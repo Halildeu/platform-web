@@ -302,3 +302,174 @@ export function classifyExportError(error: unknown): ClassifiedExportError {
 function withReason(base: string, reason: string | null): string {
   return reason ? `${base} — teknik ayrıntı: ${reason}` : base;
 }
+
+/**
+ * 39d-8b makbuz-kurtarma (R2) — backend 39d-8/#103 kontratı (OpenAPI-snapshot pinli):
+ *   GET /interviews/{id}/export/receipt?caseKey=
+ *     → 200 {caseKey, caseState, transitionStatus, artifactKey, evidenceId,
+ *            packetDigest, claimCount, ledgerRecordedAt}
+ * Rol: ats.export.read VEYA ats.export.write. Salt-okuma + idempotent →
+ * POST'un aksine YENİDEN DENENEBİLİR.
+ *
+ * 404+NOT_FOUND NEGATİF-ORACLE DEĞİLDİR (Codex 8b blocker-1) — POST kilidini
+ * ÇÖZEMEZ, üç sebeple:
+ *  1. Backend verifyLedgerReceipt review-store'un TÜM non-OK sonuçlarını
+ *     NOT_FOUND'a düzler (vaka-yok / tenant-scope / store-hatası ayrımsız);
+ *     "ledger satırı kesin yok" anlamı taşımaz.
+ *  2. GET, ambiguous POST hâlâ in-flight iken yarışabilir: o anda satır
+ *     görünmemesi POST'un birazdan append ETMEYECEĞİNİ kanıtlamaz.
+ *  3. Telafi-fail (R1) öksüz artifact bırakır; ledger'sız olduğundan yine
+ *     404 döner — "önceki deneme hiç iz bırakmadı" copy'si yanlış olur.
+ * → kind:'not-found-unresolved': kilit KORUNUR; yalnız receipt GET tekrar
+ * denenebilir; retry-unlock ancak gelecekte quiescence/terminal-status
+ * kontratı veren bir backend prerequisite ile açılabilir.
+ */
+export interface RecoveredExportReceipt extends LiveExportReceipt {
+  caseKey: string;
+  ledgerRecordedAt: string;
+}
+
+export type ReceiptRecoveryResult =
+  | { kind: 'completed'; receipt: RecoveredExportReceipt }
+  | { kind: 'incomplete-r4' }
+  | { kind: 'not-found-unresolved'; detail: string }
+  | { kind: 'authn'; detail: string }
+  | { kind: 'authz'; detail: string }
+  | { kind: 'unresolved'; detail: string };
+
+function receiptShapeValid(d: {
+  caseKey?: unknown;
+  artifactKey?: unknown;
+  evidenceId?: unknown;
+  packetDigest?: unknown;
+  claimCount?: unknown;
+  ledgerRecordedAt?: unknown;
+}): boolean {
+  return (
+    typeof d.caseKey === 'string' &&
+    !!d.caseKey.trim() &&
+    typeof d.artifactKey === 'string' &&
+    !!d.artifactKey.trim() &&
+    typeof d.evidenceId === 'string' &&
+    !!d.evidenceId.trim() &&
+    typeof d.packetDigest === 'string' &&
+    /^[0-9a-f]{64}$/.test(d.packetDigest) &&
+    Number.isSafeInteger(d.claimCount) &&
+    (d.claimCount as number) >= 1 &&
+    typeof d.ledgerRecordedAt === 'string' &&
+    // Backend Instant.parse().toString() canonical UTC üretir — biçim PİNLİ
+    // (Date.parse tek başına tarih-only/gevşek biçimleri de kabul ederdi).
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(d.ledgerRecordedAt) &&
+    Number.isFinite(Date.parse(d.ledgerRecordedAt))
+  );
+}
+
+export async function fetchExportReceipt(
+  interviewId: string,
+  caseKey: string,
+): Promise<ReceiptRecoveryResult> {
+  if (!interviewId.trim() || !caseKey.trim()) {
+    return { kind: 'unresolved', detail: 'interviewId/caseKey zorunlu (istemci hatası).' };
+  }
+  let services: InterviewEvidenceShellServices;
+  try {
+    services = await resolveServices();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'InterviewEvidenceUnauthenticatedError') {
+      return {
+        kind: 'authn',
+        detail: 'Oturum doğrulanamadı — yeniden giriş gerekebilir.',
+      };
+    }
+    return { kind: 'unresolved', detail: 'Kimlik servisi hazır değil; makbuz sorgulanamadı.' };
+  }
+  let response: { status: number; data: unknown };
+  try {
+    response = await services.http.get<unknown>(
+      `/ats/v1/interviews/${encodeURIComponent(interviewId)}/export/receipt?caseKey=${encodeURIComponent(caseKey)}`,
+      { headers: { Accept: 'application/json' } },
+    );
+  } catch (error) {
+    const e = error as HttpishError | null;
+    const resp = e && typeof e === 'object' ? e.response : undefined;
+    if (!resp) {
+      return { kind: 'unresolved', detail: 'Makbuz sorgusunun sonucu doğrulanamadı (bağlantı).' };
+    }
+    const status = typeof resp.status === 'number' ? resp.status : 0;
+    const code = typeof resp.data?.error === 'string' ? resp.data.error : null;
+    // EXACT status×code (7c deseni) — yalnız kanıtlı çiftler özel sınıf alır:
+    if (status === 401 && code === 'UNAUTHENTICATED') {
+      return { kind: 'authn', detail: 'Oturum doğrulanamadı (401) — yeniden giriş.' };
+    }
+    if (status === 403 && code === 'DENIED') {
+      return {
+        kind: 'authz',
+        detail: 'Makbuz okumak için ats.export.read (veya .write) yetkisi gerekli.',
+      };
+    }
+    if (status === 404 && code === 'NOT_FOUND') {
+      // Kilit ÇÖZÜLMEZ (üstteki 3-sebep bloğu): yalnız "şu anda makbuz yok".
+      return {
+        kind: 'not-found-unresolved',
+        detail:
+          'Şu anda doğrulanabilir export ledger kaydı bulunamadı; bu, önceki isteğin hâlâ ' +
+          'ilerlemediğini veya öksüz artifact bulunmadığını KANITLAMAZ. Kilit korunuyor — ' +
+          'makbuz sorgusunu tekrar deneyebilir veya vaka durumunu doğrulayabilirsiniz.',
+      };
+    }
+    if (status === 400 && code === 'INVALID') {
+      // Backend bütünlük/state-whitelist ihlali işaretledi — bu 'yok' DEĞİL,
+      // operasyonel alarm; kilit ÇÖZÜLMEZ.
+      return {
+        kind: 'unresolved',
+        detail: withReason(
+          'Makbuz bütünlük doğrulamasından geçemedi (operasyonel inceleme gerekir).',
+          safeReason(resp.data),
+        ),
+      };
+    }
+    // Gövdesiz 403 (eski backend / bilinmeyen), 5xx, mismatch: unresolved.
+    return {
+      kind: 'unresolved',
+      detail: 'Makbuz sorgusu beklenen kontratla eşleşmedi; kilit korunuyor.',
+    };
+  }
+  const d = (response.data ?? {}) as {
+    caseKey?: unknown;
+    caseState?: unknown;
+    transitionStatus?: unknown;
+    artifactKey?: unknown;
+    evidenceId?: unknown;
+    packetDigest?: unknown;
+    claimCount?: unknown;
+    ledgerRecordedAt?: unknown;
+  };
+  if (response.status !== 200 || !receiptShapeValid(d) || d.caseKey !== caseKey) {
+    return {
+      kind: 'unresolved',
+      detail: 'Makbuz cevabı beklenen kontrat şeklinde değil (ya da başka vakaya ait).',
+    };
+  }
+  if (d.caseState === 'EXPORTED' && d.transitionStatus === 'COMPLETED') {
+    return {
+      kind: 'completed',
+      receipt: {
+        caseKey,
+        artifactKey: d.artifactKey as string,
+        evidenceId: d.evidenceId as string,
+        packetDigest: d.packetDigest as string,
+        claimCount: d.claimCount as number,
+        ledgerRecordedAt: d.ledgerRecordedAt as string,
+      },
+    };
+  }
+  if (d.caseState === 'FINALIZED' && d.transitionStatus === 'INCOMPLETE') {
+    // R4: ledger+artifact var, EXPORTED geçişi düşmüş — tamamlanmış export
+    // DEĞİL; runbook repair gerekir. Retry AÇILMAZ (ledger satırı mevcut).
+    return { kind: 'incomplete-r4' };
+  }
+  return {
+    kind: 'unresolved',
+    detail: 'Makbuz durumu bilinen kontrat kombinasyonlarında değil (operasyonel inceleme).',
+  };
+}

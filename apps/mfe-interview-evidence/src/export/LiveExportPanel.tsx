@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Stack, Text } from '@mfe/design-system';
-import { classifyExportError, executeLiveExport } from './liveExportApi';
+import { classifyExportError, executeLiveExport, fetchExportReceipt } from './liveExportApi';
 import { isAuthnError, isAuthzError } from '../transcripts/liveTranscriptApi';
-import type { ClassifiedExportError, LiveExportReceipt } from './liveExportApi';
+import type {
+  ClassifiedExportError,
+  LiveExportReceipt,
+  RecoveredExportReceipt,
+} from './liveExportApi';
 import type { ExportProfileResolution, ExportProfileV1 } from './exportProfile';
 import { fetchLiveReviewCases } from '../review/liveReviewApi';
 import type { LiveReviewCaseSummary } from '../review/liveReviewApi';
@@ -24,12 +28,15 @@ import type { UnresolvedErasureGuard } from '../dsar/unresolvedGuard';
  *
  * Guard BEST-EFFORT duplicate-submit azaltmasıdır (aynı sekme); cross-tab/
  * multi-user invariant DEĞİLDİR — o DB-UNIQUE'tedir. Non-idempotent POST
- * OTOMATİK RETRY EDİLMEZ. Ambiguous sonuçta authoritative reconciliation
- * review-cases GET'idir: EXPORTED görünürse export GERÇEKLEŞMİŞTİR ama
- * receipt kimlikleri (artifactKey/evidenceId/packetDigest) geri alınamaz —
- * receipt UYDURULMAZ (reconciled-exported, receiptUnavailable). FINALIZED
- * görünmesi ilk POST'un uygulanmadığını KANITLAMAZ (R4: artifact+ledger
- * yazılıp markExported düşmüş olabilir) — retry açılmaz.
+ * OTOMATİK RETRY EDİLMEZ. Ambiguous'tan çıkış İKİ authoritative oracle ile:
+ *   a) review-cases GET: EXPORTED görünürse export GERÇEKLEŞMİŞTİR ama
+ *      receipt kimlikleri bu yüzeyde yok (reconciled-exported); FINALIZED
+ *      görünmesi 'uygulanmadı' KANITLAMAZ (R4) — retry açılmaz.
+ *   b) 39d-8b makbuz-kurtarma GET (WORM-ledger): COMPLETED → kimlikler
+ *      KURTARILIR (uydurma yok); exact 404+NOT_FOUND → ledger-kaydı yok =
+ *      etkili export YOK (tek negatif-oracle; R4'te bile ledger satırı var
+ *      olduğundan 200 INCOMPLETE dönerdi) → kilit çözülür, retry açılır;
+ *      INCOMPLETE (R4) → kilit korunur, runbook repair.
  */
 type PanelPhase =
   | { phase: 'editing' }
@@ -38,6 +45,7 @@ type PanelPhase =
   | { phase: 'ambiguous'; confirmation: FrozenExportConfirmation }
   | { phase: 'reconciled-exported'; caseKey: string }
   | { phase: 'completed'; receipt: LiveExportReceipt }
+  | { phase: 'recovered-receipt'; receipt: RecoveredExportReceipt }
   | { phase: 'blocked-unresolved'; malformed: boolean };
 
 interface FrozenExportConfirmation {
@@ -142,6 +150,21 @@ export function LiveExportPanel({
   const [state, setState] = useState<PanelPhase>({ phase: 'editing' });
   const [error, setError] = useState<ClassifiedExportError | null>(null);
   const [staleListNote, setStaleListNote] = useState(false);
+  const [receiptNote, setReceiptNote] = useState<string | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  // Codex 8b blocker-2: React state senkron mutex DEĞİLDİR — gerçek in-flight
+  // kilidi ref'te; epoch+context snapshot'ı bayat sonucun BAŞKA vaka/interview
+  // bağlamına state/guard mutasyonu uygulamasını yapısal olarak engeller.
+  const receiptInFlight = useRef(false);
+  const receiptEpoch = useRef(0);
+  const selectedCaseRef = useRef('');
+  const interviewIdRef = useRef(interviewId);
+  useEffect(() => {
+    interviewIdRef.current = interviewId;
+    receiptEpoch.current += 1; // interview değişimi pending makbuz sonucunu geçersizler
+    setReceiptBusy(false);
+    setReceiptNote(null);
+  }, [interviewId]);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const busy = state.phase === 'submitting';
 
@@ -211,7 +234,11 @@ export function LiveExportPanel({
       setStaleListNote(false);
     }
     setSelectedCaseKey(caseKey);
+    selectedCaseRef.current = caseKey;
+    receiptEpoch.current += 1; // vaka değişimi pending makbuz sonucunu geçersizler
+    setReceiptBusy(false);
     setError(null);
+    setReceiptNote(null);
     setState((s) => (s.phase === 'confirming' ? { phase: 'editing' } : s));
     // Remount-kilidi: seçilen case için unresolved/malformed marker → blocked.
     const read = guardRef.current.read(guardId(interviewId, caseKey));
@@ -321,7 +348,57 @@ export function LiveExportPanel({
     );
   };
 
-  /** Ambiguous'tan tek çıkış: authoritative review-cases GET'i (POST retry ASLA). */
+  /**
+   * 39d-8b makbuz-kurtarma (R2): WORM-ledger'a bağlı ikinci oracle.
+   * - completed → makbuz kimlikleri KURTARILDI (uydurma yok) + kilit çözülür.
+   * - not-found-unresolved (exact 404+NOT_FOUND) → kilit KORUNUR: 404 backend'de
+   *   vaka/store-non-OK durumlarıyla düzlenir, in-flight POST'la yarışabilir ve
+   *   R1 öksüz-artifact'i dışlamaz (Codex 8b blocker-1) — POST retry AÇILMAZ,
+   *   yalnız makbuz sorgusu tekrar denenebilir.
+   * - incomplete-r4 → tamamlanmamış export; kilit KORUNUR (runbook repair).
+   * - authn/authz/unresolved → sonuç hakkında bilgi VERMEZ; kilit korunur.
+   * GET idempotent → tekrar denenebilir (POST'un aksine). Bayat sonuç
+   * (epoch/context uyuşmazlığı) HİÇBİR state/guard mutasyonu yapmaz.
+   */
+  const recoverReceipt = async (caseKey: string) => {
+    if (receiptInFlight.current) return;
+    receiptInFlight.current = true;
+    const epoch = ++receiptEpoch.current;
+    const snapshot = { interviewId, caseKey };
+    setReceiptNote(null);
+    setReceiptBusy(true);
+    const result = await fetchExportReceipt(interviewId, caseKey);
+    receiptInFlight.current = false;
+    if (!alive.current) return;
+    if (
+      epoch !== receiptEpoch.current ||
+      snapshot.interviewId !== interviewIdRef.current ||
+      (selectedCaseRef.current && snapshot.caseKey !== selectedCaseRef.current)
+    ) {
+      return; // bayat bağlam: state/guard'a DOKUNMA (busy zaten invalidasyonda sıfırlandı)
+    }
+    setReceiptBusy(false);
+    if (result.kind === 'completed') {
+      guardRef.current.clear(guardId(snapshot.interviewId, snapshot.caseKey));
+      setError(null);
+      setState({ phase: 'recovered-receipt', receipt: result.receipt });
+      reloadCases().then((ok) => {
+        if (alive.current && !ok) setStaleListNote(true);
+      });
+      return;
+    }
+    if (result.kind === 'incomplete-r4') {
+      setReceiptNote(
+        'Makbuz bulundu ama export geçişi TAMAMLANMAMIŞ (R4): kanıt-defteri kaydı var, vaka EXPORTED değil. ' +
+          'Operasyonel inceleme/onarım gerekir; yeniden deneme AÇILMAZ.',
+      );
+      return;
+    }
+    // not-found-unresolved / authn / authz / unresolved: kilit korunur, not gösterilir.
+    setReceiptNote(result.detail);
+  };
+
+  /** Ambiguous'tan çıkışın diğer yolu: authoritative review-cases GET'i (POST retry ASLA). */
   const reconcile = async (confirmation: FrozenExportConfirmation) => {
     let cases: LiveReviewCaseSummary[];
     try {
@@ -343,6 +420,31 @@ export function LiveExportPanel({
   };
 
   const keyTail = (k: string) => (k.length > 18 ? `…${k.slice(-12)}` : k);
+
+  /** Makbuz-kurtarma bloğu — blocked/ambiguous/reconciled kartlarında ortak. */
+  const receiptRecovery = (caseKey: string) => (
+    <>
+      {receiptNote && (
+        <Stack direction="column" gap={1} data-testid="export-receipt-note">
+          <Badge variant="warning">Makbuz sorgusu sonuçsuz</Badge>
+          <Text as="p" size="sm">
+            {receiptNote}
+          </Text>
+        </Stack>
+      )}
+      <div>
+        <Button
+          data-testid="export-receipt-recover"
+          variant="secondary"
+          disabled={receiptBusy}
+          onClick={() => recoverReceipt(caseKey)}
+        >
+          Makbuzu getir (kanıt-defteri)
+        </Button>
+      </div>
+    </>
+  );
+
   const cases = list.phase === 'ready' ? list.cases : [];
   const finalized = cases.filter((c) => c.state.kind === 'known' && c.state.value === 'FINALIZED');
   const exported = cases.filter((c) => c.state.kind === 'known' && c.state.value === 'EXPORTED');
@@ -395,8 +497,10 @@ export function LiveExportPanel({
                 {state.malformed
                   ? 'Önceki işlemin güvenlik kaydı doğrulanamadı (bozuk işaret).'
                   : 'Bu vaka için sonucu doğrulanamamış bir export kaydı var.'}{' '}
-                Sonuç audit/destek üzerinden doğrulanmadan yeni export başlatmayın.
+                Sonuç doğrulanmadan yeni export başlatılamaz — makbuzu kanıt-defterinden
+                sorgulayarak durumu çözebilirsiniz.
               </Text>
+              {selectedCaseKey && receiptRecovery(selectedCaseKey)}
             </Stack>
           )}
 
@@ -406,9 +510,9 @@ export function LiveExportPanel({
               <Text as="p" size="sm">
                 Export işlemi gerçekleşmiş görünüyor (<code>{keyTail(state.caseKey)}</code>); ancak
                 ilk yanıt alınamadığı için artifact makbuz kimlikleri bu yüzeyde doğrulanamıyor.
-                Yeni export GÖNDERİLMEDİ; makbuz kimlikleri audit/kanıt-defteri üzerinden
-                alınabilir.
+                Yeni export GÖNDERİLMEDİ; makbuz kimlikleri kanıt-defterinden kurtarılabilir.
               </Text>
+              {receiptRecovery(state.caseKey)}
             </Stack>
           )}
 
@@ -443,6 +547,29 @@ export function LiveExportPanel({
                   Vaka durumunu yeniden doğrula
                 </Button>
               </div>
+              {receiptRecovery(state.confirmation.caseKey)}
+            </Stack>
+          )}
+
+          {state.phase === 'recovered-receipt' && (
+            <Stack direction="column" gap={2} data-testid="export-recovered-receipt">
+              <Badge variant="success">Makbuz kanıt-defterinden kurtarıldı — vaka EXPORTED</Badge>
+              <Text as="p" size="sm">
+                Artifact: <code>{keyTail(state.receipt.artifactKey)}</code> · kanıt:{' '}
+                <code>{keyTail(state.receipt.evidenceId)}</code> · packet digest:{' '}
+                <code>{keyTail(state.receipt.packetDigest)}</code> · claim sayısı:{' '}
+                {state.receipt.claimCount} · defter kaydı: {state.receipt.ledgerRecordedAt}
+              </Text>
+              <Text as="p" size="sm" variant="secondary">
+                Kimlikler UYDURULMADI — WORM kanıt-defterindeki export kaydından salt-okuma
+                kurtarıldı. Bu vaka için ikinci export üretilmez (tek-export).
+              </Text>
+              {staleListNote && (
+                <Text as="p" size="sm" variant="secondary" data-testid="export-stale-list-note">
+                  Not: makbuz kurtarıldı ancak güncel vaka listesi yenilenemedi — liste eski durumu
+                  gösterebilir (makbuz geçerlidir).
+                </Text>
+              )}
             </Stack>
           )}
 

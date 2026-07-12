@@ -9,15 +9,16 @@ import type { GuardReadResult, UnresolvedErasureGuard } from '../dsar/unresolved
 vi.mock('./liveExportApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./liveExportApi')>();
   // classifyExportError GERÇEK kalır — certainty politikası panelde de sınanır.
-  return { ...actual, executeLiveExport: vi.fn() };
+  return { ...actual, executeLiveExport: vi.fn(), fetchExportReceipt: vi.fn() };
 });
 vi.mock('../review/liveReviewApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../review/liveReviewApi')>();
   return { ...actual, fetchLiveReviewCases: vi.fn() };
 });
-import { executeLiveExport } from './liveExportApi';
+import { executeLiveExport, fetchExportReceipt } from './liveExportApi';
 import { fetchLiveReviewCases } from '../review/liveReviewApi';
 const mockExport = vi.mocked(executeLiveExport);
+const mockReceipt = vi.mocked(fetchExportReceipt);
 const mockList = vi.mocked(fetchLiveReviewCases);
 
 const PROFILE_JSON = {
@@ -116,6 +117,7 @@ const fillAndConfirm = async () => {
 
 beforeEach(() => {
   mockExport.mockReset();
+  mockReceipt.mockReset();
   mockList.mockReset();
   mockList.mockResolvedValue([FINALIZED, EXPORTED]);
 });
@@ -435,5 +437,158 @@ describe('remount kilidi', () => {
     fireEvent.click(screen.getByTestId('export-case-case-f'));
     expect(screen.getByTestId('export-blocked-unresolved')).toBeInTheDocument();
     expect(screen.queryByTestId('export-step1')).not.toBeInTheDocument();
+  });
+});
+describe('39d-8b makbuz-kurtarma (ikinci oracle; GET idempotent)', () => {
+  const RECOVERED = {
+    caseKey: 'case-f',
+    artifactKey: 'iv-1/pkt-9',
+    evidenceId: 'ev-9',
+    packetDigest: 'd'.repeat(64),
+    claimCount: 1,
+    ledgerRecordedAt: '2026-07-12T10:00:00Z',
+  };
+  const toAmbiguous = async (guard: FakeGuard) => {
+    renderPanel({ guard });
+    await fillAndConfirm();
+    mockExport.mockRejectedValueOnce({ response: { status: 500 } });
+    fireEvent.click(screen.getByTestId('export-step2'));
+    await waitFor(() => expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument());
+  };
+
+  test('completed → guard temizlenir + kurtarılmış-makbuz kartı (kimlik+defter zamanı) + liste tazelenir', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    mockList.mockClear();
+    mockReceipt.mockResolvedValueOnce({ kind: 'completed', receipt: RECOVERED });
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    await waitFor(() => expect(screen.getByTestId('export-recovered-receipt')).toBeInTheDocument());
+    expect(guard.clearCalls).toBeGreaterThanOrEqual(1);
+    const card = screen.getByTestId('export-recovered-receipt');
+    expect(card).toHaveTextContent(/UYDURULMADI/);
+    expect(card).toHaveTextContent('2026-07-12T10:00:00Z');
+    expect(card).toHaveTextContent('…' + RECOVERED.packetDigest.slice(-12));
+    expect(mockList).toHaveBeenCalled();
+    expect(mockReceipt.mock.calls[0]).toEqual(['iv-1', 'case-f']);
+  });
+
+  test('not-found-unresolved (exact 404) → kilit KORUNUR + not + retry AÇILMAZ (Codex 8b blocker-1)', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    mockReceipt.mockResolvedValueOnce({
+      kind: 'not-found-unresolved',
+      detail: 'Şu anda doğrulanabilir export ledger kaydı bulunamadı; KANITLAMAZ.',
+    });
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    await waitFor(() => expect(screen.getByTestId('export-receipt-note')).toBeInTheDocument());
+    expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
+    expect(guard.clearCalls).toBe(0);
+    expect(screen.queryByTestId('export-step1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('export-step2')).not.toBeInTheDocument();
+    // GET idempotent — buton tekrar denenebilir durumda kalır:
+    expect(screen.getByTestId('export-receipt-recover')).not.toBeDisabled();
+  });
+
+  test('çift tık → tek GET (ref-lock; state mutex değil)', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    let resolveReceipt: (v: unknown) => void = () => {};
+    mockReceipt.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveReceipt = res as never;
+        }),
+    );
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    expect(mockReceipt).toHaveBeenCalledTimes(1);
+    resolveReceipt({ kind: 'incomplete-r4' });
+    await waitFor(() => expect(screen.getByTestId('export-receipt-note')).toBeInTheDocument());
+  });
+
+  test('bayat bağlam: GET beklerken interview değişir → sonuç uygulanmaz + guard temizlenmez', async () => {
+    const guard = fakeGuard();
+    const utils = render(
+      <LiveExportPanel
+        interviewId="iv-1"
+        selectedTranscriptKey="iv-1/tr-a"
+        profileResolution={PROFILE_OK}
+        citationSuggestion={null}
+        guard={guard}
+      />,
+    );
+    await fillAndConfirm();
+    mockExport.mockRejectedValueOnce({ response: { status: 500 } });
+    fireEvent.click(screen.getByTestId('export-step2'));
+    await waitFor(() => expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument());
+    let resolveReceipt: (v: unknown) => void = () => {};
+    mockReceipt.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveReceipt = res as never;
+        }),
+    );
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    // GET beklerken interview prop'u değişir (epoch bump + bağlam kayması):
+    utils.rerender(
+      <LiveExportPanel
+        interviewId="iv-2"
+        selectedTranscriptKey={null}
+        profileResolution={PROFILE_OK}
+        citationSuggestion={null}
+        guard={guard}
+      />,
+    );
+    resolveReceipt({
+      kind: 'completed',
+      receipt: {
+        caseKey: 'case-f',
+        artifactKey: 'iv-1/pkt-9',
+        evidenceId: 'ev-9',
+        packetDigest: 'd'.repeat(64),
+        claimCount: 1,
+        ledgerRecordedAt: '2026-07-12T10:00:00Z',
+      },
+    });
+    // bayat sonuç HİÇBİR mutasyon yapmaz: recovered kart yok + guard temiz değil
+    await waitFor(() => expect(mockReceipt).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId('export-recovered-receipt')).not.toBeInTheDocument();
+    expect(guard.clearCalls).toBe(0);
+  });
+
+  test('remount kilidi (blocked-unresolved) → makbuz-kurtarma çalışır: completed kilidi çözer', async () => {
+    const guard = fakeGuard({
+      kind: 'unresolved',
+      record: {
+        version: 1,
+        dsarKey: 'case-f',
+        scopeFingerprint: '1',
+        startedAt: '2026-07-12T09:00:00Z',
+      },
+    });
+    renderPanel({ guard });
+    await waitFor(() => expect(screen.getByTestId('export-case-case-f')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('export-case-case-f'));
+    expect(screen.getByTestId('export-blocked-unresolved')).toBeInTheDocument();
+    mockReceipt.mockResolvedValueOnce({ kind: 'completed', receipt: RECOVERED });
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    await waitFor(() => expect(screen.getByTestId('export-recovered-receipt')).toBeInTheDocument());
+    expect(guard.clearCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  test('reconciled-exported → makbuz-kurtarma kimlikleri getirir (uydurma yerine kurtarma)', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    mockList.mockResolvedValueOnce([
+      { caseKey: 'case-f', state: { kind: 'known', value: 'EXPORTED' } as const },
+    ]);
+    fireEvent.click(screen.getByTestId('export-reconcile'));
+    await waitFor(() =>
+      expect(screen.getByTestId('export-reconciled-exported')).toBeInTheDocument(),
+    );
+    mockReceipt.mockResolvedValueOnce({ kind: 'completed', receipt: RECOVERED });
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    await waitFor(() => expect(screen.getByTestId('export-recovered-receipt')).toBeInTheDocument());
   });
 });
