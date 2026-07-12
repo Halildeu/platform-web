@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { classifyExportError, executeLiveExport, exportGuardKey } from './liveExportApi';
+import {
+  classifyExportError,
+  executeLiveExport,
+  exportGuardKey,
+  fetchExportReceipt,
+} from './liveExportApi';
 import type { ExportRequestContext } from './liveExportApi';
 import { AtsClientValidationError, AtsContractError } from '../transcripts/liveTranscriptApi';
 import { __resetShellServicesForTests, configureShellServices } from '../shell-services';
@@ -227,5 +232,122 @@ describe('classifyExportError — certainty (kaynak-kanıtlı)', () => {
     expect(classifyExportError(new AtsContractError('x')).certainty).toBe('unresolved');
     expect(classifyExportError({ request: {} }).certainty).toBe('unresolved');
     expect(classifyExportError(new AtsClientValidationError('x')).certainty).toBe('not-applied');
+  });
+});
+describe('fetchExportReceipt — 39d-8b makbuz-kurtarma exact-matrisi', () => {
+  const RECOVERED = {
+    caseKey: 'case-1',
+    caseState: 'EXPORTED',
+    transitionStatus: 'COMPLETED',
+    artifactKey: 'iv-1/pkt-1',
+    evidenceId: 'ev-9',
+    packetDigest: 'c'.repeat(64),
+    claimCount: 2,
+    ledgerRecordedAt: '2026-07-12T10:00:00Z',
+  };
+
+  test('200 EXPORTED+COMPLETED (şekil-tam) → completed + kimlikler birebir', async () => {
+    httpGet.mockResolvedValueOnce({ status: 200, data: RECOVERED });
+    const r = await fetchExportReceipt('iv-1', 'case-1');
+    expect(r.kind).toBe('completed');
+    if (r.kind !== 'completed') throw new Error('unreachable');
+    expect(r.receipt).toEqual({
+      caseKey: 'case-1',
+      artifactKey: 'iv-1/pkt-1',
+      evidenceId: 'ev-9',
+      packetDigest: 'c'.repeat(64),
+      claimCount: 2,
+      ledgerRecordedAt: '2026-07-12T10:00:00Z',
+    });
+    const url = httpGet.mock.calls[0][0] as string;
+    expect(url).toBe('/ats/v1/interviews/iv-1/export/receipt?caseKey=case-1');
+  });
+
+  test("caseKey '/' içerir → query-param encode edilir", async () => {
+    httpGet.mockResolvedValueOnce({
+      status: 200,
+      data: { ...RECOVERED, caseKey: 'iv-1/case-7' },
+    });
+    const r = await fetchExportReceipt('iv-1', 'iv-1/case-7');
+    expect(r.kind).toBe('completed');
+    expect(httpGet.mock.calls[0][0]).toBe(
+      '/ats/v1/interviews/iv-1/export/receipt?caseKey=iv-1%2Fcase-7',
+    );
+  });
+
+  test('200 FINALIZED+INCOMPLETE → incomplete-r4 (retry açılmaz sinyali)', async () => {
+    httpGet.mockResolvedValueOnce({
+      status: 200,
+      data: { ...RECOVERED, caseState: 'FINALIZED', transitionStatus: 'INCOMPLETE' },
+    });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('incomplete-r4');
+  });
+
+  test('exact 404+NOT_FOUND → no-export (negatif-oracle)', async () => {
+    httpGet.mockRejectedValueOnce({ response: { status: 404, data: { error: 'NOT_FOUND' } } });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('no-export');
+  });
+
+  test('401+UNAUTHENTICATED → authn; 403+DENIED → authz (read-scope mesajı)', async () => {
+    httpGet.mockRejectedValueOnce({
+      response: { status: 401, data: { error: 'UNAUTHENTICATED' } },
+    });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('authn');
+    httpGet.mockRejectedValueOnce({ response: { status: 403, data: { error: 'DENIED' } } });
+    const z = await fetchExportReceipt('iv-1', 'case-1');
+    expect(z.kind).toBe('authz');
+    if (z.kind !== 'authz') throw new Error('unreachable');
+    expect(z.detail).toMatch(/ats\.export\.read/);
+  });
+
+  test('400+INVALID (bütünlük ihlali) → unresolved + sanitized-reason; NO-EXPORT DEĞİL', async () => {
+    httpGet.mockRejectedValueOnce({
+      response: { status: 400, data: { error: 'INVALID', reason: 'ledger uyuşmuyor' } },
+    });
+    const r = await fetchExportReceipt('iv-1', 'case-1');
+    expect(r.kind).toBe('unresolved');
+    if (r.kind !== 'unresolved') throw new Error('unreachable');
+    expect(r.detail).toMatch(/operasyonel inceleme/);
+    expect(r.detail).toMatch(/ledger uyuşmuyor/);
+  });
+
+  test.each([
+    ['gövdesiz 403 (eski backend)', { response: { status: 403 } }],
+    ['404 kodsuz', { response: { status: 404, data: {} } }],
+    ['503', { response: { status: 503, data: { error: 'NOT_CONFIGURED' } } }],
+    ['transport (response yok)', { request: {} }],
+  ])('%s → unresolved (kilit korunur)', async (_n, err) => {
+    httpGet.mockRejectedValueOnce(err);
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('unresolved');
+  });
+
+  test.each([
+    ['caseKey yankısı farklı', { ...RECOVERED, caseKey: 'case-BAŞKA' }],
+    ['digest 63-hex', { ...RECOVERED, packetDigest: 'c'.repeat(63) }],
+    ['claimCount string', { ...RECOVERED, claimCount: '2' }],
+    ['claimCount 0', { ...RECOVERED, claimCount: 0 }],
+    ['ledgerRecordedAt bozuk', { ...RECOVERED, ledgerRecordedAt: 'dün' }],
+    [
+      'bilinmeyen durum-kombinasyonu',
+      { ...RECOVERED, caseState: 'EXPORTED', transitionStatus: 'INCOMPLETE' },
+    ],
+    ['artifactKey boş', { ...RECOVERED, artifactKey: ' ' }],
+  ])('200 ama %s → unresolved (makbuz uydurulmaz)', async (_n, data) => {
+    httpGet.mockResolvedValueOnce({ status: 200, data });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('unresolved');
+  });
+
+  test('oturum hazır değil (unauthenticated) → authn; istek atılmaz', async () => {
+    __resetShellServicesForTests();
+    configureShellServices({
+      http: { get: httpGet, post: httpPost } as never,
+      auth: {
+        getToken: () => null,
+        ready: () => Promise.resolve({ ok: false, reason: 'unauthenticated', error: 'yok' }),
+        getEpoch: () => 0,
+      },
+    });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('authn');
+    expect(httpGet).not.toHaveBeenCalled();
   });
 });

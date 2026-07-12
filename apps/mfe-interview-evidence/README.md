@@ -57,24 +57,40 @@ idempotency_key)` + deterministik export key → aynı case için **en fazla
 
 Non-idempotent export POST'u **otomatik retry edilmez**. Transport kesintisi /
 malformed-201 / bilinmeyen-5xx / kontrat-dışı status×code → guard KORUNUR +
-ambiguous kilit. Tek çıkış authoritative `review-cases` GET'i:
+ambiguous kilit. Çıkış İKİ authoritative oracle ile:
 
-- Vaka **EXPORTED** görünür → export gerçekleşmiştir; makbuz kimlikleri
-  (artifactKey/evidenceId/packetDigest) bu yüzeyde geri alınamaz —
-  **makbuz UYDURULMAZ** (`reconciled-exported`), kimlikler audit/kanıt-defteri
-  üzerinden alınır.
+**(a) `review-cases` GET'i:**
+
+- Vaka **EXPORTED** görünür → export gerçekleşmiştir; makbuz kimlikleri bu
+  yüzeyde yok — **makbuz UYDURULMAZ** (`reconciled-exported`); kimlikler
+  (b)-oracle ile kurtarılabilir.
 - Vaka hâlâ **FINALIZED** görünür → ilk isteğin uygulanmadığını **KANITLAMAZ**
   (bkz. R4) — retry açılmaz.
 - 400+INVALID cevabı `reason` gösterir ama guard'ı TEMİZLEMEZ (markExported-
   fail 400'ü post-side-effect dönebilir).
+
+**(b) makbuz-kurtarma GET'i (39d-8b — `GET /export/receipt?caseKey=`,
+`ats.export.read` yeter; idempotent → tekrar denenebilir):**
+
+- 200 **EXPORTED+COMPLETED** (şekil-tam + caseKey yankısı) → kimlikler
+  WORM-ledger'dan **KURTARILIR** (uydurma yok); kilit çözülür.
+- exact **404+NOT_FOUND** → ledger'da kayıt yok = **etkili export yok**
+  (negatif-oracle: ledger append tek atomik-telafili etki noktası; R4'te bile
+  ledger satırı VAR olduğundan 200 INCOMPLETE dönerdi) → kilit çözülür,
+  yeniden deneme açılır.
+- 200 **FINALIZED+INCOMPLETE** (R4) → tamamlanmamış export; kilit KORUNUR,
+  operasyonel repair.
+- 400+INVALID (bütünlük ihlali), gövdesiz-403 (eski backend), 5xx, malformed-200,
+  mismatch → **unresolved**; kilit korunur. Canlı aktivasyon backend
+  #103-pin'ine bağlıdır (pin öncesi buton dürüst "sonuçsuz" gösterir).
 
 ### Bilinen residual'lar (backend backlog)
 
 - **R1**: ledger-conflict sonrası artifact telafi-DELETE'i başarısız olursa
   ledger-bağsız **öksüz artifact** kalabilir (packet lineage dışı; başarı
   sayılmaz) — operasyonel temizlik gerekir.
-- **R2**: receipt-recovery/status endpoint'i YOK — ambiguous sonrası makbuz
-  kimlikleri yalnız audit'ten.
+- **R2**: ~~receipt-recovery endpoint'i YOK~~ **KAPANDI** (ats#103 backend +
+  39d-8b FE makbuz-kurtarma; canlı aktivasyon backend-pin'ine bağlı).
 - **R3**: same-receipt replay YOK — ikinci istek deterministic-conflict alır
   (payload'lar artifact-ref nedeniyle hiç birebir olamaz).
 - **R4**: artifact+ledger yazılıp `markExported` başarısız olabilir (400) —
