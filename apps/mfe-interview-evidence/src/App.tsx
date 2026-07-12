@@ -11,6 +11,7 @@ import { DsarPanel } from './dsar/DsarPanel';
 import { LiveDsarPanel } from './dsar/LiveDsarPanel';
 import { LiveExportPanel } from './export/LiveExportPanel';
 import { DeploymentReadinessConsole } from './deployment-readiness/DeploymentReadinessConsole';
+import { IntelligenceGovernanceLab } from './intelligence-governance/IntelligenceGovernanceLab';
 import { resolveExportProfile } from './export/exportProfile';
 import type { CitationEntailment } from './review/liveCitationApi';
 import { TranscriptList } from './transcripts/TranscriptList';
@@ -403,6 +404,7 @@ function LiveReadApp() {
       )}
 
       <DeploymentReadinessConsole />
+      <IntelligenceGovernanceLab />
     </Stack>
   );
 }
@@ -508,6 +510,7 @@ function DemoApp() {
       )}
 
       <DeploymentReadinessConsole />
+      <IntelligenceGovernanceLab />
     </Stack>
   );
 }
