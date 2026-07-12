@@ -10,6 +10,7 @@ import type { CitationReceiptRef } from './review/LiveReviewCasePanel';
 import { DsarPanel } from './dsar/DsarPanel';
 import { LiveDsarPanel } from './dsar/LiveDsarPanel';
 import { LiveExportPanel } from './export/LiveExportPanel';
+import { DeploymentReadinessConsole } from './deployment-readiness/DeploymentReadinessConsole';
 import { resolveExportProfile } from './export/exportProfile';
 import type { CitationEntailment } from './review/liveCitationApi';
 import { TranscriptList } from './transcripts/TranscriptList';
@@ -397,6 +398,8 @@ function LiveReadApp() {
           </Card>
         </>
       )}
+
+      <DeploymentReadinessConsole />
     </Stack>
   );
 }
@@ -498,6 +501,8 @@ function DemoApp() {
           </Card>
         </>
       )}
+
+      <DeploymentReadinessConsole />
     </Stack>
   );
 }
