@@ -251,8 +251,12 @@ export function classifyDsarError(error: unknown, op: DsarOperation): Classified
   if (status === 403 && code === 'TENANT_SCOPE_VIOLATION') {
     return {
       kind: 'tenant-scope',
+      // Detail certainty ile tutarlı (Codex non-blocking): erasure'da "uygulanmadı"
+      // İDDİA EDİLMEZ — sonuç doğrulanamadı dili kullanılır.
       detail:
-        'İstenen kaynaklardan en az biri bu tenant/mülakat kapsamına ait değil. Güvenlik nedeniyle işlem uygulanmadı.',
+        op === 'intake'
+          ? 'İstenen kaynaklardan en az biri bu tenant/mülakat kapsamına ait değil. Güvenlik nedeniyle işlem uygulanmadı.'
+          : 'İstenen kaynaklardan en az biri tenant/mülakat kapsamı ihlali bildirdi; silme sonucunun uygulanıp uygulanmadığı doğrulanamadı.',
       // Kaynak kanıtı: bu kod YALNIZ IdentityTenant.assertTenantScope kontratında
       // tanımlı; DsrService/DsarApiController akışında ÜRETİLMİYOR. Pre-side-effect
       // garantisi kanıtlanamadığından erasure için fail-closed 'unresolved'

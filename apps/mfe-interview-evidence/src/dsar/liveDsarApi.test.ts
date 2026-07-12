@@ -157,7 +157,10 @@ describe('classifyDsarError — outcome-certainty (kaynak-kanıtlı daraltılmı
       'erasure',
     );
     expect(c.kind).toBe('tenant-scope');
-    expect(c.detail).toMatch(/tenant\/mülakat kapsamına ait değil/);
+    // Erasure detail'i certainty ile tutarlı: "uygulanmadı" İDDİA ETMEZ.
+    expect(c.detail).toMatch(/kapsamı ihlali bildirdi/);
+    expect(c.detail).toMatch(/doğrulanamadı/);
+    expect(c.detail).not.toMatch(/uygulanmadı\./);
     expect(c.detail).not.toMatch(/GIZLI-anahtar/);
     expect(c.detail).not.toMatch(/ats\.erasure\.execute/);
     // Pre-side-effect kanıtı YOK (kod DSAR akışında üretilmiyor) → erasure'da
