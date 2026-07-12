@@ -74,10 +74,12 @@ ambiguous kilit. Çıkış İKİ authoritative oracle ile:
 
 - 200 **EXPORTED+COMPLETED** (şekil-tam + caseKey yankısı) → kimlikler
   WORM-ledger'dan **KURTARILIR** (uydurma yok); kilit çözülür.
-- exact **404+NOT_FOUND** → ledger'da kayıt yok = **etkili export yok**
-  (negatif-oracle: ledger append tek atomik-telafili etki noktası; R4'te bile
-  ledger satırı VAR olduğundan 200 INCOMPLETE dönerdi) → kilit çözülür,
-  yeniden deneme açılır.
+- exact **404+NOT_FOUND** → **kilit KORUNUR** (negatif-oracle DEĞİLDİR):
+  backend bu 404'ü vaka-yok/tenant-scope/store-non-OK durumlarıyla düzler,
+  in-flight ilk POST'la yarışabilir ve R1 öksüz-artifact'i dışlamaz — POST
+  retry açılmaz; yalnız makbuz sorgusu tekrar denenebilir. Retry-unlock,
+  quiescence/terminal-status veren bir backend kontratı prerequisite'ine
+  bağlıdır.
 - 200 **FINALIZED+INCOMPLETE** (R4) → tamamlanmamış export; kilit KORUNUR,
   operasyonel repair.
 - 400+INVALID (bütünlük ihlali), gövdesiz-403 (eski backend), 5xx, malformed-200,
@@ -89,8 +91,10 @@ ambiguous kilit. Çıkış İKİ authoritative oracle ile:
 - **R1**: ledger-conflict sonrası artifact telafi-DELETE'i başarısız olursa
   ledger-bağsız **öksüz artifact** kalabilir (packet lineage dışı; başarı
   sayılmaz) — operasyonel temizlik gerekir.
-- **R2**: ~~receipt-recovery endpoint'i YOK~~ **KAPANDI** (ats#103 backend +
-  39d-8b FE makbuz-kurtarma; canlı aktivasyon backend-pin'ine bağlı).
+- **R2**: ~~receipt-recovery endpoint'i YOK~~ **kod düzeyinde kapandı**
+  (ats#103 backend + 39d-8b FE makbuz-kurtarma); canlı kapanış backend pin +
+  FE deployment + login-gated functional acceptance SONRASINDA. 404-üzerinden
+  güvenli-retry AYRI bir recovery/status problemi olarak açık.
 - **R3**: same-receipt replay YOK — ikinci istek deterministic-conflict alır
   (payload'lar artifact-ref nedeniyle hiç birebir olamaz).
 - **R4**: artifact+ledger yazılıp `markExported` başarısız olabilir (400) —

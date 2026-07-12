@@ -472,39 +472,88 @@ describe('39d-8b makbuz-kurtarma (ikinci oracle; GET idempotent)', () => {
     expect(mockReceipt.mock.calls[0]).toEqual(['iv-1', 'case-f']);
   });
 
-  test('no-export (exact 404+NOT_FOUND negatif-oracle) → kilit çözülür + editing + yeniden deneme açık', async () => {
+  test('not-found-unresolved (exact 404) → kilit KORUNUR + not + retry AÇILMAZ (Codex 8b blocker-1)', async () => {
     const guard = fakeGuard();
     await toAmbiguous(guard);
-    mockReceipt.mockResolvedValueOnce({ kind: 'no-export' });
-    fireEvent.click(screen.getByTestId('export-receipt-recover'));
-    await waitFor(() => expect(screen.getByTestId('export-step1')).toBeInTheDocument());
-    expect(guard.clearCalls).toBeGreaterThanOrEqual(1);
-    expect(screen.getByTestId('export-error')).toHaveTextContent(/export kaydı yok/);
-    expect(screen.queryByTestId('export-ambiguous')).not.toBeInTheDocument();
-  });
-
-  test('incomplete-r4 → ambiguous KALIR + R4 notu + guard KORUNUR (retry açılmaz)', async () => {
-    const guard = fakeGuard();
-    await toAmbiguous(guard);
-    mockReceipt.mockResolvedValueOnce({ kind: 'incomplete-r4' });
+    mockReceipt.mockResolvedValueOnce({
+      kind: 'not-found-unresolved',
+      detail: 'Şu anda doğrulanabilir export ledger kaydı bulunamadı; KANITLAMAZ.',
+    });
     fireEvent.click(screen.getByTestId('export-receipt-recover'));
     await waitFor(() => expect(screen.getByTestId('export-receipt-note')).toBeInTheDocument());
-    expect(screen.getByTestId('export-receipt-note')).toHaveTextContent(/TAMAMLANMAMIŞ/);
     expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
     expect(guard.clearCalls).toBe(0);
+    expect(screen.queryByTestId('export-step1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('export-step2')).not.toBeInTheDocument();
+    // GET idempotent — buton tekrar denenebilir durumda kalır:
+    expect(screen.getByTestId('export-receipt-recover')).not.toBeDisabled();
   });
 
-  test.each([
-    ['unresolved', { kind: 'unresolved', detail: 'kilit korunuyor' }],
-    ['authz', { kind: 'authz', detail: 'ats.export.read gerekli' }],
-  ] as const)('%s → not gösterilir; kilit + ambiguous korunur', async (_n, result) => {
+  test('çift tık → tek GET (ref-lock; state mutex değil)', async () => {
     const guard = fakeGuard();
     await toAmbiguous(guard);
-    mockReceipt.mockResolvedValueOnce(result as never);
+    let resolveReceipt: (v: unknown) => void = () => {};
+    mockReceipt.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveReceipt = res as never;
+        }),
+    );
     fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    expect(mockReceipt).toHaveBeenCalledTimes(1);
+    resolveReceipt({ kind: 'incomplete-r4' });
     await waitFor(() => expect(screen.getByTestId('export-receipt-note')).toBeInTheDocument());
-    expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
+  });
+
+  test('bayat bağlam: GET beklerken interview değişir → sonuç uygulanmaz + guard temizlenmez', async () => {
+    const guard = fakeGuard();
+    const utils = render(
+      <LiveExportPanel
+        interviewId="iv-1"
+        selectedTranscriptKey="iv-1/tr-a"
+        profileResolution={PROFILE_OK}
+        citationSuggestion={null}
+        guard={guard}
+      />,
+    );
+    await fillAndConfirm();
+    mockExport.mockRejectedValueOnce({ response: { status: 500 } });
+    fireEvent.click(screen.getByTestId('export-step2'));
+    await waitFor(() => expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument());
+    let resolveReceipt: (v: unknown) => void = () => {};
+    mockReceipt.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveReceipt = res as never;
+        }),
+    );
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    // GET beklerken interview prop'u değişir (epoch bump + bağlam kayması):
+    utils.rerender(
+      <LiveExportPanel
+        interviewId="iv-2"
+        selectedTranscriptKey={null}
+        profileResolution={PROFILE_OK}
+        citationSuggestion={null}
+        guard={guard}
+      />,
+    );
+    resolveReceipt({
+      kind: 'completed',
+      receipt: {
+        caseKey: 'case-f',
+        artifactKey: 'iv-1/pkt-9',
+        evidenceId: 'ev-9',
+        packetDigest: 'd'.repeat(64),
+        claimCount: 1,
+        ledgerRecordedAt: '2026-07-12T10:00:00Z',
+      },
+    });
+    // bayat sonuç HİÇBİR mutasyon yapmaz: recovered kart yok + guard temiz değil
+    await waitFor(() => expect(mockReceipt).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId('export-recovered-receipt')).not.toBeInTheDocument();
     expect(guard.clearCalls).toBe(0);
   });
 

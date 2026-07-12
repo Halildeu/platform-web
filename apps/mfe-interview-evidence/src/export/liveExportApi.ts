@@ -311,15 +311,18 @@ function withReason(base: string, reason: string | null): string {
  * Rol: ats.export.read VEYA ats.export.write. Salt-okuma + idempotent →
  * POST'un aksine YENİDEN DENENEBİLİR.
  *
- * NEGATİF-ORACLE KANITI (kaynak-kanıtlı, ExportService):
- * ledger append exportPacket'te artifact.put ile ATOMİK-telafili tek etki
- * noktasıdır (append-fail → artifact telafi-silinir) ve R4'te bile ledger
- * satırı VARDIR (R4 = ledger+artifact yazılmış, markExported düşmüş →
- * endpoint 200 INCOMPLETE döner, 404 DEĞİL). Dolayısıyla exact
- * 404+NOT_FOUND = bu vaka için LEDGER-BAĞLI ETKİLİ EXPORT YOK → ambiguous
- * kilidi güvenle çözülebilir (worm UNIQUE invariant'ının negatif yüzü).
- * Bu, review-cases GET'inin yapamadığı şeydir (o yalnız EXPORTED'ı
- * KANITLAR, yokluğu kanıtlayamaz).
+ * 404+NOT_FOUND NEGATİF-ORACLE DEĞİLDİR (Codex 8b blocker-1) — POST kilidini
+ * ÇÖZEMEZ, üç sebeple:
+ *  1. Backend verifyLedgerReceipt review-store'un TÜM non-OK sonuçlarını
+ *     NOT_FOUND'a düzler (vaka-yok / tenant-scope / store-hatası ayrımsız);
+ *     "ledger satırı kesin yok" anlamı taşımaz.
+ *  2. GET, ambiguous POST hâlâ in-flight iken yarışabilir: o anda satır
+ *     görünmemesi POST'un birazdan append ETMEYECEĞİNİ kanıtlamaz.
+ *  3. Telafi-fail (R1) öksüz artifact bırakır; ledger'sız olduğundan yine
+ *     404 döner — "önceki deneme hiç iz bırakmadı" copy'si yanlış olur.
+ * → kind:'not-found-unresolved': kilit KORUNUR; yalnız receipt GET tekrar
+ * denenebilir; retry-unlock ancak gelecekte quiescence/terminal-status
+ * kontratı veren bir backend prerequisite ile açılabilir.
  */
 export interface RecoveredExportReceipt extends LiveExportReceipt {
   caseKey: string;
@@ -329,7 +332,7 @@ export interface RecoveredExportReceipt extends LiveExportReceipt {
 export type ReceiptRecoveryResult =
   | { kind: 'completed'; receipt: RecoveredExportReceipt }
   | { kind: 'incomplete-r4' }
-  | { kind: 'no-export' }
+  | { kind: 'not-found-unresolved'; detail: string }
   | { kind: 'authn'; detail: string }
   | { kind: 'authz'; detail: string }
   | { kind: 'unresolved'; detail: string };
@@ -354,6 +357,9 @@ function receiptShapeValid(d: {
     Number.isSafeInteger(d.claimCount) &&
     (d.claimCount as number) >= 1 &&
     typeof d.ledgerRecordedAt === 'string' &&
+    // Backend Instant.parse().toString() canonical UTC üretir — biçim PİNLİ
+    // (Date.parse tek başına tarih-only/gevşek biçimleri de kabul ederdi).
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(d.ledgerRecordedAt) &&
     Number.isFinite(Date.parse(d.ledgerRecordedAt))
   );
 }
@@ -402,8 +408,14 @@ export async function fetchExportReceipt(
       };
     }
     if (status === 404 && code === 'NOT_FOUND') {
-      // Negatif-oracle: ledger-bağlı export YOK (üstteki kanıt bloğu).
-      return { kind: 'no-export' };
+      // Kilit ÇÖZÜLMEZ (üstteki 3-sebep bloğu): yalnız "şu anda makbuz yok".
+      return {
+        kind: 'not-found-unresolved',
+        detail:
+          'Şu anda doğrulanabilir export ledger kaydı bulunamadı; bu, önceki isteğin hâlâ ' +
+          'ilerlemediğini veya öksüz artifact bulunmadığını KANITLAMAZ. Kilit korunuyor — ' +
+          'makbuz sorgusunu tekrar deneyebilir veya vaka durumunu doğrulayabilirsiniz.',
+      };
     }
     if (status === 400 && code === 'INVALID') {
       // Backend bütünlük/state-whitelist ihlali işaretledi — bu 'yok' DEĞİL,

@@ -283,9 +283,29 @@ describe('fetchExportReceipt — 39d-8b makbuz-kurtarma exact-matrisi', () => {
     expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('incomplete-r4');
   });
 
-  test('exact 404+NOT_FOUND → no-export (negatif-oracle)', async () => {
+  test('exact 404+NOT_FOUND → not-found-unresolved (kilit çözmez; Codex 8b blocker-1)', async () => {
     httpGet.mockRejectedValueOnce({ response: { status: 404, data: { error: 'NOT_FOUND' } } });
-    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('no-export');
+    const r = await fetchExportReceipt('iv-1', 'case-1');
+    expect(r.kind).toBe('not-found-unresolved');
+    if (r.kind !== 'not-found-unresolved') throw new Error('unreachable');
+    expect(r.detail).toMatch(/KANITLAMAZ/);
+  });
+
+  test.each([
+    ['tarih-only', '2026-07-12'],
+    ['boşluklu yerel biçim', '2026-07-12 10:00:00'],
+    ["offset'li (Z değil)", '2026-07-12T10:00:00+03:00'],
+  ])('ledgerRecordedAt gevşek biçim (%s) → unresolved (Instant-pin)', async (_n, ts) => {
+    httpGet.mockResolvedValueOnce({ status: 200, data: { ...RECOVERED, ledgerRecordedAt: ts } });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('unresolved');
+  });
+
+  test('ledgerRecordedAt fractional-Z kabul edilir', async () => {
+    httpGet.mockResolvedValueOnce({
+      status: 200,
+      data: { ...RECOVERED, ledgerRecordedAt: '2026-07-12T10:00:00.123456789Z' },
+    });
+    expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('completed');
   });
 
   test('401+UNAUTHENTICATED → authn; 403+DENIED → authz (read-scope mesajı)', async () => {

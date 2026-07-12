@@ -152,6 +152,19 @@ export function LiveExportPanel({
   const [staleListNote, setStaleListNote] = useState(false);
   const [receiptNote, setReceiptNote] = useState<string | null>(null);
   const [receiptBusy, setReceiptBusy] = useState(false);
+  // Codex 8b blocker-2: React state senkron mutex DEĞİLDİR — gerçek in-flight
+  // kilidi ref'te; epoch+context snapshot'ı bayat sonucun BAŞKA vaka/interview
+  // bağlamına state/guard mutasyonu uygulamasını yapısal olarak engeller.
+  const receiptInFlight = useRef(false);
+  const receiptEpoch = useRef(0);
+  const selectedCaseRef = useRef('');
+  const interviewIdRef = useRef(interviewId);
+  useEffect(() => {
+    interviewIdRef.current = interviewId;
+    receiptEpoch.current += 1; // interview değişimi pending makbuz sonucunu geçersizler
+    setReceiptBusy(false);
+    setReceiptNote(null);
+  }, [interviewId]);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const busy = state.phase === 'submitting';
 
@@ -221,6 +234,9 @@ export function LiveExportPanel({
       setStaleListNote(false);
     }
     setSelectedCaseKey(caseKey);
+    selectedCaseRef.current = caseKey;
+    receiptEpoch.current += 1; // vaka değişimi pending makbuz sonucunu geçersizler
+    setReceiptBusy(false);
     setError(null);
     setReceiptNote(null);
     setState((s) => (s.phase === 'confirming' ? { phase: 'editing' } : s));
@@ -335,37 +351,39 @@ export function LiveExportPanel({
   /**
    * 39d-8b makbuz-kurtarma (R2): WORM-ledger'a bağlı ikinci oracle.
    * - completed → makbuz kimlikleri KURTARILDI (uydurma yok) + kilit çözülür.
-   * - no-export (exact 404+NOT_FOUND) → ledger'da kayıt YOK = etkili export
-   *   yok (negatif-oracle; R4'te bile ledger satırı vardır → 200 INCOMPLETE
-   *   dönerdi) → kilit çözülür, yeniden deneme açılır.
+   * - not-found-unresolved (exact 404+NOT_FOUND) → kilit KORUNUR: 404 backend'de
+   *   vaka/store-non-OK durumlarıyla düzlenir, in-flight POST'la yarışabilir ve
+   *   R1 öksüz-artifact'i dışlamaz (Codex 8b blocker-1) — POST retry AÇILMAZ,
+   *   yalnız makbuz sorgusu tekrar denenebilir.
    * - incomplete-r4 → tamamlanmamış export; kilit KORUNUR (runbook repair).
    * - authn/authz/unresolved → sonuç hakkında bilgi VERMEZ; kilit korunur.
-   * GET idempotent → tekrar denenebilir (POST'un aksine).
+   * GET idempotent → tekrar denenebilir (POST'un aksine). Bayat sonuç
+   * (epoch/context uyuşmazlığı) HİÇBİR state/guard mutasyonu yapmaz.
    */
   const recoverReceipt = async (caseKey: string) => {
-    if (receiptBusy) return;
+    if (receiptInFlight.current) return;
+    receiptInFlight.current = true;
+    const epoch = ++receiptEpoch.current;
+    const snapshot = { interviewId, caseKey };
     setReceiptNote(null);
     setReceiptBusy(true);
     const result = await fetchExportReceipt(interviewId, caseKey);
-    setReceiptBusy(false);
+    receiptInFlight.current = false;
     if (!alive.current) return;
+    if (
+      epoch !== receiptEpoch.current ||
+      snapshot.interviewId !== interviewIdRef.current ||
+      (selectedCaseRef.current && snapshot.caseKey !== selectedCaseRef.current)
+    ) {
+      return; // bayat bağlam: state/guard'a DOKUNMA (busy zaten invalidasyonda sıfırlandı)
+    }
+    setReceiptBusy(false);
     if (result.kind === 'completed') {
-      guardRef.current.clear(guardId(interviewId, caseKey));
+      guardRef.current.clear(guardId(snapshot.interviewId, snapshot.caseKey));
       setError(null);
       setState({ phase: 'recovered-receipt', receipt: result.receipt });
       reloadCases().then((ok) => {
         if (alive.current && !ok) setStaleListNote(true);
-      });
-      return;
-    }
-    if (result.kind === 'no-export') {
-      guardRef.current.clear(guardId(interviewId, caseKey));
-      setState({ phase: 'editing' });
-      setError({
-        kind: 'not-found',
-        detail:
-          'Kanıt-defterinde (WORM) bu vaka için export kaydı yok — önceki deneme etkili olmamış. Yeniden deneyebilirsiniz.',
-        certainty: 'not-applied',
       });
       return;
     }
@@ -376,6 +394,7 @@ export function LiveExportPanel({
       );
       return;
     }
+    // not-found-unresolved / authn / authz / unresolved: kilit korunur, not gösterilir.
     setReceiptNote(result.detail);
   };
 
