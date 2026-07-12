@@ -367,20 +367,30 @@ describe('reconciliation 4-durum (POST retry ASLA)', () => {
     [401, 'Oturum hatası'],
     [403, 'Yetki hatası'],
   ])(
-    'reconcile GET %i → sınıflı mesaj + ambiguous KALIR + guard korunur + POST retry yok',
+    'reconcile GET %i → GÖRÜNÜR sınıflı mesaj (ambiguous kartında) + guard korunur + retry yok',
     async (status, badge) => {
+      const detail = status === 401 ? /yeniden giriş/ : /ats\.review\.read/;
       const guard = fakeGuard();
       await toAmbiguous(guard);
       mockList.mockRejectedValueOnce({ response: { status } });
       fireEvent.click(screen.getByTestId('export-reconcile'));
-      await waitFor(() => expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument());
-      // Liste-hatası sınıflı görünür (403 → ats.review.read yönlendirmesi list-error'da):
-      if (status === 403) {
-        // initial-list yüzeyinde de doğrula:
-        expect(badge).toBe('Yetki hatası');
-      }
+      // Gerçek DOM: hata AMBIGUOUS kartının içinde kullanıcıya GÖRÜNÜR (Codex final-blocker):
+      await waitFor(() => expect(screen.getByTestId('export-reconcile-error')).toBeInTheDocument());
+      expect(screen.getByText(badge)).toBeInTheDocument();
+      expect(screen.getByText(detail)).toBeInTheDocument();
+      expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
       expect(guard.clearCalls).toBe(0);
       expect(mockExport).toHaveBeenCalledTimes(1);
+      // Sonraki BAŞARILI reconciliation hata kartını temizler + terminal geçiş:
+      mockList.mockResolvedValueOnce([
+        { caseKey: 'case-f', state: { kind: 'known', value: 'EXPORTED' } },
+      ]);
+      fireEvent.click(screen.getByTestId('export-reconcile'));
+      await waitFor(() =>
+        expect(screen.getByTestId('export-reconciled-exported')).toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId('export-reconcile-error')).not.toBeInTheDocument();
+      expect(mockExport).toHaveBeenCalledTimes(1); // POST retry hiç olmadı
     },
   );
 

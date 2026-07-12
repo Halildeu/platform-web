@@ -420,6 +420,20 @@ export function LiveExportPanel({
                 OTOMATİK TEKRARLANMADI; vakanın hâlâ FINALIZED görünmesi ilk isteğin uygulanmadığını
                 KANITLAMAZ. Güncel durumu authoritative listeden doğrulayın.
               </Text>
+              {list.phase === 'error' && (
+                <Stack direction="column" gap={1} data-testid="export-reconcile-error">
+                  <Badge variant="error">
+                    {list.kind === 'authn'
+                      ? 'Oturum hatası'
+                      : list.kind === 'authz'
+                        ? 'Yetki hatası'
+                        : 'Vaka durumu okunamadı'}
+                  </Badge>
+                  <Text as="p" size="sm">
+                    {list.detail}
+                  </Text>
+                </Stack>
+              )}
               <div>
                 <Button
                   data-testid="export-reconcile"
