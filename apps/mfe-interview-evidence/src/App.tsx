@@ -8,6 +8,7 @@ import { LiveCitationPanel } from './review/LiveCitationPanel';
 import { LiveReviewCasePanel } from './review/LiveReviewCasePanel';
 import type { CitationReceiptRef } from './review/LiveReviewCasePanel';
 import { DsarPanel } from './dsar/DsarPanel';
+import { LiveDsarPanel } from './dsar/LiveDsarPanel';
 import { TranscriptList } from './transcripts/TranscriptList';
 import {
   listTranscripts,
@@ -350,13 +351,22 @@ function LiveReadApp() {
           )}
 
           <Card variant="outlined" padding="md">
+            <LiveDsarPanel
+              key={interviewId}
+              interviewId={interviewId}
+              transcriptKeys={list.transcripts.map((t) => t.transcriptKey)}
+              selectedTranscriptKey={selectedKey || null}
+            />
+          </Card>
+
+          <Card variant="outlined" padding="md">
             <Stack direction="column" gap={2} data-testid="live-write-surfaces-note">
               <Badge variant="info">
                 Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a) + kanıt-alıntı taslağı
-                (39d-7b) + insan incelemesi/finalize (39d-7b-2)
+                (39d-7b) + insan incelemesi/finalize (39d-7b-2) + DSAR/silme (39d-7c)
               </Badge>
               <Text as="p" size="sm" variant="secondary">
-                Export (F7) ve DSAR (F10) canlı bağlanmadı (39d-7c+); demo motorlar canlı transkript
+                Export (F7) canlı bağlanmadı (ayrı güvenlik kapısı); demo motorlar canlı transkript
                 anahtarlarını tanımadığı için burada gösterilmezler (yanıltıcı karışım yerine dürüst
                 sınır). Tam ürün akışı demo modunda çalışır durumda.
               </Text>

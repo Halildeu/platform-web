@@ -1,0 +1,613 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Badge, Button, Stack, Text } from '@mfe/design-system';
+import { classifyDsarError, executeLiveErasure, receiveLiveDsar } from './liveDsarApi';
+import type { ClassifiedDsarError, LiveErasureReceipt } from './liveDsarApi';
+import {
+  canonicalizeScope,
+  parseOpaqueRefs,
+  scopeItemCount,
+  stableScopeFingerprint,
+} from './opaqueRefs';
+import type { CanonicalErasureScope } from './opaqueRefs';
+import { createSessionUnresolvedGuard } from './unresolvedGuard';
+import type { UnresolvedErasureGuard } from './unresolvedGuard';
+
+/**
+ * 39d-7c canlı DSAR/erasure paneli (F10) — Codex 019f535a AGREE(şartlı) plan.
+ *
+ * Güvenlik modeli (Codex nihai akış özeti aynen):
+ * - INTAKE: subjectRef + reasonCode ZORUNLU opak; yeni submit BAŞLARKEN eski
+ *   dsarKey + downstream SENKRON invalidate (7b-2 stale-receipt dersi);
+ *   girdi/interview değişimi de invalidate eder. Bilinen 4xx → güvenli hata;
+ *   transport/malformed-201/bilinmeyen-5xx → intake-ambiguous (retry YOK).
+ * - ERASURE: iki-adım teyit FROZEN canonical scope snapshot'ına bağlı (ikinci
+ *   tık canlı inputları YENİDEN PARSE ETMEZ); session unresolved-guard POST'tan
+ *   ÖNCE arm edilir — arm başarısızsa POST GÖNDERİLMEZ (fail-closed). Yalnız
+ *   kesin-200+valid-receipt ya da kesin-uygulanmadı (401/403) guard'ı temizler;
+ *   diğer her sonuç guard'ı KORUR + erasure-ambiguous (retry/"Yeni DSAR" YOK).
+ * - REMOUNT: geçerli YA DA malformed unresolved marker → panel kilitli
+ *   (fingerprint kilit-bypass için KULLANILMAZ — interview-düzeyi kilit).
+ * - COMPLETED: kilitli dürüst receipt (yalnız GÖNDERİLEN scope için sonuç;
+ *   "adayın tüm verileri silindi" iddiası ASLA) + açık "Yeni DSAR" tam reseti
+ *   (unresolved marker'a DOKUNMAZ).
+ */
+interface IntakeReceipt {
+  interviewId: string;
+  subjectRef: string;
+  reasonCode: string;
+  dsarKey: string;
+}
+
+interface ErasureConfirmation {
+  interviewId: string;
+  dsarKey: string;
+  scope: CanonicalErasureScope;
+  fingerprint: string;
+}
+
+type PanelPhase =
+  | { phase: 'intake-editing' }
+  | { phase: 'intake-submitting' }
+  | { phase: 'intake-ambiguous' }
+  | { phase: 'scope-editing'; intake: IntakeReceipt }
+  | { phase: 'confirming'; intake: IntakeReceipt; confirmation: ErasureConfirmation }
+  | { phase: 'erasure-submitting'; intake: IntakeReceipt; confirmation: ErasureConfirmation }
+  | { phase: 'erasure-ambiguous'; intake: IntakeReceipt }
+  | { phase: 'completed'; intake: IntakeReceipt; receipt: LiveErasureReceipt }
+  | { phase: 'blocked-unresolved'; malformed: boolean };
+
+const ERR_BADGE: Record<ClassifiedDsarError['kind'], string> = {
+  authn: 'Oturum hatası',
+  authz: 'Yetki hatası',
+  'tenant-scope': 'Kapsam güvenlik engeli',
+  validation: 'Geçersiz girdi',
+  'not-found': 'Bulunamadı',
+  gate: 'Ortam kapısı',
+  'fail-closed': 'Güvenli yürütülemedi',
+  'not-configured': 'Servis yapılandırılmamış',
+  generic: 'İşlem başarısız',
+};
+
+export function LiveDsarPanel({
+  interviewId,
+  transcriptKeys,
+  selectedTranscriptKey,
+  guard,
+}: {
+  interviewId: string;
+  transcriptKeys: string[];
+  selectedTranscriptKey: string | null;
+  /** Test enjeksiyonu; default session-scoped guard. */
+  guard?: UnresolvedErasureGuard;
+}) {
+  const guardRef = useRef<UnresolvedErasureGuard>(guard ?? createSessionUnresolvedGuard());
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  // Mount kilidi: unresolved/malformed marker → yıkıcı yüzey açılmaz (fail-closed).
+  const initialPhase = useMemo<PanelPhase>(() => {
+    const read = guardRef.current.read(interviewId);
+    if (read.kind === 'unresolved') return { phase: 'blocked-unresolved', malformed: false };
+    if (read.kind === 'malformed') return { phase: 'blocked-unresolved', malformed: true };
+    return { phase: 'intake-editing' };
+  }, [interviewId]);
+  const [state, setState] = useState<PanelPhase>(initialPhase);
+  const [error, setError] = useState<{
+    operation: 'intake' | 'erasure';
+    error: ClassifiedDsarError;
+  } | null>(null);
+
+  // Intake girdileri (opak; zorunlu).
+  const [subjectRef, setSubjectRef] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  // Scope girdileri.
+  const [selectedTranscripts, setSelectedTranscripts] = useState<string[]>([]);
+  const [citationRefsText, setCitationRefsText] = useState('');
+  const [exportRefsText, setExportRefsText] = useState('');
+  const [reviewCaseRefsText, setReviewCaseRefsText] = useState('');
+  const [tombstoneRefsText, setTombstoneRefsText] = useState('');
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
+
+  const busy = state.phase === 'intake-submitting' || state.phase === 'erasure-submitting';
+  const terminal =
+    state.phase === 'intake-ambiguous' ||
+    state.phase === 'erasure-ambiguous' ||
+    state.phase === 'completed' ||
+    state.phase === 'blocked-unresolved';
+
+  // Transcript listesi (prop) değişirse: listede olmayan seçimler budanır;
+  // teyit açıksa scope-editing'e düşülür (Codex b-hükmü). Frozen gönderim
+  // erasure-submitting'de zaten snapshot'tan gider — oraya DOKUNULMAZ.
+  // Dependency signature: JSON serialization (opak anahtar grameri tanımsız —
+  // join delimiter'ı collision-safe değildir; Codex 7c post-impl blocker-1).
+  const transcriptKeysSignature = JSON.stringify(transcriptKeys);
+  useEffect(() => {
+    setSelectedTranscripts((prev) => {
+      const pruned = prev.filter((k) => transcriptKeys.includes(k));
+      return pruned.length === prev.length ? prev : pruned;
+    });
+    setState((s) => (s.phase === 'confirming' ? { phase: 'scope-editing', intake: s.intake } : s));
+  }, [transcriptKeysSignature]);
+
+  useEffect(() => {
+    if (state.phase === 'confirming') confirmRef.current?.focus();
+  }, [state.phase]);
+
+  /** Intake girdisi değişimi: eski dsarKey + TÜM downstream invalidate (Codex şart-7). */
+  const onIntakeInputChange = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setError(null);
+    setState((s) =>
+      s.phase === 'scope-editing' || s.phase === 'confirming' ? { phase: 'intake-editing' } : s,
+    );
+  };
+
+  const scopeInputsChanged = () => {
+    setError(null);
+    setState((s) => (s.phase === 'confirming' ? { phase: 'scope-editing', intake: s.intake } : s));
+  };
+
+  const buildScope = (): CanonicalErasureScope =>
+    canonicalizeScope({
+      transcriptKeys: selectedTranscripts,
+      citationKeys: parseOpaqueRefs(citationRefsText),
+      exportArtifactKeys: parseOpaqueRefs(exportRefsText),
+      reviewCaseKeys: parseOpaqueRefs(reviewCaseRefsText),
+      tombstoneTargetEvidenceIds: parseOpaqueRefs(tombstoneRefsText),
+    });
+
+  const submitIntake = () => {
+    if (busy || terminal) return;
+    // Yeni intake BAŞLARKEN eski receipt/downstream senkron düşer (stale-receipt dersi).
+    setState({ phase: 'intake-submitting' });
+    setError(null);
+    const snapshot = {
+      interviewId,
+      subjectRef: subjectRef.trim(),
+      reasonCode: reasonCode.trim(),
+    };
+    receiveLiveDsar(snapshot.interviewId, snapshot.subjectRef, snapshot.reasonCode).then(
+      (dsarKey) => {
+        if (!alive.current) return;
+        setState({ phase: 'scope-editing', intake: { ...snapshot, dsarKey } });
+      },
+      (err) => {
+        if (!alive.current) return;
+        const classified = classifyDsarError(err, 'intake');
+        if (classified.certainty === 'unresolved') {
+          // DSAR oluşmuş olabilir; dsarKey alınamadı — retry/reset sunulmaz.
+          setState({ phase: 'intake-ambiguous' });
+        } else {
+          setState({ phase: 'intake-editing' });
+          setError({ operation: 'intake', error: classified });
+        }
+      },
+    );
+  };
+
+  const openConfirmation = (intake: IntakeReceipt) => {
+    if (busy || terminal) return;
+    setError(null);
+    const scope = buildScope();
+    if (scopeItemCount(scope) === 0) {
+      setError({
+        operation: 'erasure',
+        error: {
+          kind: 'validation',
+          detail: 'Silme kapsamı boş — en az bir transkript seçin ya da referans girin.',
+          certainty: 'not-applied',
+        },
+      });
+      return;
+    }
+    setState({
+      phase: 'confirming',
+      intake,
+      confirmation: {
+        interviewId,
+        dsarKey: intake.dsarKey,
+        scope,
+        fingerprint: stableScopeFingerprint(scope),
+      },
+    });
+  };
+
+  const executeConfirmed = (intake: IntakeReceipt, confirmation: ErasureConfirmation) => {
+    if (busy) return;
+    setError(null);
+    // Guard POST'tan ÖNCE arm edilir; arm başarısızsa POST GÖNDERİLMEZ (fail-closed).
+    const armed = guardRef.current.arm(interviewId, {
+      version: 1,
+      dsarKey: confirmation.dsarKey,
+      scopeFingerprint: confirmation.fingerprint,
+      startedAt: new Date().toISOString(),
+    });
+    if (!armed) {
+      setState({ phase: 'scope-editing', intake });
+      setError({
+        operation: 'erasure',
+        error: {
+          kind: 'generic',
+          detail:
+            'Güvenli tekrar-koruması oluşturulamadığı için silme BAŞLATILMADI. Tarayıcı depolama erişimini kontrol edin.',
+          certainty: 'not-applied',
+        },
+      });
+      return;
+    }
+    setState({ phase: 'erasure-submitting', intake, confirmation });
+    // İkinci tık FROZEN snapshot'ı gönderir — canlı inputlar yeniden parse edilmez.
+    executeLiveErasure(confirmation.interviewId, confirmation.dsarKey, confirmation.scope).then(
+      (receipt) => {
+        if (!alive.current) return;
+        guardRef.current.clear(interviewId); // yalnız kesin-200+valid-receipt temizler
+        setState({ phase: 'completed', intake, receipt });
+      },
+      (err) => {
+        if (!alive.current) return;
+        const classified = classifyDsarError(err, 'erasure');
+        if (classified.certainty === 'not-applied') {
+          // Yalnız filter-chain (401/403) — handler'a girilmedi, kesin uygulanmadı.
+          guardRef.current.clear(interviewId);
+          setState({ phase: 'scope-editing', intake });
+          setError({ operation: 'erasure', error: classified });
+        } else {
+          // Transport / malformed-200 / 4xx-5xx kısmî-yürütme ihtimali: guard KALIR.
+          setState({ phase: 'erasure-ambiguous', intake });
+        }
+      },
+    );
+  };
+
+  /** Tam reset — yalnız completed'dan erişilir; unresolved marker'a DOKUNMAZ. */
+  const startNewDsar = () => {
+    setSubjectRef('');
+    setReasonCode('');
+    setSelectedTranscripts([]);
+    setCitationRefsText('');
+    setExportRefsText('');
+    setReviewCaseRefsText('');
+    setTombstoneRefsText('');
+    setError(null);
+    setState({ phase: 'intake-editing' });
+  };
+
+  const keyTail = (k: string) => (k.length > 18 ? `…${k.slice(-12)}` : k);
+  const intakeOfState =
+    state.phase === 'scope-editing' ||
+    state.phase === 'confirming' ||
+    state.phase === 'erasure-submitting' ||
+    state.phase === 'erasure-ambiguous' ||
+    state.phase === 'completed'
+      ? state.intake
+      : null;
+
+  const scopeSummary = (scope: CanonicalErasureScope) => (
+    <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+      <li>
+        Transkript: {scope.transcriptKeys.length}
+        {scope.transcriptKeys.length > 0 && (
+          <>
+            {' '}
+            (<code>{scope.transcriptKeys.map(keyTail).join(', ')}</code>)
+          </>
+        )}
+      </li>
+      <li>Kanıt-alıntı referansı: {scope.citationKeys.length}</li>
+      <li>Export artefakt referansı: {scope.exportArtifactKeys.length}</li>
+      <li>İnceleme vakası referansı: {scope.reviewCaseKeys.length}</li>
+      <li>Tombstone hedef kanıt: {scope.tombstoneTargetEvidenceIds.length}</li>
+    </ul>
+  );
+
+  return (
+    <Stack direction="column" gap={3} data-testid="live-dsar-panel">
+      <Text as="h2" size="lg" weight="semibold">
+        DSAR / silme (F10 — canlı)
+      </Text>
+      <Text as="p" size="sm" variant="secondary">
+        Veri-sahibi talebi opak referanslarla kaydedilir; silme YALNIZ gönderilen kapsam için
+        yürütülür ve geri alınamaz. WORM kanıt defteri SİLİNMEZ (tombstone eklenir); content-plane
+        verisi silinir. Alanlara aday adı/e-postası ya da içerik YAZMAYIN — yalnız opak referans.
+      </Text>
+
+      {state.phase === 'blocked-unresolved' && (
+        <Stack direction="column" gap={2} data-testid="dsar-blocked-unresolved">
+          <Badge variant="warning">Önceki silme işleminin sonucu doğrulanamadı</Badge>
+          <Text as="p" size="sm">
+            {state.malformed
+              ? 'Önceki işlemin güvenlik kaydı doğrulanamadı (bozuk işaret). Güvenlik nedeniyle bu mülakat için silme yüzeyi kilitli.'
+              : 'Bu mülakat için sonucu doğrulanamamış bir silme işlemi kaydı var. Tombstone ve content-plane işlemleri uygulanmış olabilir; otomatik tekrar YAPILMADI.'}{' '}
+            Sonuç audit/destek üzerinden doğrulanmadan yeni bir silme başlatmayın.
+          </Text>
+        </Stack>
+      )}
+
+      {state.phase === 'intake-ambiguous' && (
+        <Stack direction="column" gap={2} data-testid="dsar-intake-ambiguous">
+          <Badge variant="warning">DSAR talebinin sonucu doğrulanamadı</Badge>
+          <Text as="p" size="sm">
+            Backend talebi oluşturmuş olabilir ancak <code>dsarKey</code> alınamadı. Otomatik ya da
+            doğrudan tekrar gönderim YAPILMADI. Audit/destek üzerinden talebin durumunu doğrulayın.
+          </Text>
+        </Stack>
+      )}
+
+      {state.phase === 'erasure-ambiguous' && (
+        <Stack direction="column" gap={2} data-testid="dsar-erasure-ambiguous">
+          <Badge variant="warning">Silme sonucunun doğrulanması mümkün olmadı</Badge>
+          <Text as="p" size="sm">
+            Tombstone ve content-plane işlemleri uygulanmış olabilir (backend kısmî-yürütme
+            noktalarından hata dönebilir). İşlem OTOMATİK TEKRARLANMADI; sonuç doğrulanmadan yeni
+            bir silme talebi başlatmayın. DSAR: <code>{keyTail(state.intake.dsarKey)}</code>
+          </Text>
+        </Stack>
+      )}
+
+      {state.phase === 'completed' && (
+        <Stack direction="column" gap={2} data-testid="dsar-completed-receipt">
+          <Badge variant="success">Gönderilen kapsam için silme yürütüldü</Badge>
+          <Text as="p" size="sm">
+            DSAR: <code>{state.receipt.dsarKey}</code> · eklenen tombstone:{' '}
+            {state.receipt.tombstoneCount} · silinen içerik: {state.receipt.deletedContentCount} ·
+            vaka geçişi:{' '}
+            {state.receipt.caseTransitioned
+              ? 'en az bir uygun vaka geçişi uygulandı'
+              : 'raporlanmadı (terminal vaka state’leri korunmuş olabilir)'}
+          </Text>
+          <Text as="p" size="sm" variant="secondary">
+            Kanıt defteri (WORM) kayıtları SİLİNMEDİ
+            {state.receipt.tombstoneCount > 0 ? '; hedefler için tombstone kayıtları eklendi' : ''}.
+            Content-plane verisi yalnız bu makbuzda bildirilen kapsamda silindi — bu, adayın tüm
+            verilerinin silindiği anlamına GELMEZ (kapsam bütünlüğü ayrı operasyonel süreçtir).
+          </Text>
+          <div>
+            <Button data-testid="dsar-new-request" variant="secondary" onClick={startNewDsar}>
+              Yeni DSAR talebi başlat
+            </Button>
+          </div>
+          <Text as="p" size="sm" variant="secondary">
+            Yeni bir talep başlatmak, mevcut talebi veya WORM kayıtlarını silmez; ayrı bir DSAR
+            oluşturur.
+          </Text>
+        </Stack>
+      )}
+
+      {(state.phase === 'intake-editing' ||
+        state.phase === 'intake-submitting' ||
+        state.phase === 'scope-editing' ||
+        state.phase === 'confirming' ||
+        state.phase === 'erasure-submitting') && (
+        <Stack direction="column" gap={2} data-testid="dsar-intake-form">
+          <label htmlFor="dsar-subject-ref">
+            <Text as="span" size="sm">
+              Veri sahibi referansı (opak — zorunlu)
+            </Text>
+          </label>
+          <input
+            id="dsar-subject-ref"
+            data-testid="dsar-subject-input"
+            value={subjectRef}
+            disabled={busy}
+            onChange={(e) => onIntakeInputChange(setSubjectRef)(e.target.value)}
+            placeholder="örn. subject-2026-0712-01"
+          />
+          <label htmlFor="dsar-reason-code">
+            <Text as="span" size="sm">
+              Opak neden kodu (zorunlu) — açıklama/serbest metin/PII girmeyin
+            </Text>
+          </label>
+          <input
+            id="dsar-reason-code"
+            data-testid="dsar-reason-input"
+            value={reasonCode}
+            disabled={busy}
+            onChange={(e) => onIntakeInputChange(setReasonCode)(e.target.value)}
+            placeholder="örn. kvkk-md11-erasure"
+          />
+          {(state.phase === 'intake-editing' || state.phase === 'intake-submitting') && (
+            <div>
+              <Button
+                data-testid="dsar-intake-submit"
+                variant="primary"
+                disabled={busy || !subjectRef.trim() || !reasonCode.trim()}
+                onClick={submitIntake}
+              >
+                {state.phase === 'intake-submitting' ? 'Kaydediliyor…' : 'DSAR kaydı oluştur'}
+              </Button>
+            </div>
+          )}
+        </Stack>
+      )}
+
+      {intakeOfState && state.phase !== 'completed' && state.phase !== 'erasure-ambiguous' && (
+        <Stack direction="column" gap={2} data-testid="dsar-key-badge">
+          <div>
+            <Badge variant="info">
+              DSAR kaydı: <code>{keyTail(intakeOfState.dsarKey)}</code>
+            </Badge>
+          </div>
+          <Text as="p" size="sm" variant="secondary">
+            Veri sahibi/neden girdileri değişirse bu kayıt geçersiz sayılır ve yeni intake gerekir.
+          </Text>
+        </Stack>
+      )}
+
+      {(state.phase === 'scope-editing' ||
+        state.phase === 'confirming' ||
+        state.phase === 'erasure-submitting') && (
+        <Stack direction="column" gap={2} data-testid="dsar-scope-editor">
+          <Text as="h3" size="lg" weight="semibold">
+            Silme kapsamı (yalnız gönderilen kapsam yürütülür)
+          </Text>
+          <Text as="p" size="sm" variant="secondary">
+            Transkript seçimi bu mülakatın canlı listesinden yapılır; hiçbiri önceden seçili
+            değildir. Diğer alanlara HER SATIRA BİR opak referans girin.
+          </Text>
+          <Stack direction="column" gap={1} data-testid="dsar-transcript-select">
+            {transcriptKeys.length === 0 ? (
+              <Text as="p" size="sm">
+                Bu mülakat için listede transkript yok.
+              </Text>
+            ) : (
+              transcriptKeys.map((k) => (
+                <label key={k} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    data-testid={`dsar-transcript-${k}`}
+                    checked={selectedTranscripts.includes(k)}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setSelectedTranscripts((prev) =>
+                        e.target.checked ? [...prev, k] : prev.filter((x) => x !== k),
+                      );
+                      scopeInputsChanged();
+                    }}
+                  />
+                  <code>{keyTail(k)}</code>
+                  {k === selectedTranscriptKey && <Badge variant="muted">görüntülenen</Badge>}
+                </label>
+              ))
+            )}
+            <Stack direction="row" gap={2}>
+              <Button
+                variant="ghost"
+                data-testid="dsar-transcripts-all"
+                disabled={busy || transcriptKeys.length === 0}
+                onClick={() => {
+                  setSelectedTranscripts([...transcriptKeys]);
+                  scopeInputsChanged();
+                }}
+              >
+                Tüm transkriptleri seç
+              </Button>
+              <Button
+                variant="ghost"
+                data-testid="dsar-transcripts-none"
+                disabled={busy || selectedTranscripts.length === 0}
+                onClick={() => {
+                  setSelectedTranscripts([]);
+                  scopeInputsChanged();
+                }}
+              >
+                Seçimi temizle
+              </Button>
+            </Stack>
+          </Stack>
+          {(
+            [
+              [
+                'dsar-citation-refs',
+                'Kanıt-alıntı referansları',
+                citationRefsText,
+                setCitationRefsText,
+              ],
+              [
+                'dsar-export-refs',
+                'Export artefakt referansları',
+                exportRefsText,
+                setExportRefsText,
+              ],
+              [
+                'dsar-reviewcase-refs',
+                'İnceleme vakası referansları',
+                reviewCaseRefsText,
+                setReviewCaseRefsText,
+              ],
+              [
+                'dsar-tombstone-refs',
+                'Tombstone hedef kanıt referansları',
+                tombstoneRefsText,
+                setTombstoneRefsText,
+              ],
+            ] as const
+          ).map(([id, label, value, set]) => (
+            <Stack key={id} direction="column" gap={1}>
+              <label htmlFor={id}>
+                <Text as="span" size="sm">
+                  {label} (opsiyonel — her satıra bir opak referans; ad/e-posta/içerik
+                  yapıştırmayın)
+                </Text>
+              </label>
+              <textarea
+                id={id}
+                data-testid={`${id}-input`}
+                value={value}
+                rows={2}
+                disabled={busy}
+                onChange={(e) => {
+                  set(e.target.value);
+                  scopeInputsChanged();
+                }}
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+            </Stack>
+          ))}
+          {state.phase === 'scope-editing' && (
+            <div>
+              <Button
+                data-testid="dsar-erasure-step1"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => openConfirmation(state.intake)}
+              >
+                Silme kapsamını onayla…
+              </Button>
+            </div>
+          )}
+          {(state.phase === 'confirming' || state.phase === 'erasure-submitting') && (
+            <Stack direction="column" gap={2} data-testid="dsar-erasure-confirm">
+              <Badge variant="warning">Geri alınamaz işlem</Badge>
+              <Text as="p" size="sm">
+                DSAR <code>{keyTail(state.confirmation.dsarKey)}</code> için aşağıdaki DONMUŞ kapsam
+                KALICI olarak silinecek (kapsam parmak izi:{' '}
+                <code>{state.confirmation.fingerprint}</code>):
+              </Text>
+              {scopeSummary(state.confirmation.scope)}
+              <Text as="p" size="sm" variant="secondary">
+                WORM kanıt defteri silinmez (tombstone eklenir); content-plane verisi silinir. Bu
+                işlem yalnız gönderilen kapsamla sınırlıdır.
+              </Text>
+              <Stack direction="row" gap={2}>
+                <Button
+                  ref={confirmRef}
+                  data-testid="dsar-erasure-step2"
+                  variant="primary"
+                  aria-label="Donmuş kapsam için silmeyi kalıcı olarak yürüt"
+                  disabled={busy}
+                  onClick={() => executeConfirmed(state.intake, state.confirmation)}
+                >
+                  {state.phase === 'erasure-submitting'
+                    ? 'Silme yürütülüyor…'
+                    : 'Silmeyi kalıcı olarak yürüt'}
+                </Button>
+                <Button
+                  data-testid="dsar-erasure-cancel"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => setState({ phase: 'scope-editing', intake: state.intake })}
+                >
+                  Vazgeç
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+        </Stack>
+      )}
+
+      {error && (
+        <Stack direction="column" gap={2} data-testid="dsar-error">
+          <Badge variant="error">{ERR_BADGE[error.error.kind]}</Badge>
+          <Text as="p" size="sm">
+            {error.error.detail}
+          </Text>
+        </Stack>
+      )}
+    </Stack>
+  );
+}
