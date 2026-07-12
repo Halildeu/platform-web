@@ -77,6 +77,8 @@ export function LiveCitationPanel({
       transcriptKey: string;
       evidenceId: string;
       citationKey: string;
+      /** 39d-7d: export önerisi INSUFFICIENT receipt'i OTOMATİK önermez (Codex şartı). */
+      entailment: CitationEntailment;
     } | null,
   ) => void;
 }) {
@@ -107,6 +109,7 @@ export function LiveCitationPanel({
           transcriptKey,
           evidenceId: receipt.evidenceId,
           citationKey: receipt.citationKey,
+          entailment: receipt.entailment,
         });
       },
       (error) => {

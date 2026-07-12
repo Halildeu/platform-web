@@ -9,6 +9,9 @@ import { LiveReviewCasePanel } from './review/LiveReviewCasePanel';
 import type { CitationReceiptRef } from './review/LiveReviewCasePanel';
 import { DsarPanel } from './dsar/DsarPanel';
 import { LiveDsarPanel } from './dsar/LiveDsarPanel';
+import { LiveExportPanel } from './export/LiveExportPanel';
+import { resolveExportProfile } from './export/exportProfile';
+import type { CitationEntailment } from './review/liveCitationApi';
 import { TranscriptList } from './transcripts/TranscriptList';
 import {
   listTranscripts,
@@ -150,7 +153,11 @@ function LiveReadApp() {
   const segCache = useRef(new Map<string, Segment[]>());
   const [reloadNonce, setReloadNonce] = useState(0);
   // 39d-7b-2: güncel citation receipt'i (F4→F5 bağı); citation invalidate'inde null.
-  const [citationReceipt, setCitationReceipt] = useState<CitationReceiptRef | null>(null);
+  // 39d-7d: entailment de taşınır — export önerisi INSUFFICIENT receipt'i önermez.
+  const [citationReceipt, setCitationReceipt] = useState<
+    (CitationReceiptRef & { entailment: CitationEntailment }) | null
+  >(null);
+  const exportProfile = useMemo(() => resolveExportProfile(), []);
   // 39d-7a: transcribe sonrası hedef seçim — refresh'te bulunamazsa
   // CONSISTENCY hatası (sessizce ilk transkripte GEÇİLMEZ; Codex #6).
   const pendingTargetKey = useRef<string | null>(null);
@@ -360,15 +367,30 @@ function LiveReadApp() {
           </Card>
 
           <Card variant="outlined" padding="md">
+            <LiveExportPanel
+              key={interviewId}
+              interviewId={interviewId}
+              profileResolution={exportProfile}
+              citationSuggestion={
+                citationReceipt && citationReceipt.entailment !== 'INSUFFICIENT'
+                  ? citationReceipt
+                  : null
+              }
+            />
+          </Card>
+
+          <Card variant="outlined" padding="md">
             <Stack direction="column" gap={2} data-testid="live-write-surfaces-note">
               <Badge variant="info">
                 Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a) + kanıt-alıntı taslağı
-                (39d-7b) + insan incelemesi/finalize (39d-7b-2) + DSAR/silme (39d-7c)
+                (39d-7b) + insan incelemesi/finalize (39d-7b-2) + DSAR/silme (39d-7c) + kanıt-paketi
+                export (39d-7d)
               </Badge>
               <Text as="p" size="sm" variant="secondary">
-                Export (F7) canlı bağlanmadı (ayrı güvenlik kapısı); demo motorlar canlı transkript
-                anahtarlarını tanımadığı için burada gösterilmezler (yanıltıcı karışım yerine dürüst
-                sınır). Tam ürün akışı demo modunda çalışır durumda.
+                39d canlı ürün yüzeyi F1→F10 hattında tamamlandı (rıza → yükleme → transkripsiyon →
+                kanıt-alıntı → insan onayı/finalize → export → DSAR). Demo motorlar canlı transkript
+                anahtarlarını tanımadığı için burada gösterilmezler (dürüst sınır); tam ürün akışı
+                demo modunda da çalışır durumda.
               </Text>
             </Stack>
           </Card>
