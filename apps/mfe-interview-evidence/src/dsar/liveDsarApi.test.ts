@@ -125,8 +125,11 @@ describe('executeLiveErasure — strict 200 receipt + dsarKey eşleşmesi', () =
 });
 
 describe('classifyDsarError — outcome-certainty (kaynak-kanıtlı daraltılmış küme)', () => {
-  test('401 → authn + not-applied (filter-chain, handler öncesi)', () => {
-    const c = classifyDsarError({ response: { status: 401 } }, 'erasure');
+  test('401+UNAUTHENTICATED → authn + not-applied (filter-chain, handler öncesi)', () => {
+    const c = classifyDsarError(
+      { response: { status: 401, data: { error: 'UNAUTHENTICATED' } } },
+      'erasure',
+    );
     expect(c.kind).toBe('authn');
     expect(c.certainty).toBe('not-applied');
   });
@@ -134,7 +137,10 @@ describe('classifyDsarError — outcome-certainty (kaynak-kanıtlı daraltılmı
   test('403 DENIED → authz + not-applied; mesaj op-aware (intake=dsar.write, erasure=erasure.execute)', () => {
     const i = classifyDsarError({ response: { status: 403, data: { error: 'DENIED' } } }, 'intake');
     expect(i.detail).toMatch(/ats\.dsar\.write/);
-    const e = classifyDsarError({ response: { status: 403 } }, 'erasure');
+    const e = classifyDsarError(
+      { response: { status: 403, data: { error: 'DENIED' } } },
+      'erasure',
+    );
     expect(e.detail).toMatch(/ats\.erasure\.execute/);
     expect(i.certainty).toBe('not-applied');
     expect(e.certainty).toBe('not-applied');
@@ -154,16 +160,36 @@ describe('classifyDsarError — outcome-certainty (kaynak-kanıtlı daraltılmı
     expect(c.detail).toMatch(/tenant\/mülakat kapsamına ait değil/);
     expect(c.detail).not.toMatch(/GIZLI-anahtar/);
     expect(c.detail).not.toMatch(/ats\.erasure\.execute/);
+    // Pre-side-effect kanıtı YOK (kod DSAR akışında üretilmiyor) → erasure'da
+    // fail-closed unresolved; intake tek-put not-applied:
+    expect(c.certainty).toBe('unresolved');
+    expect(
+      classifyDsarError(
+        { response: { status: 403, data: { error: 'TENANT_SCOPE_VIOLATION' } } },
+        'intake',
+      ).certainty,
+    ).toBe('not-applied');
   });
 
-  test.each([[400], [404], [409], [422], [500], [502], [503]])(
-    'ERASURE %i → unresolved (DsrService kısmî-yürütme noktaları — guard korunmalı)',
-    (status) => {
-      expect(classifyDsarError({ response: { status } }, 'erasure').certainty).toBe('unresolved');
+  test.each([
+    [400, 'INVALID'],
+    [404, 'NOT_FOUND'],
+    [503, 'NOT_CONFIGURED'],
+    [422, 'OK'],
+    [400, null],
+    [404, null],
+    [409, null],
+    [500, null],
+    [502, null],
+  ] as [number, string | null][])(
+    'ERASURE %i (code=%s) → unresolved (DsrService kısmî-yürütme noktaları — guard korunmalı)',
+    (status, code) => {
+      const err = { response: { status, data: code ? { error: code } : undefined } };
+      expect(classifyDsarError(err, 'erasure').certainty).toBe('unresolved');
     },
   );
 
-  test('INTAKE bilinen statüler not-applied; reason yalnız izinli sınıflarda cap+temizlikle', () => {
+  test('INTAKE exact-pair not-applied; reason yalnız izinli çiftlerde cap+temizlikle', () => {
     const c400 = classifyDsarError(
       {
         response: {
@@ -179,19 +205,42 @@ describe('classifyDsarError — outcome-certainty (kaynak-kanıtlı daraltılmı
     expect(c400.detail.length).toBeLessThan(260);
     // eslint-disable-next-line no-control-regex
     expect(c400.detail).not.toMatch(/[\u0000-\u001f\u007f]/);
-    expect(classifyDsarError({ response: { status: 404 } }, 'intake').certainty).toBe(
-      'not-applied',
-    );
-    expect(classifyDsarError({ response: { status: 409 } }, 'intake').certainty).toBe(
-      'not-applied',
-    );
-    expect(classifyDsarError({ response: { status: 422 } }, 'intake').certainty).toBe(
-      'not-applied',
-    );
-    expect(classifyDsarError({ response: { status: 503 } }, 'intake').certainty).toBe(
-      'not-applied',
-    );
+    const pair = (status: number, code: string) =>
+      classifyDsarError({ response: { status, data: { error: code } } }, 'intake');
+    expect(pair(404, 'NOT_FOUND').certainty).toBe('not-applied');
+    expect(pair(409, 'UNSUPPORTED_IN_GATE').certainty).toBe('not-applied');
+    expect(pair(422, 'OK').certainty).toBe('not-applied');
+    expect(pair(503, 'NOT_CONFIGURED').certainty).toBe('not-applied');
   });
+
+  test.each([
+    [401, 'DENIED'],
+    [401, null],
+    [403, 'INVALID'],
+    [403, null],
+    [400, 'DENIED'],
+    [400, 'TENANT_SCOPE_VIOLATION'],
+    [404, 'INVALID'],
+    [409, 'NOT_FOUND'],
+    [422, 'INVALID'],
+    [503, 'OK'],
+  ] as [number, string | null][])(
+    'MISMATCH %i+%s → generic + unresolved + reason YANKILANMAZ (her iki op)',
+    (status, code) => {
+      const err = {
+        response: {
+          status,
+          data: code ? { error: code, reason: 'SIZINTI-riskli-detay' } : undefined,
+        },
+      };
+      for (const op of ['intake', 'erasure'] as const) {
+        const c = classifyDsarError(err, op);
+        expect(c.kind).toBe('generic');
+        expect(c.certainty).toBe('unresolved');
+        expect(c.detail).not.toMatch(/SIZINTI-riskli-detay/);
+      }
+    },
+  );
 
   test('INTAKE bilinmeyen 5xx → unresolved (DSAR oluşmuş olabilir, dsarKey yok)', () => {
     expect(classifyDsarError({ response: { status: 500 } }, 'intake').certainty).toBe('unresolved');

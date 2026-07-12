@@ -63,8 +63,9 @@ function parseRecord(raw: string): UnresolvedErasureRecordV1 | null {
 /**
  * sessionStorage adapter'ı. `storage` parametresi test enjeksiyonu içindir;
  * default erişim her operasyonda try/catch'lidir (storage'a ERİŞİM bile
- * SecurityError atabilir — bu durumda read 'malformed'a eşdeğer kilit üretmez,
- * 'none' da demez: erişilemeyen storage'da arm zaten false döner ve POST çıkmaz).
+ * SecurityError atabilir). Erişilemeyen storage'da read 'none' döner — intake
+ * yüzeyi açılabilir; yıkıcı POST yine de çıkamaz çünkü arm() aynı storage'a
+ * yazamayıp false döner ve çağıran fail-closed durur.
  */
 export function createSessionUnresolvedGuard(storage?: Storage): UnresolvedErasureGuard {
   const resolve = (): Storage | null => {

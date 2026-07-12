@@ -227,36 +227,45 @@ export function classifyDsarError(error: unknown, op: DsarOperation): Classified
   const status = typeof response.status === 'number' ? response.status : 0;
   const code = typeof response.data?.error === 'string' ? response.data.error : null;
 
-  // Filter-chain cevapları (SecurityConfig): handler'a girilmedi — kesin not-applied.
-  if (status === 401) {
+  // EXACT status×code eşleşmesi (Codex 7c post-impl blocker-2): yalnız kanıtlı
+  // çiftler özel sınıf/certainty alır; beklenmeyen kombinasyon (401+DENIED,
+  // 403+INVALID, gövdesiz 403, ...) kontrat-dışıdır → generic + unresolved,
+  // reason ASLA yankılanmaz, yıkıcı guard TEMİZLENMEZ.
+  if (status === 401 && code === 'UNAUTHENTICATED') {
     return {
       kind: 'authn',
       detail: 'Oturum doğrulanamadı (401) — yeniden giriş; rol ataması bu hatayı çözmez.',
-      certainty: 'not-applied',
+      certainty: 'not-applied', // SecurityConfig filter-chain: handler'a girilmedi
     };
   }
-  if (status === 403) {
-    if (code === 'TENANT_SCOPE_VIOLATION') {
-      return {
-        kind: 'tenant-scope',
-        detail:
-          'İstenen kaynaklardan en az biri bu tenant/mülakat kapsamına ait değil. Güvenlik nedeniyle işlem uygulanmadı.',
-        certainty: 'not-applied',
-      };
-    }
+  if (status === 403 && code === 'DENIED') {
     return {
       kind: 'authz',
       detail:
         op === 'intake'
           ? 'DSAR kaydı için yetkiniz yok (ats.dsar.write rolü — rol-kapısı fail-closed).'
           : 'Silme yürütme için yetkiniz yok (ats.erasure.execute rolü — AYRI yetki sınıfı; fail-closed).',
-      certainty: 'not-applied',
+      certainty: 'not-applied', // SecurityConfig authority reddi: handler'a girilmedi
+    };
+  }
+  if (status === 403 && code === 'TENANT_SCOPE_VIOLATION') {
+    return {
+      kind: 'tenant-scope',
+      detail:
+        'İstenen kaynaklardan en az biri bu tenant/mülakat kapsamına ait değil. Güvenlik nedeniyle işlem uygulanmadı.',
+      // Kaynak kanıtı: bu kod YALNIZ IdentityTenant.assertTenantScope kontratında
+      // tanımlı; DsrService/DsarApiController akışında ÜRETİLMİYOR. Pre-side-effect
+      // garantisi kanıtlanamadığından erasure için fail-closed 'unresolved'
+      // (Codex şart-6); intake tek-put olduğundan not-applied.
+      certainty: op === 'intake' ? 'not-applied' : 'unresolved',
     };
   }
 
   if (op === 'erasure') {
-    // Kaynak-kanıt: 400/404/503 (ve her 5xx) DsrService'te kısmî-yürütme
-    // noktalarından dönebilir — hiçbiri "uygulanmadı" garantisi VERMEZ.
+    // Kaynak-kanıt (DsrService.executeErasure): 503 tombstone-append DÖNGÜSÜ
+    // içinden, 400 content-delete/withdraw/FULFILLED-yazım noktalarından, 404
+    // review-case dalından — hepsi KISMÎ YÜRÜTME SONRASI dönebilir. Reason-string
+    // parse etmeden "uygulanmadı" KANITLANAMAZ → 401/403 dışı her sonuç unresolved.
     return {
       kind: 'generic',
       detail: 'Silme isteği hata döndü; işlem kısmen uygulanmış olabilir.',
@@ -264,47 +273,48 @@ export function classifyDsarError(error: unknown, op: DsarOperation): Classified
     };
   }
 
-  // intake — tek-put, yıkıcı değil; bilinen statüler not-applied.
-  const reason = safeReason(response.data);
-  if (status === 400) {
+  // intake — tek-put, yıkıcı değil; YALNIZ exact çiftler not-applied + reason
+  // yalnız {INVALID, NOT_FOUND, UNSUPPORTED_IN_GATE} çiftlerinde.
+  if (status === 400 && code === 'INVALID') {
     return {
       kind: 'validation',
-      detail: withReason('İstek backend doğrulamasından geçemedi.', reason),
+      detail: withReason('İstek backend doğrulamasından geçemedi.', safeReason(response.data)),
       certainty: 'not-applied',
     };
   }
-  if (status === 404) {
+  if (status === 404 && code === 'NOT_FOUND') {
     return {
       kind: 'not-found',
-      detail: withReason('Mülakat bulunamadı (tenant kapsamı).', reason),
+      detail: withReason('Mülakat bulunamadı (tenant kapsamı).', safeReason(response.data)),
       certainty: 'not-applied',
     };
   }
-  if (status === 409) {
+  if (status === 409 && code === 'UNSUPPORTED_IN_GATE') {
     return {
       kind: 'gate',
-      detail: withReason('Bu ortam kapısında desteklenmiyor.', reason),
+      detail: withReason('Bu ortam kapısında desteklenmiyor.', safeReason(response.data)),
       certainty: 'not-applied',
     };
   }
-  if (status === 422) {
+  if (status === 422 && code === 'OK') {
+    // OutcomeHttp: Fail(OK) tutarsızlığı fail-closed 422'ye maplenir.
     return {
       kind: 'fail-closed',
       detail: 'Güvenli şekilde yürütülemedi (backend tutarlılık koruması).',
       certainty: 'not-applied',
     };
   }
-  if (status === 503) {
+  if (status === 503 && code === 'NOT_CONFIGURED') {
     return {
       kind: 'not-configured',
       detail: 'Servis bu ortamda yapılandırılmamış ya da geçici olarak kullanılamıyor.',
       certainty: 'not-applied',
     };
   }
-  // Bilinmeyen status (5xx dahil): DSAR oluşmuş olabilir — dsarKey alınamadı.
+  // Mismatch fallback: kontrat-dışı kombinasyon — DSAR oluşmuş olabilir.
   return {
     kind: 'generic',
-    detail: 'Beklenmeyen backend hatası; talebin sonucu doğrulanamadı.',
+    detail: 'Backend hata yanıtı beklenen kontratla eşleşmedi; talebin sonucu doğrulanamadı.',
     certainty: 'unresolved',
   };
 }

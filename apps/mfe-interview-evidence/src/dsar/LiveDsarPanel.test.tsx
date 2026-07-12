@@ -266,6 +266,11 @@ describe('erasure — frozen-snapshot teyit + outcome-aware guard', () => {
       'backend 400 (kısmî-yürütme noktası olabilir)',
       { response: { status: 400, data: { error: 'INVALID' } } },
     ],
+    [
+      'MISMATCH 403+INVALID (kontrat-dışı; DENIED sanılmaz)',
+      { response: { status: 403, data: { error: 'INVALID', reason: 'SIZMA' } } },
+    ],
+    ['gövdesiz 403 (malformed filter cevabı sanılmaz)', { response: { status: 403 } }],
     ['transport kesintisi', { request: {}, message: 'timeout' }],
     ['malformed-200 (kontrat)', new AtsContractError('bozuk receipt')],
   ])('erasure %s → guard KORUNUR + erasure-ambiguous (retry/"Yeni DSAR" YOK)', async (_n, err) => {
