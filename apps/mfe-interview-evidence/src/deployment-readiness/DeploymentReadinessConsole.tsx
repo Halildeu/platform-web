@@ -110,6 +110,12 @@ function Badge({ style, ...props }: ComponentProps<typeof DesignBadge>) {
         backgroundColor: 'var(--surface-default)',
         color: 'var(--text-primary)',
         border: '1px solid var(--border-default)',
+        maxWidth: '100%',
+        minWidth: 0,
+        whiteSpace: 'normal',
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+        textAlign: 'center',
         ...style,
       }}
     />
