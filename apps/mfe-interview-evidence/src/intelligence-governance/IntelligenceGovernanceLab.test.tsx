@@ -91,4 +91,17 @@ describe('IntelligenceGovernanceLab', () => {
       'Selection-rate ratio',
     );
   });
+
+  test('interviewer coaching seciminde dedicated citation detail panelini acar', () => {
+    render(<IntelligenceGovernanceLab />);
+    expect(screen.queryByTestId('citation-backed-coaching-panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('intelligence-capability-INTERVIEWER_COACHING'));
+
+    const panel = screen.getByTestId('citation-backed-coaching-panel');
+    expect(panel).toHaveTextContent('PROPOSAL ONLY');
+    expect(panel).toHaveTextContent('AI_SUGGESTED');
+    expect(panel).toHaveTextContent('SUPPORTED citation');
+    expect(screen.getByTestId('coaching-apply-button')).toBeDisabled();
+  });
 });
