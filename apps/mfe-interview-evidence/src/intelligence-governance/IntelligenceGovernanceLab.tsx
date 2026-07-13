@@ -7,6 +7,7 @@ import {
   SYNTHETIC_INTELLIGENCE_CAPABILITIES,
 } from './syntheticIntelligenceRegistry';
 import type { IntelligenceCapabilityStatus, SyntheticIntelligenceCapability } from './types';
+import { CitationBackedCoachingPanel } from './CitationBackedCoachingPanel';
 
 const STATUS_PRESENTATION: Record<
   IntelligenceCapabilityStatus,
@@ -260,6 +261,7 @@ function CapabilityDetail({ capability }: { capability: SyntheticIntelligenceCap
             <strong>Yasak kullanım:</strong> {capability.prohibitedUse}
           </Text>
         </Stack>
+        {capability.id === 'INTERVIEWER_COACHING' && <CitationBackedCoachingPanel />}
       </Stack>
     </Card>
   );
