@@ -130,10 +130,7 @@ export interface SyntheticQualityOfHireEvidenceReceiptV1 {
 export interface QualityOfHireReceiptValidation {
   readonly valid: boolean;
   readonly issues: readonly string[];
-  readonly status:
-    | 'DESCRIPTIVE_ASSOCIATION_ONLY'
-    | 'SMALL_COHORT_SUPPRESSED'
-    | 'TRACE_FAIL_CLOSED';
+  readonly status: 'DESCRIPTIVE_ASSOCIATION_ONLY' | 'SMALL_COHORT_SUPPRESSED' | 'TRACE_FAIL_CLOSED';
 }
 
 export const BANNED_QUALITY_OF_HIRE_SURFACE_FIELDS = [
@@ -178,6 +175,8 @@ const OPAQUE_TENANT_REF = /^tenant_[a-f0-9]{16}$/;
 const OPAQUE_COHORT_REF = /^cohort_[a-f0-9]{16}$/;
 const OPAQUE_OUTCOME_CATEGORY_REF = /^category_[a-f0-9]{16}$/;
 const TIMESTAMP = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$/;
+const MAX_COUNT = 10_000_000;
+const MAX_REF_LIST_LENGTH = 20;
 const TOLERANCE = 0.000001;
 const RECEIPT_KEYS = [
   'schemaVersion',
@@ -306,21 +305,17 @@ function canonical(value: unknown): string {
 
 function sha256Hex(message: string): string {
   const constants = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
-    0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
-    0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
-    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
-    0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
   ];
   const state = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ];
   const bytes = new TextEncoder().encode(message);
   const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
@@ -332,8 +327,7 @@ function sha256Hex(message: string): string {
   view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000), false);
   view.setUint32(paddedLength - 4, bitLength >>> 0, false);
   const words = new Uint32Array(64);
-  const rotateRight = (value: number, shift: number) =>
-    (value >>> shift) | (value << (32 - shift));
+  const rotateRight = (value: number, shift: number) => (value >>> shift) | (value << (32 - shift));
 
   for (let offset = 0; offset < paddedLength; offset += 64) {
     for (let index = 0; index < 16; index += 1) {
@@ -351,7 +345,8 @@ function sha256Hex(message: string): string {
     for (let index = 0; index < 64; index += 1) {
       const sum1 = rotateRight(e ?? 0, 6) ^ rotateRight(e ?? 0, 11) ^ rotateRight(e ?? 0, 25);
       const choice = ((e ?? 0) & (f ?? 0)) ^ (~(e ?? 0) & (g ?? 0));
-      const temporary1 = ((h ?? 0) + sum1 + choice + (constants[index] ?? 0) + (words[index] ?? 0)) >>> 0;
+      const temporary1 =
+        ((h ?? 0) + sum1 + choice + (constants[index] ?? 0) + (words[index] ?? 0)) >>> 0;
       const sum0 = rotateRight(a ?? 0, 2) ^ rotateRight(a ?? 0, 13) ^ rotateRight(a ?? 0, 22);
       const majority = ((a ?? 0) & (b ?? 0)) ^ ((a ?? 0) & (c ?? 0)) ^ ((b ?? 0) & (c ?? 0));
       const temporary2 = (sum0 + majority) >>> 0;
@@ -406,6 +401,19 @@ function wilson95(selected: number, population: number): QualityOfHireWilsonInte
 
 function approximatelyEqual(left: number, right: number): boolean {
   return Math.abs(left - right) <= TOLERANCE;
+}
+
+function isCanonicalRefList(values: readonly string[]): boolean {
+  if (
+    values.length < 1 ||
+    values.length > MAX_REF_LIST_LENGTH ||
+    new Set(values).size !== values.length ||
+    values.some((value) => !REF.test(value))
+  ) {
+    return false;
+  }
+  const sorted = [...values].sort();
+  return values.every((value, index) => value === sorted[index]);
 }
 
 function containsForbiddenField(value: unknown): string | null {
@@ -463,9 +471,18 @@ export function validateSyntheticQualityOfHireReceipt(
     !Array.isArray(receipt.confounderPlanRefs) ||
     !Array.isArray(receipt.lineage.sourceSchemaVersionRefs)
   ) {
-    return { valid: false, issues: [...issues, 'RECEIPT_NESTED_SHAPE_INVALID'], status: 'TRACE_FAIL_CLOSED' };
+    return {
+      valid: false,
+      issues: [...issues, 'RECEIPT_NESTED_SHAPE_INVALID'],
+      status: 'TRACE_FAIL_CLOSED',
+    };
   }
-  validateExactKeys(receipt.comparisonProtocol, COMPARISON_KEYS, 'COMPARISON_KEY_SET_INVALID', issues);
+  validateExactKeys(
+    receipt.comparisonProtocol,
+    COMPARISON_KEYS,
+    'COMPARISON_KEY_SET_INVALID',
+    issues,
+  );
   validateExactKeys(receipt.lineage, LINEAGE_KEYS, 'LINEAGE_KEY_SET_INVALID', issues);
   validateExactKeys(receipt.governance, GOVERNANCE_KEYS, 'GOVERNANCE_KEY_SET_INVALID', issues);
   if (
@@ -491,8 +508,10 @@ export function validateSyntheticQualityOfHireReceipt(
   if (
     !Number.isInteger(receipt.minimumStatisticalSampleSize) ||
     receipt.minimumStatisticalSampleSize < 1 ||
+    receipt.minimumStatisticalSampleSize > MAX_COUNT ||
     !Number.isInteger(receipt.minimumDisclosureSampleSize) ||
     receipt.minimumDisclosureSampleSize < 1 ||
+    receipt.minimumDisclosureSampleSize > MAX_COUNT ||
     !Number.isFinite(receipt.maximumMissingnessRate) ||
     receipt.maximumMissingnessRate < 0 ||
     receipt.maximumMissingnessRate > 1
@@ -512,6 +531,15 @@ export function validateSyntheticQualityOfHireReceipt(
   ) {
     issues.push('WINDOW_SET_INVALID');
   }
+  if (
+    structurallyValidWindows.length === receipt.observationWindows.length &&
+    receipt.observationWindows.length === REQUIRED_WINDOWS.length &&
+    !structurallyValidWindows.every(
+      (window, index) => window.windowDays === REQUIRED_WINDOWS[index],
+    )
+  ) {
+    issues.push('QOH_RECEIPT_WINDOW_ORDER_INVALID');
+  }
 
   for (const window of receipt.observationWindows) {
     if (!isRecord(window) || !Array.isArray(window.dimensions)) {
@@ -522,9 +550,7 @@ export function validateSyntheticQualityOfHireReceipt(
     const structurallyValidDimensions = window.dimensions.filter((dimension) =>
       isRecord(dimension),
     );
-    const dimensionSet = new Set(
-      structurallyValidDimensions.map((dimension) => dimension.kind),
-    );
+    const dimensionSet = new Set(structurallyValidDimensions.map((dimension) => dimension.kind));
     if (
       window.dimensions.length !== REQUIRED_DIMENSIONS.length ||
       structurallyValidDimensions.length !== window.dimensions.length ||
@@ -532,6 +558,15 @@ export function validateSyntheticQualityOfHireReceipt(
       !REQUIRED_DIMENSIONS.every((dimension) => dimensionSet.has(dimension))
     ) {
       issues.push(`DIMENSION_SET_INVALID:${window.windowDays}`);
+    }
+    if (
+      structurallyValidDimensions.length === window.dimensions.length &&
+      window.dimensions.length === REQUIRED_DIMENSIONS.length &&
+      !structurallyValidDimensions.every(
+        (dimension, index) => dimension.kind === REQUIRED_DIMENSIONS[index],
+      )
+    ) {
+      issues.push(`QOH_RECEIPT_DIMENSION_ORDER_INVALID:${window.windowDays}`);
     }
     for (const dimension of window.dimensions) {
       if (!isRecord(dimension)) {
@@ -589,7 +624,7 @@ export function validateSyntheticQualityOfHireReceipt(
         dimension.outcomeCategoryCount,
       ];
       if (
-        counts.some((value) => !Number.isInteger(value) || value < 0) ||
+        counts.some((value) => !Number.isInteger(value) || value < 0 || value > MAX_COUNT) ||
         dimension.observedCount + dimension.missingCount + dimension.censoredCount !==
           dimension.eligibleCount ||
         dimension.outcomeCategoryCount > dimension.observedCount ||
@@ -626,9 +661,7 @@ export function validateSyntheticQualityOfHireReceipt(
           dimension.observedCount - dimension.outcomeCategoryCount,
           dimension.missingCount,
           dimension.censoredCount,
-        ].some(
-          (count) => count > 0 && count < receipt.minimumDisclosureSampleSize,
-        ) ||
+        ].some((count) => count > 0 && count < receipt.minimumDisclosureSampleSize) ||
         expectedMissingness > receipt.maximumMissingnessRate
       ) {
         issues.push(`STATUS_THRESHOLD_MISMATCH:${window.windowDays}:${dimension.kind}`);
@@ -695,7 +728,6 @@ export function validateSyntheticQualityOfHireReceipt(
     issues.push('ACTIVATION_GATE_BYPASS');
   }
   if (
-    receipt.confounderPlanRefs.length < 2 ||
     !receipt.measurementPlanRef ||
     !receipt.lineage.hiringEvidenceAggregateRef ||
     !receipt.lineage.linkageProtocolRef ||
@@ -710,6 +742,12 @@ export function validateSyntheticQualityOfHireReceipt(
     receipt.governance.humanOversightStandardRef !== 'human-oversight:canonical:v1'
   ) {
     issues.push('GOVERNANCE_LINEAGE_INCOMPLETE');
+  }
+  if (!isCanonicalRefList(receipt.confounderPlanRefs)) {
+    issues.push('QOH_CONFOUNDER_REFS_NOT_CANONICAL');
+  }
+  if (!isCanonicalRefList(receipt.lineage.sourceSchemaVersionRefs)) {
+    issues.push('QOH_SOURCE_SCHEMA_REFS_NOT_CANONICAL');
   }
   const refs = [
     receipt.measurementPlanRef,
@@ -747,6 +785,9 @@ export function validateSyntheticQualityOfHireReceipt(
     receipt.supersedesReceiptDigest === receipt.receiptDigest
   ) {
     issues.push('CORRECTION_SUPERSESSION_INVALID');
+  }
+  if (hasCorrectionReason || hasSupersededReceipt || receipt.correctionStatus !== 'ORIGINAL') {
+    issues.push('CORRECTION_TRUSTED_PREVIOUS_RECEIPT_REQUIRED');
   }
   if (
     (receipt.status !== 'SYNTHETIC_DESCRIPTIVE_ASSOCIATION' &&
@@ -860,26 +901,26 @@ export const SYNTHETIC_QUALITY_OF_HIRE_RECEIPT = {
   insufficiencyReasons: [],
   observationWindows: ([90, 180] as const).map((windowDays) => ({
     windowDays,
-    dimensions: (['RETENTION', 'RAMP_MILESTONE', 'STRUCTURED_MANAGER_OUTCOME', 'NEW_HIRE_EXPERIENCE'] as const).map(
-      (kind, index) => ({
-        kind,
-        outcomeCategoryRef: `category_${String(index + 1).repeat(16)}`,
-        visibility: 'VISIBLE' as const,
-        eligibleCount: 200,
-        observedCount: 160,
-        missingCount: 20,
-        censoredCount: 20,
-        outcomeCategoryCount: 100,
-        missingnessRate: 0.1,
-        outcomeCategoryRate: 0.625,
-        uncertaintyInterval: {
-          lower: 0.547882,
-          upper: 0.696257,
-          confidenceLevel: 0.95 as const,
-          method: 'WILSON_SCORE' as const,
-        },
-      }),
-    ),
+    dimensions: (
+      ['RETENTION', 'RAMP_MILESTONE', 'STRUCTURED_MANAGER_OUTCOME', 'NEW_HIRE_EXPERIENCE'] as const
+    ).map((kind, index) => ({
+      kind,
+      outcomeCategoryRef: `category_${String(index + 1).repeat(16)}`,
+      visibility: 'VISIBLE' as const,
+      eligibleCount: 200,
+      observedCount: 160,
+      missingCount: 20,
+      censoredCount: 20,
+      outcomeCategoryCount: 100,
+      missingnessRate: 0.1,
+      outcomeCategoryRate: 0.625,
+      uncertaintyInterval: {
+        lower: 0.547882,
+        upper: 0.696257,
+        confidenceLevel: 0.95 as const,
+        method: 'WILSON_SCORE' as const,
+      },
+    })),
   })),
   correlationOnly: true,
   causalConclusion: 'NONE',

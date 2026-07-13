@@ -28,7 +28,10 @@ const STATUS_LABELS: Record<QualityOfHireReceiptValidation['status'], string> = 
 const ACTION_BLOCK_REASON =
   'Yalnız sentetik aggregate evidence. Legal, bağımsız audit, müşteri-controller ve owner gate olmadan gerçek veri, export veya aktivasyon açılamaz.';
 
-function dimensionKey(windowDays: QualityOfHireWindowDays, dimension: QualityOfHireDimensionResultV1) {
+function dimensionKey(
+  windowDays: QualityOfHireWindowDays,
+  dimension: QualityOfHireDimensionResultV1,
+) {
   return `${windowDays}:${dimension.kind}`;
 }
 
@@ -54,7 +57,9 @@ export function QualityOfHireEvidencePanel({
     .flatMap((window) =>
       window.dimensions.map((dimension) => ({ windowDays: window.windowDays, dimension })),
     )
-    .find(({ windowDays, dimension }) => dimensionKey(windowDays, dimension) === selectedDimensionKey);
+    .find(
+      ({ windowDays, dimension }) => dimensionKey(windowDays, dimension) === selectedDimensionKey,
+    );
 
   if (!validation.valid) {
     return (
@@ -120,9 +125,9 @@ export function QualityOfHireEvidencePanel({
             </Text>
             {suppressed && (
               <Text as="p" size="sm" data-testid="qoh-suppression-notice">
-                En az bir pencere/boyut measurement veya disclosure eşiğini geçmedi. Kanonik
-                receipt bütün count, rate ve uncertainty interval alanlarını null tuttu; bu yüzey
-                hiçbir aggregate değer göstermiyor.
+                En az bir pencere/boyut measurement veya disclosure eşiğini geçmedi. Kanonik receipt
+                bütün count, rate ve uncertainty interval alanlarını null tuttu; bu yüzey hiçbir
+                aggregate değer göstermiyor.
               </Text>
             )}
           </Stack>
@@ -193,7 +198,8 @@ export function QualityOfHireEvidencePanel({
                               {DIMENSION_LABELS[dimension.kind]}
                             </Text>
                             <Text as="span" size="xs" variant="secondary">
-                              Eligible {dimension.eligibleCount} · Observed {dimension.observedCount}
+                              Eligible {dimension.eligibleCount} · Observed{' '}
+                              {dimension.observedCount}
                             </Text>
                             <Text as="span" size="xs" variant="secondary">
                               Missing {dimension.missingCount} · Censored {dimension.censoredCount}
@@ -290,8 +296,8 @@ export function QualityOfHireEvidencePanel({
               <ReferenceLine label="Erasure" value={receipt.governance.erasurePropagationRef} />
               <ReferenceLine label="Audit" value={receipt.governance.auditPolicyRef} />
               <Text as="p" size="xs" variant="secondary">
-                Düzeltme eski receipt’i sessizce değiştirmez; yeni digest lineage ile supersede
-                eder.
+                Bu viewer yalnız ORIGINAL receipt gösterir. Correction receipt, doğrulanmış previous
+                receipt chain olmadan fail-closed reddedilir; eski receipt sessizce değiştirilmez.
               </Text>
             </Stack>
           </Card>

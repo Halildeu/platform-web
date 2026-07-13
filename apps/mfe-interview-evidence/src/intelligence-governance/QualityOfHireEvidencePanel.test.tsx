@@ -150,6 +150,10 @@ describe('QualityOfHireEvidencePanel', () => {
     expect(governance).toHaveTextContent('retention:qoh:synthetic:v1');
     expect(governance).toHaveTextContent('access:qoh:aggregate-only:v1');
     expect(governance).toHaveTextContent('erasure:qoh:propagation:v1');
+    expect(governance).toHaveTextContent('yalnız ORIGINAL receipt gösterir');
+    expect(governance).toHaveTextContent(
+      'doğrulanmış previous receipt chain olmadan fail-closed reddedilir',
+    );
   });
 
   test('legal audit customer owner ve action kapilarini kapali tutar', () => {
@@ -351,6 +355,262 @@ describe('QualityOfHireEvidencePanel', () => {
     expect(validateSyntheticQualityOfHireReceipt(reseal(mismatch)).issues).toContain(
       'CORRECTION_SUPERSESSION_INVALID',
     );
+  });
+
+  test('trusted previous receipt olmadan resealed correction lineage fail-closed olur', () => {
+    const { receiptDigest: _digest, ...unsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    const correction = {
+      ...unsigned,
+      correctionReasonRef: 'correction-reason:qoh:synthetic:v1',
+      supersedesReceiptDigest: `sha256:${'f'.repeat(64)}`,
+      correctionStatus: 'SUPERSEDING_SYNTHETIC_CORRECTION',
+    } as const satisfies Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>;
+    const resealedCorrection = reseal(correction);
+
+    const validation = validateSyntheticQualityOfHireReceipt(resealedCorrection);
+    expect(validation.valid).toBe(false);
+    expect(validation.issues).toContain('CORRECTION_TRUSTED_PREVIOUS_RECEIPT_REQUIRED');
+    render(<QualityOfHireEvidencePanel receipt={resealedCorrection} />);
+    expect(screen.getByTestId('quality-of-hire-evidence-panel')).toHaveTextContent(
+      'TRACE FAIL-CLOSED',
+    );
+    expect(screen.queryByTestId('qoh-governance-lineage')).not.toBeInTheDocument();
+  });
+
+  test('ATS canonical window ve dimension orderindan sapan resealed receiptleri reddeder', () => {
+    const { receiptDigest: _digest, ...unsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    unsigned.observationWindows.reverse();
+    const reversedWindows = reseal(unsigned);
+    expect(validateSyntheticQualityOfHireReceipt(reversedWindows).issues).toContain(
+      'QOH_RECEIPT_WINDOW_ORDER_INVALID',
+    );
+
+    const { receiptDigest: _secondDigest, ...secondUnsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    secondUnsigned.observationWindows[0]!.dimensions.reverse();
+    const reversedDimensions = reseal(secondUnsigned);
+    expect(validateSyntheticQualityOfHireReceipt(reversedDimensions).issues).toContain(
+      'QOH_RECEIPT_DIMENSION_ORDER_INVALID:90',
+    );
+  });
+
+  test.each(['minimumStatisticalSampleSize', 'minimumDisclosureSampleSize'] as const)(
+    'ATS %s icin 10 milyon measurement threshold ust sinirini uygular',
+    (field) => {
+      const { receiptDigest: _digest, ...unsigned } = structuredClone(
+        SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+      );
+      const mutable = unsigned as unknown as Record<
+        'minimumStatisticalSampleSize' | 'minimumDisclosureSampleSize',
+        number
+      >;
+      mutable[field] = 10_000_001;
+
+      expect(validateSyntheticQualityOfHireReceipt(reseal(unsigned)).issues).toContain(
+        'MEASUREMENT_THRESHOLD_INVALID',
+      );
+    },
+  );
+
+  test.each([
+    'eligibleCount',
+    'observedCount',
+    'missingCount',
+    'censoredCount',
+    'outcomeCategoryCount',
+  ] as const)('ATS %s icin 10 milyon visible-count ust sinirini uygular', (field) => {
+    const { receiptDigest: _digest, ...unsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    const mutable = unsigned as unknown as {
+      observationWindows: Array<{
+        dimensions: Array<{
+          eligibleCount: number;
+          observedCount: number;
+          missingCount: number;
+          censoredCount: number;
+          outcomeCategoryCount: number;
+        }>;
+      }>;
+    };
+    const dimension = mutable.observationWindows[0]!.dimensions[0]!;
+    dimension[field] = 10_000_001;
+    const overLimit = reseal(unsigned);
+
+    const validation = validateSyntheticQualityOfHireReceipt(overLimit);
+    expect(validation.issues).toContain('DIMENSION_AGGREGATE_INVALID:90:RETENTION');
+  });
+
+  test('ATS exact 10 milyon count ve threshold kabul sinirini korur', () => {
+    const thresholdReceipt = suppressedReceipt();
+    const { receiptDigest: _thresholdDigest, ...thresholdUnsigned } =
+      structuredClone(thresholdReceipt);
+    const mutableThresholds = thresholdUnsigned as unknown as {
+      minimumStatisticalSampleSize: number;
+      minimumDisclosureSampleSize: number;
+    };
+    mutableThresholds.minimumStatisticalSampleSize = 10_000_000;
+    mutableThresholds.minimumDisclosureSampleSize = 10_000_000;
+    expect(validateSyntheticQualityOfHireReceipt(reseal(thresholdUnsigned)).valid).toBe(true);
+
+    const { receiptDigest: _countDigest, ...countUnsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    const z = 1.959963984540054;
+    const selected = 5_000_000;
+    const population = 8_000_000;
+    const observed = selected / population;
+    const denominator = 1 + (z * z) / population;
+    const center = (observed + (z * z) / (2 * population)) / denominator;
+    const margin =
+      (z * Math.sqrt((observed * (1 - observed) + (z * z) / (4 * population)) / population)) /
+      denominator;
+    const interval = {
+      lower: Number(Math.max(0, center - margin).toFixed(6)),
+      upper: Number(Math.min(1, center + margin).toFixed(6)),
+      confidenceLevel: 0.95 as const,
+      method: 'WILSON_SCORE' as const,
+    };
+    for (const window of countUnsigned.observationWindows) {
+      for (const dimension of window.dimensions) {
+        const mutableDimension = dimension as unknown as {
+          eligibleCount: number;
+          observedCount: number;
+          missingCount: number;
+          censoredCount: number;
+          outcomeCategoryCount: number;
+          missingnessRate: number;
+          outcomeCategoryRate: number;
+          uncertaintyInterval: typeof interval;
+        };
+        mutableDimension.eligibleCount = 10_000_000;
+        mutableDimension.observedCount = population;
+        mutableDimension.missingCount = 1_000_000;
+        mutableDimension.censoredCount = 1_000_000;
+        mutableDimension.outcomeCategoryCount = selected;
+        mutableDimension.missingnessRate = 0.1;
+        mutableDimension.outcomeCategoryRate = observed;
+        mutableDimension.uncertaintyInterval = interval;
+      }
+    }
+    expect(validateSyntheticQualityOfHireReceipt(reseal(countUnsigned)).valid).toBe(true);
+  });
+
+  test.each([
+    [
+      'empty confounder list',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (unsigned as unknown as { confounderPlanRefs: string[] }).confounderPlanRefs = [];
+      },
+      'QOH_CONFOUNDER_REFS_NOT_CANONICAL',
+    ],
+    [
+      'duplicate confounder list',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (unsigned as unknown as { confounderPlanRefs: string[] }).confounderPlanRefs = [
+          'confounder:qoh:duplicate:v1',
+          'confounder:qoh:duplicate:v1',
+        ];
+      },
+      'QOH_CONFOUNDER_REFS_NOT_CANONICAL',
+    ],
+    [
+      'invalid confounder ref',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (unsigned as unknown as { confounderPlanRefs: string[] }).confounderPlanRefs = [
+          'not a canonical ref',
+        ];
+      },
+      'QOH_CONFOUNDER_REFS_NOT_CANONICAL',
+    ],
+    [
+      'empty source schema list',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (
+          unsigned.lineage as unknown as { sourceSchemaVersionRefs: string[] }
+        ).sourceSchemaVersionRefs = [];
+      },
+      'QOH_SOURCE_SCHEMA_REFS_NOT_CANONICAL',
+    ],
+    [
+      'duplicate source schema list',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (
+          unsigned.lineage as unknown as { sourceSchemaVersionRefs: string[] }
+        ).sourceSchemaVersionRefs = ['schema:qoh:duplicate:v1', 'schema:qoh:duplicate:v1'];
+      },
+      'QOH_SOURCE_SCHEMA_REFS_NOT_CANONICAL',
+    ],
+    [
+      'invalid source schema ref',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (
+          unsigned.lineage as unknown as { sourceSchemaVersionRefs: string[] }
+        ).sourceSchemaVersionRefs = ['not a canonical ref'];
+      },
+      'QOH_SOURCE_SCHEMA_REFS_NOT_CANONICAL',
+    ],
+    [
+      'unsorted confounders',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (unsigned.confounderPlanRefs as string[]).reverse();
+      },
+      'QOH_CONFOUNDER_REFS_NOT_CANONICAL',
+    ],
+    [
+      'unsorted source schemas',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (unsigned.lineage.sourceSchemaVersionRefs as string[]).reverse();
+      },
+      'QOH_SOURCE_SCHEMA_REFS_NOT_CANONICAL',
+    ],
+    [
+      'oversized confounder list',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (unsigned as unknown as { confounderPlanRefs: string[] }).confounderPlanRefs = Array.from(
+          { length: 21 },
+          (_, index) => `confounder:qoh:${String(index).padStart(2, '0')}:v1`,
+        );
+      },
+      'QOH_CONFOUNDER_REFS_NOT_CANONICAL',
+    ],
+    [
+      'oversized source schema list',
+      (unsigned: Omit<SyntheticQualityOfHireEvidenceReceiptV1, 'receiptDigest'>) => {
+        (
+          unsigned.lineage as unknown as { sourceSchemaVersionRefs: string[] }
+        ).sourceSchemaVersionRefs = Array.from(
+          { length: 21 },
+          (_, index) => `schema:qoh:${String(index).padStart(2, '0')}:v1`,
+        );
+      },
+      'QOH_SOURCE_SCHEMA_REFS_NOT_CANONICAL',
+    ],
+  ])('%s canonical ATS ref-list sinirinda fail-closed olur', (_name, mutate, issue) => {
+    const { receiptDigest: _digest, ...unsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    mutate(unsigned);
+    expect(validateSyntheticQualityOfHireReceipt(reseal(unsigned)).issues).toContain(issue);
+  });
+
+  test('iki canonical ref listesi exact 20 eleman sinirinda kabul edilir', () => {
+    const { receiptDigest: _digest, ...unsigned } = structuredClone(
+      SYNTHETIC_QUALITY_OF_HIRE_RECEIPT,
+    );
+    (unsigned as unknown as { confounderPlanRefs: string[] }).confounderPlanRefs = Array.from(
+      { length: 20 },
+      (_, index) => `confounder:qoh:${String(index).padStart(2, '0')}:v1`,
+    );
+    (unsigned.lineage as unknown as { sourceSchemaVersionRefs: string[] }).sourceSchemaVersionRefs =
+      Array.from({ length: 20 }, (_, index) => `schema:qoh:${String(index).padStart(2, '0')}:v1`);
+
+    expect(validateSyntheticQualityOfHireReceipt(reseal(unsigned)).valid).toBe(true);
   });
 
   test('bilinmeyen status suppression davranisini descriptive moda dusuremez', () => {
