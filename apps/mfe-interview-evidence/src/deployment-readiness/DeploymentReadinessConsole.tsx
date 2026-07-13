@@ -628,7 +628,38 @@ function StateBadge({
   compact?: boolean;
 }) {
   const presentation = STATE_PRESENTATION[state];
-  return <Badge variant={presentation.variant}>{compact ? state : presentation.label}</Badge>;
+  return (
+    <Badge
+      variant={presentation.variant}
+      data-readiness-state={state}
+      data-readiness-density={compact ? 'compact' : 'full'}
+      style={{
+        // Compact values are canonical enum tokens. Keep the token atomic so
+        // a narrow viewport never turns OWNER_ACCEPTED into visually ambiguous
+        // fragments. Full localized labels may wrap only at normal language
+        // boundaries; neither mode may split a word at an arbitrary character.
+        whiteSpace: compact ? 'nowrap' : 'normal',
+        overflowWrap: 'normal',
+        wordBreak: 'normal',
+        hyphens: 'none',
+        position: 'relative',
+      }}
+    >
+      <span
+        data-readiness-visible={compact ? 'true' : undefined}
+        style={compact ? undefined : READINESS_SR_ONLY_STYLE}
+      >
+        {state}
+      </span>
+      <span style={READINESS_SR_ONLY_STYLE}>: </span>
+      <span
+        data-readiness-visible={compact ? undefined : 'true'}
+        style={compact ? READINESS_SR_ONLY_STYLE : undefined}
+      >
+        {presentation.label}
+      </span>
+    </Badge>
+  );
 }
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
@@ -638,10 +669,31 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
         {label}
       </Text>
       <Text as="p" size="sm" weight="semibold">
-        {value}
+        {renderTechnicalValue(value)}
       </Text>
     </div>
   );
+}
+
+/**
+ * Long profile contract values are also canonical technical tokens. Give the
+ * browser semantic wrap opportunities after their separators without changing
+ * the copied or screen-reader text and without splitting an identifier at an
+ * arbitrary character.
+ */
+function renderTechnicalValue(value: string): ReactNode[] {
+  const parts = value.split(/([_/.\-·])/u);
+  const rendered: ReactNode[] = [];
+
+  parts.forEach((part, index) => {
+    if (!part) return;
+    rendered.push(part);
+    if (/^[_/.\-·]$/u.test(part)) {
+      rendered.push(<wbr key={`technical-break-${index}`} />);
+    }
+  });
+
+  return rendered;
 }
 
 function shortCommit(commit: string): string {
@@ -674,6 +726,12 @@ const VISUALLY_HIDDEN_STYLE = {
   clip: 'rect(0, 0, 0, 0)',
   whiteSpace: 'nowrap',
   border: 0,
+} as const;
+
+const READINESS_SR_ONLY_STYLE = {
+  ...VISUALLY_HIDDEN_STYLE,
+  left: 0,
+  top: 0,
 } as const;
 
 function TableHeader({ children }: { children: ReactNode }) {
