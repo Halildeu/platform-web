@@ -85,7 +85,8 @@ export const SYNTHETIC_INTELLIGENCE_CAPABILITIES: readonly SyntheticIntelligence
     name: 'Quality of Hire outcomes',
     description: 'İşe alım sonrası sonuçları işe-alım kanıtıyla ilişkilendiren ölçüm hipotezi.',
     status: 'RESEARCH_ONLY',
-    standard: 'NIST AI RMF / ISO 42001 measurement record',
+    standard:
+      'NIST AI RMF / ISO/IEC 42001 evidence-input alignment · sertifika veya uygunluk beyanı değil',
     allowedUse: '90/180 günlük aggregate outcome hipotezi ve ölçüm planı taslağı.',
     prohibitedUse: 'Tek çalışana performans skoru veya geçmiş adaylar için geriye dönük ranking.',
     measurement: {

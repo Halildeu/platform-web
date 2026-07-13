@@ -11,6 +11,7 @@ import { CitationBackedCoachingPanel } from './CitationBackedCoachingPanel';
 import { SkillsOntologyRediscoveryPanel } from './SkillsOntologyRediscoveryPanel';
 import { IntegrityProvenanceReviewPanel } from './IntegrityProvenanceReviewPanel';
 import { GovernedAgenticProposalPanel } from './GovernedAgenticProposalPanel';
+import { QualityOfHireEvidencePanel } from './QualityOfHireEvidencePanel';
 
 const STATUS_PRESENTATION: Record<
   IntelligenceCapabilityStatus,
@@ -167,7 +168,7 @@ export function IntelligenceGovernanceLab() {
           )}
         </Stack>
 
-        {selected?.id !== 'AGENTIC_WORKFLOW' && (
+        {selected?.id !== 'AGENTIC_WORKFLOW' && selected?.id !== 'QUALITY_OF_HIRE' && (
           <Stack direction="column" gap={2}>
             <Text as="p" size="sm" variant="secondary" data-testid="p6-experiment-reason">
               {EXPERIMENT_BLOCK_REASON}
@@ -267,6 +268,7 @@ function CapabilityDetail({ capability }: { capability: SyntheticIntelligenceCap
           </Text>
         </Stack>
         {capability.id === 'INTERVIEWER_COACHING' && <CitationBackedCoachingPanel />}
+        {capability.id === 'QUALITY_OF_HIRE' && <QualityOfHireEvidencePanel />}
         {capability.id === 'SKILLS_ONTOLOGY' && <SkillsOntologyRediscoveryPanel />}
         {capability.id === 'DEEPFAKE_PROVENANCE' && <IntegrityProvenanceReviewPanel />}
         {capability.id === 'AGENTIC_WORKFLOW' && <GovernedAgenticProposalPanel />}
