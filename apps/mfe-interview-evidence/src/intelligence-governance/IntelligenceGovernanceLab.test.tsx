@@ -18,8 +18,26 @@ describe('IntelligenceGovernanceLab', () => {
     expect(screen.getByTestId('p6-decision')).toHaveTextContent(
       `PROPOSAL ONLY · 0/${SYNTHETIC_INTELLIGENCE_CAPABILITIES.length} live`,
     );
+    expect(screen.getByTestId('quality-of-hire-evidence-panel')).toBeVisible();
+    expect(screen.getByTestId('qoh-activate-button')).toBeDisabled();
+    expect(screen.queryByTestId('p6-experiment-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('p6-apply-button')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('intelligence-capability-INTERVIEWER_COACHING'));
     expect(screen.getByTestId('p6-experiment-button')).toBeDisabled();
     expect(screen.getByTestId('p6-apply-button')).toBeDisabled();
+  });
+
+  test('quality of hire seciminde dedicated evidence loop panelini acar', () => {
+    render(<IntelligenceGovernanceLab />);
+    const qoh = screen.getByTestId('intelligence-capability-QUALITY_OF_HIRE');
+
+    expect(qoh).toHaveAttribute('aria-pressed', 'true');
+    const panel = screen.getByTestId('quality-of-hire-evidence-panel');
+    expect(panel).toHaveTextContent('Quality-of-Hire Evidence Loop (P6.0)');
+    expect(panel).toHaveTextContent('TEK QoH SKORU YOK');
+    expect(panel).toHaveTextContent('Customer controller');
+    expect(screen.getByTestId('qoh-activate-button')).toBeDisabled();
   });
 
   test('fixture full ATS, evidence veya insan onayi uydurmaz', () => {
