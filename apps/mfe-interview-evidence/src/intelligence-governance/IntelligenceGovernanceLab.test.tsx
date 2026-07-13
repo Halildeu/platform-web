@@ -104,4 +104,17 @@ describe('IntelligenceGovernanceLab', () => {
     expect(panel).toHaveTextContent('SUPPORTED citation');
     expect(screen.getByTestId('coaching-apply-button')).toBeDisabled();
   });
+
+  test('skills ontology seciminde dedicated rediscovery panelini acar', () => {
+    render(<IntelligenceGovernanceLab />);
+    expect(screen.queryByTestId('skills-ontology-rediscovery-panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('intelligence-capability-SKILLS_ONTOLOGY'));
+
+    const panel = screen.getByTestId('skills-ontology-rediscovery-panel');
+    expect(panel).toHaveTextContent('Versioned Skills Ontology & Talent Rediscovery');
+    expect(panel).toHaveTextContent('PROPOSAL ONLY');
+    expect(panel).toHaveTextContent('UNORDERED · RANKING YOK');
+    expect(screen.getByTestId('skills-apply-button')).toBeDisabled();
+  });
 });

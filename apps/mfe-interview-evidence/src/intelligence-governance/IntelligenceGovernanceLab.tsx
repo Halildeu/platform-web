@@ -8,6 +8,7 @@ import {
 } from './syntheticIntelligenceRegistry';
 import type { IntelligenceCapabilityStatus, SyntheticIntelligenceCapability } from './types';
 import { CitationBackedCoachingPanel } from './CitationBackedCoachingPanel';
+import { SkillsOntologyRediscoveryPanel } from './SkillsOntologyRediscoveryPanel';
 
 const STATUS_PRESENTATION: Record<
   IntelligenceCapabilityStatus,
@@ -262,6 +263,7 @@ function CapabilityDetail({ capability }: { capability: SyntheticIntelligenceCap
           </Text>
         </Stack>
         {capability.id === 'INTERVIEWER_COACHING' && <CitationBackedCoachingPanel />}
+        {capability.id === 'SKILLS_ONTOLOGY' && <SkillsOntologyRediscoveryPanel />}
       </Stack>
     </Card>
   );
