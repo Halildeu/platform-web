@@ -61,6 +61,10 @@ describe('IntelligenceGovernanceLab', () => {
     expect(detail).toHaveTextContent('FULL ATS KABUL YOK');
     expect(detail).toHaveTextContent('KANIT DOĞRULANMADI');
     expect(detail).toHaveTextContent('İNSAN ONAYI YOK');
+    const panel = screen.getByTestId('integrity-provenance-review-panel');
+    expect(panel).toHaveTextContent('Integrity & Provenance Review');
+    expect(panel).toHaveTextContent('SCREENING ONLY');
+    expect(screen.getByTestId('integrity-apply-button')).toBeDisabled();
     const table = screen.getByTestId('intelligence-measurement-table');
     expect(table).toHaveTextContent('False-positive/negative rate');
     expect(table).toHaveTextContent('appeal yolu zorunlu');

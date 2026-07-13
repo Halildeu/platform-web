@@ -164,7 +164,7 @@ export const SYNTHETIC_INTELLIGENCE_CAPABILITIES: readonly SyntheticIntelligence
     description:
       'Medya provenance sinyalini karar değil inceleme girdisi olarak ele alan guardrail.',
     status: 'BLOCKED',
-    standard: 'C2PA provenance + measured liveness test protocol',
+    standard: 'C2PA provenance + integrity screening protocol (no liveness biometrics)',
     allowedUse: 'Düşük güven sinyalini insan inceleme kuyruğuna proposal olarak göndermek.',
     prohibitedUse: 'Tek sinyalle red, fraud etiketi veya aday profilinde kalıcı risk skoru.',
     measurement: {
