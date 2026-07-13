@@ -10,6 +10,7 @@ import type { IntelligenceCapabilityStatus, SyntheticIntelligenceCapability } fr
 import { CitationBackedCoachingPanel } from './CitationBackedCoachingPanel';
 import { SkillsOntologyRediscoveryPanel } from './SkillsOntologyRediscoveryPanel';
 import { IntegrityProvenanceReviewPanel } from './IntegrityProvenanceReviewPanel';
+import { GovernedAgenticProposalPanel } from './GovernedAgenticProposalPanel';
 
 const STATUS_PRESENTATION: Record<
   IntelligenceCapabilityStatus,
@@ -166,32 +167,34 @@ export function IntelligenceGovernanceLab() {
           )}
         </Stack>
 
-        <Stack direction="column" gap={2}>
-          <Text as="p" size="sm" variant="secondary" data-testid="p6-experiment-reason">
-            {EXPERIMENT_BLOCK_REASON}
-          </Text>
-          <Text as="p" size="sm" variant="secondary" data-testid="p6-apply-reason">
-            {APPLY_BLOCK_REASON}
-          </Text>
-          <Stack direction="row" gap={2} wrap>
-            <Button
-              variant="outline"
-              disabled={!experimentEnabled}
-              accessReason={EXPERIMENT_BLOCK_REASON}
-              data-testid="p6-experiment-button"
-            >
-              Deney planı oluştur
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!applyEnabled}
-              accessReason={APPLY_BLOCK_REASON}
-              data-testid="p6-apply-button"
-            >
-              Öneriyi uygula
-            </Button>
+        {selected?.id !== 'AGENTIC_WORKFLOW' && (
+          <Stack direction="column" gap={2}>
+            <Text as="p" size="sm" variant="secondary" data-testid="p6-experiment-reason">
+              {EXPERIMENT_BLOCK_REASON}
+            </Text>
+            <Text as="p" size="sm" variant="secondary" data-testid="p6-apply-reason">
+              {APPLY_BLOCK_REASON}
+            </Text>
+            <Stack direction="row" gap={2} wrap>
+              <Button
+                variant="outline"
+                disabled={!experimentEnabled}
+                accessReason={EXPERIMENT_BLOCK_REASON}
+                data-testid="p6-experiment-button"
+              >
+                Deney planı oluştur
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!applyEnabled}
+                accessReason={APPLY_BLOCK_REASON}
+                data-testid="p6-apply-button"
+              >
+                Öneriyi uygula
+              </Button>
+            </Stack>
           </Stack>
-        </Stack>
+        )}
       </Stack>
     </Card>
   );
@@ -266,6 +269,7 @@ function CapabilityDetail({ capability }: { capability: SyntheticIntelligenceCap
         {capability.id === 'INTERVIEWER_COACHING' && <CitationBackedCoachingPanel />}
         {capability.id === 'SKILLS_ONTOLOGY' && <SkillsOntologyRediscoveryPanel />}
         {capability.id === 'DEEPFAKE_PROVENANCE' && <IntegrityProvenanceReviewPanel />}
+        {capability.id === 'AGENTIC_WORKFLOW' && <GovernedAgenticProposalPanel />}
       </Stack>
     </Card>
   );
