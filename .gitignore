@@ -49,6 +49,10 @@ apps/*/dist/
 # run-web-build-guard.sh build log directory (generated each `npm run build`)
 /logs/
 
+# Dedicated P6 browser acceptance output (CI artifact, never source).
+/playwright-report-p6/
+/test-results/
+
 # PERF-INIT-V2 PR-B3d0-impl: source-map-explorer CSS attribution artifacts
 # (generated; CI uploads them, never commit — node_modules paths,
 # sourcemap normalization, and build hash variance kirletir diff trail).

@@ -76,7 +76,7 @@ export function IntegrityProvenanceReviewPanel({
 
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="integrity-epistemic-boundary">
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Epistemic sınır · sonuç değil kanıt
             </Text>
             <div style={RESPONSIVE_GRID_STYLE}>
@@ -119,7 +119,7 @@ export function IntegrityProvenanceReviewPanel({
         </Card>
 
         <Stack direction="column" gap={2}>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Screening receipt’leri
           </Text>
           <div
@@ -225,7 +225,7 @@ function ReceiptLineageCard({ receipt }: { receipt: SyntheticIntegrityReceipt })
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="integrity-receipt-lineage">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Exact receipt ve snapshot lineage
           </Text>
           <StatusBadge status={receipt.status} />
@@ -288,7 +288,7 @@ function ReasonEvidenceCard({
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="integrity-reason-evidence">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Reason → evidence exact binding
           </Text>
           <Badge variant="info">{receipt.reasonCodes.length} REASON · ORPHAN YOK</Badge>
@@ -374,7 +374,7 @@ function CoverageCard({ receipt }: { receipt: SyntheticIntegrityReceipt }) {
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="integrity-coverage">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Uncertainty ve coverage receipts
           </Text>
           <Badge variant="warning">SYNTHETIC_ONLY · BAĞIMSIZ KABUL YOK</Badge>

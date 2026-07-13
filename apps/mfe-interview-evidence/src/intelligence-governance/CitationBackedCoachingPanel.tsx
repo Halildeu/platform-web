@@ -72,40 +72,50 @@ export function CitationBackedCoachingPanel({
               (citation) => citation.entailment === 'SUPPORTED',
             );
             return (
-              <div key={suggestion.suggestionRef} style={{ minWidth: 0 }}>
+              <div
+                key={suggestion.suggestionRef}
+                data-testid="coaching-suggestion"
+                data-suggestion-ref={suggestion.suggestionRef}
+                style={{ minWidth: 0 }}
+              >
                 <Card variant="outlined" padding="sm">
-                <Stack direction="column" gap={2}>
-                  <Stack direction="row" justify="between" gap={2} align="start" wrap>
-                    <Text as="h5" size="md" weight="semibold">
-                      {suggestion.label}
+                  <Stack direction="column" gap={2}>
+                    <Stack direction="row" justify="between" gap={2} align="start" wrap>
+                      <Text as="h5" size="base" weight="semibold">
+                        {suggestion.label}
+                      </Text>
+                      <Badge variant={supported.length > 0 ? 'success' : 'error'}>
+                        {supported.length > 0
+                          ? `${supported.length} SUPPORTED citation`
+                          : 'KANIT YOK · AKSİYON KAPALI'}
+                      </Badge>
+                    </Stack>
+                    <Text as="p" size="sm">
+                      <strong>Rubric kriteri:</strong> {suggestion.criterionLabel}
                     </Text>
-                    <Badge variant={supported.length > 0 ? 'success' : 'error'}>
-                      {supported.length > 0
-                        ? `${supported.length} SUPPORTED citation`
-                        : 'KANIT YOK · AKSİYON KAPALI'}
-                    </Badge>
+                    <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
+                      {suggestion.criterionRef}
+                    </Text>
+                    <Stack
+                      direction="row"
+                      gap={2}
+                      wrap
+                      aria-label={`${suggestion.label} citations`}
+                    >
+                      {supported.map((citation) => (
+                        <button
+                          key={citation.citationRef}
+                          type="button"
+                          aria-pressed={selectedCitationRef === citation.citationRef}
+                          aria-controls="coaching-citation-detail"
+                          onClick={() => selectCitation(citation.citationRef)}
+                          style={CITATION_BUTTON_STYLE}
+                        >
+                          Citation aç · {citation.evidenceType}
+                        </button>
+                      ))}
+                    </Stack>
                   </Stack>
-                  <Text as="p" size="sm">
-                    <strong>Rubric kriteri:</strong> {suggestion.criterionLabel}
-                  </Text>
-                  <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
-                    {suggestion.criterionRef}
-                  </Text>
-                  <Stack direction="row" gap={2} wrap aria-label={`${suggestion.label} citations`}>
-                    {supported.map((citation) => (
-                      <button
-                        key={citation.citationRef}
-                        type="button"
-                        aria-pressed={selectedCitationRef === citation.citationRef}
-                        aria-controls="coaching-citation-detail"
-                        onClick={() => selectCitation(citation.citationRef)}
-                        style={CITATION_BUTTON_STYLE}
-                      >
-                        Citation aç · {citation.evidenceType}
-                      </button>
-                    ))}
-                  </Stack>
-                </Stack>
                 </Card>
               </div>
             );
@@ -119,7 +129,8 @@ export function CitationBackedCoachingPanel({
             <Stack direction="column" gap={1} data-testid="coaching-citation-empty-state">
               <Badge variant="error">CITATION EKSİK</Badge>
               <Text as="p" size="sm">
-                Öneri gösterilebilir; fakat citation closure yoksa uygulama ve mutation kapalı kalır.
+                Öneri gösterilebilir; fakat citation closure yoksa uygulama ve mutation kapalı
+                kalır.
               </Text>
             </Stack>
           </Card>
@@ -127,10 +138,16 @@ export function CitationBackedCoachingPanel({
 
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="coaching-quality-signals">
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Structured quality signals · kategorik
             </Text>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 8,
+              }}
+            >
               {proposal.qualitySignals.map((signal) => (
                 <div key={signal.signalRef} style={{ minWidth: 0 }}>
                   <Stack direction="row" gap={2} align="center" wrap>
@@ -152,7 +169,7 @@ export function CitationBackedCoachingPanel({
 
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="coaching-governance-lineage">
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Correction, appeal ve audit lineage
             </Text>
             <Text as="p" size="sm" style={REF_STYLE}>
@@ -213,7 +230,7 @@ function CitationDetail({
   detailRef,
 }: {
   citation: SyntheticCoachingCitation;
-  detailRef: RefObject<HTMLDivElement | null>;
+  detailRef: RefObject<HTMLDivElement>;
 }) {
   return (
     <div
@@ -226,24 +243,21 @@ function CitationDetail({
       data-testid="coaching-citation-detail"
     >
       <Card variant="outlined" padding="sm">
-      <Stack
-        direction="column"
-        gap={2}
-      >
-        <Stack direction="row" gap={2} align="center" wrap>
-          <Text as="h5" size="md" weight="semibold">
-            Citation detayı
+        <Stack direction="column" gap={2}>
+          <Stack direction="row" gap={2} align="center" wrap>
+            <Text as="h5" size="base" weight="semibold">
+              Citation detayı
+            </Text>
+            <Badge variant="success">SUPPORTED</Badge>
+            <Badge variant="muted">{citation.evidenceType}</Badge>
+          </Stack>
+          <Text as="p" size="sm">
+            {citation.sourceExcerpt}
           </Text>
-          <Badge variant="success">SUPPORTED</Badge>
-          <Badge variant="muted">{citation.evidenceType}</Badge>
+          <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
+            {citation.citationRef} · {citation.sourceSegmentRef} · {citation.provenanceRef}
+          </Text>
         </Stack>
-        <Text as="p" size="sm">
-          {citation.sourceExcerpt}
-        </Text>
-        <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
-          {citation.citationRef} · {citation.sourceSegmentRef} · {citation.provenanceRef}
-        </Text>
-      </Stack>
       </Card>
     </div>
   );

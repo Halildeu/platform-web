@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const MFE_URL = 'http://127.0.0.1:3011/';
 
@@ -7,7 +8,8 @@ async function openSkillsOntologyPanel(page: Page) {
   await page.goto(MFE_URL, { waitUntil: 'networkidle' });
   const capability = page.getByTestId('intelligence-capability-SKILLS_ONTOLOGY');
   await expect(capability).toBeVisible();
-  await capability.click();
+  await capability.focus();
+  await page.keyboard.press('Enter');
   const panel = page.getByTestId('skills-ontology-rediscovery-panel');
   await expect(panel).toBeVisible();
   return panel;
@@ -29,6 +31,20 @@ test.describe('P6.3 Skills Ontology browser acceptance', () => {
       'REDISCOVERY EXACT TRACE BOUND',
     );
     await expect(page.getByTestId('skills-apply-button')).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Düzeltme isteği oluştur' })).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Sonucu dışa aktar' })).toBeDisabled();
+    await expect(page.getByTestId('skills-action-block-reason')).toContainText(
+      'legal, bağımsız-audit ve owner gate olmadan',
+    );
+    await expect(page.getByTestId('skills-governance-lineage')).toContainText(
+      'Appeal, correction ve audit sınırı',
+    );
+    await expect(page.getByTestId('skills-governance-lineage')).toContainText(
+      'appeal:rediscovery:synthetic:v1',
+    );
+    await expect(page.getByTestId('skills-governance-lineage')).toContainText(
+      'correction-path:rediscovery:synthetic:v1',
+    );
 
     const incidentConcept = page.getByRole('button', {
       name: /Olay müdahalesi ve geri dönüş/,
@@ -44,6 +60,15 @@ test.describe('P6.3 Skills Ontology browser acceptance', () => {
     await expect(detail).toBeFocused();
     await expect(detail).toContainText('evidence_bbbbbbbbbbbbbbbb');
     await expect(detail).toContainText('concept_bbbbbbbbbbbbbbbb');
+
+    const accessibility = await new AxeBuilder({ page })
+      .include('[data-testid="skills-ontology-rediscovery-panel"]')
+      .analyze();
+    expect(
+      accessibility.violations.filter(
+        (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+      ),
+    ).toEqual([]);
 
     await testInfo.attach('p6-skills-desktop', {
       body: await page.screenshot({ fullPage: true }),
@@ -67,6 +92,7 @@ test.describe('P6.3 Skills Ontology browser acceptance', () => {
     await expect(page.getByTestId('skills-tombstone-audit')).toContainText(
       'TRACE INVALIDATED BY TOMBSTONE',
     );
+    await expect(page.getByTestId('skills-consent-purpose')).toContainText('REAL ACTIVATION YOK');
 
     const overflow = await page.evaluate(() => ({
       viewportWidth: window.innerWidth,
@@ -80,6 +106,15 @@ test.describe('P6.3 Skills Ontology browser acceptance', () => {
     }));
     expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth);
     expect(overflow.panelScrollWidth).toBeLessThanOrEqual(overflow.panelClientWidth ?? 0);
+
+    const accessibility = await new AxeBuilder({ page })
+      .include('[data-testid="skills-ontology-rediscovery-panel"]')
+      .analyze();
+    expect(
+      accessibility.violations.filter(
+        (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+      ),
+    ).toEqual([]);
 
     await expect(panel).toBeVisible();
     await testInfo.attach('p6-skills-390px', {

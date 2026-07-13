@@ -32,6 +32,11 @@ test.describe('P6.5 governed agentic proposal browser acceptance', () => {
     );
     await expect(page.getByTestId('p6-apply-button')).toHaveCount(0);
     await expect(page.getByTestId('agentic-approve-button')).toBeDisabled();
+    await expect(
+      panel.getByRole('button', { name: 'Öneriyi reddet · proposal only' }),
+    ).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Adayı reddet' })).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Adayları sırala' })).toHaveCount(0);
 
     for (const forbiddenName of [
       /^çalıştır$/i,
@@ -58,6 +63,10 @@ test.describe('P6.5 governed agentic proposal browser acceptance', () => {
     await expect(page.getByTestId('agentic-external-observations')).toContainText(
       'Approval olsa bile execution otomatik varsayılmaz',
     );
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('EVIDENCE · NOT_MET');
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('LEGAL · NOT_MET');
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('OWNER · NOT_MET');
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('PRODUCTION · FALSE');
 
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="governed-agentic-proposal-panel"]')
@@ -93,7 +102,10 @@ test.describe('P6.5 governed agentic proposal browser acceptance', () => {
     await expect(page.getByTestId('agentic-external-observations')).toContainText(
       'PROPOSAL REACTIVATED · FALSE',
     );
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('EVIDENCE · NOT_MET');
     await expect(page.getByTestId('agentic-closed-gates')).toContainText('LEGAL · NOT_MET');
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('OWNER · NOT_MET');
+    await expect(page.getByTestId('agentic-closed-gates')).toContainText('PRODUCTION · FALSE');
 
     const overflow = await page.evaluate(() => ({
       viewportWidth: window.innerWidth,

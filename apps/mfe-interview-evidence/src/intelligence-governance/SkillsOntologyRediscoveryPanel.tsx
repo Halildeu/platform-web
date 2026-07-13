@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
-import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
+import type { ComponentProps, RefObject } from 'react';
+import { Badge as DesignSystemBadge, Button, Card, Stack, Text } from '@mfe/design-system';
 import {
   SYNTHETIC_SKILL_CITATION_REGISTRY,
   SYNTHETIC_SKILL_LABEL_REGISTRY,
@@ -14,6 +14,10 @@ import type {
 
 const ACTION_BLOCK_REASON =
   'PRE-G0 sentetik ve sırasız proposal; insan review/rationale ile legal, bağımsız-audit ve owner gate olmadan uygulanamaz, dışa aktarılamaz veya kişiye aksiyon üretemez.';
+
+function Badge({ style, ...props }: ComponentProps<typeof DesignSystemBadge>) {
+  return <DesignSystemBadge {...props} style={{ ...RESPONSIVE_BADGE_STYLE, ...style }} />;
+}
 
 export function SkillsOntologyRediscoveryPanel({
   surface = SYNTHETIC_SKILLS_ONTOLOGY_SURFACE,
@@ -81,7 +85,12 @@ export function SkillsOntologyRediscoveryPanel({
 
   return (
     <Card variant="outlined" padding="sm">
-      <Stack direction="column" gap={4} data-testid="skills-ontology-rediscovery-panel">
+      <Stack
+        direction="column"
+        gap={4}
+        data-testid="skills-ontology-rediscovery-panel"
+        style={RESPONSIVE_PANEL_STYLE}
+      >
         <Stack direction="row" justify="between" align="start" gap={2} wrap>
           <Stack direction="column" gap={1}>
             <Text as="h4" size="lg" weight="semibold">
@@ -120,7 +129,7 @@ export function SkillsOntologyRediscoveryPanel({
 
         <Stack direction="column" gap={2}>
           <Stack direction="row" justify="between" align="center" gap={2} wrap>
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Ontology kavramları · label registry
             </Text>
             <Badge variant="muted">Serbest label yok</Badge>
@@ -180,7 +189,7 @@ export function SkillsOntologyRediscoveryPanel({
 
         <Stack direction="column" gap={2} data-testid="skills-rediscovery-results">
           <Stack direction="row" justify="between" align="center" gap={2} wrap>
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Talent rediscovery önerileri
             </Text>
             <Badge variant="info">{activeMatches.length} CURRENT · DISPLAY ORDER UNSPECIFIED</Badge>
@@ -232,7 +241,7 @@ export function SkillsOntologyRediscoveryPanel({
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="skills-tombstone-audit">
             <Stack direction="row" justify="between" align="center" gap={2} wrap>
-              <Text as="h5" size="md" weight="semibold">
+              <Text as="h5" size="base" weight="semibold">
                 Tombstone ve historical trace
               </Text>
               <Badge variant={invalidatedMatches.length > 0 ? 'error' : 'muted'}>
@@ -256,7 +265,7 @@ export function SkillsOntologyRediscoveryPanel({
 
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="skills-governance-lineage">
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Appeal, correction ve audit sınırı
             </Text>
             <ReferenceLine label="Appeal" value={surface.rediscoveryProposal.appealPathRef} />
@@ -288,6 +297,7 @@ export function SkillsOntologyRediscoveryPanel({
               disabled
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="skills-action-block-reason"
+              style={RESPONSIVE_ACTION_BUTTON_STYLE}
             >
               Düzeltme isteği oluştur
             </Button>
@@ -296,6 +306,7 @@ export function SkillsOntologyRediscoveryPanel({
               disabled
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="skills-action-block-reason"
+              style={RESPONSIVE_ACTION_BUTTON_STYLE}
             >
               Sonucu dışa aktar
             </Button>
@@ -305,6 +316,7 @@ export function SkillsOntologyRediscoveryPanel({
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="skills-action-block-reason"
               data-testid="skills-apply-button"
+              style={RESPONSIVE_ACTION_BUTTON_STYLE}
             >
               Rediscovery önerisini uygula
             </Button>
@@ -321,7 +333,7 @@ function ReleaseLineageCard({ surface }: { surface: SyntheticSkillsOntologySurfa
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="skills-release-lineage">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Immutable release lineage
           </Text>
           <Stack direction="row" gap={2} wrap>
@@ -366,14 +378,14 @@ function MappingEvidenceCard({
   evidence: readonly SyntheticSkillEvidence[];
   selectedEvidence: SyntheticSkillEvidence | undefined;
   citationRegistry: Readonly<Record<string, string>>;
-  detailRef: RefObject<HTMLDivElement | null>;
+  detailRef: RefObject<HTMLDivElement>;
   onSelectEvidence: (evidenceRef: string) => void;
 }) {
   return (
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={3} data-testid="skills-mapping-evidence">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Evidence-bound skill mapping
           </Text>
           <Badge variant={evidence.length > 0 ? 'success' : 'error'}>
@@ -466,7 +478,7 @@ function ConsentPurposeCard({
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="skills-consent-purpose">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Consent, purpose ve activation gate
           </Text>
           <Badge variant={checks.consentCurrent ? 'success' : 'error'}>
@@ -565,6 +577,25 @@ const RESPONSIVE_GRID_STYLE = {
 
 const REF_STYLE = { overflowWrap: 'anywhere', margin: 0 } as const;
 
+const RESPONSIVE_PANEL_STYLE = {
+  minWidth: 0,
+  maxWidth: '100%',
+  overflowWrap: 'anywhere',
+} as const;
+
+const RESPONSIVE_BADGE_STYLE = {
+  maxWidth: '100%',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  textAlign: 'center',
+} as const;
+
+const RESPONSIVE_ACTION_BUTTON_STYLE = {
+  maxWidth: '100%',
+  whiteSpace: 'normal',
+  textAlign: 'center',
+} as const;
+
 const SELECTABLE_CARD_STYLE = {
   appearance: 'none',
   borderRadius: 12,
@@ -585,6 +616,9 @@ const CITATION_BUTTON_STYLE = {
   padding: '0.5rem 0.625rem',
   cursor: 'pointer',
   textAlign: 'left',
+  minWidth: 0,
+  maxWidth: '100%',
+  overflowWrap: 'anywhere',
 } as const;
 
 const AUDIT_ROW_STYLE = {
