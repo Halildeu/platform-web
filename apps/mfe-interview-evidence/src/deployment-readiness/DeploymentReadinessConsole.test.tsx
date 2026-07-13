@@ -54,6 +54,49 @@ describe('DeploymentReadinessConsole', () => {
     expect(screen.getByText('Tek yüzde / ortalama yok')).toBeVisible();
   });
 
+  test('readiness tokens stay atomic while localized labels wrap only at language boundaries', () => {
+    const { container } = render(<DeploymentReadinessConsole />);
+    const compactBadges = container.querySelectorAll<HTMLElement>(
+      '[data-readiness-density="compact"]',
+    );
+    const fullBadge = container.querySelector<HTMLElement>('[data-readiness-density="full"]');
+
+    expect(compactBadges.length).toBeGreaterThan(0);
+    for (const badge of compactBadges) {
+      expect(badge).toHaveStyle({
+        whiteSpace: 'nowrap',
+        overflowWrap: 'normal',
+        wordBreak: 'normal',
+        hyphens: 'none',
+        position: 'relative',
+      });
+      expect(badge).toHaveAttribute('data-readiness-state', 'NOT_CONFIGURED');
+      expect(badge).not.toHaveAttribute('aria-label');
+      expect(badge).toHaveTextContent('NOT_CONFIGURED: YAPILANDIRILMADI');
+      expect(badge.querySelector('[data-readiness-visible="true"]')).toHaveTextContent(
+        'NOT_CONFIGURED',
+      );
+    }
+
+    expect(fullBadge).not.toBeNull();
+    expect(fullBadge).toHaveStyle({
+      whiteSpace: 'normal',
+      overflowWrap: 'normal',
+      wordBreak: 'normal',
+      hyphens: 'none',
+      position: 'relative',
+    });
+    expect(fullBadge).not.toHaveAttribute('aria-label');
+    expect(fullBadge).toHaveTextContent('NOT_CONFIGURED: YAPILANDIRILMADI');
+    expect(fullBadge?.querySelector('[data-readiness-visible="true"]')).toHaveTextContent(
+      'YAPILANDIRILMADI',
+    );
+
+    const technicalValue = screen.getByText('PLATFORM_FEDERATED_OIDC_SAML');
+    expect(technicalValue).toHaveTextContent('PLATFORM_FEDERATED_OIDC_SAML');
+    expect(technicalValue.querySelectorAll('wbr')).toHaveLength(3);
+  });
+
   test('profile selection synchronizes exact topology controls, thresholds and gate rows', () => {
     render(<DeploymentReadinessConsole />);
     const onPrem = screen.getByTestId('deployment-profile-SOVEREIGN_ON_PREM');

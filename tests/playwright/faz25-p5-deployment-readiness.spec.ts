@@ -93,6 +93,79 @@ test.describe('Faz 25 P5 deployment readiness product surface', () => {
     expect(viewportOverflow).toBeLessThanOrEqual(1);
   });
 
+  test('keeps exact readiness tokens intact at 390px and 400% reflow-equivalent width', async ({
+    page,
+  }) => {
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.getByTestId('deployment-readiness-console').scrollIntoViewIfNeeded();
+
+      const compactBadges = page.locator('[data-readiness-density="compact"]');
+      const fullBadges = page.locator('[data-readiness-density="full"]');
+      await expect(compactBadges.first()).toBeVisible();
+      await expect(fullBadges.first()).toBeVisible();
+
+      const compactLayout = await compactBadges.evaluateAll((badges) =>
+        badges.map((badge) => {
+          const style = window.getComputedStyle(badge);
+          return {
+            semanticText: badge.textContent,
+            visibleText: badge.querySelector('[data-readiness-visible="true"]')?.textContent,
+            whiteSpace: style.whiteSpace,
+            overflowWrap: style.overflowWrap,
+            wordBreak: style.wordBreak,
+            hyphens: style.hyphens,
+            contained: badge.scrollWidth <= badge.clientWidth + 1,
+          };
+        }),
+      );
+      expect(compactLayout.length).toBeGreaterThan(0);
+      for (const badge of compactLayout) {
+        expect(badge.visibleText).toBe('NOT_CONFIGURED');
+        expect(badge.semanticText).toBe('NOT_CONFIGURED: YAPILANDIRILMADI');
+        expect(badge.whiteSpace).toBe('nowrap');
+        expect(badge.overflowWrap).toBe('normal');
+        expect(badge.wordBreak).toBe('normal');
+        expect(badge.hyphens).toBe('none');
+        expect(badge.contained).toBe(true);
+      }
+
+      const fullLayout = await fullBadges.first().evaluate((badge) => {
+        const style = window.getComputedStyle(badge);
+        return {
+          whiteSpace: style.whiteSpace,
+          overflowWrap: style.overflowWrap,
+          wordBreak: style.wordBreak,
+          hyphens: style.hyphens,
+        };
+      });
+      expect(fullLayout).toEqual({
+        whiteSpace: 'normal',
+        overflowWrap: 'normal',
+        wordBreak: 'normal',
+        hyphens: 'none',
+      });
+      const accessibilitySnapshot = await compactBadges.first().ariaSnapshot();
+      expect(accessibilitySnapshot).toContain('NOT_CONFIGURED');
+      expect(accessibilitySnapshot).toContain('YAPILANDIRILMADI');
+
+      const readinessOverflow = await page
+        .getByTestId('deployment-readiness-console')
+        .evaluate((console) => console.scrollWidth - console.clientWidth);
+      expect(readinessOverflow).toBeLessThanOrEqual(1);
+
+      // 390px remains the established whole-page mobile acceptance. At the
+      // 320px/400%-reflow equivalent, this issue owns the P5 console; legacy
+      // sibling panels are tracked separately and must not be hidden here.
+      if (width === 390) {
+        const viewportOverflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(viewportOverflow).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
   test('has no serious or critical axe violations in the P5 console', async ({ page }) => {
     const results = await analyzeP5Console(page);
     const blocking = results.violations.filter(
