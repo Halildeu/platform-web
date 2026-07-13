@@ -37,6 +37,7 @@ describe('IntelligenceGovernanceLab', () => {
     expect(panel).toHaveTextContent('Quality-of-Hire Evidence Loop (P6.0)');
     expect(panel).toHaveTextContent('TEK QoH SKORU YOK');
     expect(panel).toHaveTextContent('Customer controller');
+    expect(panel).toHaveTextContent('yalnız ORIGINAL receipt gösterir');
     expect(screen.getByTestId('qoh-activate-button')).toBeDisabled();
   });
 

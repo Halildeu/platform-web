@@ -41,9 +41,7 @@ test.describe('P6.0 Quality-of-Hire evidence browser acceptance', () => {
     await expect(page.getByTestId('qoh-window-DAY_90')).toContainText(
       'Eligible 200 · Observed 160',
     );
-    await expect(page.getByTestId('qoh-window-DAY_180')).toContainText(
-      'Missing 20 · Censored 20',
-    );
+    await expect(page.getByTestId('qoh-window-DAY_180')).toContainText('Missing 20 · Censored 20');
     await expect(page.getByTestId('qoh-window-DAY_180')).toContainText(
       'Outcome category 100 · 62.5%',
     );
@@ -94,6 +92,12 @@ test.describe('P6.0 Quality-of-Hire evidence browser acceptance', () => {
     );
     await expect(page.getByTestId('qoh-governance-lineage')).toContainText(
       'erasure:qoh:propagation:v1',
+    );
+    await expect(page.getByTestId('qoh-governance-lineage')).toContainText(
+      'yalnız ORIGINAL receipt gösterir',
+    );
+    await expect(page.getByTestId('qoh-governance-lineage')).toContainText(
+      'doğrulanmış previous receipt chain olmadan fail-closed reddedilir',
     );
 
     const gates = page.getByTestId('qoh-activation-gates');
