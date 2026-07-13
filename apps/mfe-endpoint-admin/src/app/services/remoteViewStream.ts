@@ -38,6 +38,53 @@ export interface RemoteViewStreamHandle {
   close: () => void;
 }
 
+export interface RemoteViewRenderAckOptions {
+  url: string;
+  token: string | null;
+  viewerId: string;
+  frameSeq: number;
+  fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
+  timeoutMillis?: number;
+}
+
+/**
+ * Report browser render completion as bounded metadata. The request deliberately carries no frame payload,
+ * screen content or input data. Missing authority or any non-204 response fails closed and returns false.
+ */
+export async function acknowledgeRemoteViewRender(
+  opts: RemoteViewRenderAckOptions,
+): Promise<boolean> {
+  if (!opts.token || !opts.viewerId || !Number.isSafeInteger(opts.frameSeq) || opts.frameSeq < 0) {
+    return false;
+  }
+  const doFetch = opts.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener('abort', abortFromParent, { once: true });
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMillis ?? 5_000);
+  try {
+    const response = await doFetch(opts.url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${opts.token}`,
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+      body: JSON.stringify({ viewerId: opts.viewerId, frameSeq: opts.frameSeq }),
+    });
+    return response.status === 204;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+    opts.signal?.removeEventListener('abort', abortFromParent);
+  }
+}
+
 /**
  * Open the viewer SSE stream. Returns a handle whose `close()` aborts the
  * fetch (idempotent). All terminal outcomes are reported through `onStatus`:
@@ -159,6 +206,7 @@ function dispatchEvent(raw: string, handlers: RemoteViewStreamHandlers): void {
         recording: Boolean(m.recording),
         attended: Boolean(m.attended),
         capability: typeof m.capability === 'string' ? m.capability : 'VIEW_ONLY',
+        viewerId: typeof m.viewerId === 'string' ? m.viewerId : '',
       });
     } catch {
       /* ignore a malformed meta frame */
@@ -166,10 +214,25 @@ function dispatchEvent(raw: string, handlers: RemoteViewStreamHandlers): void {
   } else if (event === 'frame') {
     try {
       const f = JSON.parse(data) as Partial<RemoteViewFrame>;
-      if (typeof f.dataB64 === 'string' && f.dataB64.length > 0) {
+      const seq = Number(f.seq);
+      const observedAtEpochMillis = Number(f.observedAtEpochMillis);
+      const sentAtEpochMillis = Number(f.sentAtEpochMillis);
+      if (
+        typeof f.dataB64 === 'string' &&
+        f.dataB64.length > 0 &&
+        typeof f.contentType === 'string' &&
+        Number.isSafeInteger(seq) &&
+        seq >= 0 &&
+        Number.isFinite(observedAtEpochMillis) &&
+        observedAtEpochMillis > 0 &&
+        Number.isFinite(sentAtEpochMillis) &&
+        sentAtEpochMillis >= observedAtEpochMillis
+      ) {
         handlers.onFrame?.({
-          seq: Number(f.seq ?? 0),
-          contentType: typeof f.contentType === 'string' ? f.contentType : 'image/png',
+          seq,
+          contentType: f.contentType,
+          observedAtEpochMillis,
+          sentAtEpochMillis,
           dataB64: f.dataB64,
         });
       }
