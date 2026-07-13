@@ -8,7 +8,8 @@ async function openIntegrityPanel(page: Page) {
   await page.goto(MFE_URL, { waitUntil: 'networkidle' });
   const capability = page.getByTestId('intelligence-capability-DEEPFAKE_PROVENANCE');
   await expect(capability).toBeVisible();
-  await capability.click();
+  await capability.focus();
+  await page.keyboard.press('Enter');
   const panel = page.getByTestId('integrity-provenance-review-panel');
   await expect(panel).toBeVisible();
   return panel;
@@ -89,9 +90,24 @@ test.describe('P6.4 Integrity and Provenance browser acceptance', () => {
     await expect(page.getByTestId('integrity-coverage')).toContainText(
       'SYNTHETIC_ONLY · BAĞIMSIZ KABUL YOK',
     );
+    await expect(page.getByTestId('integrity-coverage')).toContainText('False-positive coverage');
+    await expect(page.getByTestId('integrity-coverage')).toContainText('False-negative coverage');
+    await expect(page.getByTestId('integrity-coverage')).toContainText('Uncertainty coverage');
     await expect(page.getByTestId('integrity-human-review')).toContainText('HUMAN REVIEW REQUIRED');
+    await expect(page.getByTestId('integrity-human-review')).toContainText(
+      'ACTION ALLOWED · FALSE',
+    );
+    await expect(page.getByTestId('integrity-human-review')).toContainText('Appeal');
+    await expect(page.getByTestId('integrity-human-review')).toContainText('Correction');
+    await expect(page.getByTestId('integrity-human-review')).toContainText('Audit');
     await expect(page.getByTestId('integrity-activation-gates')).toContainText(
       'LEGAL GATE · NOT_MET',
+    );
+    await expect(page.getByTestId('integrity-activation-gates')).toContainText(
+      'OWNER GATE · NOT_MET',
+    );
+    await expect(page.getByTestId('integrity-activation-gates')).toContainText(
+      'PRODUCTION · FALSE',
     );
 
     const overflow = await page.evaluate(() => ({

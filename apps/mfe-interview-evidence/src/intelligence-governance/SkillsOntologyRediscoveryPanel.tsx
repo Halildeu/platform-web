@@ -120,7 +120,7 @@ export function SkillsOntologyRediscoveryPanel({
 
         <Stack direction="column" gap={2}>
           <Stack direction="row" justify="between" align="center" gap={2} wrap>
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Ontology kavramları · label registry
             </Text>
             <Badge variant="muted">Serbest label yok</Badge>
@@ -180,7 +180,7 @@ export function SkillsOntologyRediscoveryPanel({
 
         <Stack direction="column" gap={2} data-testid="skills-rediscovery-results">
           <Stack direction="row" justify="between" align="center" gap={2} wrap>
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Talent rediscovery önerileri
             </Text>
             <Badge variant="info">{activeMatches.length} CURRENT · DISPLAY ORDER UNSPECIFIED</Badge>
@@ -232,7 +232,7 @@ export function SkillsOntologyRediscoveryPanel({
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="skills-tombstone-audit">
             <Stack direction="row" justify="between" align="center" gap={2} wrap>
-              <Text as="h5" size="md" weight="semibold">
+              <Text as="h5" size="base" weight="semibold">
                 Tombstone ve historical trace
               </Text>
               <Badge variant={invalidatedMatches.length > 0 ? 'error' : 'muted'}>
@@ -256,7 +256,7 @@ export function SkillsOntologyRediscoveryPanel({
 
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="skills-governance-lineage">
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Appeal, correction ve audit sınırı
             </Text>
             <ReferenceLine label="Appeal" value={surface.rediscoveryProposal.appealPathRef} />
@@ -321,7 +321,7 @@ function ReleaseLineageCard({ surface }: { surface: SyntheticSkillsOntologySurfa
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="skills-release-lineage">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Immutable release lineage
           </Text>
           <Stack direction="row" gap={2} wrap>
@@ -366,14 +366,14 @@ function MappingEvidenceCard({
   evidence: readonly SyntheticSkillEvidence[];
   selectedEvidence: SyntheticSkillEvidence | undefined;
   citationRegistry: Readonly<Record<string, string>>;
-  detailRef: RefObject<HTMLDivElement | null>;
+  detailRef: RefObject<HTMLDivElement>;
   onSelectEvidence: (evidenceRef: string) => void;
 }) {
   return (
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={3} data-testid="skills-mapping-evidence">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Evidence-bound skill mapping
           </Text>
           <Badge variant={evidence.length > 0 ? 'success' : 'error'}>
@@ -466,7 +466,7 @@ function ConsentPurposeCard({
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="skills-consent-purpose">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Consent, purpose ve activation gate
           </Text>
           <Badge variant={checks.consentCurrent ? 'success' : 'error'}>

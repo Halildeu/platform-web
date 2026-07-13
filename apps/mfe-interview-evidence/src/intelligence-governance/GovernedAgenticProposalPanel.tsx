@@ -71,7 +71,7 @@ export function GovernedAgenticProposalPanel({
 
         <Card variant="outlined" padding="sm">
           <Stack direction="column" gap={2} data-testid="agentic-authority-boundary">
-            <Text as="h5" size="md" weight="semibold">
+            <Text as="h5" size="base" weight="semibold">
               Yetki sınırı · dört ayrı gerçek
             </Text>
             <div style={RESPONSIVE_GRID_STYLE}>
@@ -110,7 +110,7 @@ export function GovernedAgenticProposalPanel({
         </Stack>
 
         <Stack direction="column" gap={2}>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Sentetik proposal kuyruğu
           </Text>
           <div
@@ -225,7 +225,7 @@ function ProposalDetail({
   detailRef,
 }: {
   proposal: SyntheticGovernedAgenticProposal;
-  detailRef: RefObject<HTMLDivElement | null>;
+  detailRef: RefObject<HTMLDivElement>;
 }) {
   return (
     <div
@@ -252,7 +252,7 @@ function ImmutableEnvelope({ proposal }: { proposal: SyntheticGovernedAgenticPro
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="agentic-immutable-envelope">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             Değişmez proposal envelope
           </Text>
           <Stack direction="row" gap={2} wrap>
@@ -298,7 +298,7 @@ function ReviewerAuthorizationCard({ proposal }: { proposal: SyntheticGovernedAg
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="agentic-reviewer-authorization">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             İnsan reviewer yetki kapsamı
           </Text>
           <Badge variant={auth ? 'warning' : 'muted'}>
@@ -335,7 +335,7 @@ function ApprovalCard({ proposal }: { proposal: SyntheticGovernedAgenticProposal
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="agentic-approval-receipt">
         <Stack direction="row" justify="between" align="center" gap={2} wrap>
-          <Text as="h5" size="md" weight="semibold">
+          <Text as="h5" size="base" weight="semibold">
             İnsan approval receipt
           </Text>
           <Badge variant={approval ? 'warning' : 'muted'}>
@@ -383,7 +383,7 @@ function ExternalObservationCard({ proposal }: { proposal: SyntheticGovernedAgen
   return (
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="agentic-external-observations">
-        <Text as="h5" size="md" weight="semibold">
+        <Text as="h5" size="base" weight="semibold">
           Dış icra ve rollback gözlemleri
         </Text>
         <div style={RESPONSIVE_GRID_STYLE}>
@@ -420,7 +420,7 @@ function AuditTimeline({ proposal }: { proposal: SyntheticGovernedAgenticProposa
   return (
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={2} data-testid="agentic-audit-timeline">
-        <Text as="h5" size="md" weight="semibold">
+        <Text as="h5" size="base" weight="semibold">
           Append-only audit timeline
         </Text>
         <ol style={{ margin: 0, paddingInlineStart: '1.25rem' }}>
