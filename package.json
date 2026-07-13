@@ -220,6 +220,7 @@
     "mf:shared-keys:json": "node ./scripts/diagnostics/mf-shared-keys.mjs --json",
     "mf:shared-keys:strict": "node ./scripts/diagnostics/mf-shared-keys.mjs --strict",
     "e2e": "playwright test",
+    "e2e:p4:acceptance": "playwright test --config playwright.p4.config.ts",
     "e2e:p6:acceptance": "playwright test --config playwright.p6.config.ts",
     "e2e:visual": "playwright test e2e/visual/",
     "e2e:interaction": "playwright test e2e/interaction/",
