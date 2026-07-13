@@ -249,23 +249,24 @@ export function validateDeploymentProfileRegistryV1(
   input: unknown,
 ): DeploymentProfileValidationResult {
   try {
+    // Take one owned snapshot before inspecting caller-controlled data. This
+    // prevents getters or later caller mutations from changing values between
+    // validation and the registry returned to the UI.
+    const snapshot: unknown = structuredClone(input);
     const issues: string[] = [];
-    validateStructure(input, issues);
-    scanForbiddenContent(input, '$registry', issues);
+    validateStructure(snapshot, issues);
+    scanForbiddenContent(snapshot, '$registry', issues);
 
     if (issues.length > 0) {
       return { ok: false, issues: uniqueIssues(issues) };
     }
 
-    const registry = input as DeploymentProfileRegistryV1;
+    const registry = snapshot as DeploymentProfileRegistryV1;
     validateSemantics(registry, issues);
 
     if (issues.length > 0) return { ok: false, issues: uniqueIssues(issues) };
 
-    // Return an owned immutable snapshot. Callers may retain and mutate the
-    // original object after validation; that must never alter cached UI truth.
-    const snapshot = deepFreezeSnapshot(structuredClone(registry));
-    return { ok: true, registry: snapshot };
+    return { ok: true, registry: deepFreezeSnapshot(registry) };
   } catch {
     return { ok: false, issues: ['REGISTRY_VALIDATION_EXCEPTION'] };
   }
@@ -714,12 +715,14 @@ function exactObject<
   const allowed = new Set<string>([...required, ...optional]);
   const keys = Object.keys(input);
   for (const key of required) {
-    if (!(key in input)) issues.push(path + ': missing key ' + key);
+    if (!Object.hasOwn(input, key)) issues.push(path + ': missing key ' + key);
   }
   for (const key of keys) {
     if (!allowed.has(key)) issues.push(path + ': unknown key ' + key);
   }
-  return required.every((key) => key in input) && keys.every((key) => allowed.has(key));
+  return (
+    required.every((key) => Object.hasOwn(input, key)) && keys.every((key) => allowed.has(key))
+  );
 }
 
 function enumValue(

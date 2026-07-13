@@ -129,6 +129,46 @@ describe('deploymentProfileAdapter', () => {
     ).toBe(false);
   });
 
+  test('snapshots getter-backed values once before validation and returns that exact snapshot', () => {
+    const input = cloneFixture();
+    const managed = input.profiles[0]!;
+    let reads = 0;
+    Object.defineProperty(managed, 'release_allowed', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        reads += 1;
+        return reads === 1 ? false : true;
+      },
+    });
+
+    const result = validateDeploymentProfileRegistryV1(input);
+
+    expect(reads).toBe(1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.registry.profiles[0]?.release_allowed).toBe(false);
+    expect(input.profiles[0]?.release_allowed).toBe(true);
+    expect(result.registry.profiles[0]?.release_allowed).toBe(false);
+  });
+
+  test('prototype-only required profile fields fail closed', () => {
+    const payload = {
+      schema_version: CANONICAL_SYNTHETIC_DEPLOYMENT_PROFILE_REGISTRY.schema_version,
+      activation_gate: CANONICAL_SYNTHETIC_DEPLOYMENT_PROFILE_REGISTRY.activation_gate,
+      profiles: CANONICAL_SYNTHETIC_DEPLOYMENT_PROFILE_REGISTRY.profiles.map((profile) =>
+        Object.create(profile),
+      ),
+    };
+
+    const result = validateDeploymentProfileRegistryV1(payload);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues).toContain('$registry.profiles[0]: missing key profile_id');
+    }
+  });
+
   test('cyclic, over-deep and throwing proxy payloads fail closed without throwing', () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
