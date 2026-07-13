@@ -78,7 +78,12 @@ describe('IntelligenceGovernanceLab', () => {
     expect(within(detail).getByText('İZİN VERİLMEZ')).toBeVisible();
     expect(detail).toHaveTextContent('Taslak sonraki-adım');
     expect(detail).toHaveTextContent('workflow mutation');
-    expect(screen.getByTestId('p6-apply-button')).toBeDisabled();
+    expect(screen.queryByTestId('p6-apply-button')).not.toBeInTheDocument();
+    const agenticPanel = screen.getByTestId('governed-agentic-proposal-panel');
+    expect(agenticPanel).toHaveTextContent('HUMAN APPROVAL CEILING');
+    expect(agenticPanel).toHaveTextContent('EXECUTION AUTHORITY · NONE');
+    expect(screen.getByTestId('agentic-approve-button')).toBeDisabled();
+    expect(agenticPanel).not.toHaveTextContent('Öneriyi uygula');
     const checkpoints = screen.getByTestId('p6-approval-checkpoints');
     expect(SYNTHETIC_APPROVAL_CHECKPOINTS).toHaveLength(4);
     expect(checkpoints).toHaveTextContent('Toplu onay yok');
