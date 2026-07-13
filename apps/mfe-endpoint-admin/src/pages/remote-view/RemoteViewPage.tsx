@@ -3,11 +3,13 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useEndpointAdminI18n } from '../../i18n';
 import { readBearerToken, resolveBaseUrl } from '../../app/services/endpointAdminApi';
 import {
+  acknowledgeRemoteViewRender,
   openRemoteViewStream,
   type RemoteViewStreamHandle,
 } from '../../app/services/remoteViewStream';
 import {
   isRenderableFrame,
+  type RemoteViewFrame,
   type RemoteViewMeta,
   type RemoteViewStatus,
 } from '../../entities/remote-view/types';
@@ -32,6 +34,8 @@ export interface RemoteViewPageProps {
   fetchImpl?: typeof fetch;
   tokenResolver?: () => string | null;
   nowFn?: () => number;
+  /** Test seam; production schedules acknowledgement after two animation frames. */
+  afterPaint?: (callback: () => void) => void;
 }
 
 const VIEWER_PATH = '/endpoint-admin/remote-access/sessions';
@@ -108,6 +112,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   fetchImpl,
   tokenResolver,
   nowFn,
+  afterPaint,
 }) => {
   const { t } = useEndpointAdminI18n();
   const params = useParams();
@@ -120,17 +125,39 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
 
   const [status, setStatus] = React.useState<RemoteViewStatus>('connecting');
   const [meta, setMeta] = React.useState<RemoteViewMeta | null>(null);
-  const [frameSrc, setFrameSrc] = React.useState<string | null>(null);
+  const [frame, setFrame] = React.useState<RemoteViewFrame | null>(null);
   const [frameCount, setFrameCount] = React.useState(0);
-  const [lastFrameAt, setLastFrameAt] = React.useState<number | null>(null);
+  const [renderAckAcceptedCount, setRenderAckAcceptedCount] = React.useState(0);
   const [, tick] = React.useReducer((x: number) => x + 1, 0);
   const handleRef = React.useRef<RemoteViewStreamHandle | null>(null);
+  const ackContextRef = React.useRef<{
+    target: string;
+    url: string;
+    token: string | null;
+    active: boolean;
+    abort: AbortController;
+    ackInFlight: boolean;
+    queuedAck: { viewerId: string; frameSeq: number } | null;
+  } | null>(null);
+  const lastAckAttemptedSeqRef = React.useRef(-1);
+
+  const terminateAcknowledgements = React.useCallback(() => {
+    const context = ackContextRef.current;
+    if (!context) return;
+    context.active = false;
+    context.queuedAck = null;
+    context.abort.abort();
+  }, []);
 
   const stop = React.useCallback(() => {
+    terminateAcknowledgements();
     handleRef.current?.close();
     handleRef.current = null;
+    setMeta(null);
+    setFrame(null);
+    setFrameCount(0);
     setStatus('closed');
-  }, []);
+  }, [terminateAcknowledgements]);
 
   React.useEffect(() => {
     // Reset per-target view state FIRST so a previous session's frame/meta can
@@ -138,9 +165,10 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     // has not pushed a frame yet — a stale screen frame is a privacy leak and a
     // VIEW_ONLY acceptance-truth violation.
     setMeta(null);
-    setFrameSrc(null);
+    setFrame(null);
     setFrameCount(0);
-    setLastFrameAt(null);
+    setRenderAckAcceptedCount(0);
+    lastAckAttemptedSeqRef.current = -1;
 
     if (missing) {
       setStatus('error');
@@ -156,32 +184,115 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     const url = `${resolveBaseUrl()}${VIEWER_PATH}/${encodeURIComponent(
       sessionId,
     )}/view?streamId=${encodeURIComponent(streamId)}`;
+    const target = `${sessionId}\u0000${streamId}`;
+    const ackAbort = new AbortController();
+    ackContextRef.current = {
+      target,
+      url,
+      token,
+      active: true,
+      abort: ackAbort,
+      ackInFlight: false,
+      queuedAck: null,
+    };
     const handle = openRemoteViewStream({
       url,
       token,
       fetchImpl,
       onStatus: (s) => {
-        if (active) setStatus(s);
+        if (!active) return;
+        setStatus(s);
+        if (s === 'closed' || s === 'error' || s === 'forbidden' || s === 'busy') {
+          terminateAcknowledgements();
+          setMeta(null);
+          setFrame(null);
+          setFrameCount(0);
+        }
       },
       onMeta: (m) => {
         if (active) setMeta(m);
       },
       onFrame: (frame) => {
         if (!active || !isRenderableFrame(frame)) return; // never build a data URL from a non-image type
-        setFrameSrc(`data:${frame.contentType};base64,${frame.dataB64}`);
+        setFrame(frame);
         setFrameCount((c) => c + 1);
-        setLastFrameAt(now());
       },
     });
     handleRef.current = handle;
     return () => {
       active = false;
+      ackAbort.abort();
+      if (ackContextRef.current?.target === target) {
+        ackContextRef.current.active = false;
+        ackContextRef.current.queuedAck = null;
+      }
       handle.close();
       handleRef.current = null;
     };
     // Reconnect only when the stream target changes — the test-seam props
     // (fetchImpl/tokenResolver/now) are stable for a given mount.
-  }, [sessionId, streamId, missing]);
+  }, [sessionId, streamId, missing, terminateAcknowledgements]);
+
+  const acknowledgeRendered = React.useCallback(
+    (renderedFrame: RemoteViewFrame) => {
+      const context = ackContextRef.current;
+      const expectedTarget = `${sessionId}\u0000${streamId}`;
+      if (
+        !context?.active ||
+        context.target !== expectedTarget ||
+        !meta?.viewerId ||
+        renderedFrame.seq <= lastAckAttemptedSeqRef.current
+      ) {
+        return;
+      }
+      lastAckAttemptedSeqRef.current = renderedFrame.seq;
+      const send = () => {
+        const current = ackContextRef.current;
+        if (!current?.active || current.target !== expectedTarget || current.abort.signal.aborted)
+          return;
+        const dispatch = (
+          context: NonNullable<typeof ackContextRef.current>,
+          acknowledgement: { viewerId: string; frameSeq: number },
+        ) => {
+          if (!context.active || ackContextRef.current !== context || context.abort.signal.aborted)
+            return;
+          if (context.ackInFlight) {
+            context.queuedAck = acknowledgement; // latest-wins: at most one pending POST
+            return;
+          }
+          context.ackInFlight = true;
+          void acknowledgeRemoteViewRender({
+            url: context.url,
+            token: context.token,
+            viewerId: acknowledgement.viewerId,
+            frameSeq: acknowledgement.frameSeq,
+            fetchImpl,
+            signal: context.abort.signal,
+          })
+            .then((accepted) => {
+              if (accepted && context.active && ackContextRef.current === context) {
+                setRenderAckAcceptedCount((count) => count + 1);
+              }
+            })
+            .finally(() => {
+              context.ackInFlight = false;
+              const next = context.queuedAck;
+              context.queuedAck = null;
+              if (next) dispatch(context, next);
+            });
+        };
+        dispatch(current, { viewerId: meta.viewerId, frameSeq: renderedFrame.seq });
+      };
+      if (afterPaint) {
+        afterPaint(send);
+      } else if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => requestAnimationFrame(send));
+      } else {
+        queueMicrotask(send);
+      }
+    },
+    [afterPaint, fetchImpl, meta?.viewerId, sessionId, streamId],
+  );
 
   // Frame-age ticker — only while live, so a closed view stops counting.
   React.useEffect(() => {
@@ -201,15 +312,20 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     );
   }
 
-  const ageSeconds =
-    lastFrameAt != null ? Math.max(0, Math.floor((now() - lastFrameAt) / 1000)) : null;
+  const ageSeconds = frame
+    ? Math.max(0, Math.floor((now() - frame.observedAtEpochMillis) / 1000))
+    : null;
   const recordingOff = meta ? !meta.recording : true;
   const attended = meta ? meta.attended : true;
   const stopped =
     status === 'closed' || status === 'error' || status === 'forbidden' || status === 'busy';
 
   return (
-    <div style={wrapStyle} data-testid="remote-view-page">
+    <div
+      style={wrapStyle}
+      data-testid="remote-view-page"
+      data-render-ack-accepted-count={renderAckAcceptedCount}
+    >
       <div style={barStyle} data-testid="remote-view-bar">
         <strong style={{ fontSize: 15 }}>{t('endpointAdmin.remoteView.title')}</strong>
         <span
@@ -258,12 +374,14 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       </div>
 
       <div style={stageStyle} data-testid="remote-view-stage">
-        {frameSrc ? (
+        {frame ? (
           <img
-            src={frameSrc}
+            key={`${meta?.viewerId ?? 'pending'}-${frame.seq}`}
+            src={`data:${frame.contentType};base64,${frame.dataB64}`}
             alt={t('endpointAdmin.remoteView.alt')}
             style={imgStyle}
             draggable={false}
+            onLoad={() => acknowledgeRendered(frame)}
             data-testid="remote-view-frame"
           />
         ) : (
