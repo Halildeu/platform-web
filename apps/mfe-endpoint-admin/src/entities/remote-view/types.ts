@@ -26,11 +26,11 @@ export type RemoteViewStatus =
  * authoritative server state rather than a hardcoded client assumption.
  */
 export interface RemoteViewMeta {
-  recording: boolean;
-  attended: boolean;
-  capability: string;
+  readonly recording: false;
+  readonly attended: true;
+  readonly capability: 'VIEW_ONLY';
   /** Opaque, server-generated id that binds render telemetry to this live subscription. */
-  viewerId: string;
+  readonly viewerId: string;
 }
 
 /** One relayed screen frame (base64 image payload, latest-wins upstream). */

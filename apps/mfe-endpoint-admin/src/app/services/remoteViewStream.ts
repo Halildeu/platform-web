@@ -38,6 +38,11 @@ export interface RemoteViewStreamHandle {
   close: () => void;
 }
 
+type DispatchOutcome = 'continue' | 'meta' | 'close' | 'protocol-error';
+
+const VIEWER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/;
+const MAX_SSE_BUFFER_CHARS = 2_000_000;
+
 export interface RemoteViewRenderAckOptions {
   url: string;
   token: string | null;
@@ -55,7 +60,12 @@ export interface RemoteViewRenderAckOptions {
 export async function acknowledgeRemoteViewRender(
   opts: RemoteViewRenderAckOptions,
 ): Promise<boolean> {
-  if (!opts.token || !opts.viewerId || !Number.isSafeInteger(opts.frameSeq) || opts.frameSeq < 0) {
+  if (
+    !opts.token ||
+    !VIEWER_ID_PATTERN.test(opts.viewerId) ||
+    !Number.isSafeInteger(opts.frameSeq) ||
+    opts.frameSeq < 0
+  ) {
     return false;
   }
   const doFetch = opts.fetchImpl ?? fetch;
@@ -140,17 +150,28 @@ export function openRemoteViewStream(opts: RemoteViewStreamOptions): RemoteViewS
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let metadataAccepted = false;
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
+        if (buffer.length > MAX_SSE_BUFFER_CHARS) {
+          await failProtocol(reader, controller, opts);
+          return;
+        }
         let sep: number;
         // SSE events are separated by a blank line (\n\n). Handle \r\n\r\n too.
         while ((sep = indexOfEventBoundary(buffer)) >= 0) {
           const rawEvent = buffer.slice(0, sep);
           buffer = buffer.slice(sep + boundaryLength(buffer, sep));
-          dispatchEvent(rawEvent, opts);
+          const outcome = dispatchEvent(rawEvent, opts, metadataAccepted);
+          if (outcome === 'meta') metadataAccepted = true;
+          if (outcome === 'close') return;
+          if (outcome === 'protocol-error') {
+            await failProtocol(reader, controller, opts);
+            return;
+          }
         }
       }
       opts.onStatus?.('closed');
@@ -166,6 +187,21 @@ export function openRemoteViewStream(opts: RemoteViewStreamOptions): RemoteViewS
   return { close };
 }
 
+async function failProtocol(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  controller: AbortController,
+  handlers: RemoteViewStreamHandlers,
+): Promise<void> {
+  try {
+    await reader.cancel();
+  } catch {
+    // A broken stream cancellation must not suppress the terminal error state.
+  }
+  controller.abort();
+  handlers.onError?.(new Error('Remote VIEW_ONLY stream protocol validation failed'));
+  handlers.onStatus?.('error');
+}
+
 function indexOfEventBoundary(buffer: string): number {
   const lf = buffer.indexOf('\n\n');
   const crlf = buffer.indexOf('\r\n\r\n');
@@ -179,11 +215,15 @@ function boundaryLength(buffer: string, sep: number): number {
 }
 
 /**
- * Parse one SSE event block and route it. Comment lines (`:` — used for the
- * server heartbeat) are ignored. Malformed JSON is swallowed (a bad frame
- * must never crash the live view).
+ * Parse one lowercase SSE event block and route it. Heartbeat comments and
+ * malformed frame payloads are ignored. Missing/invalid/duplicate security
+ * metadata and frame-before-meta ordering fail closed at the caller.
  */
-function dispatchEvent(raw: string, handlers: RemoteViewStreamHandlers): void {
+function dispatchEvent(
+  raw: string,
+  handlers: RemoteViewStreamHandlers,
+  metadataAccepted: boolean,
+): DispatchOutcome {
   let event = 'message';
   const dataLines: string[] = [];
   for (const line of raw.split(/\r?\n/)) {
@@ -194,24 +234,26 @@ function dispatchEvent(raw: string, handlers: RemoteViewStreamHandlers): void {
       dataLines.push(line.slice('data:'.length).replace(/^ /, ''));
     }
   }
+  if (event === 'close') {
+    handlers.onStatus?.('closed');
+    return 'close';
+  }
   if (dataLines.length === 0) {
-    if (event === 'close') handlers.onStatus?.('closed');
-    return;
+    return 'continue';
   }
   const data = dataLines.join('\n');
   if (event === 'meta') {
+    if (metadataAccepted) return 'protocol-error';
     try {
-      const m = JSON.parse(data) as Partial<RemoteViewMeta>;
-      handlers.onMeta?.({
-        recording: Boolean(m.recording),
-        attended: Boolean(m.attended),
-        capability: typeof m.capability === 'string' ? m.capability : 'VIEW_ONLY',
-        viewerId: typeof m.viewerId === 'string' ? m.viewerId : '',
-      });
+      const m = JSON.parse(data) as unknown;
+      if (!isExactViewOnlyMeta(m)) return 'protocol-error';
+      handlers.onMeta?.(m);
+      return 'meta';
     } catch {
-      /* ignore a malformed meta frame */
+      return 'protocol-error';
     }
   } else if (event === 'frame') {
+    if (!metadataAccepted) return 'protocol-error';
     try {
       const f = JSON.parse(data) as Partial<RemoteViewFrame>;
       const seq = Number(f.seq);
@@ -239,7 +281,21 @@ function dispatchEvent(raw: string, handlers: RemoteViewStreamHandlers): void {
     } catch {
       /* ignore a malformed frame */
     }
-  } else if (event === 'close') {
-    handlers.onStatus?.('closed');
   }
+  return 'continue';
+}
+
+function isExactViewOnlyMeta(value: unknown): value is RemoteViewMeta {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const meta = value as Record<string, unknown>;
+  // This is the sole runtime trust boundary for the published RemoteViewMeta
+  // interface. viewerId is restricted for its current telemetry/React-key
+  // sinks and must be revalidated before any future URL/path use.
+  return (
+    meta.recording === false &&
+    meta.attended === true &&
+    meta.capability === 'VIEW_ONLY' &&
+    typeof meta.viewerId === 'string' &&
+    VIEWER_ID_PATTERN.test(meta.viewerId)
+  );
 }
