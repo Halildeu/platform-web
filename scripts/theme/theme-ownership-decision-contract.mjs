@@ -17,6 +17,7 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const POSITIVE_INTEGER = (value) => Number.isInteger(value) && value > 0;
 const FULL_GIT_SHA = /^[a-f0-9]{40}$/;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const LOCAL_AUTHORITY_REF = 'refs/remotes/origin/main';
 const BASELINE_PATHS = Object.freeze({
   themeCss: 'apps/mfe-shell/src/styles/theme.css',
   themeInlineCss: 'apps/mfe-shell/src/styles/generated-theme-inline.css',
@@ -318,18 +319,54 @@ function readHistoricalBlob(commit, record, label) {
   return content;
 }
 
-function assertHistoricalCommit(commit) {
+function assertGitAncestor(ancestor, descendant, message) {
+  try {
+    execFileSync('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', ancestor, descendant], {
+      stdio: 'ignore',
+    });
+  } catch {
+    fail(message);
+  }
+}
+
+function resolveAuthorityCommit(authorityRef) {
+  if (authorityRef !== undefined && typeof authorityRef !== 'string') {
+    fail('THEME_OWNERSHIP_AUTHORITY_REF must be a string');
+  }
+  const explicitAuthority = authorityRef?.trim();
+  if (explicitAuthority !== undefined && !FULL_GIT_SHA.test(explicitAuthority)) {
+    fail('THEME_OWNERSHIP_AUTHORITY_REF must be an explicit full Git SHA');
+  }
+  const ref = explicitAuthority || LOCAL_AUTHORITY_REF;
+  const resolved = String(
+    runGit(['rev-parse', '--verify', `${ref}^{commit}`], 'theme ownership authority'),
+  ).trim();
+  if (explicitAuthority && resolved !== explicitAuthority) {
+    fail('THEME_OWNERSHIP_AUTHORITY_REF does not resolve to its declared commit');
+  }
+  if (explicitAuthority) {
+    const mergeBase = String(
+      runGit(['merge-base', 'HEAD', resolved], 'theme ownership authority merge-base'),
+    ).trim();
+    if (mergeBase !== resolved) {
+      fail('THEME_OWNERSHIP_AUTHORITY_REF must be the explicit merge-base ancestor of HEAD');
+    }
+  }
+  return Object.freeze({ commit: resolved, ref });
+}
+
+function assertHistoricalCommit(commit, authorityRef) {
   const resolved = String(
     runGit(['rev-parse', '--verify', `${commit}^{commit}`], 'baseline commit'),
   ).trim();
   if (resolved !== commit) fail('baseline.commit does not resolve to the declared commit');
-  try {
-    execFileSync('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', commit, 'HEAD'], {
-      stdio: 'ignore',
-    });
-  } catch {
-    fail('baseline.commit must be an ancestor of HEAD');
-  }
+  assertGitAncestor(commit, 'HEAD', 'baseline.commit must be an ancestor of HEAD');
+  const authority = resolveAuthorityCommit(authorityRef);
+  assertGitAncestor(
+    commit,
+    authority.commit,
+    `baseline.commit must be an ancestor of canonical authority ${authority.ref}`,
+  );
 }
 
 function generateHistoricalArtifacts({ commit, generator, tokens }) {
@@ -378,8 +415,8 @@ function generateHistoricalArtifacts({ commit, generator, tokens }) {
   }
 }
 
-function loadHistoricalBaseline(manifest) {
-  assertHistoricalCommit(manifest.baseline.commit);
+function loadHistoricalBaseline(manifest, authorityRef) {
+  assertHistoricalCommit(manifest.baseline.commit, authorityRef);
   const blobs = {};
   for (const key of Object.keys(BASELINE_PATHS)) {
     blobs[key] = readHistoricalBlob(
@@ -686,10 +723,11 @@ export function assertThemeOwnershipDecisionContract({
   themeExtensionCss,
   generatedThemeInlineCss,
   themeInlineExtensionCss,
+  authorityRef = process.env.THEME_OWNERSHIP_AUTHORITY_REF,
 }) {
   const { source, bridge, removal } = validateManifestShape(manifest);
   if (typeof tokenSourceContent !== 'string') fail('tokenSourceContent is required');
-  const historical = loadHistoricalBaseline(manifest);
+  const historical = loadHistoricalBaseline(manifest, authorityRef);
   if (sha256(tokenSourceContent) !== manifest.result.tokenSourceSha256) {
     fail('token source result digest mismatch');
   }

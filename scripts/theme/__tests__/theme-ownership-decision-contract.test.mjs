@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -109,6 +110,22 @@ test('baseline records and unreconciled output are verified from real historical
   assert.throws(
     () => contract({ manifest: fakeUnreconciled }),
     /unreconciled generated theme digest does not match historical generator output/,
+  );
+
+  const branchOnlyAncestor = execFileSync('git', ['rev-parse', 'HEAD^'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  }).trim();
+  assert.notEqual(branchOnlyAncestor, manifest.baseline.commit);
+  const branchAuthoredBaseline = clone(manifest);
+  branchAuthoredBaseline.baseline.commit = branchOnlyAncestor;
+  assert.throws(
+    () =>
+      contract({
+        manifest: branchAuthoredBaseline,
+        authorityRef: manifest.baseline.commit,
+      }),
+    /baseline\.commit must be an ancestor of canonical authority/,
   );
 });
 
