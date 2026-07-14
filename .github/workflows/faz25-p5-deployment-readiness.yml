@@ -1,25 +1,14 @@
 name: Faz 25 P5 Deployment Readiness
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/mfe-interview-evidence/src/deployment-readiness/**'
-      - 'tests/playwright/faz25-p5-deployment-readiness.spec.ts'
-      - '.github/workflows/faz25-p5-deployment-readiness.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'apps/mfe-interview-evidence/src/deployment-readiness/**'
-      - 'tests/playwright/faz25-p5-deployment-readiness.spec.ts'
-      - '.github/workflows/faz25-p5-deployment-readiness.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: faz25-p5-deployment-readiness-${{ github.event.pull_request.number || github.ref }}
+  group: faz25-p5-deployment-readiness-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

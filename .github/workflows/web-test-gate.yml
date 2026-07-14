@@ -2,7 +2,7 @@ name: Web Test Gate
 
 # Foundation gate — see docs/architecture/frontend/adr-test-environment-strategy.md
 #
-# Required jobs (branch protection points to the aggregator below):
+# Required-set jobs (the aggregator below enforces this dependency set):
 #   - unit-required          — Vitest jsdom across the workspace
 #   - token-drift-required   — tokens:build --check + tokens:build:theme --check
 #   - cssom-canary-required  — curated manifest: Tailwind layer sentinel +
@@ -21,6 +21,9 @@ name: Web Test Gate
 #                              Also runs the real-Chromium Badge WCAG matrix
 #                              (themes/scopes/surfaces + forced-colors) as a
 #                              required product-surface acceptance gate.
+#   - p5-deployment-readiness-required — real Chromium whole-MFE acceptance
+#                              at desktop, 390px and 320 CSS px, including
+#                              keyboard, reflow, Badge geometry and Axe.
 #
 # Advisory jobs (run, but do not block merge by default):
 #   - cssom-full-advisory          — full *.cssom.test.{ts,tsx} suite
@@ -33,8 +36,11 @@ name: Web Test Gate
 #
 # Aggregator:
 #   - web-test-gate-required — `needs:` against the required set; this is the
-#                              single check pinned in branch protection. When
-#                              repo variable STRICT_GATES=true, the aggregator
+#                              single check intended for branch-protection
+#                              pinning. Live GitHub rules must be verified
+#                              separately; repo issue #908 tracks the current
+#                              unprotected-main gap. When repo variable
+#                              STRICT_GATES=true, the aggregator
 #                              also fails on advisory infra failure (NOT on
 #                              warning count — see lint advisory comment).
 #
@@ -654,6 +660,10 @@ jobs:
             playwright-report
             test-results
 
+  p5-deployment-readiness-required:
+    name: P5 Deployment Readiness (Chromium)
+    uses: ./.github/workflows/faz25-p5-deployment-readiness.yml
+
   web-test-gate-required:
     name: Web Test Gate (aggregator)
     runs-on: ubuntu-latest
@@ -665,6 +675,7 @@ jobs:
       - cssom-full-advisory
       - lint-warn-visibility-advisory
       - visual-invariant-required
+      - p5-deployment-readiness-required
     # Always run so the aggregator can read advisory results when STRICT_GATES=true.
     # Skip on baseline-only manual runs (visual-invariant-required is skipped).
     if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline')
@@ -677,12 +688,14 @@ jobs:
           semantic_result="${{ needs.semantic-layer-required.result }}"
           cssom_result="${{ needs.cssom-canary-required.result }}"
           visual_result="${{ needs.visual-invariant-required.result }}"
+          p5_result="${{ needs.p5-deployment-readiness-required.result }}"
           echo "unit-required: $unit_result"
           echo "token-drift-required: $token_result"
           echo "semantic-layer-required: $semantic_result"
           echo "cssom-canary-required: $cssom_result"
           echo "visual-invariant-required: $visual_result"
-          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" ]]; then
+          echo "p5-deployment-readiness-required: $p5_result"
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" || "$p5_result" != "success" ]]; then
             echo "::error::A required job failed."
             exit 1
           fi
