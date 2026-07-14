@@ -115,6 +115,7 @@ describe('openRemoteViewStream', () => {
       .fn()
       .mockResolvedValue(
         sseResponse([
+          'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
           'event: frame\ndata: {"seq":7,"contentType":"image/p',
           'ng","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"ZZZ"}\n\n',
         ]),
@@ -159,6 +160,7 @@ describe('openRemoteViewStream', () => {
       .fn()
       .mockResolvedValue(
         sseResponse([
+          'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
           'event: frame\ndata: {not valid json}\n\n',
           'event: frame\ndata: {"dataB64":"INCOMPLETE"}\n\n',
           'event: frame\ndata: {"seq":3,"contentType":"image/png","observedAtEpochMillis":10,"sentAtEpochMillis":11,"dataB64":"OK"}\n\n',
@@ -181,6 +183,127 @@ describe('openRemoteViewStream', () => {
         dataB64: 'OK',
       },
     ]);
+  });
+
+  it.each([
+    ['malformed JSON', '{not-json}'],
+    ['missing recording', '{"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-1"}'],
+    [
+      'recording enabled',
+      '{"recording":true,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-1"}',
+    ],
+    [
+      'unattended',
+      '{"recording":false,"attended":false,"capability":"VIEW_ONLY","viewerId":"vw-1"}',
+    ],
+    [
+      'wrong capability',
+      '{"recording":false,"attended":true,"capability":"FULL_CONTROL","viewerId":"vw-1"}',
+    ],
+    ['missing viewer id', '{"recording":false,"attended":true,"capability":"VIEW_ONLY"}'],
+    [
+      'unsafe viewer id',
+      '{"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"../bad id"}',
+    ],
+  ])('fails closed on %s metadata', async (_label, metadata) => {
+    const statuses: RemoteViewStatus[] = [];
+    const frames: RemoteViewFrame[] = [];
+    const errors: unknown[] = [];
+    const onMeta = vi.fn();
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        sseResponse([
+          `event: meta\ndata: ${metadata}\n\n`,
+          'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"SHOULD_NOT_RENDER"}\n\n',
+        ]),
+      );
+
+    openRemoteViewStream({
+      url: 'u',
+      token: 'tkn',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      onStatus: (status) => statuses.push(status),
+      onFrame: (frame) => frames.push(frame),
+      onMeta,
+      onError: (error) => errors.push(error),
+    });
+
+    await until(() => statuses.includes('error'));
+    expect(frames).toEqual([]);
+    expect(onMeta).not.toHaveBeenCalled();
+    expect(errors).toHaveLength(1);
+    expect(statuses).toEqual(['connecting', 'live', 'error']);
+  });
+
+  it('fails closed when a frame arrives before valid metadata', async () => {
+    const statuses: RemoteViewStatus[] = [];
+    const frames: RemoteViewFrame[] = [];
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        sseResponse([
+          'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"EARLY"}\n\n',
+        ]),
+      );
+
+    openRemoteViewStream({
+      url: 'u',
+      token: 'tkn',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      onStatus: (status) => statuses.push(status),
+      onFrame: (frame) => frames.push(frame),
+    });
+
+    await until(() => statuses.includes('error'));
+    expect(frames).toEqual([]);
+  });
+
+  it('fails closed on a second metadata event and keeps the first meta as the only callback', async () => {
+    const statuses: RemoteViewStatus[] = [];
+    const onMeta = vi.fn();
+    const frames: RemoteViewFrame[] = [];
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        sseResponse([
+          'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-first"}\n\n',
+          'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-second"}\n\n',
+          'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"NO"}\n\n',
+        ]),
+      );
+
+    openRemoteViewStream({
+      url: 'u',
+      token: 'tkn',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      onStatus: (status) => statuses.push(status),
+      onMeta,
+      onFrame: (frame) => frames.push(frame),
+    });
+
+    await until(() => statuses.includes('error'));
+    expect(onMeta).toHaveBeenCalledTimes(1);
+    expect(onMeta).toHaveBeenCalledWith(expect.objectContaining({ viewerId: 'vw-first' }));
+    expect(frames).toEqual([]);
+    expect(statuses).toEqual(['connecting', 'live', 'error']);
+  });
+
+  it('fails closed when an unterminated SSE event exceeds the buffer limit', async () => {
+    const statuses: RemoteViewStatus[] = [];
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(sseResponse([`event: frame\ndata: ${'A'.repeat(2_000_001)}`]));
+
+    openRemoteViewStream({
+      url: 'u',
+      token: 'tkn',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      onStatus: (status) => statuses.push(status),
+    });
+
+    await until(() => statuses.includes('error'));
+    expect(statuses).toEqual(['connecting', 'live', 'error']);
   });
 
   it('sends metadata-only render acknowledgement with the bearer token', async () => {
@@ -216,4 +339,35 @@ describe('openRemoteViewStream', () => {
     ).toBe(false);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it('does not send render acknowledgement for an untrusted viewer id', async () => {
+    const fetchImpl = vi.fn();
+    expect(
+      await acknowledgeRemoteViewRender({
+        url: 'u',
+        token: 'tkn',
+        viewerId: '../bad id',
+        frameSeq: 1,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    ).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each(['a', 'a'.repeat(129)])(
+    'does not acknowledge a viewer id outside length bounds',
+    async (viewerId) => {
+      const fetchImpl = vi.fn();
+      expect(
+        await acknowledgeRemoteViewRender({
+          url: 'u',
+          token: 'tkn',
+          viewerId,
+          frameSeq: 1,
+          fetchImpl: fetchImpl as unknown as typeof fetch,
+        }),
+      ).toBe(false);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    },
+  );
 });
