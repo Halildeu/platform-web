@@ -28,5 +28,8 @@ packages/design-system/src/tokens/build/
 # Exact-owned theme generator outputs. Their byte representation is the
 # freshness contract checked by `pnpm run tokens:drift`; formatter mutation
 # would make a freshly generated artifact stale in the same commit.
+apps/mfe-shell/src/styles/theme.css
+apps/mfe-shell/src/styles/generated-theme-inline.css
 apps/mfe-shell/src/styles/component-theme.generated.css
+design-tokens/generated/theme-contract.json
 design-tokens/generated/token-types.ts

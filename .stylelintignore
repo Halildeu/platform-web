@@ -22,4 +22,6 @@ apps/mfe-schema-explorer/**
 
 # Exact-owned output; style is defined by generate-theme-css.mjs and verified
 # byte-for-byte by the required token drift gate.
+apps/mfe-shell/src/styles/theme.css
+apps/mfe-shell/src/styles/generated-theme-inline.css
 apps/mfe-shell/src/styles/component-theme.generated.css
