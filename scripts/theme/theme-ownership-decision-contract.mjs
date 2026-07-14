@@ -1,5 +1,11 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   assertNoCuratedShadow,
+  diffDeclarationMultisets,
   normalizeAtRuleParams,
   normalizeSelector,
   normalizeValue,
@@ -9,6 +15,15 @@ import {
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const POSITIVE_INTEGER = (value) => Number.isInteger(value) && value > 0;
+const FULL_GIT_SHA = /^[a-f0-9]{40}$/;
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const BASELINE_PATHS = Object.freeze({
+  themeCss: 'apps/mfe-shell/src/styles/theme.css',
+  themeInlineCss: 'apps/mfe-shell/src/styles/generated-theme-inline.css',
+  tokens: 'design-tokens/figma.tokens.json',
+  generator: 'scripts/theme/generate-theme-css.mjs',
+});
+const historicalGenerationCache = new Map();
 
 function fail(message) {
   const error = new Error(`Theme ownership decision contract rejected: ${message}`);
@@ -39,6 +54,10 @@ function assertPositiveInteger(value, label) {
   if (!POSITIVE_INTEGER(value)) fail(`${label} must be a positive integer`);
 }
 
+function assertBoolean(value, label) {
+  if (typeof value !== 'boolean') fail(`${label} must be a boolean`);
+}
+
 function assertUnique(values, label) {
   if (new Set(values).size !== values.length) fail(`${label} contains duplicates`);
 }
@@ -64,10 +83,20 @@ function resolveJsonPointer(root, pointer) {
 function validateFileDigestRecord(record, label) {
   exactObject(record, label, ['path', 'sha256']);
   assertString(record.path, `${label}.path`);
-  if (record.path.startsWith('/') || record.path.includes('..')) {
+  if (
+    record.path.startsWith('/') ||
+    record.path.includes('..') ||
+    !/^[a-zA-Z0-9._/-]+$/.test(record.path)
+  ) {
     fail(`${label}.path must be repo-relative`);
   }
   assertDigest(record.sha256, `${label}.sha256`);
+}
+
+function assertCanonicalBaselinePath(record, key) {
+  if (record.path !== BASELINE_PATHS[key]) {
+    fail(`baseline.${key}.path must be ${BASELINE_PATHS[key]}`);
+  }
 }
 
 function validateManifestShape(manifest) {
@@ -88,12 +117,17 @@ function validateManifestShape(manifest) {
     'themeCss',
     'themeInlineCss',
     'tokens',
+    'generator',
     'unreconciledGeneratedThemeSha256',
   ]);
-  if (!/^[a-f0-9]{40}$/.test(manifest.baseline.commit)) fail('baseline.commit must be full SHA');
+  if (!FULL_GIT_SHA.test(manifest.baseline.commit)) fail('baseline.commit must be full SHA');
   validateFileDigestRecord(manifest.baseline.themeCss, 'baseline.themeCss');
   validateFileDigestRecord(manifest.baseline.themeInlineCss, 'baseline.themeInlineCss');
   validateFileDigestRecord(manifest.baseline.tokens, 'baseline.tokens');
+  validateFileDigestRecord(manifest.baseline.generator, 'baseline.generator');
+  for (const key of Object.keys(BASELINE_PATHS)) {
+    assertCanonicalBaselinePath(manifest.baseline[key], key);
+  }
   assertDigest(
     manifest.baseline.unreconciledGeneratedThemeSha256,
     'baseline.unreconciledGeneratedThemeSha256',
@@ -194,6 +228,8 @@ function validateManifestShape(manifest) {
     'candidateIdentityCount',
     'property',
     'scopes',
+    'expectedValue',
+    'important',
     'reason',
   ]);
   assertString(removal.id, 'removal decision.id');
@@ -205,6 +241,8 @@ function validateManifestShape(manifest) {
   }
   removal.scopes.forEach((scope, index) => assertString(scope, `removal scope ${index}`));
   assertUnique(removal.scopes, 'removal scopes');
+  assertString(removal.expectedValue, 'removal expectedValue');
+  assertBoolean(removal.important, 'removal important');
 
   if (
     source.candidateIdentityCount + bridge.candidateIdentityCount !==
@@ -256,6 +294,150 @@ function validateManifestShape(manifest) {
   return { source, bridge, removal };
 }
 
+function runGit(args, label, options = {}) {
+  try {
+    return execFileSync('git', ['-C', repoRoot, ...args], {
+      encoding: Object.hasOwn(options, 'encoding') ? options.encoding : 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    fail(`${label} is unavailable from the local Git object database`);
+  }
+}
+
+function readHistoricalBlob(commit, record, label) {
+  const objectSpec = `${commit}:${record.path}`;
+  const objectType = String(runGit(['cat-file', '-t', objectSpec], `${label} blob`)).trim();
+  if (objectType !== 'blob') fail(`${label} is not a Git blob`);
+  const content = runGit(['cat-file', 'blob', objectSpec], `${label} blob`, { encoding: null });
+  const actualDigest = sha256(content);
+  if (actualDigest !== record.sha256) {
+    fail(`${label} historical blob digest mismatch`);
+  }
+  return content;
+}
+
+function assertHistoricalCommit(commit) {
+  const resolved = String(
+    runGit(['rev-parse', '--verify', `${commit}^{commit}`], 'baseline commit'),
+  ).trim();
+  if (resolved !== commit) fail('baseline.commit does not resolve to the declared commit');
+  try {
+    execFileSync('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', commit, 'HEAD'], {
+      stdio: 'ignore',
+    });
+  } catch {
+    fail('baseline.commit must be an ancestor of HEAD');
+  }
+}
+
+function generateHistoricalArtifacts({ commit, generator, tokens }) {
+  const cacheKey = `${commit}:${sha256(generator)}:${sha256(tokens)}`;
+  const cached = historicalGenerationCache.get(cacheKey);
+  if (cached) return cached;
+
+  const temporaryRoot = realpathSync(mkdtempSync(path.join(tmpdir(), 'theme-ownership-baseline-')));
+  const generatorPath = path.join(temporaryRoot, BASELINE_PATHS.generator);
+  const tokenPath = path.join(temporaryRoot, BASELINE_PATHS.tokens);
+  const themePath = path.join(temporaryRoot, BASELINE_PATHS.themeCss);
+  const themeInlinePath = path.join(temporaryRoot, BASELINE_PATHS.themeInlineCss);
+  try {
+    for (const filePath of [generatorPath, tokenPath, themePath, themeInlinePath]) {
+      mkdirSync(path.dirname(filePath), { recursive: true });
+    }
+    mkdirSync(path.join(temporaryRoot, 'design-tokens/generated'), { recursive: true });
+    writeFileSync(generatorPath, generator);
+    writeFileSync(tokenPath, tokens);
+    execFileSync(
+      process.execPath,
+      [
+        '--permission',
+        `--allow-fs-read=${temporaryRoot}`,
+        `--allow-fs-write=${temporaryRoot}`,
+        generatorPath,
+      ],
+      {
+        cwd: temporaryRoot,
+        env: {},
+        maxBuffer: 4 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 10_000,
+      },
+    );
+    const result = Object.freeze({
+      themeCss: readFileSync(themePath, 'utf8'),
+      themeInlineCss: readFileSync(themeInlinePath, 'utf8'),
+    });
+    historicalGenerationCache.set(cacheKey, result);
+    return result;
+  } catch {
+    fail('historical generator could not reproduce the unreconciled artifacts');
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+function loadHistoricalBaseline(manifest) {
+  assertHistoricalCommit(manifest.baseline.commit);
+  const blobs = {};
+  for (const key of Object.keys(BASELINE_PATHS)) {
+    blobs[key] = readHistoricalBlob(
+      manifest.baseline.commit,
+      manifest.baseline[key],
+      `baseline.${key}`,
+    );
+  }
+  const generated = generateHistoricalArtifacts({
+    commit: manifest.baseline.commit,
+    generator: blobs.generator,
+    tokens: blobs.tokens,
+  });
+  if (sha256(generated.themeCss) !== manifest.baseline.unreconciledGeneratedThemeSha256) {
+    fail('unreconciled generated theme digest does not match historical generator output');
+  }
+  return Object.freeze({
+    themeCss: blobs.themeCss.toString('utf8'),
+    themeInlineCss: blobs.themeInlineCss.toString('utf8'),
+    tokens: JSON.parse(blobs.tokens.toString('utf8')),
+    generatedThemeCss: generated.themeCss,
+    generatedThemeInlineCss: generated.themeInlineCss,
+  });
+}
+
+function escapeJsonPointerSegment(segment) {
+  return String(segment).replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+function collectJsonLeafChanges(expected, actual, pointer = '') {
+  const expectedObject = expected !== null && typeof expected === 'object';
+  const actualObject = actual !== null && typeof actual === 'object';
+  const bothArrays = Array.isArray(expected) && Array.isArray(actual);
+  const bothRecords =
+    expectedObject && actualObject && !Array.isArray(expected) && !Array.isArray(actual);
+  if (bothArrays || bothRecords) {
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    return [...keys].flatMap((key) =>
+      collectJsonLeafChanges(
+        expected[key],
+        actual[key],
+        `${pointer}/${escapeJsonPointerSegment(key)}`,
+      ),
+    );
+  }
+  return JSON.stringify(expected) === JSON.stringify(actual) ? [] : [pointer];
+}
+
+function assertExactSet(actual, expected, label) {
+  const actualSorted = [...actual].sort();
+  const expectedSorted = [...expected].sort();
+  if (JSON.stringify(actualSorted) !== JSON.stringify(expectedSorted)) {
+    fail(
+      `${label} mismatch: expected ${expectedSorted.length} exact items, got ${actualSorted.length}`,
+    );
+  }
+}
+
 function expectedAppearanceSelectors(mode) {
   const themed = normalizeSelector(
     `:root[data-theme="${mode}"], [data-theme-scope][data-theme="${mode}"]`,
@@ -267,6 +449,7 @@ function expectedAppearanceSelectors(mode) {
 
 function validateSourceBindings(source, tokens, generatedThemeCss) {
   const declarations = parseDeclarationMultiset(generatedThemeCss);
+  const identityKeys = new Set();
   for (const target of source.targets) {
     const actualValue = resolveJsonPointer(tokens, target.jsonPointer);
     if (actualValue !== target.expectedValue) {
@@ -297,7 +480,9 @@ function validateSourceBindings(source, tokens, generatedThemeCss) {
         `${target.jsonPointer} binds ${matched.length} generated identities, expected ${target.affectedIdentityCount}`,
       );
     }
+    for (const entry of matched) identityKeys.add(entry.key);
   }
+  return identityKeys;
 }
 
 function findBridgeEntry(declarations, property, selector, atRules) {
@@ -311,6 +496,7 @@ function findBridgeEntry(declarations, property, selector, atRules) {
 
 function validateBridgeBindings(bridge, generatedThemeCss) {
   const declarations = parseDeclarationMultiset(generatedThemeCss);
+  const identityKeys = new Set();
   const darkSelector = normalizeSelector('[data-mode="dark"]');
   const systemSelector = normalizeSelector(
     ':root[data-mode="system"]:not([data-theme="serban-hc"]), [data-theme-scope][data-mode="system"]:not([data-theme="serban-hc"])',
@@ -337,12 +523,155 @@ function validateBridgeBindings(bridge, generatedThemeCss) {
       ) {
         fail(`${binding.property} ${label} bridge is not bound to ${binding.expectedValue}`);
       }
+      identityKeys.add(entry.key);
     }
   }
+  return identityKeys;
 }
 
 function countDeclarations(multiset) {
   return [...multiset.values()].reduce((total, entry) => total + entry.occurrences.length, 0);
+}
+
+function customPropertyEntries(multiset) {
+  return [...multiset.values()].filter(({ property }) => property.startsWith('--'));
+}
+
+function countCustomPropertyDeclarations(multiset) {
+  return customPropertyEntries(multiset).reduce(
+    (total, entry) => total + entry.occurrences.length,
+    0,
+  );
+}
+
+function customPropertyDiffIdentityKeys(diff) {
+  return new Set(
+    [...diff.missing, ...diff.unexpected]
+      .filter(({ property }) => property.startsWith('--'))
+      .map(({ identityKey }) => identityKey),
+  );
+}
+
+function formatRemovalScope(delta) {
+  const ancestry = delta.atRules
+    .map(({ name, params }) => `@${name}${params ? ` ${params}` : ''}`)
+    .join(' > ');
+  return `${ancestry ? `${ancestry} > ` : ''}${delta.selector}`;
+}
+
+function validateHistoricalProvenance({
+  manifest,
+  source,
+  bridge,
+  removal,
+  historical,
+  tokens,
+  generatedThemeCss,
+  themeExtensionCss,
+  generatedThemeInlineCss,
+  themeInlineExtensionCss,
+  sourceIdentityKeys,
+  bridgeIdentityKeys,
+}) {
+  const tokenChanges = new Set(collectJsonLeafChanges(historical.tokens, tokens));
+  const reviewedTokenPointers = new Set(source.targets.map(({ jsonPointer }) => jsonPointer));
+  assertExactSet(tokenChanges, reviewedTokenPointers, 'historical token-source decision partition');
+
+  const drift = diffDeclarationMultisets(historical.generatedThemeCss, generatedThemeCss);
+  const driftIdentityKeys = customPropertyDiffIdentityKeys(drift);
+  const reviewedDriftIdentityKeys = new Set([...sourceIdentityKeys, ...bridgeIdentityKeys]);
+  if (reviewedDriftIdentityKeys.size !== sourceIdentityKeys.size + bridgeIdentityKeys.size) {
+    fail('source and bridge decisions overlap');
+  }
+  assertExactSet(
+    driftIdentityKeys,
+    reviewedDriftIdentityKeys,
+    'historical generated-theme decision partition',
+  );
+  if (sourceIdentityKeys.size !== source.candidateIdentityCount) {
+    fail('source decision identity inventory mismatch');
+  }
+  if (bridgeIdentityKeys.size !== bridge.candidateIdentityCount) {
+    fail('bridge decision identity inventory mismatch');
+  }
+
+  const historicalInlineGeneration = diffDeclarationMultisets(
+    historical.generatedThemeInlineCss,
+    generatedThemeInlineCss,
+  );
+  if (!historicalInlineGeneration.equal) {
+    fail('generated theme-inline differs from the historical generator output');
+  }
+
+  const composedThemeCss = `${generatedThemeCss}\n${themeExtensionCss}`;
+  const composedThemeDiff = diffDeclarationMultisets(historical.themeCss, composedThemeCss);
+  if (composedThemeDiff.unexpected.length > 0) {
+    fail(
+      `composed theme contains ${composedThemeDiff.unexpected.length} declaration not present in the historical baseline`,
+    );
+  }
+  const removedOccurrences = composedThemeDiff.missing.reduce(
+    (total, delta) => total + delta.count,
+    0,
+  );
+  if (
+    removedOccurrences !== removal.candidateIdentityCount ||
+    composedThemeDiff.missing.length !== removal.candidateIdentityCount
+  ) {
+    fail('historical removal decision is not the exact composed-theme difference');
+  }
+  const expectedRemovalValue = normalizeValue(removal.expectedValue);
+  for (const delta of composedThemeDiff.missing) {
+    if (
+      delta.count !== 1 ||
+      delta.property !== removal.property ||
+      delta.value !== expectedRemovalValue ||
+      delta.important !== removal.important
+    ) {
+      fail('historical removal payload does not match the reviewed decision');
+    }
+  }
+  assertExactSet(
+    new Set(composedThemeDiff.missing.map(formatRemovalScope)),
+    new Set(removal.scopes),
+    'historical removal scopes',
+  );
+
+  const composedInlineDiff = diffDeclarationMultisets(
+    historical.themeInlineCss,
+    `${generatedThemeInlineCss}\n${themeInlineExtensionCss}`,
+  );
+  if (!composedInlineDiff.equal) {
+    fail('composed theme-inline differs from the historical baseline');
+  }
+
+  const baselineTheme = parseDeclarationMultiset(historical.themeCss);
+  const generatedTheme = parseDeclarationMultiset(generatedThemeCss);
+  const curatedTheme = parseDeclarationMultiset(themeExtensionCss);
+  const baselineInline = parseDeclarationMultiset(historical.themeInlineCss);
+  const generatedInline = parseDeclarationMultiset(generatedThemeInlineCss);
+  const curatedInline = parseDeclarationMultiset(themeInlineExtensionCss);
+  const actualInventory = {
+    themeDeclarationTotal: countDeclarations(baselineTheme),
+    themeCustomPropertyDeclarations: countCustomPropertyDeclarations(baselineTheme),
+    themeCustomPropertyIdentities: customPropertyEntries(baselineTheme).length,
+    generatedThemeDeclarationTotal: countDeclarations(generatedTheme),
+    generatedThemeCustomPropertyIdentities: customPropertyEntries(generatedTheme).length,
+    curatedThemeCustomPropertyIdentities: customPropertyEntries(curatedTheme).length,
+    valueDriftIdentities: driftIdentityKeys.size,
+    duplicateConflictIdentities: composedThemeDiff.missing.length,
+    themeInlineDeclarations: countDeclarations(baselineInline),
+    generatedThemeInlineDeclarations: countDeclarations(generatedInline),
+    curatedThemeInlineDeclarations: countDeclarations(curatedInline),
+  };
+  for (const [key, actual] of Object.entries(actualInventory)) {
+    if (manifest.inventory[key] !== actual) {
+      fail(`inventory.${key} is ${manifest.inventory[key]}, derived historical value is ${actual}`);
+    }
+  }
+  if (manifest.result.removedRedundantDeclarations !== removedOccurrences) {
+    fail('result removed declaration count is not historically derived');
+  }
 }
 
 /**
@@ -358,13 +687,14 @@ export function assertThemeOwnershipDecisionContract({
   generatedThemeInlineCss,
   themeInlineExtensionCss,
 }) {
-  const { source, bridge } = validateManifestShape(manifest);
+  const { source, bridge, removal } = validateManifestShape(manifest);
   if (typeof tokenSourceContent !== 'string') fail('tokenSourceContent is required');
+  const historical = loadHistoricalBaseline(manifest);
   if (sha256(tokenSourceContent) !== manifest.result.tokenSourceSha256) {
     fail('token source result digest mismatch');
   }
-  validateSourceBindings(source, tokens, generatedThemeCss);
-  validateBridgeBindings(bridge, generatedThemeCss);
+  const sourceIdentityKeys = validateSourceBindings(source, tokens, generatedThemeCss);
+  const bridgeIdentityKeys = validateBridgeBindings(bridge, generatedThemeCss);
 
   for (const [label, content, expected] of [
     ['generated theme CSS', generatedThemeCss, manifest.result.generatedThemeCssSha256],
@@ -387,6 +717,20 @@ export function assertThemeOwnershipDecisionContract({
 
   assertNoCuratedShadow(generatedThemeCss, themeExtensionCss);
   assertNoCuratedShadow(generatedThemeInlineCss, themeInlineExtensionCss);
+  validateHistoricalProvenance({
+    manifest,
+    source,
+    bridge,
+    removal,
+    historical,
+    tokens,
+    generatedThemeCss,
+    themeExtensionCss,
+    generatedThemeInlineCss,
+    themeInlineExtensionCss,
+    sourceIdentityKeys,
+    bridgeIdentityKeys,
+  });
   const composedTheme = parseDeclarationMultiset(`${generatedThemeCss}\n${themeExtensionCss}`);
   const customPropertyIdentities = [...composedTheme.values()].filter(({ property }) =>
     property.startsWith('--'),

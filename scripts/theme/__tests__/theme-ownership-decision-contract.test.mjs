@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { generatedThemeArtifacts } from '../generate-theme-css.mjs';
 import { assertThemeOwnershipDecisionContract } from '../theme-ownership-decision-contract.mjs';
+import { sha256 } from '../theme-css-contract.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const read = (...segments) => fs.readFileSync(path.join(repoRoot, ...segments), 'utf8');
@@ -88,5 +89,93 @@ test('curated edits and stale result digests fail the required contract', () => 
   assert.throws(
     () => contract({ manifest: candidate }),
     /generated theme CSS result digest mismatch/,
+  );
+});
+
+test('baseline records and unreconciled output are verified from real historical Git objects', () => {
+  const fakeCommit = clone(manifest);
+  fakeCommit.baseline.commit = '0'.repeat(40);
+  assert.throws(() => contract({ manifest: fakeCommit }), /baseline commit.*unavailable/);
+
+  const fakeBlobDigest = clone(manifest);
+  fakeBlobDigest.baseline.themeCss.sha256 = '0'.repeat(64);
+  assert.throws(
+    () => contract({ manifest: fakeBlobDigest }),
+    /baseline\.themeCss historical blob digest mismatch/,
+  );
+
+  const fakeUnreconciled = clone(manifest);
+  fakeUnreconciled.baseline.unreconciledGeneratedThemeSha256 = '0'.repeat(64);
+  assert.throws(
+    () => contract({ manifest: fakeUnreconciled }),
+    /unreconciled generated theme digest does not match historical generator output/,
+  );
+});
+
+test('historically derived inventory and removal partition reject caller-authored substitutes', () => {
+  const fakeInventory = clone(manifest);
+  fakeInventory.inventory.themeDeclarationTotal += 1;
+  assert.throws(
+    () => contract({ manifest: fakeInventory }),
+    /inventory\.themeDeclarationTotal.*derived historical value/,
+  );
+
+  const fakeRemoval = clone(manifest);
+  fakeRemoval.decisions[2].property = '--ring-focus';
+  assert.throws(
+    () => contract({ manifest: fakeRemoval }),
+    /historical removal payload does not match the reviewed decision/,
+  );
+
+  const fakeScope = clone(manifest);
+  fakeScope.decisions[2].scopes[0] = '[data-mode="unreviewed"]';
+  assert.throws(() => contract({ manifest: fakeScope }), /historical removal scopes mismatch/);
+});
+
+test('unreviewed generated substitutions fail even with a matching caller-authored result digest', () => {
+  const generatedThemeCss = generatedThemeArtifacts.themeCss.content.replace(
+    '  --surface-default-bg: oklch(100% 0 0);',
+    '  --surface-default-bg: hotpink;',
+  );
+  assert.notEqual(generatedThemeCss, generatedThemeArtifacts.themeCss.content);
+  const candidate = clone(manifest);
+  candidate.result.generatedThemeCssSha256 = sha256(generatedThemeCss);
+  assert.throws(
+    () => contract({ manifest: candidate, generatedThemeCss }),
+    /historical generated-theme decision partition mismatch/,
+  );
+});
+
+test('an unrelated existing dark/system property cannot substitute for a reviewed bridge', () => {
+  const candidate = clone(manifest);
+  candidate.decisions[1].bindings[0] = {
+    property: '--action-primary',
+    expectedValue: 'oklch(62.31% 0.188 259.81deg)',
+  };
+  assert.throws(
+    () => contract({ manifest: candidate }),
+    /historical generated-theme decision partition mismatch/,
+  );
+});
+
+test('cross-selector curated provenance rejects additions and mutations after digest refresh', () => {
+  const addedOverride = `${themeExtensionCss}\n[data-theme="serban-dark"] .candidate { --action-primary-bg: hotpink; }\n`;
+  const addedManifest = clone(manifest);
+  addedManifest.result.themeExtensionCssSha256 = sha256(addedOverride);
+  assert.throws(
+    () => contract({ manifest: addedManifest, themeExtensionCss: addedOverride }),
+    /composed theme contains 1 declaration not present in the historical baseline/,
+  );
+
+  const mutatedOverride = themeExtensionCss.replace(
+    '--action-primary-bg: oklch(62% 0.19 260deg);',
+    '--action-primary-bg: hotpink;',
+  );
+  assert.notEqual(mutatedOverride, themeExtensionCss);
+  const mutatedManifest = clone(manifest);
+  mutatedManifest.result.themeExtensionCssSha256 = sha256(mutatedOverride);
+  assert.throws(
+    () => contract({ manifest: mutatedManifest, themeExtensionCss: mutatedOverride }),
+    /composed theme contains 1 declaration not present in the historical baseline/,
   );
 });

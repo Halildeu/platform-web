@@ -15,6 +15,10 @@
       "path": "design-tokens/figma.tokens.json",
       "sha256": "7417b3bab63f60003e4e56800e9e7e7a7d1d8ccf00e4ceb5a03186dc87375280"
     },
+    "generator": {
+      "path": "scripts/theme/generate-theme-css.mjs",
+      "sha256": "9d1fb5b131fc13896892aadb18738cf4986d826a90743cbeca090637c45b1768"
+    },
     "unreconciledGeneratedThemeSha256": "8b470212cd0c70ac8b531af1c521c36a439786f03d811a417abb8b498c03abce"
   },
   "inventory": {
@@ -121,9 +125,11 @@
       "candidateIdentityCount": 2,
       "property": "--ring-color",
       "scopes": [
-        "[data-mode=dark]",
-        "@media (prefers-color-scheme:dark) > :root[data-mode=system],[data-theme-scope][data-mode=system]"
+        "[data-mode=\"dark\"]",
+        "@media (prefers-color-scheme:dark) > :root[data-mode=\"system\"]:not([data-theme=\"serban-hc\"]),[data-theme-scope][data-mode=\"system\"]:not([data-theme=\"serban-hc\"])"
       ],
+      "expectedValue": "oklch(68% 0.19 263deg)",
+      "important": false,
       "reason": "The later literals duplicate the focus-outline result and create conflicting ownership. The generated alias is retained and browser-computed equivalence is required."
     }
   ],
