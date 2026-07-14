@@ -74,6 +74,9 @@
         }
       },
       "info": {
+        "400": {
+          "value": "#60a5fa"
+        },
         "500": {
           "value": "#3b82f6"
         },
@@ -85,6 +88,9 @@
         }
       },
       "success": {
+        "400": {
+          "value": "#4ade80"
+        },
         "500": {
           "value": "#22c55e"
         },
@@ -96,6 +102,9 @@
         }
       },
       "warning": {
+        "400": {
+          "value": "#fbbf24"
+        },
         "500": {
           "value": "#f59e0b"
         },
@@ -107,6 +116,9 @@
         }
       },
       "danger": {
+        "400": {
+          "value": "#f87171"
+        },
         "500": {
           "value": "#ef4444"
         },
@@ -1471,6 +1483,142 @@
           }
         }
       },
+      "component": {
+        "badge": {
+          "foreground": {
+            "default": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.neutral.900}"
+                },
+                "serban-dark": {
+                  "value": "#e2e8f0"
+                },
+                "serban-hc": {
+                  "value": "{raw.color.neutral.0}"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.neutral.900}"
+                }
+              }
+            },
+            "muted": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.neutral.700}"
+                },
+                "serban-dark": {
+                  "value": "#cbd5e1"
+                },
+                "serban-hc": {
+                  "value": "{raw.color.neutral.0}"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.neutral.700}"
+                }
+              }
+            }
+          },
+          "dot": {
+            "neutral": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.neutral.600}"
+                },
+                "serban-dark": {
+                  "value": "#cbd5e1"
+                },
+                "serban-hc": {
+                  "value": "{raw.color.neutral.0}"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.neutral.600}"
+                }
+              }
+            },
+            "primary": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.brand.primary.700}"
+                },
+                "serban-dark": {
+                  "value": "{raw.color.brand.primary.400}"
+                },
+                "serban-hc": {
+                  "value": "{raw.color.brand.primary.400}"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.brand.primary.700}"
+                }
+              }
+            },
+            "info": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.info.700}"
+                },
+                "serban-dark": {
+                  "value": "{raw.color.info.400}"
+                },
+                "serban-hc": {
+                  "value": "#00BFFF"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.info.700}"
+                }
+              }
+            },
+            "success": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.success.700}"
+                },
+                "serban-dark": {
+                  "value": "{raw.color.success.400}"
+                },
+                "serban-hc": {
+                  "value": "#00FF00"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.success.700}"
+                }
+              }
+            },
+            "warning": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.warning.700}"
+                },
+                "serban-dark": {
+                  "value": "{raw.color.warning.400}"
+                },
+                "serban-hc": {
+                  "value": "#FFD700"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.warning.700}"
+                }
+              }
+            },
+            "danger": {
+              "modes": {
+                "serban-light": {
+                  "value": "{raw.color.danger.700}"
+                },
+                "serban-dark": {
+                  "value": "{raw.color.danger.400}"
+                },
+                "serban-hc": {
+                  "value": "#FF0000"
+                },
+                "serban-compact": {
+                  "value": "{raw.color.danger.700}"
+                }
+              }
+            }
+          }
+        }
+      },
       "data-table": {
         "header": {
           "bg": {
@@ -1954,14 +2102,7 @@
   "meta": {
     "surfaceTone": {
       "default": "ultra-1",
-      "presets": [
-        "ultra-1",
-        "ultra-3",
-        "mid-2",
-        "mid-4",
-        "deep-2",
-        "deep-4"
-      ],
+      "presets": ["ultra-1", "ultra-3", "mid-2", "mid-4", "deep-2", "deep-4"],
       "options": [
         {
           "id": "ultra-1",
@@ -2076,50 +2217,24 @@
         {
           "id": "ultra-light",
           "label": "Ultra Light Neutrals",
-          "tones": [
-            "ultra-1",
-            "ultra-2",
-            "ultra-3",
-            "ultra-4",
-            "ultra-5",
-            "ultra-6"
-          ]
+          "tones": ["ultra-1", "ultra-2", "ultra-3", "ultra-4", "ultra-5", "ultra-6"]
         },
         {
           "id": "mid-neutral",
           "label": "Mid Neutrals",
-          "tones": [
-            "mid-1",
-            "mid-2",
-            "mid-3",
-            "mid-4",
-            "mid-5",
-            "mid-6"
-          ]
+          "tones": ["mid-1", "mid-2", "mid-3", "mid-4", "mid-5", "mid-6"]
         },
         {
           "id": "deep-neutral",
           "label": "Deep Neutrals",
-          "tones": [
-            "deep-1",
-            "deep-2",
-            "deep-3",
-            "deep-4",
-            "deep-5",
-            "deep-6"
-          ]
+          "tones": ["deep-1", "deep-2", "deep-3", "deep-4", "deep-5", "deep-6"]
         }
       ]
     },
     "themeContract": {
       "version": "0.1",
       "defaultMode": "serban-light",
-      "allowedModes": [
-        "serban-light",
-        "serban-dark",
-        "serban-hc",
-        "serban-compact"
-      ],
+      "allowedModes": ["serban-light", "serban-dark", "serban-hc", "serban-compact"],
       "modes": {
         "serban-light": {
           "label": "Light",

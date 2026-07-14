@@ -223,7 +223,8 @@
   --elevation-sm: 0 1px 2px oklch(21% 0.032 265deg / 6%);
 }
 
-:root[data-theme="serban-light"], [data-theme-scope][data-theme="serban-light"] {
+:root[data-theme='serban-light'],
+[data-theme-scope][data-theme='serban-light'] {
   --surface-default-bg: oklch(100% 0 0deg);
   --surface-raised-bg: oklch(100% 0 0deg);
   --surface-muted-bg: oklch(96.7% 0.0029 264.54deg);
@@ -294,7 +295,8 @@
   --data-table-row-border: oklch(92.76% 0.0058 264.53deg);
 }
 
-:root[data-theme="serban-dark"], [data-theme-scope][data-theme="serban-dark"] {
+:root[data-theme='serban-dark'],
+[data-theme-scope][data-theme='serban-dark'] {
   --surface-default-bg: oklch(12.96% 0.0274 261.69deg);
   --surface-raised-bg: oklch(21.01% 0.0318 264.66deg);
   --surface-muted-bg: oklch(27.95% 0.0368 260.03deg);
@@ -442,7 +444,8 @@
   --ring-color: oklch(71.37% 0.1434 254.62deg);
 }
 
-:root[data-theme="serban-hc"], [data-theme-scope][data-theme="serban-hc"] {
+:root[data-theme='serban-hc'],
+[data-theme-scope][data-theme='serban-hc'] {
   --surface-default-bg: oklch(0% 0 0deg);
   --surface-raised-bg: oklch(17.76% 0 0deg);
   --surface-muted-bg: oklch(23.93% 0 0deg);
@@ -631,7 +634,8 @@
   --ring-color: oklch(88.68% 0.1822 95.33deg);
 }
 
-:root[data-theme="serban-compact"], [data-theme-scope][data-theme="serban-compact"] {
+:root[data-theme='serban-compact'],
+[data-theme-scope][data-theme='serban-compact'] {
   --surface-default-bg: oklch(100% 0 0deg);
   --surface-raised-bg: oklch(100% 0 0deg);
   --surface-muted-bg: oklch(96.7% 0.0029 264.54deg);
@@ -702,55 +706,64 @@
   --data-table-row-border: oklch(92.76% 0.0058 264.53deg);
 }
 
-:root[data-radius="rounded"], [data-theme-scope][data-radius="rounded"] {
+:root[data-radius='rounded'],
+[data-theme-scope][data-radius='rounded'] {
   --radius-control: 12px;
   --radius-surface: 8px;
 }
 
-:root[data-radius="sharp"], [data-theme-scope][data-radius="sharp"] {
+:root[data-radius='sharp'],
+[data-theme-scope][data-radius='sharp'] {
   --radius-control: 4px;
   --radius-surface: 4px;
 }
 
-:root[data-density="comfortable"], [data-theme-scope][data-density="comfortable"] {
+:root[data-density='comfortable'],
+[data-theme-scope][data-density='comfortable'] {
   --density-space: 16px;
   --density-row-height: 44px;
 }
 
-:root[data-density="compact"], [data-theme-scope][data-density="compact"] {
+:root[data-density='compact'],
+[data-theme-scope][data-density='compact'] {
   --density-space: 12px;
   --density-row-height: 36px;
 }
 
-:root[data-elevation="raised"], [data-theme-scope][data-elevation="raised"] {
+:root[data-elevation='raised'],
+[data-theme-scope][data-elevation='raised'] {
   --elevation-surface: 0 4px 12px oklch(20.77% 0.0398 265.75deg / 12%);
   --elevation-overlay: 0 8px 24px oklch(20.77% 0.0398 265.75deg / 18%);
 }
 
-:root[data-elevation="flat"], [data-theme-scope][data-elevation="flat"] {
+:root[data-elevation='flat'],
+[data-theme-scope][data-elevation='flat'] {
   --elevation-surface: none;
   --elevation-overlay: 0 1px 2px oklch(20.77% 0.0398 265.75deg / 8%);
 }
 
-:root[data-motion="standard"], [data-theme-scope][data-motion="standard"] {
+:root[data-motion='standard'],
+[data-theme-scope][data-motion='standard'] {
   --motion-duration-fast: 100ms;
   --motion-duration-medium: 200ms;
   --motion-duration-slow: 300ms;
-  --motion-easing-standard: cubic-bezier(.2,0,.2,1);
-  --motion-easing-enter: cubic-bezier(0,0,.2,1);
-  --motion-easing-exit: cubic-bezier(.4,0,1,1);
+  --motion-easing-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --motion-easing-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-easing-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
-:root[data-motion="reduced"], [data-theme-scope][data-motion="reduced"] {
+:root[data-motion='reduced'],
+[data-theme-scope][data-motion='reduced'] {
   --motion-duration-fast: 0ms;
   --motion-duration-medium: 0ms;
   --motion-duration-slow: 0ms;
-  --motion-easing-standard: cubic-bezier(.2,0,.2,1);
-  --motion-easing-enter: cubic-bezier(0,0,.2,1);
-  --motion-easing-exit: cubic-bezier(.4,0,1,1);
+  --motion-easing-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --motion-easing-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-easing-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="ultra-1"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="ultra-1"] {
+:root[data-theme='serban-light'][data-surface-tone='ultra-1'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='ultra-1'] {
   --surface-default-bg: oklch(97.89% 0.0029 264.54deg);
   --surface-raised-bg: oklch(97.89% 0.0029 264.54deg);
   --surface-muted-bg: oklch(97.89% 0.0029 264.54deg);
@@ -758,7 +771,8 @@
   --surface-header-bg: oklch(97.89% 0.0029 264.54deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="ultra-1"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="ultra-1"] {
+:root[data-theme='serban-compact'][data-surface-tone='ultra-1'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='ultra-1'] {
   --surface-default-bg: oklch(97.89% 0.0029 264.54deg);
   --surface-raised-bg: oklch(97.89% 0.0029 264.54deg);
   --surface-muted-bg: oklch(97.89% 0.0029 264.54deg);
@@ -766,7 +780,8 @@
   --surface-header-bg: oklch(97.89% 0.0029 264.54deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="ultra-2"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="ultra-2"] {
+:root[data-theme='serban-light'][data-surface-tone='ultra-2'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='ultra-2'] {
   --surface-default-bg: oklch(96.35% 0.0045 258.32deg);
   --surface-raised-bg: oklch(96.35% 0.0045 258.32deg);
   --surface-muted-bg: oklch(96.35% 0.0045 258.32deg);
@@ -774,7 +789,8 @@
   --surface-header-bg: oklch(96.35% 0.0045 258.32deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="ultra-2"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="ultra-2"] {
+:root[data-theme='serban-compact'][data-surface-tone='ultra-2'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='ultra-2'] {
   --surface-default-bg: oklch(96.35% 0.0045 258.32deg);
   --surface-raised-bg: oklch(96.35% 0.0045 258.32deg);
   --surface-muted-bg: oklch(96.35% 0.0045 258.32deg);
@@ -782,7 +798,8 @@
   --surface-header-bg: oklch(96.35% 0.0045 258.32deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="ultra-3"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="ultra-3"] {
+:root[data-theme='serban-light'][data-surface-tone='ultra-3'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='ultra-3'] {
   --surface-default-bg: oklch(95.1% 0.0063 255.48deg);
   --surface-raised-bg: oklch(95.1% 0.0063 255.48deg);
   --surface-muted-bg: oklch(95.1% 0.0063 255.48deg);
@@ -790,7 +807,8 @@
   --surface-header-bg: oklch(95.1% 0.0063 255.48deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="ultra-3"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="ultra-3"] {
+:root[data-theme='serban-compact'][data-surface-tone='ultra-3'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='ultra-3'] {
   --surface-default-bg: oklch(95.1% 0.0063 255.48deg);
   --surface-raised-bg: oklch(95.1% 0.0063 255.48deg);
   --surface-muted-bg: oklch(95.1% 0.0063 255.48deg);
@@ -798,7 +816,8 @@
   --surface-header-bg: oklch(95.1% 0.0063 255.48deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="ultra-4"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="ultra-4"] {
+:root[data-theme='serban-light'][data-surface-tone='ultra-4'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='ultra-4'] {
   --surface-default-bg: oklch(92.71% 0.0075 260.73deg);
   --surface-raised-bg: oklch(92.71% 0.0075 260.73deg);
   --surface-muted-bg: oklch(92.71% 0.0075 260.73deg);
@@ -806,7 +825,8 @@
   --surface-header-bg: oklch(92.71% 0.0075 260.73deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="ultra-4"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="ultra-4"] {
+:root[data-theme='serban-compact'][data-surface-tone='ultra-4'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='ultra-4'] {
   --surface-default-bg: oklch(92.71% 0.0075 260.73deg);
   --surface-raised-bg: oklch(92.71% 0.0075 260.73deg);
   --surface-muted-bg: oklch(92.71% 0.0075 260.73deg);
@@ -814,7 +834,8 @@
   --surface-header-bg: oklch(92.71% 0.0075 260.73deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="ultra-5"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="ultra-5"] {
+:root[data-theme='serban-light'][data-surface-tone='ultra-5'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='ultra-5'] {
   --surface-default-bg: oklch(90.84% 0.0092 258.34deg);
   --surface-raised-bg: oklch(90.84% 0.0092 258.34deg);
   --surface-muted-bg: oklch(90.84% 0.0092 258.34deg);
@@ -822,7 +843,8 @@
   --surface-header-bg: oklch(90.84% 0.0092 258.34deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="ultra-5"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="ultra-5"] {
+:root[data-theme='serban-compact'][data-surface-tone='ultra-5'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='ultra-5'] {
   --surface-default-bg: oklch(90.84% 0.0092 258.34deg);
   --surface-raised-bg: oklch(90.84% 0.0092 258.34deg);
   --surface-muted-bg: oklch(90.84% 0.0092 258.34deg);
@@ -830,7 +852,8 @@
   --surface-header-bg: oklch(90.84% 0.0092 258.34deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="ultra-6"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="ultra-6"] {
+:root[data-theme='serban-light'][data-surface-tone='ultra-6'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='ultra-6'] {
   --surface-default-bg: oklch(88.66% 0.011 256.7deg);
   --surface-raised-bg: oklch(88.66% 0.011 256.7deg);
   --surface-muted-bg: oklch(88.66% 0.011 256.7deg);
@@ -838,7 +861,8 @@
   --surface-header-bg: oklch(88.66% 0.011 256.7deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="ultra-6"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="ultra-6"] {
+:root[data-theme='serban-compact'][data-surface-tone='ultra-6'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='ultra-6'] {
   --surface-default-bg: oklch(88.66% 0.011 256.7deg);
   --surface-raised-bg: oklch(88.66% 0.011 256.7deg);
   --surface-muted-bg: oklch(88.66% 0.011 256.7deg);
@@ -846,7 +870,8 @@
   --surface-header-bg: oklch(88.66% 0.011 256.7deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="mid-1"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="mid-1"] {
+:root[data-theme='serban-light'][data-surface-tone='mid-1'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='mid-1'] {
   --surface-default-bg: oklch(84.91% 0.0129 255.51deg);
   --surface-raised-bg: oklch(84.91% 0.0129 255.51deg);
   --surface-muted-bg: oklch(84.91% 0.0129 255.51deg);
@@ -854,7 +879,8 @@
   --surface-header-bg: oklch(84.91% 0.0129 255.51deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="mid-1"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="mid-1"] {
+:root[data-theme='serban-compact'][data-surface-tone='mid-1'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='mid-1'] {
   --surface-default-bg: oklch(84.91% 0.0129 255.51deg);
   --surface-raised-bg: oklch(84.91% 0.0129 255.51deg);
   --surface-muted-bg: oklch(84.91% 0.0129 255.51deg);
@@ -862,7 +888,8 @@
   --surface-header-bg: oklch(84.91% 0.0129 255.51deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="mid-2"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="mid-2"] {
+:root[data-theme='serban-light'][data-surface-tone='mid-2'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='mid-2'] {
   --surface-default-bg: oklch(79.98% 0.0156 260.73deg);
   --surface-raised-bg: oklch(79.98% 0.0156 260.73deg);
   --surface-muted-bg: oklch(79.98% 0.0156 260.73deg);
@@ -870,7 +897,8 @@
   --surface-header-bg: oklch(79.98% 0.0156 260.73deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="mid-2"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="mid-2"] {
+:root[data-theme='serban-compact'][data-surface-tone='mid-2'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='mid-2'] {
   --surface-default-bg: oklch(79.98% 0.0156 260.73deg);
   --surface-raised-bg: oklch(79.98% 0.0156 260.73deg);
   --surface-muted-bg: oklch(79.98% 0.0156 260.73deg);
@@ -878,7 +906,8 @@
   --surface-header-bg: oklch(79.98% 0.0156 260.73deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="mid-3"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="mid-3"] {
+:root[data-theme='serban-light'][data-surface-tone='mid-3'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='mid-3'] {
   --surface-default-bg: oklch(75.54% 0.0189 261.33deg);
   --surface-raised-bg: oklch(75.54% 0.0189 261.33deg);
   --surface-muted-bg: oklch(75.54% 0.0189 261.33deg);
@@ -886,7 +915,8 @@
   --surface-header-bg: oklch(75.54% 0.0189 261.33deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="mid-3"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="mid-3"] {
+:root[data-theme='serban-compact'][data-surface-tone='mid-3'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='mid-3'] {
   --surface-default-bg: oklch(75.54% 0.0189 261.33deg);
   --surface-raised-bg: oklch(75.54% 0.0189 261.33deg);
   --surface-muted-bg: oklch(75.54% 0.0189 261.33deg);
@@ -894,7 +924,8 @@
   --surface-header-bg: oklch(75.54% 0.0189 261.33deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="mid-4"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="mid-4"] {
+:root[data-theme='serban-light'][data-surface-tone='mid-4'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='mid-4'] {
   --surface-default-bg: oklch(71.03% 0.0223 261.75deg);
   --surface-raised-bg: oklch(71.03% 0.0223 261.75deg);
   --surface-muted-bg: oklch(71.03% 0.0223 261.75deg);
@@ -902,7 +933,8 @@
   --surface-header-bg: oklch(71.03% 0.0223 261.75deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="mid-4"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="mid-4"] {
+:root[data-theme='serban-compact'][data-surface-tone='mid-4'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='mid-4'] {
   --surface-default-bg: oklch(71.03% 0.0223 261.75deg);
   --surface-raised-bg: oklch(71.03% 0.0223 261.75deg);
   --surface-muted-bg: oklch(71.03% 0.0223 261.75deg);
@@ -910,7 +942,8 @@
   --surface-header-bg: oklch(71.03% 0.0223 261.75deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="mid-5"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="mid-5"] {
+:root[data-theme='serban-light'][data-surface-tone='mid-5'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='mid-5'] {
   --surface-default-bg: oklch(66.16% 0.0273 263.27deg);
   --surface-raised-bg: oklch(66.16% 0.0273 263.27deg);
   --surface-muted-bg: oklch(66.16% 0.0273 263.27deg);
@@ -918,7 +951,8 @@
   --surface-header-bg: oklch(66.16% 0.0273 263.27deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="mid-5"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="mid-5"] {
+:root[data-theme='serban-compact'][data-surface-tone='mid-5'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='mid-5'] {
   --surface-default-bg: oklch(66.16% 0.0273 263.27deg);
   --surface-raised-bg: oklch(66.16% 0.0273 263.27deg);
   --surface-muted-bg: oklch(66.16% 0.0273 263.27deg);
@@ -926,7 +960,8 @@
   --surface-header-bg: oklch(66.16% 0.0273 263.27deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="mid-6"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="mid-6"] {
+:root[data-theme='serban-light'][data-surface-tone='mid-6'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='mid-6'] {
   --surface-default-bg: oklch(60.91% 0.0307 265.31deg);
   --surface-raised-bg: oklch(60.91% 0.0307 265.31deg);
   --surface-muted-bg: oklch(60.91% 0.0307 265.31deg);
@@ -934,7 +969,8 @@
   --surface-header-bg: oklch(60.91% 0.0307 265.31deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="mid-6"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="mid-6"] {
+:root[data-theme='serban-compact'][data-surface-tone='mid-6'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='mid-6'] {
   --surface-default-bg: oklch(60.91% 0.0307 265.31deg);
   --surface-raised-bg: oklch(60.91% 0.0307 265.31deg);
   --surface-muted-bg: oklch(60.91% 0.0307 265.31deg);
@@ -942,7 +978,8 @@
   --surface-header-bg: oklch(60.91% 0.0307 265.31deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="deep-1"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="deep-1"] {
+:root[data-theme='serban-light'][data-surface-tone='deep-1'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='deep-1'] {
   --surface-default-bg: oklch(55.9% 0.0344 266.95deg);
   --surface-raised-bg: oklch(55.9% 0.0344 266.95deg);
   --surface-muted-bg: oklch(55.9% 0.0344 266.95deg);
@@ -950,7 +987,8 @@
   --surface-header-bg: oklch(55.9% 0.0344 266.95deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="deep-1"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="deep-1"] {
+:root[data-theme='serban-compact'][data-surface-tone='deep-1'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='deep-1'] {
   --surface-default-bg: oklch(55.9% 0.0344 266.95deg);
   --surface-raised-bg: oklch(55.9% 0.0344 266.95deg);
   --surface-muted-bg: oklch(55.9% 0.0344 266.95deg);
@@ -958,7 +996,8 @@
   --surface-header-bg: oklch(55.9% 0.0344 266.95deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="deep-2"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="deep-2"] {
+:root[data-theme='serban-light'][data-surface-tone='deep-2'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='deep-2'] {
   --surface-default-bg: oklch(49.95% 0.0339 266.07deg);
   --surface-raised-bg: oklch(49.95% 0.0339 266.07deg);
   --surface-muted-bg: oklch(49.95% 0.0339 266.07deg);
@@ -966,7 +1005,8 @@
   --surface-header-bg: oklch(49.95% 0.0339 266.07deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="deep-2"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="deep-2"] {
+:root[data-theme='serban-compact'][data-surface-tone='deep-2'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='deep-2'] {
   --surface-default-bg: oklch(49.95% 0.0339 266.07deg);
   --surface-raised-bg: oklch(49.95% 0.0339 266.07deg);
   --surface-muted-bg: oklch(49.95% 0.0339 266.07deg);
@@ -974,7 +1014,8 @@
   --surface-header-bg: oklch(49.95% 0.0339 266.07deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="deep-3"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="deep-3"] {
+:root[data-theme='serban-light'][data-surface-tone='deep-3'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='deep-3'] {
   --surface-default-bg: oklch(44.18% 0.0334 265.12deg);
   --surface-raised-bg: oklch(44.18% 0.0334 265.12deg);
   --surface-muted-bg: oklch(44.18% 0.0334 265.12deg);
@@ -982,7 +1023,8 @@
   --surface-header-bg: oklch(44.18% 0.0334 265.12deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="deep-3"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="deep-3"] {
+:root[data-theme='serban-compact'][data-surface-tone='deep-3'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='deep-3'] {
   --surface-default-bg: oklch(44.18% 0.0334 265.12deg);
   --surface-raised-bg: oklch(44.18% 0.0334 265.12deg);
   --surface-muted-bg: oklch(44.18% 0.0334 265.12deg);
@@ -990,7 +1032,8 @@
   --surface-header-bg: oklch(44.18% 0.0334 265.12deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="deep-4"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="deep-4"] {
+:root[data-theme='serban-light'][data-surface-tone='deep-4'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='deep-4'] {
   --surface-default-bg: oklch(38.6% 0.033 264.07deg);
   --surface-raised-bg: oklch(38.6% 0.033 264.07deg);
   --surface-muted-bg: oklch(38.6% 0.033 264.07deg);
@@ -998,7 +1041,8 @@
   --surface-header-bg: oklch(38.6% 0.033 264.07deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="deep-4"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="deep-4"] {
+:root[data-theme='serban-compact'][data-surface-tone='deep-4'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='deep-4'] {
   --surface-default-bg: oklch(38.6% 0.033 264.07deg);
   --surface-raised-bg: oklch(38.6% 0.033 264.07deg);
   --surface-muted-bg: oklch(38.6% 0.033 264.07deg);
@@ -1006,7 +1050,8 @@
   --surface-header-bg: oklch(38.6% 0.033 264.07deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="deep-5"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="deep-5"] {
+:root[data-theme='serban-light'][data-surface-tone='deep-5'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='deep-5'] {
   --surface-default-bg: oklch(32.76% 0.0311 261.81deg);
   --surface-raised-bg: oklch(32.76% 0.0311 261.81deg);
   --surface-muted-bg: oklch(32.76% 0.0311 261.81deg);
@@ -1014,7 +1059,8 @@
   --surface-header-bg: oklch(32.76% 0.0311 261.81deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="deep-5"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="deep-5"] {
+:root[data-theme='serban-compact'][data-surface-tone='deep-5'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='deep-5'] {
   --surface-default-bg: oklch(32.76% 0.0311 261.81deg);
   --surface-raised-bg: oklch(32.76% 0.0311 261.81deg);
   --surface-muted-bg: oklch(32.76% 0.0311 261.81deg);
@@ -1022,7 +1068,8 @@
   --surface-header-bg: oklch(32.76% 0.0311 261.81deg);
 }
 
-:root[data-theme="serban-light"][data-surface-tone="deep-6"], [data-theme-scope][data-theme="serban-light"][data-surface-tone="deep-6"] {
+:root[data-theme='serban-light'][data-surface-tone='deep-6'],
+[data-theme-scope][data-theme='serban-light'][data-surface-tone='deep-6'] {
   --surface-default-bg: oklch(25.91% 0.0249 261.09deg);
   --surface-raised-bg: oklch(25.91% 0.0249 261.09deg);
   --surface-muted-bg: oklch(25.91% 0.0249 261.09deg);
@@ -1030,7 +1077,8 @@
   --surface-header-bg: oklch(25.91% 0.0249 261.09deg);
 }
 
-:root[data-theme="serban-compact"][data-surface-tone="deep-6"], [data-theme-scope][data-theme="serban-compact"][data-surface-tone="deep-6"] {
+:root[data-theme='serban-compact'][data-surface-tone='deep-6'],
+[data-theme-scope][data-theme='serban-compact'][data-surface-tone='deep-6'] {
   --surface-default-bg: oklch(25.91% 0.0249 261.09deg);
   --surface-raised-bg: oklch(25.91% 0.0249 261.09deg);
   --surface-muted-bg: oklch(25.91% 0.0249 261.09deg);
@@ -1113,7 +1161,7 @@
 /*  preserve hue+chroma for accents/states, boost for dark readability  */
 
 /* ------------------------------------------------------------------ */
-[data-mode="dark"] {
+[data-mode='dark'] {
   /* ── Surface ── */
   --surface-default-bg: oklch(17% 0.025 261deg);
   --surface-raised-bg: oklch(21% 0.028 261deg);
@@ -1505,7 +1553,8 @@
 
 /* When user selects "system" and OS is dark, apply same dark tokens */
 @media (prefers-color-scheme: dark) {
-  [data-mode="system"] {
+  :root[data-mode='system']:not([data-theme='serban-hc']),
+  [data-theme-scope][data-mode='system']:not([data-theme='serban-hc']) {
     /* ── Surface ── */
     --surface-default-bg: oklch(17% 0.025 261deg);
     --surface-raised-bg: oklch(21% 0.028 261deg);
@@ -1650,7 +1699,7 @@
     --ring-color: var(--focus-outline);
 
     color-scheme: dark;
-  
+
     /* ── Scoped --color-* overrides (cascade fix) ── */
     --color-surface-default: oklch(17% 0.025 261deg);
     --color-surface-raised: oklch(21% 0.028 261deg);
@@ -1750,64 +1799,73 @@ html {
   --table-surface-bg: var(--surface-table-normal-bg);
 }
 
-:root[data-table-surface-tone="soft"], [data-theme-scope][data-table-surface-tone="soft"] {
+:root[data-table-surface-tone='soft'],
+[data-theme-scope][data-table-surface-tone='soft'] {
   --table-surface-bg: var(--surface-table-soft-bg);
 }
 
-:root[data-table-surface-tone="strong"], [data-theme-scope][data-table-surface-tone="strong"] {
+:root[data-table-surface-tone='strong'],
+[data-theme-scope][data-table-surface-tone='strong'] {
   --table-surface-bg: var(--surface-table-strong-bg);
 }
 
-:root[data-table-surface-tone="normal"], [data-theme-scope][data-table-surface-tone="normal"] {
+:root[data-table-surface-tone='normal'],
+[data-theme-scope][data-table-surface-tone='normal'] {
   --table-surface-bg: var(--surface-table-normal-bg);
 }
 
-:root[data-accent="neutral"], [data-theme-scope][data-accent="neutral"] {
+:root[data-accent='neutral'],
+[data-theme-scope][data-accent='neutral'] {
   --accent-primary: oklch(62.43% 0.2056 255.49deg);
   --accent-primary-hover: oklch(52.2% 0.1771 255.83deg);
   --accent-focus: oklch(88.68% 0.1822 95.33deg);
   --accent-soft: oklch(62.43% 0.2056 255.49deg / 18%);
 }
 
-:root[data-accent="light"], [data-theme-scope][data-accent="light"] {
+:root[data-accent='light'],
+[data-theme-scope][data-accent='light'] {
   --accent-primary: oklch(62.43% 0.2056 255.49deg);
   --accent-primary-hover: oklch(52.2% 0.1771 255.83deg);
   --accent-focus: oklch(88.68% 0.1822 95.33deg);
   --accent-soft: oklch(62.43% 0.2056 255.49deg / 18%);
 }
 
-:root[data-accent="violet"], [data-theme-scope][data-accent="violet"] {
+:root[data-accent='violet'],
+[data-theme-scope][data-accent='violet'] {
   --accent-primary: oklch(60.56% 0.2189 292.72deg);
   --accent-primary-hover: oklch(49.07% 0.2412 292.58deg);
   --accent-focus: oklch(83.26% 0.114 310.99deg);
   --accent-soft: oklch(60.56% 0.2189 292.72deg / 20%);
 }
 
-:root[data-accent="emerald"], [data-theme-scope][data-accent="emerald"] {
+:root[data-accent='emerald'],
+[data-theme-scope][data-accent='emerald'] {
   --accent-primary: oklch(72.27% 0.192 149.58deg);
   --accent-primary-hover: oklch(62.71% 0.1699 149.21deg);
   --accent-focus: oklch(92.5% 0.0806 155.99deg);
   --accent-soft: oklch(72.27% 0.192 149.58deg / 20%);
 }
 
-:root[data-accent="sunset"], [data-theme-scope][data-accent="sunset"] {
+:root[data-accent='sunset'],
+[data-theme-scope][data-accent='sunset'] {
   --accent-primary: oklch(70.49% 0.1867 47.6deg);
   --accent-primary-hover: oklch(64.61% 0.1943 41.12deg);
   --accent-focus: oklch(90.81% 0.0654 66.84deg);
   --accent-soft: oklch(70.49% 0.1867 47.6deg / 20%);
 }
 
-:root[data-accent="ocean"], [data-theme-scope][data-accent="ocean"] {
+:root[data-accent='ocean'],
+[data-theme-scope][data-accent='ocean'] {
   --accent-primary: oklch(71.48% 0.1257 215.22deg);
   --accent-primary-hover: oklch(60.89% 0.1109 221.72deg);
   --accent-focus: oklch(91.67% 0.0772 205.04deg);
   --accent-soft: oklch(71.48% 0.1257 215.22deg / 20%);
 }
 
-:root[data-accent="graphite"], [data-theme-scope][data-accent="graphite"] {
+:root[data-accent='graphite'],
+[data-theme-scope][data-accent='graphite'] {
   --accent-primary: oklch(97.02% 0 0deg);
   --accent-primary-hover: oklch(92.76% 0.0058 264.53deg);
   --accent-focus: oklch(88.68% 0.1822 95.33deg);
   --accent-soft: oklch(100% 0 0deg / 24%);
 }
-

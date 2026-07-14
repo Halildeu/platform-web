@@ -19,3 +19,7 @@ packages/docs/dist/**
 
 # Schema Explorer — legacy CSS, migration candidate
 apps/mfe-schema-explorer/**
+
+# Exact-owned output; style is defined by generate-theme-css.mjs and verified
+# byte-for-byte by the required token drift gate.
+apps/mfe-shell/src/styles/component-theme.generated.css

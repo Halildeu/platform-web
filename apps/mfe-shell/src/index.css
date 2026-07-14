@@ -1,6 +1,7 @@
-@import "tailwindcss";
-@import "./styles/generated-theme-inline.css";
-@import "./styles/theme.css";
+@import 'tailwindcss';
+@import './styles/generated-theme-inline.css';
+@import './styles/theme.css';
+@import './styles/component-theme.generated.css';
 
 /* Content scanning for monorepo — TW4 native @source */
 @source "../../../packages/design-system/src/**/*.{ts,tsx}";
@@ -46,7 +47,7 @@
 
   /* Button cursor: default → pointer */
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  [role='button']:not(:disabled) {
     cursor: pointer;
   }
 
@@ -107,11 +108,13 @@ body {
 /* Elevation aksı */
 
 /* v4 renames: shadow-sm→shadow-xs, shadow→shadow-sm — both old and new covered */
-[data-elevation="raised"] :is(.shadow, .shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+[data-elevation='raised']
+  :is(.shadow, .shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
   box-shadow: var(--elevation-surface) !important;
 }
 
-[data-elevation="flat"] :is(.shadow, .shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+[data-elevation='flat']
+  :is(.shadow, .shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
   box-shadow: var(--elevation-surface) !important;
 }
 
@@ -126,7 +129,7 @@ body {
 /* ------------------------------------------------------------------ */
 @media (forced-colors: active) {
   button,
-  [role="button"],
+  [role='button'],
   input,
   select,
   textarea,
@@ -140,9 +143,9 @@ body {
   }
 
   /* Active/selected states — prevent invisible elements */
-  [aria-current="page"],
-  [aria-selected="true"],
-  [data-state="active"],
+  [aria-current='page'],
+  [aria-selected='true'],
+  [data-state='active'],
   [data-active],
   .bg-action-primary {
     forced-color-adjust: none;
@@ -152,16 +155,16 @@ body {
   }
 
   /* Steps — active/completed indicators */
-  [aria-current="step"],
-  [data-step-status="active"],
-  [data-step-status="completed"] {
+  [aria-current='step'],
+  [data-step-status='active'],
+  [data-step-status='completed'] {
     forced-color-adjust: none;
     background-color: Highlight !important;
     color: HighlightText !important;
   }
 
   /* Disabled states */
-  [aria-disabled="true"],
+  [aria-disabled='true'],
   [disabled] {
     forced-color-adjust: none;
     color: GrayText !important;
@@ -178,8 +181,8 @@ body {
   }
 
   /* Ensure active buttons have strong contrast */
-  [aria-current="page"],
-  [aria-selected="true"] {
+  [aria-current='page'],
+  [aria-selected='true'] {
     outline: 2px solid currentcolor;
     outline-offset: -2px;
   }
