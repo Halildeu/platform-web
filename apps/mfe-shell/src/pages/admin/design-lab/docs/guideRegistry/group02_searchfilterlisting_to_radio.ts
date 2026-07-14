@@ -403,7 +403,7 @@ Uc boyut secenegi (\`sm\`, \`md\`, \`lg\`) ve \`dot\` modu ile sadece renkli nok
 \`\`\`tsx
 <Badge variant="success">Aktif</Badge>
 <Badge variant="error" size="sm">3 Hata</Badge>
-<Badge variant="warning" dot />
+<Badge variant="warning" dot role="img" aria-label="Bekleyen durum" />
 \`\`\``,
       },
       {

@@ -8,6 +8,7 @@
 - **Girdi:** `design-tokens/figma.tokens.json`
 - **Cikti:**
   - `apps/mfe-shell/src/styles/theme.css` — CSS custom properties (appearance, density, radius, elevation, motion axisleri)
+  - `apps/mfe-shell/src/styles/component-theme.generated.css` — exact-owned component runtime token degerleri
   - `design-tokens/generated/theme-contract.json` — Theme contract manifest
 - **Rol:** ThemeProvider runtime styling — CSS custom properties (`data-theme`, `data-radius`, `data-density`, `data-elevation`, `data-motion` attribute'lari ile axis bazli selector'lar uretir). Token Bridge blogu ile component-level alias'lar da dahil.
 - **Ne zaman calisir:**
@@ -44,12 +45,12 @@
 ## Release Iliskisi
 - Token degisikligi -> design-system minor/patch release gerektirir
 - `tokens:build` ciktisi `dist/`'e dahil mi? **Evet** — `src/tokens/build/` dizini `src/` altinda oldugundan ve `package.json`'daki `files` alani `"src"` icerdiginden, publish edilen pakete dahildir
-- `tokens:build:theme` ciktisi nerede tuketiliyor? `apps/mfe-shell/src/styles/theme.css` olarak uretilir ve mfe-shell uygulamasi tarafindan import edilir. ThemeProvider, `DesignSystemProvider` uzerinden runtime'da CSS custom property'leri `data-*` attribute'lari ile uygular.
+- `tokens:build:theme` ciktisi nerede tuketiliyor? `theme.css` ve `component-theme.generated.css`, `apps/mfe-shell/src/index.css` tarafindan birlikte ve bu sirayla import edilir. Platform MFE'leri global tema katmanini shell'den alir; bagimsiz bir runtime girisi olusturulursa bu iki runtime dosyasi da ayni girise eklenmelidir. ThemeProvider, `DesignSystemProvider` uzerinden CSS custom property'lerini `data-*` attribute'lari ile uygular.
 
 ## Akis Diyagrami
 ```
 Token source (figma.tokens.json)
-  └── tokens:build:theme → theme.css + theme-contract.json → mfe-shell → ThemeProvider → Runtime
+  └── tokens:build:theme → theme.css + component-theme.generated.css + theme-contract.json → mfe-shell → ThemeProvider → Runtime
 
 Token source (.ts dosyalari: color, spacing, radius, typography, motion, zIndex, elevation, opacity, density, focusRing, semantic)
   ├── tokens:build → tokens.json + tokens.css + token-types.ts + docs.json → Design Lab + Types + Figma export

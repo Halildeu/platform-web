@@ -21,6 +21,16 @@
   --color-text-tertiary: var(--text-tertiary);
   --color-text-disabled: var(--text-disabled);
 
+  /* Component colors */
+  --color-component-badge-foreground-default: var(--component-badge-foreground-default);
+  --color-component-badge-foreground-muted: var(--component-badge-foreground-muted);
+  --color-component-badge-dot-neutral: var(--component-badge-dot-neutral);
+  --color-component-badge-dot-primary: var(--component-badge-dot-primary);
+  --color-component-badge-dot-info: var(--component-badge-dot-info);
+  --color-component-badge-dot-success: var(--component-badge-dot-success);
+  --color-component-badge-dot-warning: var(--component-badge-dot-warning);
+  --color-component-badge-dot-danger: var(--component-badge-dot-danger);
+
   /* Border colors */
   --color-border: var(--border-default);
   --color-border-subtle: var(--border-subtle);
@@ -193,4 +203,3 @@
   --font-size-md: var(--font-size-md);
   --spacing-1: var(--spacing-1);
 }
-

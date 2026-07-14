@@ -18,6 +18,9 @@ name: Web Test Gate
 #                              cascade + state-variant matrix), PR-16 added
 #                              Skeleton + Spinner + Avatar (loading-state
 #                              cascade locks).
+#                              Also runs the real-Chromium Badge WCAG matrix
+#                              (themes/scopes/surfaces + forced-colors) as a
+#                              required product-surface acceptance gate.
 #
 # Advisory jobs (run, but do not block merge by default):
 #   - cssom-full-advisory          — full *.cssom.test.{ts,tsx} suite
@@ -168,6 +171,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: CSSOM canary suite (Tailwind layer + ThemeProvider + 13 primitives)
         run: pnpm run test:cssom:canary
+      - name: Badge WCAG contrast matrix (real Chromium, required)
+        run: pnpm run test:browser:badge
 
   cssom-full-advisory:
     name: CSSOM Full (advisory)

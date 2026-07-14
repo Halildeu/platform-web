@@ -576,13 +576,13 @@ export function Example() {
   return (
     <div className="flex items-center gap-3">
       <span className="flex items-center gap-1.5">
-        <Badge dot variant="success" /> Aktif
+        <Badge dot variant="success" aria-hidden="true" /> Aktif
       </span>
       <span className="flex items-center gap-1.5">
-        <Badge dot variant="warning" /> Beklemede
+        <Badge dot variant="warning" aria-hidden="true" /> Beklemede
       </span>
       <span className="flex items-center gap-1.5">
-        <Badge dot variant="error" /> Devre Disi
+        <Badge dot variant="error" aria-hidden="true" /> Devre Disi
       </span>
     </div>
   );

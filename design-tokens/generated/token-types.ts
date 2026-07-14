@@ -17,6 +17,14 @@ export type TokenColor =
   | 'text-inverse'
   | 'text-tertiary'
   | 'text-disabled'
+  | 'component-badge-foreground-default'
+  | 'component-badge-foreground-muted'
+  | 'component-badge-dot-neutral'
+  | 'component-badge-dot-primary'
+  | 'component-badge-dot-info'
+  | 'component-badge-dot-success'
+  | 'component-badge-dot-warning'
+  | 'component-badge-dot-danger'
   | 'border'
   | 'border-subtle'
   | 'border-default'
@@ -101,5 +109,5 @@ export type TokenShadow =
 /** All design token names */
 export type DesignToken = TokenColor | TokenRadius | TokenShadow;
 
-/** Total token count: 84 colors, 2 radius, 2 shadows */
-export const TOKEN_COUNT = { color: 84, radius: 2, shadow: 2 } as const;
+/** Total token count: 92 colors, 2 radius, 2 shadows */
+export const TOKEN_COUNT = { color: 92, radius: 2, shadow: 2 } as const;

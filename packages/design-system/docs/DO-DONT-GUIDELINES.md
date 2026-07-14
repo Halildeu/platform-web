@@ -390,7 +390,7 @@ Practical usage guidelines for `@mfe/design-system` components.
 ### Do
 
 - Use semantic `variant` values: `"success"`, `"warning"`, `"error"`, `"info"` for status indicators
-- Use `dot={true}` for minimal status indicators (renders as a small colored circle)
+- Use `dot={true}` for minimal status indicators only as either a standalone `role="img"` with an accessible name, or an `aria-hidden="true"` decoration beside a visible status label
 - Use `size` for proportional sizing: `"sm"`, `"md"` (default), `"lg"`
 
 ### Don't
@@ -399,6 +399,7 @@ Practical usage guidelines for `@mfe/design-system` components.
 - Don't put interactive content inside Badge -- it renders as a `<span>`
 - Don't use Badge for clickable actions -- it has no click handler or keyboard support
 - Don't use `variant="danger"` and `variant="error"` interchangeably without consistency -- they produce the same visual output
+- Don't rely on dot color alone to communicate status
 
 ### Tips
 
@@ -496,7 +497,7 @@ Practical usage guidelines for `@mfe/design-system` components.
 
 - Use `FormField` to wrap inputs for consistent label, help, and error styling
 - Use `error` to show validation messages -- it also injects `aria-invalid` into the child input
-- Use `required` to show the required indicator asterisk (*)
+- Use `required` to show the required indicator asterisk (\*)
 - Use `optional` to show "(optional)" text
 - Use `horizontal={true}` for side-by-side label and input layout
 - Use `htmlFor` to override the auto-generated ID for input association

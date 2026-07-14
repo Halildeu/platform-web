@@ -264,7 +264,7 @@ export function KitchenSink() {
               <Badge variant="error">Error</Badge>
               <Badge variant="info">Info</Badge>
               <Badge variant="muted">Muted</Badge>
-              <Badge variant="success" dot />
+              <Badge variant="success" dot role="img" aria-label="Success status" />
             </div>
 
             <h3 style={{ marginTop: 16, marginBottom: 8, fontSize: 14, fontWeight: 600 }}>
