@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { isAuthCriticalUnauthorizedUrl } from '@mfe/auth';
+import { isAuthCriticalUnauthorizedUrl } from '@mfe/auth/errors';
 
 interface UseSessionExpiredToastOptions {
   token: string | null | undefined;

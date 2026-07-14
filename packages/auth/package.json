@@ -12,6 +12,11 @@
       "types": "./src/ui.ts",
       "import": "./src/ui.ts",
       "default": "./src/ui.ts"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "import": "./src/errors.ts",
+      "default": "./src/errors.ts"
     }
   },
   "scripts": {
