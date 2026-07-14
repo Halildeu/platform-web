@@ -16,10 +16,16 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const TOKEN_FILE = path.resolve(repoRoot, 'design-tokens/figma.tokens.json');
 const OUTPUT_CSS = path.resolve(repoRoot, 'apps/mfe-shell/src/styles/theme.css');
 const OUTPUT_THEME_INLINE = path.resolve(repoRoot, 'apps/mfe-shell/src/styles/generated-theme-inline.css');
+const OUTPUT_COMPONENT_THEME = path.resolve(repoRoot, 'apps/mfe-shell/src/styles/component-theme.generated.css');
 const OUTPUT_CONTRACT = path.resolve(repoRoot, 'design-tokens/generated/theme-contract.json');
 const OUTPUT_TOKEN_TYPES = path.resolve(repoRoot, 'design-tokens/generated/token-types.ts');
 
 const isCheckMode = process.argv.includes('--check');
+const isComponentOnlyMode = process.argv.includes('--component-only');
+
+if (isCheckMode && isComponentOnlyMode) {
+  throw new Error('⚠️ --check and --component-only are mutually exclusive.');
+}
 
 const AXIS_ATTRIBUTE = {
   radius: 'data-radius',
@@ -35,6 +41,8 @@ if (!themeContract || typeof themeContract !== 'object') {
 }
 
 const colorTokens = flattenSemantic(tokens.semantic.color, ['color']);
+const componentColorTokens = colorTokens.filter((entry) => entry.path[1] === 'component');
+const globalColorTokens = colorTokens.filter((entry) => entry.path[1] !== 'component');
 const axisTokens = {
   radius: flattenSemantic(tokens.semantic.radius, ['radius']),
   density: flattenSemantic(tokens.semantic.density, ['density']),
@@ -56,7 +64,7 @@ if (appearanceThemes.length === 0) {
 const overlayConfig = extractOverlayConfig(tokens, appearanceThemes[0]);
 
 const defaultAppearance = appearanceThemes[0];
-const rootDeclarations = buildDeclarations(colorTokens, defaultAppearance);
+const rootDeclarations = buildDeclarations(globalColorTokens, defaultAppearance);
 if (accentPalettes.length > 0) {
   const [defaultAccent] = accentPalettes;
   rootDeclarations.push(...buildAccentDeclarations(defaultAccent.entry, defaultAccent.key));
@@ -67,7 +75,7 @@ pushBlock(':root', rootDeclarations);
 
 for (const theme of appearanceThemes) {
   const selector = `:root[data-theme="${theme}"], [data-theme-scope][data-theme="${theme}"]`;
-  pushBlock(selector, buildDeclarations(colorTokens, theme));
+  pushBlock(selector, buildDeclarations(globalColorTokens, theme));
 }
 
 for (const [axis, entries] of Object.entries(axisTokens)) {
@@ -251,7 +259,9 @@ if (darkAppearanceKey) {
   const systemLines = [];
   systemLines.push('/* System preference fallback (prefers-color-scheme) */');
   systemLines.push('@media (prefers-color-scheme: dark) {');
-  systemLines.push('  [data-mode="system"] {');
+  systemLines.push(
+    '  :root[data-mode="system"]:not([data-theme="serban-hc"]), [data-theme-scope][data-mode="system"]:not([data-theme="serban-hc"]) {',
+  );
   for (const line of darkBridgeLines) {
     if (line.startsWith('  ') && line.includes(':') && !line.startsWith('/*') && !line.startsWith('[') && !line.startsWith('}')) {
       systemLines.push(`  ${line}`);
@@ -304,6 +314,12 @@ if (accentPalettes.length > 0) {
 const cssOutput = cssChunks.filter((line, index) => !(line === '' && cssChunks[index - 1] === '')).join('\n');
 const cssWithEol = `${cssOutput}\n`;
 const contractWithEol = `${JSON.stringify(themeContract, null, 2)}\n`;
+const componentThemeOutput = buildComponentThemeCss(
+  componentColorTokens,
+  appearanceThemes,
+  defaultAppearance,
+  darkAppearanceKey,
+);
 
 /* ---- Build @theme inline block for TW4 utility generation ---- */
 const themeInlineOutput = buildThemeInlineBlock(colorTokens, bridgeAliases);
@@ -346,6 +362,17 @@ if (isCheckMode) {
     }
   }
 
+  // Component theme is generator-owned and must match exactly. Unlike the
+  // legacy mixed theme files, it intentionally has no curated extension area.
+  try {
+    const existing = fs.readFileSync(OUTPUT_COMPONENT_THEME, 'utf8');
+    if (existing !== componentThemeOutput) {
+      errors.push(`- Drift: ${path.relative(repoRoot, OUTPUT_COMPONENT_THEME)} generated output is not up to date.`);
+    }
+  } catch {
+    errors.push(`- Missing: ${path.relative(repoRoot, OUTPUT_COMPONENT_THEME)} does not exist.`);
+  }
+
   // JSON and TypeScript files use exact match (no hand-curated content expected).
   for (const [label, outputPath, content] of [
     ['theme-contract.json', OUTPUT_CONTRACT, contractWithEol],
@@ -367,16 +394,30 @@ if (isCheckMode) {
     process.exit(1);
   }
 
-  console.log(`✅ tokens:build --check OK (4 files)`);
+  console.log(`✅ tokens:build --check OK (5 files)`);
+} else if (isComponentOnlyMode) {
+  // Safe bounded path for component-scoped runtime values while legacy
+  // theme.css and generated-theme-inline.css still mix generated and curated
+  // ownership. Token names are exact-owned, so update their TypeScript union;
+  // the legacy inline utility map remains untouched and --check catches drift.
+  fs.mkdirSync(path.dirname(OUTPUT_COMPONENT_THEME), { recursive: true });
+  fs.mkdirSync(path.dirname(OUTPUT_TOKEN_TYPES), { recursive: true });
+  fs.writeFileSync(OUTPUT_COMPONENT_THEME, componentThemeOutput);
+  fs.writeFileSync(OUTPUT_TOKEN_TYPES, tokenTypesOutput);
+  console.log(`✅ Generated bounded component token bundle (2 files)`);
+  console.log(`  - ${path.relative(repoRoot, OUTPUT_COMPONENT_THEME)}`);
+  console.log(`  - ${path.relative(repoRoot, OUTPUT_TOKEN_TYPES)}`);
 } else {
   fs.mkdirSync(path.dirname(OUTPUT_CONTRACT), { recursive: true });
   fs.writeFileSync(OUTPUT_CONTRACT, contractWithEol);
   fs.writeFileSync(OUTPUT_CSS, cssWithEol);
   fs.writeFileSync(OUTPUT_THEME_INLINE, themeInlineOutput);
+  fs.writeFileSync(OUTPUT_COMPONENT_THEME, componentThemeOutput);
   fs.writeFileSync(OUTPUT_TOKEN_TYPES, tokenTypesOutput);
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_CSS)} from ${path.relative(repoRoot, TOKEN_FILE)}`);
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_CONTRACT)}`);
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_THEME_INLINE)} (@theme inline)`);
+  console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_COMPONENT_THEME)} (component tokens)`);
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_TOKEN_TYPES)} (TypeScript types)`);
 }
 
@@ -443,6 +484,62 @@ function buildDeclarations(entries, mode) {
     lines.push(`  ${varName}: ${resolved};`);
   }
   return lines;
+}
+
+/**
+ * Build the exact-owned runtime stylesheet for component-scoped color tokens.
+ * Keeping this artifact separate prevents a bounded component change from
+ * rewriting the legacy theme.css file, which still contains curated sections.
+ */
+function buildComponentThemeCss(entries, themes, defaultTheme, darkTheme) {
+  const lines = [
+    '/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */',
+    '/* Safe bounded regeneration: npm run tokens:build:component-theme */',
+    '',
+  ];
+
+  const addBlock = (selector, mode, indentation = '', trailingBlank = true) => {
+    const declarations = buildDeclarations(entries, mode);
+    if (declarations.length === 0) return;
+    const indentedSelector = selector
+      .split('\n')
+      .map((line) => `${indentation}${line}`)
+      .join('\n');
+    lines.push(`${indentedSelector} {`);
+    for (const declaration of declarations) {
+      lines.push(`${indentation}${declaration}`);
+    }
+    lines.push(`${indentation}}`);
+    if (trailingBlank) lines.push('');
+  };
+
+  addBlock(':root', defaultTheme);
+
+  for (const theme of themes) {
+    addBlock(
+      `:root[data-theme='${theme}'],\n[data-theme-scope][data-theme='${theme}']`,
+      theme,
+    );
+  }
+
+  if (darkTheme) {
+    addBlock(
+      ":root[data-mode='dark']:not([data-theme='serban-hc']),\n[data-theme-scope][data-mode='dark']:not([data-theme='serban-hc'])",
+      darkTheme,
+    );
+
+    lines.push('@media (prefers-color-scheme: dark) {');
+    addBlock(
+      ":root[data-mode='system']:not([data-theme='serban-hc']),\n[data-theme-scope][data-mode='system']:not([data-theme='serban-hc'])",
+      darkTheme,
+      '  ',
+      false,
+    );
+    lines.push('}');
+    lines.push('');
+  }
+
+  return `${lines.join('\n').trimEnd()}\n`;
 }
 
 function extractAccentPalettes(root) {
@@ -619,6 +716,18 @@ function buildThemeInlineBlock(colorEntries, aliases) {
   // Bridge aliases for text
   lines.push('  --color-text-tertiary: var(--text-tertiary);');
   lines.push('  --color-text-disabled: var(--text-disabled);');
+
+  /* --- Component-scoped colors --- */
+  const componentTokens = colorEntries.filter((entry) => entry.path[1] === 'component');
+  if (componentTokens.length > 0) {
+    lines.push('');
+    lines.push('  /* Component colors */');
+    for (const entry of componentTokens) {
+      const varName = toVarName(entry.path);
+      const twName = entry.path.slice(1).join('-');
+      lines.push(`  --color-${twName}: var(${varName});`);
+    }
+  }
 
   /* --- Border colors --- */
   lines.push('');

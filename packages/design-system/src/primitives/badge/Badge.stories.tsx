@@ -81,11 +81,11 @@ export const Muted: Story = {
 export const DotMode: Story = {
   render: () => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <Badge variant="success" dot />
-      <Badge variant="warning" dot />
-      <Badge variant="error" dot />
-      <Badge variant="primary" dot />
-      <Badge variant="info" dot />
+      <Badge variant="success" dot role="img" aria-label="Başarılı durum" />
+      <Badge variant="warning" dot role="img" aria-label="Uyarı durumu" />
+      <Badge variant="error" dot role="img" aria-label="Hata durumu" />
+      <Badge variant="primary" dot role="img" aria-label="Birincil durum" />
+      <Badge variant="info" dot role="img" aria-label="Bilgi durumu" />
     </div>
   ),
 };

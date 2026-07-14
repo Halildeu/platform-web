@@ -24,3 +24,9 @@ docs/x-charts-adoption-matrix.json
 # semantic underscores inside `color-mix()`, and switches `"x"` → `'x'`
 # quote style; all break round-trip with the generator output.
 packages/design-system/src/tokens/build/
+
+# Exact-owned theme generator outputs. Their byte representation is the
+# freshness contract checked by `pnpm run tokens:drift`; formatter mutation
+# would make a freshly generated artifact stale in the same commit.
+apps/mfe-shell/src/styles/component-theme.generated.css
+design-tokens/generated/token-types.ts

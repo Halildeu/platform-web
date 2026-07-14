@@ -33,13 +33,19 @@ describe('Badge contract', () => {
   });
 
   /* ---- Variants ---- */
-  it.each(['default', 'primary', 'success', 'warning', 'error', 'danger', 'info', 'muted'] as const)(
-    'renders variant=%s without crash',
-    (variant) => {
-      const { container } = render(<Badge variant={variant}>V</Badge>);
-      expect(container.querySelector('span')).toBeInTheDocument();
-    },
-  );
+  it.each([
+    'default',
+    'primary',
+    'success',
+    'warning',
+    'error',
+    'danger',
+    'info',
+    'muted',
+  ] as const)('renders variant=%s without crash', (variant) => {
+    const { container } = render(<Badge variant={variant}>V</Badge>);
+    expect(container.querySelector('span')).toBeInTheDocument();
+  });
 
   /* ---- Sizes ---- */
   it.each(['sm', 'md', 'lg'] as const)('renders size=%s without crash', (size) => {
@@ -49,7 +55,7 @@ describe('Badge contract', () => {
 
   /* ---- Dot mode ---- */
   it('renders dot mode without children', () => {
-    const { container } = render(<Badge dot />);
+    const { container } = render(<Badge dot aria-hidden="true" />);
     const dot = container.querySelector('span');
     expect(dot).toBeInTheDocument();
     expect(dot?.textContent).toBe('');
@@ -64,7 +70,9 @@ describe('Badge contract', () => {
   it('renders JSX children (e.g. icon + text)', () => {
     render(
       <Badge>
-        <svg data-testid="icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="8" /></svg>
+        <svg data-testid="icon" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="8" />
+        </svg>
         Status
       </Badge>,
     );
@@ -91,29 +99,57 @@ describe('Badge contract', () => {
   /* ---- Event handlers ---- */
   it('fires onClick when clicked', () => {
     const onClick = vi.fn();
-    render(<Badge onClick={onClick} data-testid="clickable">Click</Badge>);
+    render(
+      <Badge onClick={onClick} data-testid="clickable">
+        Click
+      </Badge>,
+    );
     fireEvent.click(screen.getByTestId('clickable'));
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   /* ---- Dot mode with variant ---- */
-  it('dot mode applies variant-derived background color', () => {
-    const { container } = render(<Badge dot variant="success" />);
+  it('dot mode applies the explicit component-scoped variant token', () => {
+    const { container } = render(
+      <Badge dot variant="success" role="img" aria-label="Success status" />,
+    );
     const dot = container.querySelector('span');
-    expect(dot?.className).toContain('bg-state-success-text');
+    expect(dot?.className).toContain('bg-component-badge-dot-success');
+    expect(dot?.className).not.toContain('bg-state-success-text');
+    expect(dot).toHaveAttribute('data-component', 'badge');
+    expect(dot).toHaveAttribute('data-badge-dot', '');
+    expect(dot?.className).toContain('forced-colors:bg-[CanvasText]');
   });
 
   /* ---- Dot mode passthrough ---- */
   it('dot mode forwards aria-label', () => {
-    const { container } = render(<Badge dot aria-label="online indicator" />);
+    const { container } = render(<Badge dot role="img" aria-label="online indicator" />);
     expect(container.querySelector('span')).toHaveAttribute('aria-label', 'online indicator');
+  });
+
+  it('warns in development when a dot relies on color alone', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    render(<Badge dot />);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dot-only Badge must be decorative'));
+    warn.mockRestore();
+  });
+
+  it('accepts both documented non-color dot patterns without warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    render(
+      <>
+        <Badge dot aria-hidden="true" />
+        <Badge dot role="img" aria-label="Online status" />
+      </>,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   /* ---- No children renders without crash ---- */
   it('renders without children and without crash', () => {
     expect(() => render(<Badge />)).not.toThrow();
   });
-
 });
 
 describe('Badge — accessibility', () => {
