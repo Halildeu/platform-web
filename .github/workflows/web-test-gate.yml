@@ -4,7 +4,8 @@ name: Web Test Gate
 #
 # Required-set jobs (the aggregator below enforces this dependency set):
 #   - unit-required          — Vitest jsdom across the workspace
-#   - token-drift-required   — tokens:build --check + tokens:build:theme --check
+#   - token-drift-required   — exact token/theme ownership contract +
+#                              Theme Doctor ratchet + shell import build
 #   - cssom-canary-required  — curated manifest: Tailwind layer sentinel +
 #                              ThemeProvider + 13 primitives (Button, Input,
 #                              Checkbox, Switch, Radio, Card, Dialog,
@@ -123,9 +124,9 @@ jobs:
         run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts src/modules/hr-demographic-report/__tests__/api-filter.test.ts src/modules/hr-demographic-report/__tests__/DemographicDashboard.contract.test.tsx
 
   token-drift-required:
-    name: Token Drift (build --check)
+    name: Token & Theme Ownership
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -137,8 +138,14 @@ jobs:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
-      - name: Token drift gate (build artifacts and theme CSS)
+      - name: Theme ownership contract tests
+        run: pnpm run test:theme-contract
+      - name: Token drift gate (exact generated artifacts and curated ownership)
         run: pnpm run tokens:drift
+      - name: Theme Doctor regression ratchet
+        run: pnpm run lint:theme
+      - name: Shell theme import build
+        run: pnpm --filter mfe-shell build
 
   semantic-layer-required:
     name: Semantic Layer (no-raw-hex)
