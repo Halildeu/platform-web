@@ -234,15 +234,17 @@ let fatalBaselineError;
 let baselineProvenance;
 try {
   baseline = BASELINE_PATH ? loadBaseline(resolve(ROOT, BASELINE_PATH)) : undefined;
+  evaluation = evaluateRatchet(results, baseline, { strictZero: STRICT_ZERO });
   if (baseline && !RATCHET_MEASUREMENT_ONLY) {
     baselineProvenance = verifyRepositoryBaselineProvenance(baseline, {
       repoRoot: ROOT,
       scannerPath: fileURLToPath(import.meta.url),
+      currentResults: results,
       authoritativeBaseCommit: AUTHORITATIVE_BASE_COMMIT,
       requireAuthoritativeBase: Boolean(process.env.CI),
+      requireCurrentExact: evaluation.exitCode === 0,
     });
   }
-  evaluation = evaluateRatchet(results, baseline, { strictZero: STRICT_ZERO });
 } catch (error) {
   fatalBaselineError = error;
   evaluation = {
@@ -273,7 +275,7 @@ if (UPDATE_BASELINE_IMPROVEMENTS) {
     process.exit(2);
   }
   try {
-    const improved = createImprovementBaseline(baseline, evaluation, sourceCommit());
+    const improved = createImprovementBaseline(baseline, evaluation);
     writeBaselineAtomic(resolve(ROOT, BASELINE_PATH), improved);
     console.log(`Theme Doctor baseline updated with verified improvements: ${BASELINE_PATH}`);
     process.exit(0);
@@ -330,7 +332,7 @@ if (JSON_MODE) {
   console.log(`  Observed: ${observed.pass} pass, ${observed.warn} warn, ${observed.fail} fail (${results.length} checks)`);
   console.log(`  Gate: ${gateSummary.verdict} — ${gateSummary.knownDebt} exact known debt, ${gateSummary.regressions} regression, ${gateSummary.improvements} improvement, ${gateSummary.baselineErrors} baseline error`);
   if (baselineProvenance) {
-    console.log(`  Baseline provenance: ${baselineProvenance.sourceCommit} (${baselineProvenance.authorityKind})`);
+    console.log(`  Baseline provenance: ${baselineProvenance.sourceCommit} (${baselineProvenance.authorityKind}, current=${baselineProvenance.currentBinding})`);
   }
   console.log('');
 }

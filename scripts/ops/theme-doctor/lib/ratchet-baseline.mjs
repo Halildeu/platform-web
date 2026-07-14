@@ -285,7 +285,7 @@ export function createBaselineCandidate(results, sourceCommit, {
   });
 }
 
-export function createImprovementBaseline(baseline, evaluation, sourceCommit) {
+export function createImprovementBaseline(baseline, evaluation) {
   const normalized = normalizeBaseline(baseline);
   if (evaluation.regressions.length || evaluation.baselineErrors.length) {
     throw new BaselineError('refusing baseline update while regressions or baseline errors exist');
@@ -310,7 +310,7 @@ export function createImprovementBaseline(baseline, evaluation, sourceCommit) {
   if (Object.keys(checks).length === 0) {
     throw new BaselineError('all debt cleared; remove the baseline file and --baseline gate explicitly');
   }
-  return normalizeBaseline({ ...normalized, sourceCommit, checks: stableObject(Object.entries(checks)) });
+  return normalizeBaseline({ ...normalized, checks: stableObject(Object.entries(checks)) });
 }
 
 export function writeBaselineAtomic(path, baseline) {

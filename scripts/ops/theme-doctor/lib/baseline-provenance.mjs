@@ -39,7 +39,7 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-/** Bind every committed baseline entry to a result recomputed from sourceCommit. */
+/** Bind every committed baseline entry to a result measured from a concrete tree. */
 export function assertBaselineMatchesMeasuredTree(candidateValue, measuredResults) {
   const candidate = normalizeBaseline(candidateValue);
   const byId = new Map();
@@ -49,16 +49,16 @@ export function assertBaselineMatchesMeasuredTree(candidateValue, measuredResult
   }
 
   for (const [id, check] of Object.entries(candidate.checks)) {
-    const measured = checkFromResult(byId.get(id), `sourceCommit check ${id}`);
+    const measured = checkFromResult(byId.get(id), `measured tree check ${id}`);
     if (!sameJson(check, measured)) {
-      fail(`check ${id} does not exactly match the measurement recomputed from sourceCommit`);
+      fail(`check ${id} does not exactly match the measured tree`);
     }
   }
 
   for (const id of BASELINED_CHECK_IDS) {
     const result = byId.get(id);
     if (result?.status === 'fail' && !candidate.checks[id]) {
-      fail(`sourceCommit has unrecorded failing reviewed check ${id}`);
+      fail(`measured tree has unrecorded failing reviewed check ${id}`);
     }
   }
   return candidate;
@@ -129,18 +129,30 @@ export function assertBaselineMonotonic(candidateValue, authorityValue) {
 export function verifyBaselineProvenance(candidateValue, {
   headCommit,
   isAncestor,
-  measureCommit,
+  currentResults,
   authoritativeBaseline,
+  requireCurrentExact = true,
 }) {
   const candidate = normalizeBaseline(candidateValue);
   if (!SHA_RE.test(headCommit)) fail('HEAD must resolve to a full lowercase Git commit SHA');
   if (!isAncestor(candidate.sourceCommit, headCommit)) {
     fail(`sourceCommit ${candidate.sourceCommit} is not a real ancestor of HEAD ${headCommit}`);
   }
-  const sourceResults = measureCommit(candidate.sourceCommit);
-  assertBaselineMatchesMeasuredTree(candidate, sourceResults);
-  if (authoritativeBaseline) assertBaselineMonotonic(candidate, authoritativeBaseline);
-  return candidate;
+  if (authoritativeBaseline) {
+    const authority = normalizeBaseline(authoritativeBaseline);
+    if (candidate.sourceCommit !== authority.sourceCommit) {
+      fail(`candidate rotates enduring sourceCommit authority from ${authority.sourceCommit} to ${candidate.sourceCommit}`);
+    }
+    assertBaselineMonotonic(candidate, authority);
+  }
+  let currentBinding = 'exact';
+  try {
+    assertBaselineMatchesMeasuredTree(candidate, currentResults);
+  } catch (error) {
+    if (requireCurrentExact) throw error;
+    currentBinding = 'mismatch-gate-already-rejected';
+  }
+  return { candidate, currentBinding };
 }
 
 function resolveCommit(repoRoot, value, label) {
@@ -202,8 +214,10 @@ function baselineAtCommit(repoRoot, commit) {
 export function verifyRepositoryBaselineProvenance(candidateValue, {
   repoRoot,
   scannerPath,
+  currentResults,
   authoritativeBaseCommit,
   requireAuthoritativeBase = false,
+  requireCurrentExact = true,
 }) {
   const headRun = run('git', ['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: repoRoot });
   if (headRun.status !== 0) fail('cannot resolve repository HEAD');
@@ -227,20 +241,33 @@ export function verifyRepositoryBaselineProvenance(candidateValue, {
       fail(`authoritative base ${base} is not the exact merge-base ancestor of HEAD ${headCommit}`);
     }
     authority = baselineAtCommit(repoRoot, base);
-    if (authority) authorityKind = 'committed-merge-base-baseline';
-    else {
-      authority = measuredAuthorityBaseline(measureCommit(base), base);
+    const baseResults = measureCommit(base);
+    if (authority) {
+      resolveCommit(repoRoot, authority.sourceCommit, 'authoritative sourceCommit');
+      if (!isGitAncestor(repoRoot, authority.sourceCommit, base)) {
+        fail(`authoritative sourceCommit ${authority.sourceCommit} is not an ancestor of merge-base ${base}`);
+      }
+      assertBaselineMatchesMeasuredTree(authority, baseResults);
+      authorityKind = 'verified-merge-base-baseline';
+    } else {
+      authority = measuredAuthorityBaseline(baseResults, base);
       authorityKind = 'measured-merge-base-seed';
     }
   } else if (requireAuthoritativeBase) {
     fail('CI requires --authoritative-baseline-ref with the explicit merge-base SHA');
   }
 
-  verifyBaselineProvenance(candidate, {
+  const verified = verifyBaselineProvenance(candidate, {
     headCommit,
     isAncestor: (ancestor, descendant) => isGitAncestor(repoRoot, ancestor, descendant),
-    measureCommit,
+    currentResults,
     authoritativeBaseline: authority,
+    requireCurrentExact,
   });
-  return { sourceCommit: candidate.sourceCommit, headCommit, authorityKind };
+  return {
+    sourceCommit: candidate.sourceCommit,
+    headCommit,
+    authorityKind,
+    currentBinding: verified.currentBinding,
+  };
 }

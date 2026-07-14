@@ -154,8 +154,9 @@ test('improvement-only update is deterministic and rejects regressions', () => {
   const base = baselineFor(original);
   const improvedResult = check('color-leaks', 'fail', [{ key: 'a', count: 1 }]);
   const evaluation = evaluateRatchet([improvedResult], base);
-  const improved = createImprovementBaseline(base, evaluation, 'b'.repeat(40));
+  const improved = createImprovementBaseline(base, evaluation);
   assert.equal(improved.checks['color-leaks'].dimensions.debt.value, 1);
+  assert.equal(improved.sourceCommit, base.sourceCommit);
 
   const dir = mkdtempSync(join(tmpdir(), 'theme-doctor-'));
   try {
@@ -167,7 +168,7 @@ test('improvement-only update is deterministic and rejects regressions', () => {
   }
 
   const regression = evaluateRatchet([check('color-leaks', 'fail', [{ key: 'a', count: 4 }])], base);
-  assert.throws(() => createImprovementBaseline(base, regression, 'b'.repeat(40)), BaselineError);
+  assert.throws(() => createImprovementBaseline(base, regression), BaselineError);
 });
 
 test('provenance rejects a hash-shaped sourceCommit that is not a real HEAD ancestor', () => {
@@ -175,16 +176,16 @@ test('provenance rejects a hash-shaped sourceCommit that is not a real HEAD ance
   assert.throws(() => verifyBaselineProvenance(candidate, {
     headCommit: 'b'.repeat(40),
     isAncestor: () => false,
-    measureCommit: () => { throw new Error('must not measure a fake commit'); },
+    currentResults: [check('color-leaks')],
   }), /not a real ancestor/);
 });
 
-test('provenance rejects caller-authored debt that does not match sourceCommit measurement', () => {
+test('provenance rejects caller-authored debt that does not match current HEAD measurement', () => {
   const candidate = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 3 }]));
   assert.throws(() => verifyBaselineProvenance(candidate, {
     headCommit: 'b'.repeat(40),
     isAncestor: () => true,
-    measureCommit: () => [check('color-leaks', 'fail', [{ key: 'a', count: 2 }])],
+    currentResults: [check('color-leaks', 'fail', [{ key: 'a', count: 2 }])],
   }), /does not exactly match/);
 });
 
@@ -194,9 +195,47 @@ test('authoritative baseline rejects growth even when candidate matches its own 
   assert.throws(() => verifyBaselineProvenance(candidate, {
     headCommit: 'b'.repeat(40),
     isAncestor: () => true,
-    measureCommit: () => [check('color-leaks', 'fail', [{ key: 'a', count: 3 }])],
+    currentResults: [check('color-leaks', 'fail', [{ key: 'a', count: 3 }])],
     authoritativeBaseline: authority,
   }), /grows .* from 2 to 3/);
+});
+
+test('provenance keeps enduring authority while accepting a current strict debt subset', () => {
+  const authority = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 2 }]));
+  const candidate = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 1 }]));
+  const verified = verifyBaselineProvenance(candidate, {
+    headCommit: 'b'.repeat(40),
+    isAncestor: () => true,
+    currentResults: [check('color-leaks', 'fail', [{ key: 'a', count: 1 }])],
+    authoritativeBaseline: authority,
+  });
+  assert.equal(verified.currentBinding, 'exact');
+  assert.equal(verified.candidate.sourceCommit, authority.sourceCommit);
+
+  const rotated = { ...candidate, sourceCommit: 'c'.repeat(40) };
+  assert.throws(() => verifyBaselineProvenance(rotated, {
+    headCommit: 'b'.repeat(40),
+    isAncestor: () => true,
+    currentResults: [check('color-leaks', 'fail', [{ key: 'a', count: 1 }])],
+    authoritativeBaseline: authority,
+  }), /rotates enduring sourceCommit/);
+});
+
+test('an uncommitted improvement preserves baseline-stale semantics until baseline refresh', () => {
+  const baseline = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 2 }]));
+  const current = check('color-leaks', 'fail', [{ key: 'a', count: 1 }]);
+  const evaluation = evaluateRatchet([current], baseline);
+  assert.equal(evaluation.exitCode, 2);
+  assert.equal(evaluation.verdict, 'baseline-stale');
+
+  const provenance = verifyBaselineProvenance(baseline, {
+    headCommit: 'b'.repeat(40),
+    isAncestor: () => true,
+    currentResults: [current],
+    authoritativeBaseline: baseline,
+    requireCurrentExact: false,
+  });
+  assert.equal(provenance.currentBinding, 'mismatch-gate-already-rejected');
 });
 
 test('authoritative baseline accepts an equal baseline or strict debt subset only', () => {
