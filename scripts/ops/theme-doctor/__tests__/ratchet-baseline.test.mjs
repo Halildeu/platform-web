@@ -12,6 +12,10 @@ import {
   normalizeBaseline,
   writeBaselineAtomic,
 } from '../lib/ratchet-baseline.mjs';
+import {
+  assertBaselineMonotonic,
+  verifyBaselineProvenance,
+} from '../lib/baseline-provenance.mjs';
 
 const SHA = 'a'.repeat(40);
 
@@ -164,4 +168,46 @@ test('improvement-only update is deterministic and rejects regressions', () => {
 
   const regression = evaluateRatchet([check('color-leaks', 'fail', [{ key: 'a', count: 4 }])], base);
   assert.throws(() => createImprovementBaseline(base, regression, 'b'.repeat(40)), BaselineError);
+});
+
+test('provenance rejects a hash-shaped sourceCommit that is not a real HEAD ancestor', () => {
+  const candidate = baselineFor(check('color-leaks'));
+  assert.throws(() => verifyBaselineProvenance(candidate, {
+    headCommit: 'b'.repeat(40),
+    isAncestor: () => false,
+    measureCommit: () => { throw new Error('must not measure a fake commit'); },
+  }), /not a real ancestor/);
+});
+
+test('provenance rejects caller-authored debt that does not match sourceCommit measurement', () => {
+  const candidate = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 3 }]));
+  assert.throws(() => verifyBaselineProvenance(candidate, {
+    headCommit: 'b'.repeat(40),
+    isAncestor: () => true,
+    measureCommit: () => [check('color-leaks', 'fail', [{ key: 'a', count: 2 }])],
+  }), /does not exactly match/);
+});
+
+test('authoritative baseline rejects growth even when candidate matches its own sourceCommit', () => {
+  const authority = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 2 }]));
+  const candidate = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 3 }]));
+  assert.throws(() => verifyBaselineProvenance(candidate, {
+    headCommit: 'b'.repeat(40),
+    isAncestor: () => true,
+    measureCommit: () => [check('color-leaks', 'fail', [{ key: 'a', count: 3 }])],
+    authoritativeBaseline: authority,
+  }), /grows .* from 2 to 3/);
+});
+
+test('authoritative baseline accepts an equal baseline or strict debt subset only', () => {
+  const authority = baselineFor(check('color-leaks', 'fail', [
+    { key: 'a', count: 2 },
+    { key: 'b', count: 1 },
+  ]));
+  assert.doesNotThrow(() => assertBaselineMonotonic(authority, authority));
+  const improved = baselineFor(check('color-leaks', 'fail', [{ key: 'a', count: 1 }]));
+  assert.doesNotThrow(() => assertBaselineMonotonic(improved, authority));
+
+  const swapped = baselineFor(check('color-leaks', 'fail', [{ key: 'c', count: 1 }]));
+  assert.throws(() => assertBaselineMonotonic(swapped, authority), /swaps\/adds/);
 });

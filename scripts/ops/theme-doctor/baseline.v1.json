@@ -2,23 +2,23 @@
   "$schema": "./baseline.schema.json",
   "schemaVersion": 1,
   "tool": "theme-doctor",
-  "sourceCommit": "695c1868882bbf3ca235e4f84e408866175cd6f4",
+  "sourceCommit": "da548d7bd356990bf78d6e3a23d5a4c6d3be85b6",
   "checks": {
     "color-leaks": {
-      "measurementVersion": 1,
+      "measurementVersion": 2,
       "observedStatus": "fail",
       "dimensions": {
         "violations": {
           "direction": "lower-is-better",
-          "value": 30,
+          "value": 50,
           "items": [
             {
               "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(148,163,184,0.5)\"]",
-              "count": 1
+              "count": 5
             },
             {
               "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(239,68,68,0.4)\"]",
-              "count": 1
+              "count": 2
             },
             {
               "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(245,158,11,0.45)\"]",
@@ -66,15 +66,15 @@
             },
             {
               "key": "[\"packages/x-charts/src/GaugeChart.tsx\",\"inline-hex\",\"color:'#999'\"]",
-              "count": 1
+              "count": 2
             },
             {
               "key": "[\"packages/x-charts/src/GeoMap.tsx\",\"inline-hex\",\"bordercolor:'#000'\"]",
-              "count": 1
+              "count": 4
             },
             {
               "key": "[\"packages/x-charts/src/GeoMap.tsx\",\"inline-hex\",\"bordercolor:'#cbd5e1'\"]",
-              "count": 1
+              "count": 2
             },
             {
               "key": "[\"packages/x-charts/src/HeatmapChart.tsx\",\"inline-hex\",\"bordercolor:'#333'\"]",
@@ -82,7 +82,7 @@
             },
             {
               "key": "[\"packages/x-charts/src/RadarChart.tsx\",\"inline-rgb\",\"color:'rgba(0,0,0,0.1)\"]",
-              "count": 1
+              "count": 2
             },
             {
               "key": "[\"packages/x-charts/src/TreemapChart.tsx\",\"inline-hex\",\"bordercolor:'#333'\"]",
@@ -90,11 +90,11 @@
             },
             {
               "key": "[\"packages/x-charts/src/TreemapChart.tsx\",\"inline-hex\",\"bordercolor:'#fff'\"]",
-              "count": 1
+              "count": 3
             },
             {
               "key": "[\"packages/x-charts/src/TreemapChart.tsx\",\"inline-hex\",\"color:'#333'\"]",
-              "count": 1
+              "count": 2
             },
             {
               "key": "[\"packages/x-charts/src/WaterfallChart.tsx\",\"inline-hex\",\"color:'#94a3b8'\"]",
@@ -102,7 +102,7 @@
             },
             {
               "key": "[\"packages/x-charts/src/collaboration/chart-export.ts\",\"inline-hex\",\"backgroundcolor:'#ffffff'\"]",
-              "count": 1
+              "count": 2
             },
             {
               "key": "[\"packages/x-charts/src/states/ChartErrorState.tsx\",\"inline-hex\",\"color:\\\"#fff\\\"\"]",
@@ -130,7 +130,7 @@
             },
             {
               "key": "[\"packages/x-charts/src/theme/decal-patterns.ts\",\"inline-rgb\",\"color:'rgba(0,0,0,0.15)\"]",
-              "count": 1
+              "count": 6
             }
           ]
         }

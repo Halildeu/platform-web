@@ -7,6 +7,57 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execSync } from 'node:child_process';
 
+const COLOR_LEAK_PATTERNS = Object.freeze([
+  /* 1. Inline style hex: style={{ color: '#fff' }} or backgroundColor: '#000' */
+  { name: 'inline-hex', re: /(?:color|background|backgroundColor|borderColor|fill|stroke|boxShadow)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
+  /* 2. SVG attribute hex: fill="#fff", stroke="#000" (not var()) */
+  { name: 'svg-hex', re: /\b(?:fill|stroke|stop-color|flood-color)="(?!var\()#[0-9a-fA-F]{3,8}"/g },
+  /* 3. rgb/rgba in inline style */
+  { name: 'inline-rgb', re: /(?:color|background|backgroundColor|borderColor|border|outline)\s*[:=]\s*[`'"](?:rgba?\([^)]+\))/g },
+  /* 4. JS variable with hardcoded hex: color: '#ffffff', const c = '#ff0' */
+  { name: 'js-hex', re: /\b(?:color|background|bg|fill|stroke)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
+]);
+
+/**
+ * Return the canonical, occurrence-sensitive fingerprint for one source file.
+ * Overlapping detector patterns still count a source span once, while repeated
+ * occurrences of the same file + detector + canonical value remain visible.
+ */
+export function collectColorLeakFileOccurrences(content, relativePath) {
+  const fileMatches = new Map();
+  const occupiedSpans = [];
+  for (const { name, re } of COLOR_LEAK_PATTERNS) {
+    let match;
+    /* Skip var(--token, #fallback) pattern — fallback hex inside var() is acceptable */
+    while ((match = re.exec(content)) !== null) {
+      const raw = match[0];
+      if (raw.includes('var(')) continue;
+      const start = match.index;
+      const end = start + raw.length;
+      if (occupiedSpans.some((span) => start < span.end && end > span.start)) continue;
+      occupiedSpans.push({ start, end });
+      const display = raw.trim().replace(/\s+/g, ' ');
+      const canonical = display.replace(/\s+/g, '').toLowerCase();
+      const dedupeKey = `${name}\0${canonical}`;
+      const existing = fileMatches.get(dedupeKey);
+      if (existing) existing.count += 1;
+      else fileMatches.set(dedupeKey, { name, canonical, display, count: 1 });
+    }
+    re.lastIndex = 0;
+  }
+
+  const values = [...fileMatches.values()]
+    .sort((a, b) => `${a.name}:${a.canonical}`.localeCompare(`${b.name}:${b.canonical}`));
+  return {
+    count: values.reduce((sum, item) => sum + item.count, 0),
+    samples: values.slice(0, 4).map(({ display }) => display),
+    fingerprintItems: values.map(({ name, canonical, count }) => ({
+      key: JSON.stringify([relativePath, name, canonical]),
+      count,
+    })),
+  };
+}
+
 export function register(ctx) {
   const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
@@ -183,17 +234,6 @@ check('color-leaks', 'Hardcoded color values in production code (all patterns)',
   const internalPaths = ['design-lab', 'demos/', 'playground/', 'showcase/', '__stories__'];
   const violations = [];
   const fingerprintItems = [];
-  const patterns = [
-    /* 1. Inline style hex: style={{ color: '#fff' }} or backgroundColor: '#000' */
-    { name: 'inline-hex', re: /(?:color|background|backgroundColor|borderColor|fill|stroke|boxShadow)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
-    /* 2. SVG attribute hex: fill="#fff", stroke="#000" (not var()) */
-    { name: 'svg-hex', re: /\b(?:fill|stroke|stop-color|flood-color)="(?!var\()#[0-9a-fA-F]{3,8}"/g },
-    /* 3. rgb/rgba in inline style */
-    { name: 'inline-rgb', re: /(?:color|background|backgroundColor|borderColor|border|outline)\s*[:=]\s*[`'"](?:rgba?\([^)]+\))/g },
-    /* 4. JS variable with hardcoded hex: color: '#ffffff', const c = '#ff0' */
-    { name: 'js-hex', re: /\b(?:color|background|bg|fill|stroke)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
-  ];
-
   for (const dir of scanDirs) {
     const tsxFiles = [...walkDir(dir, '.tsx'), ...walkDir(dir, '.ts')];
     for (const file of tsxFiles) {
@@ -202,46 +242,24 @@ check('color-leaks', 'Hardcoded color values in production code (all patterns)',
       /* Color pickers naturally use dynamic rgba — skip */
       if (rel.includes('ColorPicker') || rel.includes('color-picker')) continue;
       const content = readSafe(file);
-      const fileMatches = new Map();
-      const occupiedSpans = [];
-      for (const { name, re } of patterns) {
-        let match;
-        /* Skip var(--token, #fallback) pattern — fallback hex inside var() is acceptable */
-        while ((match = re.exec(content)) !== null) {
-          const raw = match[0];
-          if (raw.includes('var(')) continue;
-          const start = match.index;
-          const end = start + raw.length;
-          if (occupiedSpans.some((span) => start < span.end && end > span.start)) continue;
-          occupiedSpans.push({ start, end });
-          const display = raw.trim().replace(/\s+/g, ' ');
-          const canonical = display.replace(/\s+/g, '').toLowerCase();
-          const dedupeKey = `${name}\0${canonical}`;
-          if (!fileMatches.has(dedupeKey)) fileMatches.set(dedupeKey, { name, canonical, display });
-        }
-        re.lastIndex = 0;
-      }
-      if (fileMatches.size > 0) {
-        const values = [...fileMatches.values()]
-          .sort((a, b) => `${a.name}:${a.canonical}`.localeCompare(`${b.name}:${b.canonical}`));
-        violations.push({ file: rel, count: values.length, samples: values.slice(0, 4).map(({ display }) => display) });
-        for (const { name, canonical } of values) {
-          fingerprintItems.push({ key: JSON.stringify([rel, name, canonical]), count: 1 });
-        }
+      const measured = collectColorLeakFileOccurrences(content, rel);
+      if (measured.count > 0) {
+        violations.push({ file: rel, count: measured.count, samples: measured.samples });
+        fingerprintItems.push(...measured.fingerprintItems);
       }
     }
   }
 
   const ratchet = {
-    measurementVersion: 1,
+    measurementVersion: 2,
     dimensions: {
       violations: {
         direction: 'lower-is-better',
-        value: fingerprintItems.length,
+        value: fingerprintItems.reduce((sum, item) => sum + item.count, 0),
         items: fingerprintItems,
       },
     },
-    context: { semantics: 'unique whitespace-insensitive lowercase match per file and rule' },
+    context: { semantics: 'occurrence count per whitespace-insensitive lowercase match, file, and rule' },
   };
   if (violations.length === 0) return { status: 'pass', message: 'No hardcoded color values in production code (hex, rgb, SVG, JS vars)', ratchet };
   const total = violations.reduce((s, v) => s + v.count, 0);

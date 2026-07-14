@@ -26,6 +26,7 @@
  *
  * Usage:
  *   node scripts/ops/theme-doctor.mjs [--json] [--fix-hint] [--baseline path] [--strict-zero]
+ *     [--authoritative-baseline-ref <full merge-base SHA>]
  *
  * Exit: 0 = gate accepted, 1 = regression/strict failure, 2 = stale or invalid baseline
  */
@@ -53,15 +54,19 @@ import {
 } from './theme-doctor/lib/css-layers.mjs';
 import { normalizeCheckResult } from './theme-doctor/lib/result-model.mjs';
 import {
+  BASELINED_CHECK_IDS,
   createBaselineCandidate,
   createImprovementBaseline,
   evaluateRatchet,
   loadBaseline,
   writeBaselineAtomic,
 } from './theme-doctor/lib/ratchet-baseline.mjs';
+import { verifyRepositoryBaselineProvenance } from './theme-doctor/lib/baseline-provenance.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..', '..');
+const ROOT = process.env.THEME_DOCTOR_SCAN_ROOT
+  ? resolve(process.env.THEME_DOCTOR_SCAN_ROOT)
+  : join(__dirname, '..', '..');
 const DS_SRC = join(ROOT, 'packages', 'design-system', 'src');
 const SHELL_STYLES = join(ROOT, 'apps', 'mfe-shell', 'src', 'styles');
 const SHELL_INDEX_CSS = join(ROOT, 'apps', 'mfe-shell', 'src', 'index.css');
@@ -80,11 +85,18 @@ const FIX_HINT = flags.has('--fix-hint');
 const STRICT_ZERO = flags.has('--strict-zero');
 const PRINT_BASELINE_CANDIDATE = flags.has('--print-baseline-candidate');
 const UPDATE_BASELINE_IMPROVEMENTS = flags.has('--update-baseline-improvements');
+const RATCHET_MEASUREMENT_ONLY = flags.has('--ratchet-measurement-only');
 const baselineFlagIndex = argv.indexOf('--baseline');
 const BASELINE_PATH = baselineFlagIndex >= 0 ? argv[baselineFlagIndex + 1] : undefined;
+const authoritativeFlagIndex = argv.indexOf('--authoritative-baseline-ref');
+const AUTHORITATIVE_BASE_COMMIT = authoritativeFlagIndex >= 0 ? argv[authoritativeFlagIndex + 1] : undefined;
 
 if (baselineFlagIndex >= 0 && (!BASELINE_PATH || BASELINE_PATH.startsWith('--'))) {
   console.error('Theme Doctor: --baseline requires a path');
+  process.exit(2);
+}
+if (authoritativeFlagIndex >= 0 && (!AUTHORITATIVE_BASE_COMMIT || AUTHORITATIVE_BASE_COMMIT.startsWith('--'))) {
+  console.error('Theme Doctor: --authoritative-baseline-ref requires a full Git SHA');
   process.exit(2);
 }
 if (PRINT_BASELINE_CANDIDATE && UPDATE_BASELINE_IMPROVEMENTS) {
@@ -105,6 +117,7 @@ function check(id, label, fn) {
     throw new Error(`Duplicate Theme Doctor check id: ${id}`);
   }
   checkIds.add(id);
+  if (RATCHET_MEASUREMENT_ONLY && !BASELINED_CHECK_IDS.includes(id)) return;
   try {
     results.push(normalizeCheckResult({ id, label, result: fn() }));
   } catch (err) {
@@ -218,8 +231,17 @@ function sourceCommit() {
 let baseline;
 let evaluation;
 let fatalBaselineError;
+let baselineProvenance;
 try {
   baseline = BASELINE_PATH ? loadBaseline(resolve(ROOT, BASELINE_PATH)) : undefined;
+  if (baseline && !RATCHET_MEASUREMENT_ONLY) {
+    baselineProvenance = verifyRepositoryBaselineProvenance(baseline, {
+      repoRoot: ROOT,
+      scannerPath: fileURLToPath(import.meta.url),
+      authoritativeBaseCommit: AUTHORITATIVE_BASE_COMMIT,
+      requireAuthoritativeBase: Boolean(process.env.CI),
+    });
+  }
   evaluation = evaluateRatchet(results, baseline, { strictZero: STRICT_ZERO });
 } catch (error) {
   fatalBaselineError = error;
@@ -275,6 +297,7 @@ if (JSON_MODE) {
     version: '8.0.0',
     timestamp: new Date().toISOString(),
     summary: { ...observed, observed, gate: gateSummary },
+    baselineProvenance,
     checks: evaluation.checks,
   };
   console.log(JSON.stringify(report, null, 2));
@@ -306,6 +329,9 @@ if (JSON_MODE) {
   console.log('─'.repeat(62));
   console.log(`  Observed: ${observed.pass} pass, ${observed.warn} warn, ${observed.fail} fail (${results.length} checks)`);
   console.log(`  Gate: ${gateSummary.verdict} — ${gateSummary.knownDebt} exact known debt, ${gateSummary.regressions} regression, ${gateSummary.improvements} improvement, ${gateSummary.baselineErrors} baseline error`);
+  if (baselineProvenance) {
+    console.log(`  Baseline provenance: ${baselineProvenance.sourceCommit} (${baselineProvenance.authorityKind})`);
+  }
   console.log('');
 }
 
