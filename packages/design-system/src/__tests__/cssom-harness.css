@@ -9,13 +9,15 @@
  * Path notes:
  *   Runtime theme artifacts are generated into `apps/mfe-shell/src/styles/`.
  *   Tests load them from the shell directly so we don't duplicate generated
- *   output across packages. Component-scoped tokens use their own exact-owned
- *   generated file while the legacy theme.css ownership split is completed.
+ *   output across packages. Every generator-owned artifact is followed by its
+ *   disjoint curated extension before component-scoped tokens are loaded.
  */
 
 @import 'tailwindcss';
 @import '../../../../apps/mfe-shell/src/styles/generated-theme-inline.css';
+@import '../../../../apps/mfe-shell/src/styles/theme-inline.extensions.css';
 @import '../../../../apps/mfe-shell/src/styles/theme.css';
+@import '../../../../apps/mfe-shell/src/styles/theme.extensions.css';
 @import '../../../../apps/mfe-shell/src/styles/component-theme.generated.css';
 
 @source "../../../design-system/src/**/*.{ts,tsx}";

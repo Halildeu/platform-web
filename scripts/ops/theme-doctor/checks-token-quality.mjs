@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, srgbToHex, parseCssVarsFlat, walkDir,
+    extractRootBodies,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -16,7 +17,7 @@ export function register(ctx) {
 
 // 44. A11y Contrast Ratio — OKLCH lightness-based WCAG contrast check
 check('a11y-contrast-ratio', 'WCAG contrast ratio for text/surface token pairs', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
   /* Extract OKLCH lightness for key tokens */
   function getL(name) {
     const re = new RegExp(`--${name}:\\s*oklch\\((\\d+(?:\\.\\d+)?)%`);
@@ -164,8 +165,8 @@ check('z-index-chaos', 'Z-index values: scattered arbitrary vs systematic scale'
 
 // 48. Unused Tokens — defined in theme.css but never referenced in components
 check('unused-tokens', 'Tokens defined in theme.css but never referenced in any component', () => {
-  const themeCss = readSafe(THEME_CSS);
-  const rootBlock = themeCss.split('[data-mode=')[0] || '';
+  const themeCss = readThemeCss();
+  const rootBlock = extractRootBodies(themeCss).join('\n');
   const definedTokens = new Set();
   for (const m of rootBlock.matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) {
     if (!m[1].startsWith('color-')) definedTokens.add(m[1]);
@@ -205,8 +206,8 @@ check('unused-tokens', 'Tokens defined in theme.css but never referenced in any 
 
 // 49. Token Naming Convention — mixed naming patterns
 check('token-naming-convention', 'Token naming consistency (semantic vs alias vs shorthand)', () => {
-  const themeCss = readSafe(THEME_CSS);
-  const rootBlock = themeCss.split('[data-mode=')[0] || '';
+  const themeCss = readThemeCss();
+  const rootBlock = extractRootBodies(themeCss).join('\n');
   const tokens = [];
   for (const m of rootBlock.matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) {
     if (!m[1].startsWith('color-') && !m[1].startsWith('font-')) tokens.push(m[1]);
@@ -248,8 +249,8 @@ check('token-naming-convention', 'Token naming consistency (semantic vs alias vs
 
 // 50. Near-Duplicate Tokens — tokens with very similar OKLCH values
 check('near-duplicate-tokens', 'Tokens with near-identical color values (potential redundancy)', () => {
-  const themeCss = readSafe(THEME_CSS);
-  const rootBlock = themeCss.split('[data-mode=')[0] || '';
+  const themeCss = readThemeCss();
+  const rootBlock = extractRootBodies(themeCss).join('\n');
   const colorTokens = [];
   for (const m of rootBlock.matchAll(/--((?:surface|text|border|action|state|accent)[a-z0-9-]*)\s*:\s*oklch\(([^)]+)\)/g)) {
     const parts = m[2].trim().split(/\s+/);
@@ -392,7 +393,7 @@ check('opacity-hardcodes', 'Arbitrary opacity values vs consistent scale', () =>
 
 // 54. CSS Variable Cycles — circular var() references
 check('css-var-cycles', 'Circular CSS variable references (var cycle detection)', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
   const graph = new Map(); /* token → [dependencies] */
   for (const m of themeCss.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
     const name = m[1];

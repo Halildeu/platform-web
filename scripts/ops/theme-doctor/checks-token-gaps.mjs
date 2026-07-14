@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
+    extractRootBodies,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -17,8 +18,8 @@ export function register(ctx) {
 // 60. Token Naming Consistency — error vs danger state naming
 check('token-naming-consistency', 'State token naming consistency (error vs danger)', () => {
   const tokensCss = readSafe(TOKENS_CSS);
-  const themeCss = readSafe(THEME_CSS);
-  const themeInline = readSafe(THEME_INLINE_CSS);
+  const themeCss = readThemeCss();
+  const themeInline = readThemeInlineCss();
 
   const tokensError = [...tokensCss.matchAll(/--(state-error[\w-]*)/g)].map(m => m[1]);
   const tokensDanger = [...tokensCss.matchAll(/--(state-danger[\w-]*)/g)].map(m => m[1]);
@@ -71,8 +72,8 @@ check('token-naming-consistency', 'State token naming consistency (error vs dang
 
 // 61. Theme Inline Completeness — component-used tokens missing from @theme inline
 check('theme-inline-completeness', 'Component-used tokens present in @theme inline for TW4 utility generation', () => {
-  const themeCss = readSafe(THEME_CSS);
-  const themeInline = readSafe(THEME_INLINE_CSS);
+  const themeCss = readThemeCss();
+  const themeInline = readThemeInlineCss();
   if (!themeInline) return { status: 'warn', message: 'generated-theme-inline.css not found' };
 
   /* Extract all tokens covered by @theme inline:
@@ -89,7 +90,7 @@ check('theme-inline-completeness', 'Component-used tokens present in @theme inli
 
   /* Extract all --X definitions from theme.css :root */
   const themeRootDefs = new Set();
-  const rootBlock = themeCss.split('[data-mode=')[0] || '';
+  const rootBlock = extractRootBodies(themeCss).join('\n');
   for (const m of rootBlock.matchAll(/^\s+--([\w-]+)\s*:/gm)) themeRootDefs.add(m[1]);
 
   /* Scan components for TW class usage to find which tokens need @theme inline mapping */

@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import './styles/generated-theme-inline.css';
+@import './styles/theme-inline.extensions.css';
 @import './styles/theme.css';
+@import './styles/theme.extensions.css';
 @import './styles/component-theme.generated.css';
 
 /* Content scanning for monorepo — TW4 native @source */

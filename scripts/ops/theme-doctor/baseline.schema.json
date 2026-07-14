@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acik.com/schemas/theme-doctor-baseline-v1.json",
+  "title": "Theme Doctor reviewed debt baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "tool", "sourceCommit", "checks"],
+  "properties": {
+    "$schema": { "const": "./baseline.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "tool": { "const": "theme-doctor" },
+    "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "checks": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/check" },
+      "propertyNames": { "enum": ["color-leaks", "palette-over-token", "preview-coverage"] }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measurementVersion", "observedStatus", "dimensions"],
+      "properties": {
+        "measurementVersion": { "type": "integer", "minimum": 1 },
+        "observedStatus": { "enum": ["pass", "warn", "fail"] },
+        "dimensions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/dimension" },
+          "propertyNames": { "pattern": "^[a-z][a-zA-Z0-9]*$" }
+        }
+      }
+    },
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["direction", "value", "items"],
+      "properties": {
+        "direction": { "const": "lower-is-better" },
+        "value": { "type": "integer", "minimum": 0 },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/item" }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "count"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "pattern": "^[^\\n\\r\\u0000]+$" },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

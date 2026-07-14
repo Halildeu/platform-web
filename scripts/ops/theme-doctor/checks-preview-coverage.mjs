@@ -25,11 +25,22 @@ check('preview-coverage', 'Component preview coverage (doc entries vs Playground
     const preview = readSafe(previewFile);
     const uiEntries = entries.filter(n => !apiItems.has(n));
     const found = uiEntries.filter(n => preview.includes(n));
-    const missing = uiEntries.filter(n => !preview.includes(n));
+    const missing = uiEntries.filter(n => !preview.includes(n)).sort((a, b) => a.localeCompare(b));
     const pct = Math.round((found.length / uiEntries.length) * 100);
-    if (pct === 100) return { status: 'pass', message: `${found.length}/${uiEntries.length} UI components covered (100%)` };
-    if (pct >= 90) return { status: 'warn', message: `${found.length}/${uiEntries.length} (${pct}%) — ${missing.length} missing`, details: missing.slice(0, 10) };
-    return { status: 'fail', message: `${found.length}/${uiEntries.length} (${pct}%) — ${missing.length} missing`, details: missing.slice(0, 10) };
+    const ratchet = {
+      measurementVersion: 1,
+      dimensions: {
+        missingUiComponents: {
+          direction: 'lower-is-better',
+          value: missing.length,
+          items: missing.map((name) => ({ key: name, count: 1 })),
+        },
+      },
+      context: { found: found.length, total: uiEntries.length, coveragePercent: pct },
+    };
+    if (pct === 100) return { status: 'pass', message: `${found.length}/${uiEntries.length} UI components covered (100%)`, ratchet };
+    if (pct >= 90) return { status: 'warn', message: `${found.length}/${uiEntries.length} (${pct}%) — ${missing.length} missing`, details: missing.slice(0, 10), ratchet };
+    return { status: 'fail', message: `${found.length}/${uiEntries.length} (${pct}%) — ${missing.length} missing`, details: missing.slice(0, 10), ratchet };
   } catch { return { status: 'warn', message: 'Could not check preview coverage' }; }
 });
 
