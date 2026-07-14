@@ -182,6 +182,7 @@ check('color-leaks', 'Hardcoded color values in production code (all patterns)',
   const scanDirs = [DS_SRC, join(ROOT, 'packages/x-form-builder/src'), join(ROOT, 'packages/x-charts/src'), join(ROOT, 'packages/x-data-grid/src'), join(ROOT, 'packages/x-editor/src'), join(ROOT, 'packages/x-kanban/src'), join(ROOT, 'packages/x-scheduler/src'), join(ROOT, 'apps/mfe-shell/src'), join(ROOT, 'apps/mfe-audit/src'), join(ROOT, 'apps/mfe-users/src'), join(ROOT, 'apps/mfe-access/src'), join(ROOT, 'apps/mfe-reporting/src'), join(ROOT, 'apps/mfe-ethic/src'), join(ROOT, 'apps/mfe-suggestions/src')];
   const internalPaths = ['design-lab', 'demos/', 'playground/', 'showcase/', '__stories__'];
   const violations = [];
+  const fingerprintItems = [];
   const patterns = [
     /* 1. Inline style hex: style={{ color: '#fff' }} or backgroundColor: '#000' */
     { name: 'inline-hex', re: /(?:color|background|backgroundColor|borderColor|fill|stroke|boxShadow)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
@@ -201,29 +202,55 @@ check('color-leaks', 'Hardcoded color values in production code (all patterns)',
       /* Color pickers naturally use dynamic rgba — skip */
       if (rel.includes('ColorPicker') || rel.includes('color-picker')) continue;
       const content = readSafe(file);
-      const fileMatches = new Set();
-      for (const { re } of patterns) {
-        const matches = content.match(re) || [];
+      const fileMatches = new Map();
+      const occupiedSpans = [];
+      for (const { name, re } of patterns) {
+        let match;
         /* Skip var(--token, #fallback) pattern — fallback hex inside var() is acceptable */
-        for (const m of matches) {
-          if (m.includes('var(')) continue;
-          fileMatches.add(m.trim().substring(0, 60));
+        while ((match = re.exec(content)) !== null) {
+          const raw = match[0];
+          if (raw.includes('var(')) continue;
+          const start = match.index;
+          const end = start + raw.length;
+          if (occupiedSpans.some((span) => start < span.end && end > span.start)) continue;
+          occupiedSpans.push({ start, end });
+          const display = raw.trim().replace(/\s+/g, ' ');
+          const canonical = display.replace(/\s+/g, '').toLowerCase();
+          const dedupeKey = `${name}\0${canonical}`;
+          if (!fileMatches.has(dedupeKey)) fileMatches.set(dedupeKey, { name, canonical, display });
         }
         re.lastIndex = 0;
       }
       if (fileMatches.size > 0) {
-        violations.push({ file: rel, count: fileMatches.size, samples: [...fileMatches].slice(0, 4) });
+        const values = [...fileMatches.values()]
+          .sort((a, b) => `${a.name}:${a.canonical}`.localeCompare(`${b.name}:${b.canonical}`));
+        violations.push({ file: rel, count: values.length, samples: values.slice(0, 4).map(({ display }) => display) });
+        for (const { name, canonical } of values) {
+          fingerprintItems.push({ key: JSON.stringify([rel, name, canonical]), count: 1 });
+        }
       }
     }
   }
 
-  if (violations.length === 0) return { status: 'pass', message: 'No hardcoded color values in production code (hex, rgb, SVG, JS vars)' };
+  const ratchet = {
+    measurementVersion: 1,
+    dimensions: {
+      violations: {
+        direction: 'lower-is-better',
+        value: fingerprintItems.length,
+        items: fingerprintItems,
+      },
+    },
+    context: { semantics: 'unique whitespace-insensitive lowercase match per file and rule' },
+  };
+  if (violations.length === 0) return { status: 'pass', message: 'No hardcoded color values in production code (hex, rgb, SVG, JS vars)', ratchet };
   const total = violations.reduce((s, v) => s + v.count, 0);
   return {
     status: total > 10 ? 'fail' : 'warn',
     message: `${total} hardcoded colors in ${violations.length} production files (inline hex, SVG hex, rgb/rgba, JS vars)`,
     details: violations.slice(0, 10),
     fix: FIX_HINT ? 'Replace with var(--token, fallback): color: "#fff" → color: "var(--text-inverse, #fff)"; fill="#000" → fill="var(--text-primary, #000)"' : undefined,
+    ratchet,
   };
 });
 

@@ -25,13 +25,13 @@
  *  16. forwardRef coverage       (interactive components)
  *
  * Usage:
- *   node scripts/ops/theme-doctor.mjs [--json] [--fix-hint]
+ *   node scripts/ops/theme-doctor.mjs [--json] [--fix-hint] [--baseline path] [--strict-zero]
  *
- * Exit: 0 = healthy, 1 = issues found
+ * Exit: 0 = gate accepted, 1 = regression/strict failure, 2 = stale or invalid baseline
  */
 
-import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
-import { join, dirname, relative } from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import { register as checks_theme_token } from './theme-doctor/checks-theme-token.mjs';
@@ -51,6 +51,14 @@ import {
   extractThemeInlineBodies,
   readCssLayers,
 } from './theme-doctor/lib/css-layers.mjs';
+import { normalizeCheckResult } from './theme-doctor/lib/result-model.mjs';
+import {
+  createBaselineCandidate,
+  createImprovementBaseline,
+  evaluateRatchet,
+  loadBaseline,
+  writeBaselineAtomic,
+} from './theme-doctor/lib/ratchet-baseline.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -65,9 +73,24 @@ const THEME_INLINE_CSS = join(SHELL_STYLES, 'generated-theme-inline.css');
 const THEME_EXTENSION_CSS = join(SHELL_STYLES, 'theme.extensions.css');
 const THEME_INLINE_EXTENSION_CSS = join(SHELL_STYLES, 'theme-inline.extensions.css');
 
-const flags = new Set(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const flags = new Set(argv);
 const JSON_MODE = flags.has('--json');
 const FIX_HINT = flags.has('--fix-hint');
+const STRICT_ZERO = flags.has('--strict-zero');
+const PRINT_BASELINE_CANDIDATE = flags.has('--print-baseline-candidate');
+const UPDATE_BASELINE_IMPROVEMENTS = flags.has('--update-baseline-improvements');
+const baselineFlagIndex = argv.indexOf('--baseline');
+const BASELINE_PATH = baselineFlagIndex >= 0 ? argv[baselineFlagIndex + 1] : undefined;
+
+if (baselineFlagIndex >= 0 && (!BASELINE_PATH || BASELINE_PATH.startsWith('--'))) {
+  console.error('Theme Doctor: --baseline requires a path');
+  process.exit(2);
+}
+if (PRINT_BASELINE_CANDIDATE && UPDATE_BASELINE_IMPROVEMENTS) {
+  console.error('Theme Doctor: candidate and update modes are mutually exclusive');
+  process.exit(2);
+}
 
 
 /* ------------------------------------------------------------------ */
@@ -75,21 +98,17 @@ const FIX_HINT = flags.has('--fix-hint');
 /* ------------------------------------------------------------------ */
 
 const results = [];
-let passCount = 0;
-let warnCount = 0;
-let failCount = 0;
+const checkIds = new Set();
 
 function check(id, label, fn) {
+  if (checkIds.has(id)) {
+    throw new Error(`Duplicate Theme Doctor check id: ${id}`);
+  }
+  checkIds.add(id);
   try {
-    const result = fn();
-    const status = result.status; // 'pass' | 'warn' | 'fail'
-    if (status === 'pass') passCount++;
-    else if (status === 'warn') warnCount++;
-    else failCount++;
-    results.push({ id, label, ...result });
+    results.push(normalizeCheckResult({ id, label, result: fn() }));
   } catch (err) {
-    failCount++;
-    results.push({ id, label, status: 'fail', message: `Exception: ${err.message}` });
+    results.push(normalizeCheckResult({ id, label, error: err }));
   }
 }
 
@@ -185,23 +204,88 @@ checks_preview_coverage(ctx);
 /*  Report                                                             */
 /* ------------------------------------------------------------------ */
 
+const observed = {
+  pass: results.filter(({ status }) => status === 'pass').length,
+  warn: results.filter(({ status }) => status === 'warn').length,
+  fail: results.filter(({ status }) => status === 'fail').length,
+  total: results.length,
+};
+
+function sourceCommit() {
+  return execSync('git rev-parse HEAD', { cwd: ROOT, encoding: 'utf8' }).trim();
+}
+
+let baseline;
+let evaluation;
+let fatalBaselineError;
+try {
+  baseline = BASELINE_PATH ? loadBaseline(resolve(ROOT, BASELINE_PATH)) : undefined;
+  evaluation = evaluateRatchet(results, baseline, { strictZero: STRICT_ZERO });
+} catch (error) {
+  fatalBaselineError = error;
+  evaluation = {
+    exitCode: 2,
+    verdict: 'baseline-invalid',
+    checks: results.map((result) => ({ ...result, gateStatus: 'baseline-error', gateReason: error.message })),
+    knownDebt: [],
+    regressions: [],
+    improvements: [],
+    baselineErrors: [{ id: 'baseline', reason: error.message }],
+  };
+}
+
+if (PRINT_BASELINE_CANDIDATE) {
+  try {
+    const candidate = createBaselineCandidate(results, sourceCommit());
+    console.log(JSON.stringify(candidate, null, 2));
+    process.exit(0);
+  } catch (error) {
+    console.error(`Theme Doctor baseline candidate refused: ${error.message}`);
+    process.exit(2);
+  }
+}
+
+if (UPDATE_BASELINE_IMPROVEMENTS) {
+  if (!BASELINE_PATH || !baseline || fatalBaselineError) {
+    console.error('Theme Doctor: --update-baseline-improvements requires a valid --baseline');
+    process.exit(2);
+  }
+  try {
+    const improved = createImprovementBaseline(baseline, evaluation, sourceCommit());
+    writeBaselineAtomic(resolve(ROOT, BASELINE_PATH), improved);
+    console.log(`Theme Doctor baseline updated with verified improvements: ${BASELINE_PATH}`);
+    process.exit(0);
+  } catch (error) {
+    console.error(`Theme Doctor baseline update refused: ${error.message}`);
+    process.exit(2);
+  }
+}
+
+const gateSummary = {
+  verdict: evaluation.verdict,
+  knownDebt: evaluation.knownDebt.length,
+  regressions: evaluation.regressions.length,
+  improvements: evaluation.improvements.length,
+  baselineErrors: evaluation.baselineErrors.length,
+};
+
 if (JSON_MODE) {
   const report = {
     tool: 'theme-doctor',
-    version: '7.1.0',
+    version: '8.0.0',
     timestamp: new Date().toISOString(),
-    summary: { pass: passCount, warn: warnCount, fail: failCount, total: results.length },
-    checks: results,
+    summary: { ...observed, observed, gate: gateSummary },
+    checks: evaluation.checks,
   };
   console.log(JSON.stringify(report, null, 2));
 } else {
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log(`║         🩺 Theme Doctor v7.1 (${results.length} checks)                ║`);
+  console.log(`║         🩺 Theme Doctor v8.0 (${results.length} checks)                ║`);
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log('');
 
-  for (const r of results) {
+  for (const r of evaluation.checks) {
     const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️ ' : '❌';
     console.log(`  ${icon} [${r.id}] ${r.label}`);
     console.log(`     ${r.message}`);
@@ -214,12 +298,15 @@ if (JSON_MODE) {
       if (items.length > 8) console.log(`       ... and ${items.length - 8} more`);
     }
     if (r.fix) console.log(`     💡 Fix: ${r.fix}`);
+    if (r.gateStatus === 'known-debt') console.log('     🧾 Gate: reviewed known debt — exact fingerprint match');
+    else if (r.gateStatus && r.gateStatus !== 'pass') console.log(`     🚧 Gate: ${r.gateStatus} — ${r.gateReason}`);
     console.log('');
   }
 
   console.log('─'.repeat(62));
-  console.log(`  Summary: ${passCount} pass, ${warnCount} warn, ${failCount} fail (${results.length} checks)`);
+  console.log(`  Observed: ${observed.pass} pass, ${observed.warn} warn, ${observed.fail} fail (${results.length} checks)`);
+  console.log(`  Gate: ${gateSummary.verdict} — ${gateSummary.knownDebt} exact known debt, ${gateSummary.regressions} regression, ${gateSummary.improvements} improvement, ${gateSummary.baselineErrors} baseline error`);
   console.log('');
 }
 
-process.exit(failCount > 0 ? 1 : 0);
+process.exit(evaluation.exitCode);

@@ -5,6 +5,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { detectTailwindBuildIntegration } from './lib/tailwind-build-integration.mjs';
 
 export function register(ctx) {
   const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
@@ -128,12 +129,31 @@ check('tw4-directives', 'No deprecated TW3 CSS directives (@apply, @screen, @var
   };
 });
 
-// 13. PostCSS config
-check('postcss-tw4', 'PostCSS uses @tailwindcss/postcss (TW4 native)', () => {
-  const config = readSafe(join(ROOT, 'postcss.config.js')) + readSafe(join(ROOT, 'postcss.config.cjs')) + readSafe(join(ROOT, 'postcss.config.mjs'));
-  if (config.includes('@tailwindcss/postcss')) return { status: 'pass', message: 'PostCSS uses @tailwindcss/postcss plugin' };
-  if (config.includes('tailwindcss')) return { status: 'warn', message: 'PostCSS uses legacy tailwindcss plugin — migrate to @tailwindcss/postcss' };
-  return { status: 'fail', message: 'No Tailwind plugin found in postcss config' };
+// 13. Tailwind build integration (Vite or PostCSS)
+check('postcss-tw4', 'Tailwind CSS v4 build plugin is imported and invoked', () => {
+  const files = [];
+  for (const ext of ['js', 'cjs', 'mjs', 'ts']) {
+    const path = join(ROOT, `postcss.config.${ext}`);
+    if (existsSync(path)) files.push({ path: relative(ROOT, path), kind: 'postcss', text: readSafe(path) });
+  }
+  const appsDir = join(ROOT, 'apps');
+  if (existsSync(appsDir)) {
+    for (const app of readdirSync(appsDir, { withFileTypes: true })) {
+      if (!app.isDirectory()) continue;
+      for (const ext of ['ts', 'js', 'mjs']) {
+        const path = join(appsDir, app.name, `vite.config.${ext}`);
+        if (existsSync(path)) files.push({ path: relative(ROOT, path), kind: 'vite', text: readSafe(path) });
+      }
+    }
+  }
+  const detection = detectTailwindBuildIntegration(files);
+  if (detection.integrated) return {
+    status: 'pass',
+    message: `Tailwind CSS v4 build plugin invoked in ${detection.evidence.length} config(s)`,
+    details: detection.evidence,
+  };
+  if (detection.legacy) return { status: 'warn', message: 'Legacy tailwindcss build plugin is invoked — migrate to @tailwindcss/vite or @tailwindcss/postcss' };
+  return { status: 'fail', message: 'No invoked @tailwindcss/vite or @tailwindcss/postcss build plugin found' };
 });
 
 /* ================================================================== */

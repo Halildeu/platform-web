@@ -1,0 +1,1230 @@
+{
+  "$schema": "./baseline.schema.json",
+  "schemaVersion": 1,
+  "tool": "theme-doctor",
+  "sourceCommit": "695c1868882bbf3ca235e4f84e408866175cd6f4",
+  "checks": {
+    "color-leaks": {
+      "measurementVersion": 1,
+      "observedStatus": "fail",
+      "dimensions": {
+        "violations": {
+          "direction": "lower-is-better",
+          "value": 30,
+          "items": [
+            {
+              "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(148,163,184,0.5)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(239,68,68,0.4)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(245,158,11,0.45)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(34,197,94,0.4)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-audit/src/app/components/DeliveryStatusPill.tsx\",\"inline-rgb\",\"border:'rgba(59,130,246,0.4)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/hr-demographic-report/utils/location-to-geomap.ts\",\"inline-hex\",\"color:'#dc2626'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/RootErrorBoundary.tsx\",\"inline-hex\",\"background:'#e5e7eb'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/RootErrorBoundary.tsx\",\"inline-hex\",\"background:'#fef2f2'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/RootErrorBoundary.tsx\",\"inline-hex\",\"background:'#fff'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/RootErrorBoundary.tsx\",\"inline-hex\",\"color:'#1f2937'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/RootErrorBoundary.tsx\",\"inline-hex\",\"color:'#b91c1c'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/Bar3DChart.tsx\",\"inline-hex\",\"color:'#ffd166'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/CalendarHeatmap.tsx\",\"inline-hex\",\"bordercolor:'#333'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/GaugeChart.tsx\",\"inline-hex\",\"color:'#999'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/GeoMap.tsx\",\"inline-hex\",\"bordercolor:'#000'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/GeoMap.tsx\",\"inline-hex\",\"bordercolor:'#cbd5e1'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/HeatmapChart.tsx\",\"inline-hex\",\"bordercolor:'#333'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/RadarChart.tsx\",\"inline-rgb\",\"color:'rgba(0,0,0,0.1)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/TreemapChart.tsx\",\"inline-hex\",\"bordercolor:'#333'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/TreemapChart.tsx\",\"inline-hex\",\"bordercolor:'#fff'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/TreemapChart.tsx\",\"inline-hex\",\"color:'#333'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/WaterfallChart.tsx\",\"inline-hex\",\"color:'#94a3b8'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/collaboration/chart-export.ts\",\"inline-hex\",\"backgroundcolor:'#ffffff'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/states/ChartErrorState.tsx\",\"inline-hex\",\"color:\\\"#fff\\\"\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/theme/DesignLabEChartsPrintTheme.ts\",\"inline-hex\",\"backgroundcolor:'#ffffff'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/theme/DesignLabEChartsPrintTheme.ts\",\"inline-hex\",\"bordercolor:'#ffffff'\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/theme/DesignLabEChartsPrintTheme.ts\",\"inline-rgb\",\"color:'rgba(0,0,0,0.25)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/theme/decal-patterns.ts\",\"inline-rgb\",\"color:'rgba(0,0,0,0.1)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/theme/decal-patterns.ts\",\"inline-rgb\",\"color:'rgba(0,0,0,0.12)\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/x-charts/src/theme/decal-patterns.ts\",\"inline-rgb\",\"color:'rgba(0,0,0,0.15)\"]",
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    "palette-over-token": {
+      "measurementVersion": 1,
+      "observedStatus": "fail",
+      "dimensions": {
+        "internal": {
+          "direction": "lower-is-better",
+          "value": 36,
+          "items": [
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"bg-amber-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"bg-blue-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"bg-gray-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"bg-green-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"bg-purple-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"bg-rose-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"text-amber-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"text-blue-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"text-gray-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"text-green-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"text-purple-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx\",\"text-rose-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-blue-50\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-blue-500\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-gray-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-gray-50\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-green-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-red-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"bg-yellow-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"border-gray-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"border-green-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"border-red-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"border-yellow-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"text-blue-400\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"text-gray-400\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"text-gray-500\"]",
+              "count": 5
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"text-green-800\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"text-red-800\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/admin/design-lab/showcase/PermissionGatesShowcase.tsx\",\"text-yellow-800\"]",
+              "count": 1
+            }
+          ]
+        },
+        "production": {
+          "direction": "lower-is-better",
+          "value": 150,
+          "items": [
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"bg-emerald-50\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"bg-emerald-500\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"bg-red-50\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"bg-red-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"border-red-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"hover:bg-red-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"text-emerald-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"text-red-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/ContextHealthDashboard.tsx\",\"text-red-800\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-amber-50\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-amber-500\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-emerald-50\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-emerald-500\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-gray-400\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-gray-50\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-red-50\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"bg-red-500\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"text-amber-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"text-emerald-700\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"text-gray-600\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/StatusBadge.tsx\",\"text-red-700\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-reporting/src/modules/context-health/grids/GridTabPanel.tsx\",\"bg-gray-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/layout/NotificationCenter.tsx\",\"bg-zinc-100\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/layout/NotificationCenter.tsx\",\"border-zinc-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/layout/NotificationCenter.tsx\",\"hover:bg-zinc-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/layout/NotificationCenter.tsx\",\"text-zinc-500\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/layout/NotificationCenter.tsx\",\"text-zinc-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/app/layout/NotificationCenter.tsx\",\"text-zinc-900\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"bg-emerald-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"bg-emerald-50\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"bg-rose-50\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"bg-zinc-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"bg-zinc-900\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"border-emerald-200\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"border-rose-200\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"border-zinc-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-amber-700\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-blue-700\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-emerald-800\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-rose-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-rose-700\"]",
+              "count": 5
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-rose-800\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-zinc-400\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-zinc-500\"]",
+              "count": 9
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-zinc-600\"]",
+              "count": 5
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/NotificationPreferencesPage.tsx\",\"text-zinc-700\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"bg-amber-50\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"bg-blue-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"bg-gray-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"bg-gray-50\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"bg-red-50\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"border-amber-300\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"border-gray-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"border-gray-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"border-red-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:bg-amber-950\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:bg-gray-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:bg-gray-800\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:bg-gray-900\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:bg-red-950\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:border-amber-700\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:border-gray-700\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:border-red-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:hover:bg-gray-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-amber-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-amber-200\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-amber-400\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-blue-400\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-gray-100\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-gray-400\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"dark:text-red-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"hover:bg-blue-700\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"hover:bg-gray-300\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-amber-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-amber-800\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-amber-900\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-blue-600\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-gray-500\"]",
+              "count": 4
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-gray-600\"]",
+              "count": 2
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-gray-900\"]",
+              "count": 3
+            },
+            {
+              "key": "[\"apps/mfe-shell/src/pages/settings/PushSubscriptionCard.tsx\",\"text-red-800\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/design-system/src/components/theme-preview-card/ThemePreviewCard.tsx\",\"bg-gray-100\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/design-system/src/components/theme-preview-card/ThemePreviewCard.tsx\",\"bg-gray-800\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/design-system/src/components/theme-preview-card/ThemePreviewCard.tsx\",\"text-gray-200\"]",
+              "count": 1
+            },
+            {
+              "key": "[\"packages/design-system/src/components/theme-preview-card/ThemePreviewCard.tsx\",\"text-gray-700\"]",
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    "preview-coverage": {
+      "measurementVersion": 1,
+      "observedStatus": "fail",
+      "dimensions": {
+        "missingUiComponents": {
+          "direction": "lower-is-better",
+          "value": 151,
+          "items": [
+            {
+              "key": "ActionBar",
+              "count": 1
+            },
+            {
+              "key": "ActionHeader",
+              "count": 1
+            },
+            {
+              "key": "ActivityFeed",
+              "count": 1
+            },
+            {
+              "key": "AgendaView",
+              "count": 1
+            },
+            {
+              "key": "Alert",
+              "count": 1
+            },
+            {
+              "key": "AppHeader",
+              "count": 1
+            },
+            {
+              "key": "AppSidebar",
+              "count": 1
+            },
+            {
+              "key": "AppSidebarFooterAction",
+              "count": 1
+            },
+            {
+              "key": "ApprovalCaseView",
+              "count": 1
+            },
+            {
+              "key": "ApprovalEligibilityGuard",
+              "count": 1
+            },
+            {
+              "key": "ApprovalInbox",
+              "count": 1
+            },
+            {
+              "key": "ApprovalRequestForm",
+              "count": 1
+            },
+            {
+              "key": "ApprovalWorkflow",
+              "count": 1
+            },
+            {
+              "key": "AssigneePicker",
+              "count": 1
+            },
+            {
+              "key": "AutoComplete",
+              "count": 1
+            },
+            {
+              "key": "Avatar",
+              "count": 1
+            },
+            {
+              "key": "AvatarGroup",
+              "count": 1
+            },
+            {
+              "key": "BottomNavigation",
+              "count": 1
+            },
+            {
+              "key": "BoxPlot",
+              "count": 1
+            },
+            {
+              "key": "Breadcrumb",
+              "count": 1
+            },
+            {
+              "key": "BulletChart",
+              "count": 1
+            },
+            {
+              "key": "Button",
+              "count": 1
+            },
+            {
+              "key": "Calendar",
+              "count": 1
+            },
+            {
+              "key": "Carousel",
+              "count": 1
+            },
+            {
+              "key": "Cascader",
+              "count": 1
+            },
+            {
+              "key": "ChartContainer",
+              "count": 1
+            },
+            {
+              "key": "ChartDashboard",
+              "count": 1
+            },
+            {
+              "key": "ChartLegend",
+              "count": 1
+            },
+            {
+              "key": "ColorPicker",
+              "count": 1
+            },
+            {
+              "key": "CommandHeader",
+              "count": 1
+            },
+            {
+              "key": "CommandPaletteTrigger",
+              "count": 1
+            },
+            {
+              "key": "CommandWorkspace",
+              "count": 1
+            },
+            {
+              "key": "CommentThread",
+              "count": 1
+            },
+            {
+              "key": "ComparisonTable",
+              "count": 1
+            },
+            {
+              "key": "Container",
+              "count": 1
+            },
+            {
+              "key": "ContextMenu",
+              "count": 1
+            },
+            {
+              "key": "ControlChart",
+              "count": 1
+            },
+            {
+              "key": "CrudTemplate",
+              "count": 1
+            },
+            {
+              "key": "DashboardTemplate",
+              "count": 1
+            },
+            {
+              "key": "DataExportDialog",
+              "count": 1
+            },
+            {
+              "key": "DataGridFilterChips",
+              "count": 1
+            },
+            {
+              "key": "DataGridSelectionBar",
+              "count": 1
+            },
+            {
+              "key": "DateRangePicker",
+              "count": 1
+            },
+            {
+              "key": "DecisionActionDialog",
+              "count": 1
+            },
+            {
+              "key": "DecisionRecordPanel",
+              "count": 1
+            },
+            {
+              "key": "DesktopMenubar",
+              "count": 1
+            },
+            {
+              "key": "DetailTemplate",
+              "count": 1
+            },
+            {
+              "key": "Dialog",
+              "count": 1
+            },
+            {
+              "key": "Dropdown",
+              "count": 1
+            },
+            {
+              "key": "EditableGrid",
+              "count": 1
+            },
+            {
+              "key": "EditorImageUpload",
+              "count": 1
+            },
+            {
+              "key": "EditorLinkDialog",
+              "count": 1
+            },
+            {
+              "key": "EditorMenuBubble",
+              "count": 1
+            },
+            {
+              "key": "EditorTableMenu",
+              "count": 1
+            },
+            {
+              "key": "EditorToolbar",
+              "count": 1
+            },
+            {
+              "key": "EmptyState",
+              "count": 1
+            },
+            {
+              "key": "EventForm",
+              "count": 1
+            },
+            {
+              "key": "ExecutiveKPIStrip",
+              "count": 1
+            },
+            {
+              "key": "FieldRegistry",
+              "count": 1
+            },
+            {
+              "key": "FieldRenderer",
+              "count": 1
+            },
+            {
+              "key": "FileUploadZone",
+              "count": 1
+            },
+            {
+              "key": "FilterPresets",
+              "count": 1
+            },
+            {
+              "key": "FineKinney",
+              "count": 1
+            },
+            {
+              "key": "Flex",
+              "count": 1
+            },
+            {
+              "key": "FloatButton",
+              "count": 1
+            },
+            {
+              "key": "FlowBuilder",
+              "count": 1
+            },
+            {
+              "key": "FormPreview",
+              "count": 1
+            },
+            {
+              "key": "FormRenderer",
+              "count": 1
+            },
+            {
+              "key": "FormSummary",
+              "count": 1
+            },
+            {
+              "key": "FullscreenToggle",
+              "count": 1
+            },
+            {
+              "key": "GanttTimeline",
+              "count": 1
+            },
+            {
+              "key": "GovernanceBoard",
+              "count": 1
+            },
+            {
+              "key": "GroupedCardGallery",
+              "count": 1
+            },
+            {
+              "key": "HeaderBar",
+              "count": 1
+            },
+            {
+              "key": "HeatmapCalendar",
+              "count": 1
+            },
+            {
+              "key": "HeatmapChart",
+              "count": 1
+            },
+            {
+              "key": "HistogramChart",
+              "count": 1
+            },
+            {
+              "key": "IconButton",
+              "count": 1
+            },
+            {
+              "key": "ImageComponent",
+              "count": 1
+            },
+            {
+              "key": "InlineEdit",
+              "count": 1
+            },
+            {
+              "key": "InputNumber",
+              "count": 1
+            },
+            {
+              "key": "KPICard",
+              "count": 1
+            },
+            {
+              "key": "KanbanBoard",
+              "count": 1
+            },
+            {
+              "key": "KanbanCard",
+              "count": 1
+            },
+            {
+              "key": "KanbanCardDetail",
+              "count": 1
+            },
+            {
+              "key": "KanbanColumn",
+              "count": 1
+            },
+            {
+              "key": "KanbanMetrics",
+              "count": 1
+            },
+            {
+              "key": "KanbanSwimlane",
+              "count": 1
+            },
+            {
+              "key": "KanbanToolbar",
+              "count": 1
+            },
+            {
+              "key": "LinkInline",
+              "count": 1
+            },
+            {
+              "key": "MasterDetail",
+              "count": 1
+            },
+            {
+              "key": "MasterDetailGrid",
+              "count": 1
+            },
+            {
+              "key": "MentionList",
+              "count": 1
+            },
+            {
+              "key": "Mentions",
+              "count": 1
+            },
+            {
+              "key": "MicroChart",
+              "count": 1
+            },
+            {
+              "key": "MiniChart",
+              "count": 1
+            },
+            {
+              "key": "MobileStepper",
+              "count": 1
+            },
+            {
+              "key": "Modal",
+              "count": 1
+            },
+            {
+              "key": "MultiStepForm",
+              "count": 1
+            },
+            {
+              "key": "NavigationMenu",
+              "count": 1
+            },
+            {
+              "key": "NotificationCenter",
+              "count": 1
+            },
+            {
+              "key": "OrgChart",
+              "count": 1
+            },
+            {
+              "key": "ParetoChart",
+              "count": 1
+            },
+            {
+              "key": "PivotGrid",
+              "count": 1
+            },
+            {
+              "key": "PivotTable",
+              "count": 1
+            },
+            {
+              "key": "Popover",
+              "count": 1
+            },
+            {
+              "key": "ProcessFlow",
+              "count": 1
+            },
+            {
+              "key": "QRCode",
+              "count": 1
+            },
+            {
+              "key": "Rating",
+              "count": 1
+            },
+            {
+              "key": "RepeatableFieldGroup",
+              "count": 1
+            },
+            {
+              "key": "ResourceView",
+              "count": 1
+            },
+            {
+              "key": "Result",
+              "count": 1
+            },
+            {
+              "key": "RichTextEditor",
+              "count": 1
+            },
+            {
+              "key": "RiskMatrix",
+              "count": 1
+            },
+            {
+              "key": "RowGroupingGrid",
+              "count": 1
+            },
+            {
+              "key": "SankeyDiagram",
+              "count": 1
+            },
+            {
+              "key": "ScatterChart",
+              "count": 1
+            },
+            {
+              "key": "Scheduler",
+              "count": 1
+            },
+            {
+              "key": "SchedulerEvent",
+              "count": 1
+            },
+            {
+              "key": "SchedulerToolbar",
+              "count": 1
+            },
+            {
+              "key": "SearchInput",
+              "count": 1
+            },
+            {
+              "key": "ServerDataSource",
+              "count": 1
+            },
+            {
+              "key": "ServerPaginationFooter",
+              "count": 1
+            },
+            {
+              "key": "SettingsTemplate",
+              "count": 1
+            },
+            {
+              "key": "ShellHeaderPattern",
+              "count": 1
+            },
+            {
+              "key": "ShellSidebar",
+              "count": 1
+            },
+            {
+              "key": "SlashCommandMenu",
+              "count": 1
+            },
+            {
+              "key": "SmartDashboard",
+              "count": 1
+            },
+            {
+              "key": "SparklineChart",
+              "count": 1
+            },
+            {
+              "key": "SpeedDial",
+              "count": 1
+            },
+            {
+              "key": "Spinner",
+              "count": 1
+            },
+            {
+              "key": "Stack",
+              "count": 1
+            },
+            {
+              "key": "StatWidget",
+              "count": 1
+            },
+            {
+              "key": "StatisticDoc",
+              "count": 1
+            },
+            {
+              "key": "StatusIndicator",
+              "count": 1
+            },
+            {
+              "key": "StatusTimeline",
+              "count": 1
+            },
+            {
+              "key": "TablePagination",
+              "count": 1
+            },
+            {
+              "key": "Tag",
+              "count": 1
+            },
+            {
+              "key": "ThemeLayout",
+              "count": 1
+            },
+            {
+              "key": "ThemePreviewCard",
+              "count": 1
+            },
+            {
+              "key": "Toast",
+              "count": 1
+            },
+            {
+              "key": "ToastProvider",
+              "count": 1
+            },
+            {
+              "key": "Tooltip",
+              "count": 1
+            },
+            {
+              "key": "Transfer",
+              "count": 1
+            },
+            {
+              "key": "TreeDataGrid",
+              "count": 1
+            },
+            {
+              "key": "TreeSelect",
+              "count": 1
+            },
+            {
+              "key": "ValueStream",
+              "count": 1
+            },
+            {
+              "key": "VariantIntegration",
+              "count": 1
+            },
+            {
+              "key": "Watermark",
+              "count": 1
+            },
+            {
+              "key": "useBreakpoint",
+              "count": 1
+            },
+            {
+              "key": "useDownloadWithProgress",
+              "count": 1
+            }
+          ]
+        }
+      }
+    }
+  }
+}

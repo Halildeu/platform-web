@@ -358,6 +358,8 @@ check('palette-over-token', 'Tailwind palette colors used instead of design toke
   const internalPaths = ['design-lab', 'demos/', 'playground/', 'showcase/'];
   const prodViolations = [];
   const internalViolations = [];
+  const prodFingerprintItems = [];
+  const internalFingerprintItems = [];
 
   for (const dir of scanDirs) {
     const files = walkDir(join(ROOT, dir), '.tsx');
@@ -368,24 +370,45 @@ check('palette-over-token', 'Tailwind palette colors used instead of design toke
       const rel = relative(ROOT, file);
       const isInternal = internalPaths.some(p => rel.includes(p));
       const entry = { file: rel, count: matches.length, samples: [...new Set(matches)].slice(0, 5) };
-      if (isInternal) internalViolations.push(entry);
-      else prodViolations.push(entry);
+      const counts = new Map();
+      for (const className of matches) counts.set(className, (counts.get(className) || 0) + 1);
+      const items = [...counts.entries()].map(([className, count]) => ({
+        key: JSON.stringify([rel, className]),
+        count,
+      }));
+      if (isInternal) {
+        internalViolations.push(entry);
+        internalFingerprintItems.push(...items);
+      } else {
+        prodViolations.push(entry);
+        prodFingerprintItems.push(...items);
+      }
     }
   }
 
   const prodTotal = prodViolations.reduce((s, v) => s + v.count, 0);
   const internalTotal = internalViolations.reduce((s, v) => s + v.count, 0);
+  const ratchet = {
+    measurementVersion: 1,
+    dimensions: {
+      internal: { direction: 'lower-is-better', value: internalTotal, items: internalFingerprintItems },
+      production: { direction: 'lower-is-better', value: prodTotal, items: prodFingerprintItems },
+    },
+    context: { productionFiles: prodViolations.length, internalFiles: internalViolations.length },
+  };
 
-  if (prodTotal === 0 && internalTotal === 0) return { status: 'pass', message: 'No hardcoded Tailwind palette colors — all use design tokens' };
+  if (prodTotal === 0 && internalTotal === 0) return { status: 'pass', message: 'No hardcoded Tailwind palette colors — all use design tokens', ratchet };
   if (prodTotal === 0) return {
     status: 'pass',
     message: `Production code clean. ${internalTotal} palette colors in ${internalViolations.length} internal/design-lab files (cosmetic)`,
+    ratchet,
   };
   return {
     status: prodTotal > 20 ? 'fail' : 'warn',
     message: `${prodTotal} palette colors in ${prodViolations.length} production files + ${internalTotal} in ${internalViolations.length} internal files`,
     details: prodViolations.slice(0, 10),
     fix: FIX_HINT ? 'Replace palette colors with token utilities: bg-red-500→bg-state-danger-text, text-gray-500→text-text-secondary, dark:bg-zinc-800→dark:bg-surface-default, border-gray-200→border-border-subtle' : undefined,
+    ratchet,
   };
 });
 
