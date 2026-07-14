@@ -12,6 +12,7 @@ import {
   sha256,
   writeFileAtomicIfChanged,
 } from '../theme-css-contract.mjs';
+import { assertThemeOwnershipDecisionContract } from '../theme-ownership-decision-contract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -178,6 +179,20 @@ function assertExtensionContract(themeExtension, themeInlineExtension) {
   if (themeInlineExtensionCount !== decisions.inventory.curatedThemeInlineDeclarations) {
     fail(`theme inline extension declaration count ${themeInlineExtensionCount} is not 40`);
   }
+
+  const tokenSourceContent = fs.readFileSync(
+    path.join(repoRoot, decisions.baseline.tokens.path),
+    'utf8',
+  );
+  assertThemeOwnershipDecisionContract({
+    manifest: decisions,
+    tokenSourceContent,
+    tokens: JSON.parse(tokenSourceContent),
+    generatedThemeCss: generatedThemeArtifacts.themeCss.content,
+    themeExtensionCss: themeExtension,
+    generatedThemeInlineCss: generatedThemeArtifacts.themeInlineCss.content,
+    themeInlineExtensionCss: themeInlineExtension,
+  });
 }
 
 function run() {

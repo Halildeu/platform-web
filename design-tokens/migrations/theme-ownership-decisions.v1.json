@@ -36,17 +36,61 @@
       "action": "preserve-runtime-in-token-source",
       "candidateIdentityCount": 13,
       "targets": [
-        "/semantic/color/action/primary/bg/modes/serban-light",
-        "/semantic/color/action/primary/bg/modes/serban-dark",
-        "/semantic/color/action/primary/bg/modes/serban-hc",
-        "/semantic/color/action/primary/bg/modes/serban-compact",
-        "/semantic/color/action/primary/text/modes/serban-hc",
-        "/semantic/color/action/secondary/border/modes/serban-hc",
-        "/semantic/color/state/success/text/modes/serban-light",
-        "/semantic/color/state/success/text/modes/serban-dark",
-        "/semantic/color/state/success/text/modes/serban-compact",
-        "/semantic/color/text/inverse/modes/serban-dark",
-        "/semantic/color/surface/overlay/bg/modes/serban-hc"
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-light/value",
+          "expectedValue": "oklch(56% 0.2 259.81deg)",
+          "affectedIdentityCount": 2
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-dark/value",
+          "expectedValue": "oklch(56% 0.2 259.81deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-hc/value",
+          "expectedValue": "oklch(88.68% 0.1822 95.33deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-compact/value",
+          "expectedValue": "oklch(56% 0.2 259.81deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/text/modes/serban-hc/value",
+          "expectedValue": "oklch(0% 0 0deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/secondary/border/modes/serban-hc/value",
+          "expectedValue": "oklch(88.68% 0.1822 95.33deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/state/success/text/modes/serban-light/value",
+          "expectedValue": "oklch(55% 0.17 152deg)",
+          "affectedIdentityCount": 2
+        },
+        {
+          "jsonPointer": "/semantic/color/state/success/text/modes/serban-dark/value",
+          "expectedValue": "oklch(55% 0.17 152deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/state/success/text/modes/serban-compact/value",
+          "expectedValue": "oklch(55% 0.17 152deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/text/inverse/modes/serban-dark/value",
+          "expectedValue": "oklch(100% 0 0deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/surface/overlay/bg/modes/serban-hc/value",
+          "expectedValue": "oklch(12% 0 0deg)",
+          "affectedIdentityCount": 1
+        }
       ],
       "reason": "The reviewed runtime values include product contrast and high-contrast decisions. Replacing them with the stale generated preview would change the product surface."
     },
@@ -54,20 +98,20 @@
       "id": "preserve-legacy-dark-bridge-indirection",
       "action": "preserve-runtime-indirection-in-generator",
       "candidateIdentityCount": 26,
-      "properties": [
-        "--feedback-error",
-        "--feedback-success",
-        "--feedback-warning",
-        "--feedback-info",
-        "--danger-color",
-        "--success-color",
-        "--warning-color",
-        "--info-color",
-        "--bg-primary",
-        "--ring-primary",
-        "--ring-focus",
-        "--ring-error",
-        "--ring-color"
+      "bindings": [
+        { "property": "--feedback-error", "expectedValue": "var(--state-danger-text)" },
+        { "property": "--feedback-success", "expectedValue": "var(--state-success-text)" },
+        { "property": "--feedback-warning", "expectedValue": "var(--state-warning-text)" },
+        { "property": "--feedback-info", "expectedValue": "var(--state-info-text)" },
+        { "property": "--danger-color", "expectedValue": "var(--state-danger-text)" },
+        { "property": "--success-color", "expectedValue": "var(--state-success-text)" },
+        { "property": "--warning-color", "expectedValue": "var(--state-warning-text)" },
+        { "property": "--info-color", "expectedValue": "var(--state-info-text)" },
+        { "property": "--bg-primary", "expectedValue": "var(--action-primary-bg)" },
+        { "property": "--ring-primary", "expectedValue": "var(--action-primary-bg)" },
+        { "property": "--ring-focus", "expectedValue": "var(--focus-outline)" },
+        { "property": "--ring-error", "expectedValue": "var(--state-danger-border)" },
+        { "property": "--ring-color", "expectedValue": "var(--focus-outline)" }
       ],
       "reason": "Dark and system-dark legacy aliases remain bound to semantic runtime properties instead of freezing copied terminal colors."
     },
@@ -84,6 +128,7 @@
     }
   ],
   "result": {
+    "tokenSourceSha256": "433a73813b9a23ecc5f3974aa570f6d06be9b69af837b476a9db9ee99371f545",
     "generatedThemeCssSha256": "233d5e2ec141453896df9b4a6aaeb14d2cfe0b5e66f9bb8c3bbb87036439af2a",
     "themeExtensionCssSha256": "9e29d452e7b6c89ae7b371557d21a5b4a2617ac47876e923f27827730d8bd7f8",
     "generatedThemeInlineCssSha256": "c348fe2c1bd25b8e9f1dc864f541acbdadf1743822cb6f769e05594941f9cf57",

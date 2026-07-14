@@ -13,6 +13,7 @@ import {
   assertNoCuratedShadow,
   writeFileAtomicIfChanged,
 } from './theme-css-contract.mjs';
+import { assertThemeOwnershipDecisionContract } from './theme-ownership-decision-contract.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,10 @@ const OUTPUT_COMPONENT_THEME = path.resolve(
 );
 const OUTPUT_CONTRACT = path.resolve(repoRoot, 'design-tokens/generated/theme-contract.json');
 const OUTPUT_TOKEN_TYPES = path.resolve(repoRoot, 'design-tokens/generated/token-types.ts');
+const OWNERSHIP_DECISIONS = path.resolve(
+  repoRoot,
+  'design-tokens/migrations/theme-ownership-decisions.v1.json',
+);
 const THEME_EXTENSION_CSS = path.resolve(
   repoRoot,
   'apps/mfe-shell/src/styles/theme.extensions.css',
@@ -61,7 +66,8 @@ const AXIS_ATTRIBUTE = {
   motion: 'data-motion',
 };
 
-const tokens = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+const tokenSourceContent = fs.readFileSync(TOKEN_FILE, 'utf8');
+const tokens = JSON.parse(tokenSourceContent);
 const themeContract = tokens?.meta?.themeContract;
 if (!themeContract || typeof themeContract !== 'object') {
   throw new Error(
@@ -436,7 +442,7 @@ function readRequired(filePath, label) {
 }
 
 /** Validate ownership and cascade order without mutating any artifact. */
-function assertThemeOwnershipContract() {
+function assertThemeOwnershipContract({ enforceDecisionContract = false } = {}) {
   const themeExtension = readRequired(THEME_EXTENSION_CSS, 'curated theme extension');
   const themeInlineExtension = readRequired(
     THEME_INLINE_EXTENSION_CSS,
@@ -446,6 +452,18 @@ function assertThemeOwnershipContract() {
   assertNoCuratedShadow(cssWithEol, themeExtension);
   assertNoCuratedShadow(componentThemeOutput, themeExtension);
   assertNoCuratedShadow(themeInlineOutput, themeInlineExtension);
+
+  if (enforceDecisionContract) {
+    assertThemeOwnershipDecisionContract({
+      manifest: JSON.parse(readRequired(OWNERSHIP_DECISIONS, 'ownership decision manifest')),
+      tokenSourceContent,
+      tokens,
+      generatedThemeCss: cssWithEol,
+      themeExtensionCss: themeExtension,
+      generatedThemeInlineCss: themeInlineOutput,
+      themeInlineExtensionCss: themeInlineExtension,
+    });
+  }
 
   assertExpectedImportOrder(
     readRequired(SHELL_ENTRY_CSS, 'shell CSS entry'),
@@ -490,7 +508,7 @@ if (isMain && isCheckMode) {
   }
 
   try {
-    assertThemeOwnershipContract();
+    assertThemeOwnershipContract({ enforceDecisionContract: true });
   } catch (error) {
     errors.push(`- Ownership/import contract: ${error.message}`);
   }

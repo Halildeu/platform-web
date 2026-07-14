@@ -157,6 +157,18 @@ describe('curated ownership boundary', () => {
   test('permits the same property under a different selector', () => {
     assert.equal(assertNoCuratedShadow(generated, '.consumer { --owned: green; }'), true);
   });
+
+  test('rejects nested style rules instead of losing selector ancestry', () => {
+    const nested = '.card { & { --owned: blue; } }';
+    assert.throws(
+      () => parseDeclarationMultiset(nested),
+      (error) => error.code === 'THEME_NESTED_RULE_UNSUPPORTED',
+    );
+    assert.throws(
+      () => assertNoCuratedShadow('.card { --owned: red; }', nested),
+      (error) => error.code === 'THEME_NESTED_RULE_UNSUPPORTED',
+    );
+  });
 });
 
 describe('import ordering', () => {

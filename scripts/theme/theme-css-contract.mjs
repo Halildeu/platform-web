@@ -129,6 +129,7 @@ export function normalizeAtRuleParams(name, params) {
 function declarationIdentity(declaration) {
   const atRules = [];
   let selector = ROOT_SELECTOR;
+  let ruleDepth = 0;
   let parent = declaration.parent;
 
   while (parent && parent.type !== 'root') {
@@ -140,7 +141,15 @@ function declarationIdentity(declaration) {
           params: normalizeAtRuleParams(name, parent.params),
         }),
       );
-    } else if (parent.type === 'rule' && selector === ROOT_SELECTOR) {
+    } else if (parent.type === 'rule') {
+      ruleDepth += 1;
+      if (ruleDepth > 1) {
+        const error = new Error(
+          `Nested style rules are unsupported in the theme ownership contract: ${JSON.stringify(parent.selector)}`,
+        );
+        error.code = 'THEME_NESTED_RULE_UNSUPPORTED';
+        throw error;
+      }
       selector = normalizeSelector(parent.selector);
     }
     parent = parent.parent;
