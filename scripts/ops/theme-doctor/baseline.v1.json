@@ -2,7 +2,7 @@
   "$schema": "./baseline.schema.json",
   "schemaVersion": 1,
   "tool": "theme-doctor",
-  "sourceCommit": "da548d7bd356990bf78d6e3a23d5a4c6d3be85b6",
+  "sourceCommit": "196e92d2d0248f224b301f6818f70ac0f33c0c0b",
   "checks": {
     "color-leaks": {
       "measurementVersion": 2,
