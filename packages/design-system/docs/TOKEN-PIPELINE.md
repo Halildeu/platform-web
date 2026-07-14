@@ -32,8 +32,7 @@
   - `docs.json` — Design Lab token viewer icin dokumanasyon verisi
 - **Rol:** Design Lab, documentation, type safety, Figma export
 - **Ne zaman calisir:**
-  - CI: `design-system-gate.yml` workflow'unda `tokens:validate` sonrasi `Build tokens` step'i ile (design-system veya token dosyalarina dokunan PR'larda)
-  - CI: `.github/workflows/web-test-gate.yml` icindeki required token drift zinciri
+  - CI: `.github/workflows/web-test-gate.yml` icindeki required `token-drift-required` zincirinde exact `--check`
 - **Sahip:** Design System team
 
 ## Validation Gate
@@ -45,8 +44,8 @@
   - Color dosyalarinda gecersiz renk degeri kontrolu (hex, rgb, rgba, hsl, hsla, CSS var, named color)
   - Spacing/size dosyalarinda gecersiz boyut degeri kontrolu (px, rem, em, vb.)
   - Undefined veya bos referans kontrolu
-- **CI'da nerede:** `design-system-gate.yml` — `Validate tokens` step'i (`tokens:build` oncesinde calisir)
-- **Fail olursa:** PR merge edilemez (exit code 1 doner)
+- **CI'da nerede:** `.github/workflows/web-test-gate.yml` — required `token-drift-required` icindeki `Token source validation` adimi
+- **Fail olursa:** Workflow-required aggregator basarisiz olur (exit code 1 doner). `main` repository-level ruleset pinning ayrica #908 ile izlenir.
 
 ## Release Iliskisi
 
@@ -65,17 +64,17 @@ Token source (figma.tokens.json)
 
 Token source (.ts dosyalari: color, spacing, radius, typography, motion, zIndex, elevation, opacity, density, focusRing, semantic)
   ├── tokens:build → tokens.json + tokens.css + token-types.ts + docs.json → Design Lab + Types + Figma export
-  └── tokens:validate → CI gate (duplicate/gecersiz deger/undefined ref kontrolu)
+  └── tokens:validate → web-test-gate token-drift-required (duplicate/gecersiz deger/undefined ref kontrolu)
 ```
 
 ## Sorumluluklar
 
-| Aksiyon                                 | Sorumlu                                                   | Ne zaman                                            |
-| --------------------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
-| Token ekleme/degistirme (.ts kaynaklar) | Design System team                                        | Feature branch                                      |
-| figma.tokens.json guncelleme            | Design System team                                        | Figma sync sonrasi                                  |
-| tokens:validate calistirma              | CI (otomatik, design-system-gate.yml)                     | design-system veya token dosyalarina dokunan her PR |
-| tokens:build calistirma                 | CI (otomatik, design-system-gate.yml + web-test-gate.yml) | Her PR ve main merge                                |
-| tokens:build:theme kontrolu             | CI (otomatik, web-test-gate.yml / token-drift-required)   | Her PR ve main push                                 |
-| Ownership + exact drift kontrolu        | CI (otomatik, web-test-gate-required zinciri)             | Her PR ve main push                                 |
-| Release notu yazma                      | Design System team                                        | Her token degisikliginde                            |
+| Aksiyon                                 | Sorumlu                                                 | Ne zaman                 |
+| --------------------------------------- | ------------------------------------------------------- | ------------------------ |
+| Token ekleme/degistirme (.ts kaynaklar) | Design System team                                      | Feature branch           |
+| figma.tokens.json guncelleme            | Design System team                                      | Figma sync sonrasi       |
+| tokens:validate calistirma              | CI (otomatik, web-test-gate.yml / token-drift-required) | Her PR ve main push      |
+| tokens:build exact kontrolu             | CI (otomatik, web-test-gate.yml / token-drift-required) | Her PR ve main push      |
+| tokens:build:theme kontrolu             | CI (otomatik, web-test-gate.yml / token-drift-required) | Her PR ve main push      |
+| Ownership + exact drift kontrolu        | CI (otomatik, web-test-gate-required zinciri)           | Her PR ve main push      |
+| Release notu yazma                      | Design System team                                      | Her token degisikliginde |

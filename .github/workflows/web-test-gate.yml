@@ -140,6 +140,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Theme ownership contract tests
         run: pnpm run test:theme-contract
+      - name: Token source validation
+        run: pnpm run tokens:validate
       - name: Token drift gate (exact generated artifacts and curated ownership)
         run: pnpm run tokens:drift
       - name: Theme Doctor regression ratchet
