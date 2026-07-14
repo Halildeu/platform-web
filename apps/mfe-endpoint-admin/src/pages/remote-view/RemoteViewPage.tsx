@@ -127,6 +127,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   const [meta, setMeta] = React.useState<RemoteViewMeta | null>(null);
   const [frame, setFrame] = React.useState<RemoteViewFrame | null>(null);
   const [frameCount, setFrameCount] = React.useState(0);
+  const [renderAckAttemptedCount, setRenderAckAttemptedCount] = React.useState(0);
   const [renderAckAcceptedCount, setRenderAckAcceptedCount] = React.useState(0);
   const [, tick] = React.useReducer((x: number) => x + 1, 0);
   const handleRef = React.useRef<RemoteViewStreamHandle | null>(null);
@@ -167,6 +168,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     setMeta(null);
     setFrame(null);
     setFrameCount(0);
+    setRenderAckAttemptedCount(0);
     setRenderAckAcceptedCount(0);
     lastAckAttemptedSeqRef.current = -1;
 
@@ -261,6 +263,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
             return;
           }
           context.ackInFlight = true;
+          setRenderAckAttemptedCount((count) => count + 1);
           void acknowledgeRemoteViewRender({
             url: context.url,
             token: context.token,
@@ -315,8 +318,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   const ageSeconds = frame
     ? Math.max(0, Math.floor((now() - frame.observedAtEpochMillis) / 1000))
     : null;
-  const recordingOff = meta ? !meta.recording : true;
-  const attended = meta ? meta.attended : true;
+  const metadataTrusted = meta !== null;
   const stopped =
     status === 'closed' || status === 'error' || status === 'forbidden' || status === 'busy';
 
@@ -324,21 +326,29 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     <div
       style={wrapStyle}
       data-testid="remote-view-page"
+      data-render-ack-attempted-count={renderAckAttemptedCount}
       data-render-ack-accepted-count={renderAckAcceptedCount}
+      data-metadata-trusted={metadataTrusted ? 'true' : 'false'}
+      data-viewer-id={meta?.viewerId}
+      data-frame-seq={frame?.seq}
+      data-frame-observed-at={frame?.observedAtEpochMillis}
+      data-frame-sent-at={frame?.sentAtEpochMillis}
     >
       <div style={barStyle} data-testid="remote-view-bar">
         <strong style={{ fontSize: 15 }}>{t('endpointAdmin.remoteView.title')}</strong>
-        <span
-          style={{
-            ...badgeBase,
-            color: 'var(--text-primary)',
-            borderColor: 'var(--border-strong, #888)',
-          }}
-          data-testid="remote-view-badge-viewonly"
-        >
-          {t('endpointAdmin.remoteView.badge.viewOnly')}
-        </span>
-        {recordingOff && (
+        {metadataTrusted && (
+          <span
+            style={{
+              ...badgeBase,
+              color: 'var(--text-primary)',
+              borderColor: 'var(--border-strong, #888)',
+            }}
+            data-testid="remote-view-badge-viewonly"
+          >
+            {t('endpointAdmin.remoteView.badge.viewOnly')}
+          </span>
+        )}
+        {metadataTrusted && (
           <span
             style={{
               ...badgeBase,
@@ -350,7 +360,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
             {t('endpointAdmin.remoteView.badge.recordingOff')}
           </span>
         )}
-        {attended && (
+        {metadataTrusted && (
           <span style={badgeBase} data-testid="remote-view-badge-attended">
             {t('endpointAdmin.remoteView.badge.attended')}
           </span>
@@ -374,7 +384,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       </div>
 
       <div style={stageStyle} data-testid="remote-view-stage">
-        {frame ? (
+        {metadataTrusted && frame ? (
           <img
             key={`${meta?.viewerId ?? 'pending'}-${frame.seq}`}
             src={`data:${frame.contentType};base64,${frame.dataB64}`}
@@ -402,9 +412,11 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
         )}
       </div>
 
-      <p style={noteStyle} data-testid="remote-view-no-input-note">
-        {t('endpointAdmin.remoteView.noInputNote')}
-      </p>
+      {metadataTrusted && (
+        <p style={noteStyle} data-testid="remote-view-no-input-note">
+          {t('endpointAdmin.remoteView.noInputNote')}
+        </p>
+      )}
     </div>
   );
 };
