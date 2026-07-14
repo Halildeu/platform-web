@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -22,6 +30,18 @@ function assertDrift(expected, actual, message) {
   assert.ok(diff.missing.length > 0, `${message}: expected a missing occurrence`);
   assert.ok(diff.unexpected.length > 0, `${message}: expected an unexpected occurrence`);
   return diff;
+}
+
+function readFileSnapshotNoFollow(filePath) {
+  const descriptor = openSync(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    return {
+      content: readFileSync(descriptor, 'utf8'),
+      stat: fstatSync(descriptor),
+    };
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 describe('declaration multiset identity and payload', () => {
@@ -217,17 +237,18 @@ describe('hash and atomic write helpers', () => {
         '3cb8201e7ff1e7777446032ef1bf4338535aadbabe464c15411cdce8c2317590',
       );
       const first = writeFileAtomicIfChanged(file, 'alpha\n', { mode: 0o640 });
-      const firstModified = statSync(file).mtimeMs;
+      const firstModified = readFileSnapshotNoFollow(file).stat.mtimeMs;
       const second = writeFileAtomicIfChanged(file, 'alpha\n');
-      const secondModified = statSync(file).mtimeMs;
+      const secondModified = readFileSnapshotNoFollow(file).stat.mtimeMs;
       const third = writeFileAtomicIfChanged(file, 'beta\n');
+      const finalSnapshot = readFileSnapshotNoFollow(file);
 
       assert.equal(first.changed, true);
       assert.equal(second.changed, false);
       assert.equal(third.changed, true);
       assert.equal(firstModified, secondModified, 'unchanged bytes preserve file mtime');
-      assert.equal(readFileSync(file, 'utf8'), 'beta\n');
-      assert.equal(statSync(file).mode & 0o777, 0o640);
+      assert.equal(finalSnapshot.content, 'beta\n');
+      assert.equal(finalSnapshot.stat.mode & 0o777, 0o640);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

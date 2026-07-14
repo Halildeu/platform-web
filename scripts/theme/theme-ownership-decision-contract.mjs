@@ -374,6 +374,15 @@ function generateHistoricalArtifacts({ commit, generator, tokens }) {
   const cached = historicalGenerationCache.get(cacheKey);
   if (cached) return cached;
 
+  const permissionFlag = process.allowedNodeEnvironmentFlags.has('--permission')
+    ? '--permission'
+    : process.allowedNodeEnvironmentFlags.has('--experimental-permission')
+      ? '--experimental-permission'
+      : null;
+  if (!permissionFlag) {
+    fail('Node permission model is unavailable for the historical generator sandbox');
+  }
+
   const temporaryRoot = realpathSync(mkdtempSync(path.join(tmpdir(), 'theme-ownership-baseline-')));
   const generatorPath = path.join(temporaryRoot, BASELINE_PATHS.generator);
   const tokenPath = path.join(temporaryRoot, BASELINE_PATHS.tokens);
@@ -389,7 +398,7 @@ function generateHistoricalArtifacts({ commit, generator, tokens }) {
     execFileSync(
       process.execPath,
       [
-        '--permission',
+        permissionFlag,
         `--allow-fs-read=${temporaryRoot}`,
         `--allow-fs-write=${temporaryRoot}`,
         generatorPath,

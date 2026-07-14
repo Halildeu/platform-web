@@ -1,0 +1,3 @@
+# Reviewed false positive: tokenSourceSha256 is a content-addressed SHA-256,
+# not a credential. Keep the exemption bound to the exact historical finding.
+300dfd0ff20fc770a282bc137c4a083eff205dcf:design-tokens/migrations/theme-ownership-decisions.v1.json:generic-api-key:131
