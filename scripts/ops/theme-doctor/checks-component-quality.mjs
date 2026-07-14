@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
+    extractThemeInlineBodies,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -184,21 +185,16 @@ check('undefined-tw-prefix', 'Undefined Tailwind class prefixes in production TS
 
 // 19. Phantom classes — used in code but NOT in @theme (won't generate CSS)
 check('phantom-classes', 'Tailwind classes using tokens not defined in @theme inline', () => {
-  /* Extract all token names from @theme inline block (may be in index.css or generated file) */
-  let indexCss = readSafe(SHELL_INDEX_CSS);
-  let themeBlock = indexCss.match(/@theme\s+inline\s*\{([\s\S]*?)\}/);
-  if (!themeBlock) {
-    /* Check for imported generated file */
-    const genPath = join(SHELL_STYLES, 'generated-theme-inline.css');
-    const genCss = readSafe(genPath);
-    themeBlock = genCss.match(/@theme\s+inline\s*\{([\s\S]*?)\}/);
-  }
-  if (!themeBlock) return { status: 'warn', message: 'No @theme inline block found in index.css or generated-theme-inline.css' };
+  /* Extract token names from every generated and curated @theme inline block. */
+  const inlineBlocks = extractThemeInlineBodies(readThemeInlineCss());
+  if (inlineBlocks.length === 0) return { status: 'warn', message: 'No @theme inline block found in composed theme-inline layers' };
 
   const themeTokens = new Set();
-  for (const line of themeBlock[1].split('\n')) {
-    const m = line.match(/^\s+--([\w-]+):/);
-    if (m) themeTokens.add(m[1]);
+  for (const block of inlineBlocks) {
+    for (const line of block.split('\n')) {
+      const m = line.match(/^\s+--([\w-]+):/);
+      if (m) themeTokens.add(m[1]);
+    }
   }
 
   /* Also extract token-bridge.css tokens (they provide component-level aliases) */
@@ -209,7 +205,7 @@ check('phantom-classes', 'Tailwind classes using tokens not defined in @theme in
   }
 
   /* Also add theme.css tokens */
-  const theme = readSafe(THEME_CSS);
+  const theme = readThemeCss();
   for (const line of theme.split('\n')) {
     const m = line.trim().match(/^--([\w-]+):/);
     if (m) themeTokens.add(m[1]);
@@ -395,7 +391,7 @@ check('palette-over-token', 'Tailwind palette colors used instead of design toke
 
 // 21. Token-eligible hardcodes — hex values matching known tokens but not using var()
 check('token-eligible', 'Hardcoded hex values that match known design tokens', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
   const bridgeCss = readSafe(TOKEN_BRIDGE_CSS);
   const tokenMap = new Map();
 

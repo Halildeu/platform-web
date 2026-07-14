@@ -45,6 +45,12 @@ import { register as checks_token_quality } from './theme-doctor/checks-token-qu
 import { register as checks_api_health } from './theme-doctor/checks-api-health.mjs';
 import { register as checks_token_gaps } from './theme-doctor/checks-token-gaps.mjs';
 import { register as checks_preview_coverage } from './theme-doctor/checks-preview-coverage.mjs';
+import {
+  extractCssRuleBodies,
+  extractRootBodies,
+  extractThemeInlineBodies,
+  readCssLayers,
+} from './theme-doctor/lib/css-layers.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -56,6 +62,8 @@ const THEME_CSS = join(SHELL_STYLES, 'theme.css');
 const TOKEN_BRIDGE_CSS = join(SHELL_STYLES, 'token-bridge.css');
 const TOKENS_CSS = join(ROOT, 'packages', 'design-system', 'src', 'tokens', 'build', 'tokens.css');
 const THEME_INLINE_CSS = join(SHELL_STYLES, 'generated-theme-inline.css');
+const THEME_EXTENSION_CSS = join(SHELL_STYLES, 'theme.extensions.css');
+const THEME_INLINE_EXTENSION_CSS = join(SHELL_STYLES, 'theme-inline.extensions.css');
 
 const flags = new Set(process.argv.slice(2));
 const JSON_MODE = flags.has('--json');
@@ -87,6 +95,14 @@ function check(id, label, fn) {
 
 function readSafe(path) {
   try { return readFileSync(path, 'utf-8'); } catch { return ''; }
+}
+
+function readThemeCss() {
+  return readCssLayers([THEME_CSS, THEME_EXTENSION_CSS]);
+}
+
+function readThemeInlineCss() {
+  return readCssLayers([THEME_INLINE_CSS, THEME_INLINE_EXTENSION_CSS]);
 }
 
 function srgbToHex(srgb) {
@@ -146,9 +162,11 @@ function extractCSSVars(css) {
 
 
 const ctx = {
-  check, readSafe, srgbToHex, parseCssVarsFlat, walkDir, extractCSSVars,
+  check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat,
+  walkDir, extractCSSVars, extractCssRuleBodies, extractRootBodies, extractThemeInlineBodies,
   ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
-  THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT,
+  THEME_CSS, THEME_EXTENSION_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS,
+  THEME_INLINE_CSS, THEME_INLINE_EXTENSION_CSS, FIX_HINT,
 };
 
 checks_theme_token(ctx);

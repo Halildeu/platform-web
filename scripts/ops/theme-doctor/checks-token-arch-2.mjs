@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, srgbToHex, parseCssVarsFlat, walkDir,
+    extractCssRuleBodies, extractRootBodies,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -215,7 +216,7 @@ check('high-contrast-readiness', 'High contrast / forced-colors mode support', (
   const interactiveWithout = [];
 
   /* Check CSS files for forced-colors */
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
   const indexCss = readSafe(SHELL_INDEX_CSS);
   const allCss = themeCss + indexCss;
   const hasForcedColorsGlobal = allCss.includes('forced-colors');
@@ -268,7 +269,7 @@ check('high-contrast-readiness', 'High contrast / forced-colors mode support', (
 
 // 42. Theme Mode Coverage — check all 4 modes have token overrides in theme.css
 check('theme-mode-coverage', 'All theme modes (light/dark/HC/compact) have complete token overrides', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
 
   /* Extract mode blocks */
   const modes = {
@@ -279,25 +280,25 @@ check('theme-mode-coverage', 'All theme modes (light/dark/HC/compact) have compl
   };
 
   /* Parse :root tokens */
-  const rootBlock = themeCss.split('[data-mode=')[0] || '';
+  const rootBlock = extractRootBodies(themeCss).join('\n');
   for (const m of rootBlock.matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.light.tokens.add(m[1]);
 
   /* Parse dark tokens */
-  const darkMatch = themeCss.match(/\[data-mode="dark"\]\s*\{([^}]+)\}/s);
-  if (darkMatch) {
-    for (const m of darkMatch[1].matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.dark.tokens.add(m[1]);
+  const darkBlocks = extractCssRuleBodies(themeCss, (selector) => /\[data-mode=(?:"dark"|'dark'|dark)\]/.test(selector));
+  for (const block of darkBlocks) {
+    for (const m of block.matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.dark.tokens.add(m[1]);
   }
 
   /* Parse HC tokens */
-  const hcMatch = themeCss.match(/serban-hc[^{]*\{([^}]+)\}/s);
-  if (hcMatch) {
-    for (const m of hcMatch[1].matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.hc.tokens.add(m[1]);
+  const hcBlocks = extractCssRuleBodies(themeCss, (selector) => selector.includes('serban-hc'));
+  for (const block of hcBlocks) {
+    for (const m of block.matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.hc.tokens.add(m[1]);
   }
 
   /* Parse compact */
-  const compactMatch = themeCss.match(/compact[^{]*\{([^}]+)\}/s);
-  if (compactMatch) {
-    for (const m of compactMatch[1].matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.compact.tokens.add(m[1]);
+  const compactBlocks = extractCssRuleBodies(themeCss, (selector) => selector.includes('serban-compact'));
+  for (const block of compactBlocks) {
+    for (const m of block.matchAll(/--([a-z][a-z0-9-]+)\s*:/g)) modes.compact.tokens.add(m[1]);
   }
 
   const lightCount = modes.light.tokens.size;
@@ -391,7 +392,7 @@ check('dark-visual-risks', 'Visual patterns that commonly break in dark mode', (
 
 // 58. HC/Dark Invisible Token Pairs — text+bg with same lightness (invisible content)
 check('invisible-token-pairs', 'Token pairs where text is invisible on its background (all modes)', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
 
   /* Parse all mode blocks and extract OKLCH L values */
   function extractBlock(css, startMarker) {
@@ -473,10 +474,10 @@ check('invisible-token-pairs', 'Token pairs where text is invisible on its backg
 
 // 59. HC Token Completeness — all semantic tokens must have HC overrides
 check('hc-token-completeness', 'HC theme has overrides for all semantic color tokens', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
 
   /* Extract light :root tokens */
-  const rootBlock = themeCss.split('[data-mode=')[0] || '';
+  const rootBlock = extractRootBodies(themeCss).join('\n');
   const lightTokens = new Set();
   for (const m of rootBlock.matchAll(/--((?:surface|text|action|border|state|accent|selection|focus|data-table|interactive|elevation)[a-z0-9-]*)\s*:\s*oklch/g)) {
     lightTokens.add(m[1]);

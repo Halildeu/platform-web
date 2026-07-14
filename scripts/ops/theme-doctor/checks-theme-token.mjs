@@ -8,7 +8,7 @@ import { join, relative } from 'node:path';
 import { execSync } from 'node:child_process';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -40,12 +40,11 @@ check('attr-consistency', 'Theme attribute consistency (controller sets data-the
 // 2. @theme inline
 check('theme-inline', '@theme inline directive in index.css (TW4 runtime resolution)', () => {
   const css = readSafe(SHELL_INDEX_CSS);
-  const hasThemeInline = css.includes('@theme inline');
-  const hasOldTheme = /^@theme\s*\{/m.test(css.replace(/@theme\s+inline/, ''));
+  const hasThemeInline = readThemeInlineCss().includes('@theme inline');
   // Check we removed the :root override block
   const hasRootOverride = css.includes(':root,\n:root[data-theme]') || css.includes(':root, :root[data-theme]');
 
-  if (hasThemeInline && !hasRootOverride) return { status: 'pass', message: '@theme inline active, no redundant :root override block' };
+  if (hasThemeInline && !hasRootOverride) return { status: 'pass', message: 'Composed @theme inline layers active, no redundant :root override block' };
   const issues = [];
   if (!hasThemeInline) issues.push('Missing @theme inline — utilities use static build-time values');
   if (hasRootOverride) issues.push('Redundant :root override block still present — remove it');
@@ -93,7 +92,7 @@ check('raw-token-drift', 'Figma raw token ↔ DTCG code alignment', () => {
 
 // 5. Surface tone integrity (dark tones ≠ light defaults)
 check('surface-tone-dark', 'Dark mode surface tone override integrity', () => {
-  const css = readSafe(THEME_CSS);
+  const css = readThemeCss();
   const darkTonePattern = /data-theme="serban-dark"\]\[data-surface-tone/g;
   const darkToneMatches = css.match(darkTonePattern) || [];
   if (darkToneMatches.length === 0) {
@@ -105,7 +104,7 @@ check('surface-tone-dark', 'Dark mode surface tone override integrity', () => {
 // 6. Token bridge staleness
 check('token-bridge', 'Token bridge fallback staleness', () => {
   const bridge = readSafe(TOKEN_BRIDGE_CSS);
-  const theme = readSafe(THEME_CSS);
+  const theme = readThemeCss();
   const themeVars = parseCssVarsFlat(theme);
 
   /* Extract bridge entries: --short-name: var(--theme-name, <fallback>); */

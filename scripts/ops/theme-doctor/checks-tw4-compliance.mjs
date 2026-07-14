@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
+    extractRootBodies, extractThemeInlineBodies,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -16,27 +17,30 @@ export function register(ctx) {
 
 // 28. theme-inline-sync — verify all theme.css tokens have @theme inline mapping
 check('theme-inline-sync', 'Token pipeline: theme.css ↔ @theme inline sync', () => {
-  const themeCss = readSafe(THEME_CSS);
-  const genPath = join(SHELL_STYLES, 'generated-theme-inline.css');
-  const genCss = readSafe(genPath);
-  if (!genCss) return { status: 'warn', message: 'generated-theme-inline.css not found' };
+  const themeCss = readThemeCss();
+  const inlineCss = readThemeInlineCss();
+  if (!inlineCss) return { status: 'warn', message: 'Composed theme-inline layers not found' };
 
   /* Extract :root var names from theme.css */
-  const rootBlock = themeCss.match(/:root\s*\{([\s\S]*?)\}/);
-  if (!rootBlock) return { status: 'warn', message: 'No :root block in theme.css' };
+  const rootBlocks = extractRootBodies(themeCss);
+  if (rootBlocks.length === 0) return { status: 'warn', message: 'No :root block in composed theme layers' };
   const themeVars = new Set();
-  for (const line of rootBlock[1].split('\n')) {
-    const m = line.match(/^\s+--([\w-]+):/);
-    if (m) themeVars.add(m[1]);
+  for (const block of rootBlocks) {
+    for (const line of block.split('\n')) {
+      const m = line.match(/^\s+--([\w-]+):/);
+      if (m) themeVars.add(m[1]);
+    }
   }
 
   /* Extract var() references from @theme inline */
-  const inlineBlock = genCss.match(/@theme\s+inline\s*\{([\s\S]*?)\}/);
-  if (!inlineBlock) return { status: 'warn', message: 'No @theme inline block in generated file' };
+  const inlineBlocks = extractThemeInlineBodies(inlineCss);
+  if (inlineBlocks.length === 0) return { status: 'warn', message: 'No @theme inline block in composed theme-inline layers' };
   const referencedVars = new Set();
-  for (const line of inlineBlock[1].split('\n')) {
-    const refs = line.matchAll(/var\(--([\w-]+)/g);
-    for (const ref of refs) referencedVars.add(ref[1]);
+  for (const block of inlineBlocks) {
+    for (const line of block.split('\n')) {
+      const refs = line.matchAll(/var\(--([\w-]+)/g);
+      for (const ref of refs) referencedVars.add(ref[1]);
+    }
   }
 
   /* Find theme.css vars not referenced in @theme inline.
@@ -124,7 +128,7 @@ check('v4-transform-none', 'TW4: transform-none replaced by scale-none/rotate-no
 
 // 33. system-preference-support — verify @media prefers-color-scheme in theme.css
 check('system-preference', 'Dark mode: @media (prefers-color-scheme: dark) support in theme.css', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
   const hasMediaQuery = themeCss.includes('@media (prefers-color-scheme: dark)');
   const hasSystemMode = themeCss.includes('[data-mode="system"]');
   const hasColorScheme = themeCss.includes('color-scheme: dark');
