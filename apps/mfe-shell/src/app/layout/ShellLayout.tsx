@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { BrowserRouter, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/store.hooks';
 import { useThemeContext } from '../theme/theme-context.provider';
@@ -30,6 +30,7 @@ import { ChordOverlay } from '../shortcuts/ChordOverlay';
 import { MobileBottomBar } from './MobileBottomBar';
 
 import { buildSafeLoginRedirect } from './buildSafeLoginRedirect';
+import { useSessionExpiredToast } from './useSessionExpiredToast';
 
 /* ------------------------------------------------------------------ */
 /*  ShellLayout — Main application layout with header, sidebar, routes */
@@ -103,6 +104,7 @@ export const ShellLayout: React.FC = () => {
     info: pushInfoToast,
     warning: pushWarningToast,
     error: pushErrorToast,
+    dismiss: dismissToast,
   } = useToast();
 
   useShellShortcuts();
@@ -170,25 +172,10 @@ export const ShellLayout: React.FC = () => {
     };
   }, [dispatch, pushRuntimeToast]);
 
-  /* Codex 019dd818 iter-7 (B-prime PR-2b): app:auth:unauthorized event listener.
-   *
-   * shared-http interceptor 401 yakaladığında window event dispatch eder
-   * (PR-2a). Burada:
-   *  - Sadece token varken + login route'ta değilken işle (bootstrap noise guard)
-   *  - Episode başına TEK persistent toast (5sn time-window dedupe değil)
-   *  - CTA: same-origin path guard ile /login?redirect=<current>
-   */
-  const sessionExpiredToastIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handler = () => {
-      // Bootstrap noise guard
-      if (!token) return;
-      if (window.location.pathname.startsWith('/login')) return;
-      // Episode dedupe
-      if (sessionExpiredToastIdRef.current) return;
+  const showSessionExpiredToast = useCallback(
+    (onCancel: () => void) => {
       const ctaUrl = buildSafeLoginRedirect(window.location);
-      const id = pushWarningToast(t('auth.session.expired'), {
+      return pushWarningToast(t('auth.session.expired'), {
         title: t('auth.session.expired'),
         content: (
           <div className="flex flex-col gap-2">
@@ -203,37 +190,31 @@ export const ShellLayout: React.FC = () => {
           </div>
         ),
         persistent: true,
-        onCancel: () => {
-          sessionExpiredToastIdRef.current = null;
-        },
+        onCancel,
       });
-      sessionExpiredToastIdRef.current = id;
-      dispatch(
-        pushNotification({
-          message: t('auth.session.expired'),
-          description: t('auth.session.expired.description'),
-          type: 'warning',
-          priority: 'high',
-          pinned: true,
-          meta: { source: 'auth-session-expired-event' },
-        }),
-      );
-    };
-    window.addEventListener('app:auth:unauthorized', handler);
-    return () => {
-      window.removeEventListener('app:auth:unauthorized', handler);
-    };
-  }, [dispatch, pushWarningToast, t, token]);
+    },
+    [pushWarningToast, t],
+  );
 
-  /* Codex 019dd818 iter-10 PARTIAL ek bulgu: token yenilendiğinde
-   * sessionExpiredToastIdRef reset edilmeli — aksi halde Keycloak refresh
-   * race condition'da eski persistent toast id kalır, sonraki gerçek
-   * session-expired event'leri no-op olur. */
-  useEffect(() => {
-    if (token) {
-      sessionExpiredToastIdRef.current = null;
-    }
-  }, [token]);
+  const handleSessionExpired = useCallback(() => {
+    dispatch(
+      pushNotification({
+        message: t('auth.session.expired'),
+        description: t('auth.session.expired.description'),
+        type: 'warning',
+        priority: 'high',
+        pinned: true,
+        meta: { source: 'auth-session-expired-event' },
+      }),
+    );
+  }, [dispatch, t]);
+
+  useSessionExpiredToast({
+    token,
+    showToast: showSessionExpiredToast,
+    dismissToast,
+    onSessionExpired: handleSessionExpired,
+  });
 
   /* Session expiry handler */
   useEffect(() => {

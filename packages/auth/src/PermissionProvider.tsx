@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import type { AuthzMeResponse, AccessLevel } from './types';
 import { fetchAuthzMe, fetchAuthzVersion } from './api';
-import { isUnauthorizedError } from './errors';
+import { isAuthCriticalUnauthorizedUrl, isUnauthorizedError } from './errors';
 
 interface PermissionContextValue {
   /** Current user's authorization data */
@@ -256,14 +256,9 @@ export function PermissionProvider({
   useEffect(() => {
     if (permitAll || !enabled || typeof window === 'undefined') return undefined;
 
-    const isAuthCriticalUrl = (url: unknown): boolean => {
-      if (typeof url !== 'string') return true; // unknown path → preserve old behavior
-      return url.includes('/v1/authz/me') || url.includes('/v1/authz/version');
-    };
-
     const handler = (evt: Event) => {
       const detail = (evt as CustomEvent<{ url?: unknown }>).detail;
-      if (!isAuthCriticalUrl(detail?.url)) {
+      if (!isAuthCriticalUnauthorizedUrl(detail?.url)) {
         if (process.env.NODE_ENV !== 'production') {
           console.debug('[PermissionProvider] non-auth-critical 401 ignored:', detail?.url);
         }
