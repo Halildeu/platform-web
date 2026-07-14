@@ -295,6 +295,15 @@ test.describe('Faz 25 P5 deployment readiness product surface', () => {
           await assertButtonContainsRenderedLabel(button);
         }
       }
+
+      const renderedBadges = detail.locator('[data-component="badge"]');
+      expect(await renderedBadges.count()).toBeGreaterThan(0);
+      for (let index = 0; index < (await renderedBadges.count()); index += 1) {
+        const badge = renderedBadges.nth(index);
+        if (await badge.isVisible()) {
+          await assertElementContainsRenderedLabel(badge, 'Badge');
+        }
+      }
     }
   });
 
@@ -355,11 +364,15 @@ async function assertPageHasNoHorizontalRootClipping(page: Page) {
 }
 
 async function assertButtonContainsRenderedLabel(button: Locator) {
-  await button.scrollIntoViewIfNeeded();
-  const geometry = await button.evaluate((element) => {
-    const buttonRect = element.getBoundingClientRect();
+  await assertElementContainsRenderedLabel(button, 'Button');
+}
+
+async function assertElementContainsRenderedLabel(element: Locator, elementName: string) {
+  await element.scrollIntoViewIfNeeded();
+  const geometry = await element.evaluate((node) => {
+    const elementRect = node.getBoundingClientRect();
     const labelRects: DOMRect[] = [];
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (!node.textContent?.trim()) continue;
       const range = document.createRange();
@@ -370,24 +383,28 @@ async function assertButtonContainsRenderedLabel(button: Locator) {
     }
 
     return {
-      label: element.textContent?.replace(/\s+/g, ' ').trim(),
-      scrollContained: element.scrollHeight <= element.clientHeight + 1,
+      label: node.textContent?.replace(/\s+/g, ' ').trim(),
+      scrollContained:
+        node.scrollWidth <= node.clientWidth + 1 && node.scrollHeight <= node.clientHeight + 1,
       viewportContained:
-        buttonRect.left >= -1 &&
-        buttonRect.right <= window.innerWidth + 1 &&
-        buttonRect.top >= -1 &&
-        buttonRect.bottom <= window.innerHeight + 1,
+        elementRect.left >= -1 &&
+        elementRect.right <= window.innerWidth + 1 &&
+        elementRect.top >= -1 &&
+        elementRect.bottom <= window.innerHeight + 1,
       labelContained: labelRects.every(
         (rect) =>
-          rect.left >= buttonRect.left - 1 &&
-          rect.right <= buttonRect.right + 1 &&
-          rect.top >= buttonRect.top - 1 &&
-          rect.bottom <= buttonRect.bottom + 1,
+          rect.left >= elementRect.left - 1 &&
+          rect.right <= elementRect.right + 1 &&
+          rect.top >= elementRect.top - 1 &&
+          rect.bottom <= elementRect.bottom + 1,
       ),
     };
   });
 
-  expect(geometry, `Button label must stay inside its hit area: ${geometry.label}`).toEqual({
+  expect(
+    geometry,
+    `${elementName} label must stay inside its rendered box: ${geometry.label}`,
+  ).toEqual({
     label: geometry.label,
     scrollContained: true,
     viewportContained: true,
