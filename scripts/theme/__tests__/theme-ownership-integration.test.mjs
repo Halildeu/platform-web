@@ -38,6 +38,25 @@ const cssomHarnessPath = relative(
   'cssom-harness.css',
 );
 const generatorPath = relative('scripts', 'theme', 'generate-theme-css.mjs');
+const generatedArtifactPaths = Object.values(generatedThemeArtifacts)
+  .filter((candidate) => candidate && typeof candidate === 'object' && 'path' in candidate)
+  .map(({ path: artifactPath }) => artifactPath);
+const snapshotFiles = (filePaths) =>
+  new Map(
+    filePaths.map((filePath) => [
+      filePath,
+      { hash: sha256(fs.readFileSync(filePath)), mtimeMs: fs.statSync(filePath).mtimeMs },
+    ]),
+  );
+const assertSnapshotsEqual = (filePaths, before, operation) => {
+  for (const filePath of filePaths) {
+    assert.deepEqual(
+      { hash: sha256(fs.readFileSync(filePath)), mtimeMs: fs.statSync(filePath).mtimeMs },
+      before.get(filePath),
+      `${path.relative(repoRoot, filePath)} changed during ${operation}`,
+    );
+  }
+};
 
 test('all five generated artifacts match exact on-disk bytes', () => {
   for (const artifact of Object.values(generatedThemeArtifacts).filter(
@@ -100,20 +119,13 @@ test('shell and real-browser harness preserve the same exact cascade order', () 
 
 test('--check is a read-only exact drift and ownership gate', () => {
   const protectedPaths = [
-    ...Object.values(generatedThemeArtifacts)
-      .filter((candidate) => candidate && typeof candidate === 'object' && 'path' in candidate)
-      .map(({ path: artifactPath }) => artifactPath),
+    ...generatedArtifactPaths,
     themeExtensionPath,
     themeInlineExtensionPath,
     shellEntryPath,
     cssomHarnessPath,
   ];
-  const before = new Map(
-    protectedPaths.map((filePath) => [
-      filePath,
-      { hash: sha256(fs.readFileSync(filePath)), mtimeMs: fs.statSync(filePath).mtimeMs },
-    ]),
-  );
+  const before = snapshotFiles(protectedPaths);
 
   const output = execFileSync(process.execPath, [generatorPath, '--check'], {
     cwd: repoRoot,
@@ -121,11 +133,18 @@ test('--check is a read-only exact drift and ownership gate', () => {
   });
   assert.match(output, /tokens:build --check OK \(5 files\)/);
 
-  for (const filePath of protectedPaths) {
-    assert.deepEqual(
-      { hash: sha256(fs.readFileSync(filePath)), mtimeMs: fs.statSync(filePath).mtimeMs },
-      before.get(filePath),
-      `${path.relative(repoRoot, filePath)} changed during --check`,
-    );
-  }
+  assertSnapshotsEqual(protectedPaths, before, '--check');
+});
+
+test('full generation is byte/mtime stable and never writes curated extensions', () => {
+  const protectedPaths = [...generatedArtifactPaths, themeExtensionPath, themeInlineExtensionPath];
+  const before = snapshotFiles(protectedPaths);
+
+  const output = execFileSync(process.execPath, [generatorPath], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+  assert.match(output, /Generated apps\/mfe-shell\/src\/styles\/theme\.css/);
+
+  assertSnapshotsEqual(protectedPaths, before, 'full generation');
 });
