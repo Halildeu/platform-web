@@ -18,6 +18,15 @@ describe('CitationBackedCoachingPanel', () => {
     expect(panel).toHaveTextContent('Rollback ve incident öğrenimi');
     expect(screen.getByTestId('coaching-apply-button')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Düzeltme isteği oluştur' })).toBeDisabled();
+    expect(screen.getByTestId('coaching-apply-button')).toHaveStyle({
+      minWidth: 0,
+      maxWidth: '100%',
+      height: 'auto',
+      minHeight: '2.25rem',
+      paddingBlock: '0.5rem',
+      whiteSpace: 'normal',
+      overflowWrap: 'anywhere',
+    });
   });
 
   test('citation dugmesi kaynak detayi, entailment ve provenance gosterir', () => {
@@ -45,6 +54,10 @@ describe('CitationBackedCoachingPanel', () => {
     expect(signals).toHaveTextContent('GÖZLENDİ');
     expect(signals).toHaveTextContent('KANIT YETERSİZ');
     expect(signals).toHaveTextContent('Oturum düzeyi · kişi profili veya sayısal puan değil');
+    expect(screen.getByTestId('coaching-quality-signal-grid')).toHaveStyle({
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+      minWidth: 0,
+    });
     expect(screen.getByTestId('coaching-action-block-reason')).toHaveTextContent(
       'insan review/rationale ve legal/audit/owner gate olmadan uygulanamaz',
     );

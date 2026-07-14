@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const enabled = process.env.P5_DEPLOYMENT_READINESS_E2E === '1';
 
@@ -166,6 +166,168 @@ test.describe('Faz 25 P5 deployment readiness product surface', () => {
     }
   });
 
+  test('contains the whole MFE at 320 CSS px without clipping controls or the evidence table', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 844 });
+
+    const subjectInput = page.getByTestId('consent-subject-input');
+    const consentState = page.getByTestId('consent-state-select');
+    const fileInput = page.getByTestId('upload-file-input');
+    const transcript = page.getByTestId('transcript-select-tr-demo-1');
+    const integrationSearch = page.getByTestId('integration-search');
+    const qualityExport = page.getByRole('button', { name: 'Aggregate evidence dışa aktar' });
+
+    for (const control of [
+      subjectInput,
+      consentState,
+      fileInput,
+      transcript,
+      integrationSearch,
+      qualityExport,
+    ]) {
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeVisible();
+    }
+
+    await subjectInput.focus();
+    await expect(subjectInput).toBeFocused();
+    await consentState.focus();
+    await expect(consentState).toBeFocused();
+    await fileInput.focus();
+    await expect(fileInput).toBeFocused();
+    await transcript.focus();
+    await expect(transcript).toBeFocused();
+    await integrationSearch.focus();
+    await expect(integrationSearch).toBeFocused();
+
+    const pageLayout = await page.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      rootOverflowModes: [document.documentElement, document.body, document.querySelector('main')]
+        .filter((element): element is HTMLElement => element instanceof HTMLElement)
+        .map((element) => window.getComputedStyle(element).overflowX),
+    }));
+    expect(pageLayout.overflow).toBeLessThanOrEqual(1);
+    expect(pageLayout.rootOverflowModes).not.toContain('hidden');
+    expect(pageLayout.rootOverflowModes).not.toContain('clip');
+
+    const evidenceTableRegion = page.getByRole('region', { name: /kanıt kapıları/ });
+    await evidenceTableRegion.scrollIntoViewIfNeeded();
+    await evidenceTableRegion.focus();
+    await expect(evidenceTableRegion).toBeFocused();
+    const localScroll = await evidenceTableRegion.evaluate((region) => {
+      const style = window.getComputedStyle(region);
+      region.scrollLeft = 0;
+      return {
+        overflowX: style.overflowX,
+        hasOverflow: region.scrollWidth > region.clientWidth,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: Number.parseFloat(style.outlineWidth),
+        outlineColor: style.outlineColor,
+      };
+    });
+    expect(localScroll.overflowX).toBe('auto');
+    expect(localScroll.hasOverflow).toBe(true);
+    expect(localScroll.outlineStyle).not.toBe('none');
+    expect(localScroll.outlineWidth).toBeGreaterThan(0);
+    expect(localScroll.outlineColor).not.toBe('transparent');
+    expect(localScroll.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+    await page.keyboard.press('ArrowRight');
+    await expect
+      .poll(() => evidenceTableRegion.evaluate((region) => region.scrollLeft))
+      .toBeGreaterThan(0);
+
+    const measurementTableRegion = page.getByTestId('intelligence-measurement-table-region');
+    await measurementTableRegion.scrollIntoViewIfNeeded();
+    await measurementTableRegion.focus();
+    await expect(measurementTableRegion).toBeFocused();
+    const measurementGeometry = await measurementTableRegion.evaluate((region) => {
+      region.scrollLeft = 0;
+      const style = window.getComputedStyle(region);
+      return {
+        hasOverflow: region.scrollWidth > region.clientWidth,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: Number.parseFloat(style.outlineWidth),
+        outlineColor: style.outlineColor,
+      };
+    });
+    expect(measurementGeometry.hasOverflow).toBe(true);
+    expect(measurementGeometry.outlineStyle).not.toBe('none');
+    expect(measurementGeometry.outlineWidth).toBeGreaterThan(0);
+    expect(measurementGeometry.outlineColor).not.toBe('transparent');
+    expect(measurementGeometry.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+    await page.keyboard.press('ArrowRight');
+    await expect
+      .poll(() => measurementTableRegion.evaluate((region) => region.scrollLeft))
+      .toBeGreaterThan(0);
+
+    await assertButtonContainsRenderedLabel(transcript);
+    await assertButtonContainsRenderedLabel(qualityExport);
+  });
+
+  test('contains every user-selectable P6 capability state at 320 CSS px', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 844 });
+
+    for (const capabilityId of [
+      'QUALITY_OF_HIRE',
+      'FAIRNESS_EVIDENCE',
+      'INTERVIEWER_COACHING',
+      'SKILLS_ONTOLOGY',
+      'DEEPFAKE_PROVENANCE',
+      'INTERNAL_MOBILITY',
+      'AGENTIC_WORKFLOW',
+    ]) {
+      const selector = page.getByTestId(`intelligence-capability-${capabilityId}`);
+      await selector.scrollIntoViewIfNeeded();
+      await selector.click();
+      await expect(selector).toHaveAttribute('aria-pressed', 'true');
+
+      const detail = page.getByTestId('intelligence-capability-detail');
+      await detail.scrollIntoViewIfNeeded();
+      await expect(detail).toBeVisible();
+      await assertPageHasNoHorizontalRootClipping(page);
+
+      const renderedButtons = detail.getByRole('button');
+      for (let index = 0; index < (await renderedButtons.count()); index += 1) {
+        const button = renderedButtons.nth(index);
+        if (await button.isVisible()) {
+          await button.scrollIntoViewIfNeeded();
+          await assertButtonContainsRenderedLabel(button);
+        }
+      }
+
+      const renderedBadges = detail.locator('[data-component="badge"]');
+      expect(await renderedBadges.count()).toBeGreaterThan(0);
+      for (let index = 0; index < (await renderedBadges.count()); index += 1) {
+        const badge = renderedBadges.nth(index);
+        if (await badge.isVisible()) {
+          await assertElementContainsRenderedLabel(badge, 'Badge');
+        }
+      }
+    }
+  });
+
+  test('has no serious or critical axe violations across the 320px MFE surface', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 844 });
+    const results = await new AxeBuilder({ page })
+      .include('main')
+      .withTags(['wcag2a', 'wcag2aa', 'best-practice'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+    );
+
+    expect(
+      blocking.map((violation) => ({
+        id: violation.id,
+        impact: violation.impact,
+        nodes: violation.nodes.map((node) => node.target),
+      })),
+    ).toEqual([]);
+  });
+
   test('has no serious or critical axe violations in the P5 console', async ({ page }) => {
     const results = await analyzeP5Console(page);
     const blocking = results.violations.filter(
@@ -187,4 +349,65 @@ async function analyzeP5Console(page: Page) {
     .include('[data-testid="deployment-readiness-console"]')
     .withTags(['wcag2a', 'wcag2aa', 'best-practice'])
     .analyze();
+}
+
+async function assertPageHasNoHorizontalRootClipping(page: Page) {
+  const layout = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    rootOverflowModes: [document.documentElement, document.body, document.querySelector('main')]
+      .filter((element): element is HTMLElement => element instanceof HTMLElement)
+      .map((element) => window.getComputedStyle(element).overflowX),
+  }));
+  expect(layout.overflow).toBeLessThanOrEqual(1);
+  expect(layout.rootOverflowModes).not.toContain('hidden');
+  expect(layout.rootOverflowModes).not.toContain('clip');
+}
+
+async function assertButtonContainsRenderedLabel(button: Locator) {
+  await assertElementContainsRenderedLabel(button, 'Button');
+}
+
+async function assertElementContainsRenderedLabel(element: Locator, elementName: string) {
+  await element.scrollIntoViewIfNeeded();
+  const geometry = await element.evaluate((node) => {
+    const elementRect = node.getBoundingClientRect();
+    const labelRects: DOMRect[] = [];
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent?.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      labelRects.push(
+        ...Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0),
+      );
+    }
+
+    return {
+      label: node.textContent?.replace(/\s+/g, ' ').trim(),
+      scrollContained:
+        node.scrollWidth <= node.clientWidth + 1 && node.scrollHeight <= node.clientHeight + 1,
+      viewportContained:
+        elementRect.left >= -1 &&
+        elementRect.right <= window.innerWidth + 1 &&
+        elementRect.top >= -1 &&
+        elementRect.bottom <= window.innerHeight + 1,
+      labelContained: labelRects.every(
+        (rect) =>
+          rect.left >= elementRect.left - 1 &&
+          rect.right <= elementRect.right + 1 &&
+          rect.top >= elementRect.top - 1 &&
+          rect.bottom <= elementRect.bottom + 1,
+      ),
+    };
+  });
+
+  expect(
+    geometry,
+    `${elementName} label must stay inside its rendered box: ${geometry.label}`,
+  ).toEqual({
+    label: geometry.label,
+    scrollContained: true,
+    viewportContained: true,
+    labelContained: true,
+  });
 }

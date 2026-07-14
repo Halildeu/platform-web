@@ -28,12 +28,26 @@ const entries: TranscriptEntry[] = [
 describe('TranscriptList (F-liste seçim yüzeyi, 39c-7)', () => {
   test('girdileri etiket + anahtar + köken rozetiyle listeler; seçili aria-pressed', () => {
     render(<TranscriptList transcripts={entries} selectedKey="tr-demo-1" onSelect={() => {}} />);
+    expect(screen.getByTestId('transcript-list-panel')).toHaveStyle({
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      minWidth: 0,
+      width: '100%',
+    });
     expect(screen.getByTestId('transcript-list')).toBeInTheDocument();
     expect(screen.getByTestId('transcript-select-tr-demo-1')).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     expect(screen.getByTestId('transcript-select-tr-abc')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('transcript-select-tr-demo-1')).toHaveStyle({
+      minWidth: 0,
+      maxWidth: '100%',
+      height: 'auto',
+      minHeight: '2.25rem',
+      paddingBlock: '0.5rem',
+      whiteSpace: 'normal',
+      overflowWrap: 'anywhere',
+    });
     expect(screen.getByText('Demo')).toBeInTheDocument();
     expect(screen.getByText('Yükleme')).toBeInTheDocument();
   });

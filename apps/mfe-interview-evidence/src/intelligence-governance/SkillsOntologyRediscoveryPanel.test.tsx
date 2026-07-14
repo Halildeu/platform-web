@@ -157,5 +157,14 @@ describe('SkillsOntologyRediscoveryPanel', () => {
       gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
     });
     expect(within(conceptGroup).getAllByRole('button')).toHaveLength(3);
+    expect(screen.getByTestId('skills-apply-button')).toHaveStyle({
+      minWidth: 0,
+      maxWidth: '100%',
+      height: 'auto',
+      minHeight: '2.25rem',
+      paddingBlock: '0.5rem',
+      whiteSpace: 'normal',
+      overflowWrap: 'anywhere',
+    });
   });
 });

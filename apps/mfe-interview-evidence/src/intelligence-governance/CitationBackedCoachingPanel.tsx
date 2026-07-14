@@ -142,10 +142,12 @@ export function CitationBackedCoachingPanel({
               Structured quality signals · kategorik
             </Text>
             <div
+              data-testid="coaching-quality-signal-grid"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
                 gap: 8,
+                minWidth: 0,
               }}
             >
               {proposal.qualitySignals.map((signal) => (
@@ -206,6 +208,7 @@ export function CitationBackedCoachingPanel({
               disabled
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="coaching-action-block-reason"
+              style={RESPONSIVE_ACTION_BUTTON_STYLE}
             >
               Düzeltme isteği oluştur
             </Button>
@@ -215,6 +218,7 @@ export function CitationBackedCoachingPanel({
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="coaching-action-block-reason"
               data-testid="coaching-apply-button"
+              style={RESPONSIVE_ACTION_BUTTON_STYLE}
             >
               Coaching önerisini uygula
             </Button>
@@ -264,6 +268,17 @@ function CitationDetail({
 }
 
 const REF_STYLE = { overflowWrap: 'anywhere' } as const;
+
+const RESPONSIVE_ACTION_BUTTON_STYLE = {
+  minWidth: 0,
+  maxWidth: '100%',
+  height: 'auto',
+  minHeight: '2.25rem',
+  paddingBlock: '0.5rem',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  textAlign: 'center',
+} as const;
 
 const CITATION_BUTTON_STYLE = {
   appearance: 'none',

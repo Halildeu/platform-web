@@ -170,6 +170,17 @@ describe('QualityOfHireEvidencePanel', () => {
     expect(
       within(panel).getByRole('button', { name: 'Aggregate evidence dışa aktar' }),
     ).toBeDisabled();
+    expect(
+      within(panel).getByRole('button', { name: 'Aggregate evidence dışa aktar' }),
+    ).toHaveStyle({
+      minWidth: 0,
+      maxWidth: '100%',
+      height: 'auto',
+      minHeight: '2.25rem',
+      paddingBlock: '0.5rem',
+      whiteSpace: 'normal',
+      overflowWrap: 'anywhere',
+    });
     expect(screen.getByTestId('qoh-action-block-reason')).toHaveTextContent(
       'Legal, bağımsız audit, müşteri-controller ve owner gate olmadan',
     );

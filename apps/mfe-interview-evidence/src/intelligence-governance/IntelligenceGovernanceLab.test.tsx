@@ -85,6 +85,11 @@ describe('IntelligenceGovernanceLab', () => {
     expect(panel).toHaveTextContent('SCREENING ONLY');
     expect(screen.getByTestId('integrity-apply-button')).toBeDisabled();
     const table = screen.getByTestId('intelligence-measurement-table');
+    const tableRegion = screen.getByRole('region', {
+      name: /measurement contract tablosu/,
+    });
+    expect(tableRegion).toHaveAttribute('tabindex', '0');
+    expect(tableRegion).toContainElement(table);
     expect(table).toHaveTextContent('False-positive/negative rate');
     expect(table).toHaveTextContent('appeal yolu zorunlu');
   });

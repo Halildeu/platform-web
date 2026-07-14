@@ -88,8 +88,9 @@ export function IntelligenceGovernanceLab() {
           aria-label="İleri intelligence capability alanları"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))',
             gap: '0.75rem',
+            minWidth: 0,
           }}
         >
           {SYNTHETIC_INTELLIGENCE_CAPABILITIES.map((capability) => (
@@ -139,7 +140,13 @@ export function IntelligenceGovernanceLab() {
             </Badge>
           </Stack>
           {selected && (
-            <div style={{ overflowX: 'auto' }}>
+            <div
+              aria-label={`${selected.name} measurement contract tablosu`}
+              data-testid="intelligence-measurement-table-region"
+              role="region"
+              tabIndex={0}
+              style={{ overflowX: 'auto' }}
+            >
               <table
                 data-testid="intelligence-measurement-table"
                 style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}
@@ -225,6 +232,8 @@ function CapabilityCard({
         padding: '0.875rem',
         textAlign: 'left',
         cursor: 'pointer',
+        minWidth: 0,
+        overflowWrap: 'anywhere',
       }}
     >
       <Stack direction="column" gap={2}>
