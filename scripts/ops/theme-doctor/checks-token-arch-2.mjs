@@ -11,6 +11,8 @@ export function register(ctx) {
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
+// 39. Component Style Completeness — detect missing essential styles per component role
+check('component-completeness', 'Components missing essential styles for their role (focus, hover, bg, border)', () => {
   /*
    * Role detection: infer component role from file name/content,
    * then check if essential classes/tokens are present.
