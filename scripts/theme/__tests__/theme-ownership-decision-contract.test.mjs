@@ -75,6 +75,13 @@ test('curated edits and stale result digests fail the required contract', () => 
       contract({ themeExtensionCss: `${themeExtensionCss}\n:root { --unreviewed: hotpink; }\n` }),
     /theme extension CSS result digest mismatch/,
   );
+  assert.throws(
+    () =>
+      contract({
+        themeExtensionCss: `${themeExtensionCss}\n[data-theme="serban-dark"] .candidate { --action-primary-bg: hotpink; }\n`,
+      }),
+    /theme extension CSS result digest mismatch/,
+  );
 
   const candidate = clone(manifest);
   candidate.result.generatedThemeCssSha256 = '0'.repeat(64);

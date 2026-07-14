@@ -51,7 +51,7 @@
 
 - Token degisikligi -> design-system minor/patch release gerektirir
 - `tokens:build` ciktisi `dist/`'e dahil mi? **Evet** — `src/tokens/build/` dizini `src/` altinda oldugundan ve `package.json`'daki `files` alani `"src"` icerdiginden, publish edilen pakete dahildir
-- `tokens:build:theme` ciktisi nerede tuketiliyor? Production ve CSSOM harness ayni exact sirayi kullanir: `tailwindcss` → `generated-theme-inline.css` → `theme-inline.extensions.css` → `theme.css` → `theme.extensions.css` → `component-theme.generated.css`. Her curated katman kendi generated counterpart'indan sonra yuklenir; cross-layer identity cakismasi yasaktir. ThemeProvider, `DesignSystemProvider` uzerinden CSS custom property'lerini `data-*` attribute'lari ile uygular.
+- `tokens:build:theme` ciktisi nerede tuketiliyor? Production ve CSSOM harness ayni exact sirayi kullanir: `tailwindcss` → `generated-theme-inline.css` → `theme-inline.extensions.css` → `theme.css` → `theme.extensions.css` → `component-theme.generated.css`. Her curated katman kendi generated counterpart'indan sonra yuklenir; cross-layer identity cakismasi yasaktir. Identity, ordered at-rule ancestry + normalized selector + property olarak tanimlidir; ayni property'nin farkli selector altindaki scoped kullanimi ayri bir curated identity'dir. Bu izin serbest yazim anlami tasimaz: curated dosyalarin tamamı reviewed ledger digest'ine baglidir, dolayisiyla daha spesifik selector dahil her ek/deger degisikligi ledger guncellemesi ve yeniden review olmadan `--check` kapisini gecemez. ThemeProvider, `DesignSystemProvider` uzerinden CSS custom property'lerini `data-*` attribute'lari ile uygular.
 
 ## Akis Diyagrami
 
