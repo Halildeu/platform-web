@@ -21,6 +21,10 @@ describe('IntegrationWorkspace', () => {
     expect(screen.getByText('PRE_G0_CONTRACT_ONLY')).toBeVisible();
     expect(screen.getByText(/connector-capability\/v1 · P1 BASELINE · AYRI/)).toBeVisible();
     expect(within(screen.getByTestId('connector-catalog')).getAllByRole('button')).toHaveLength(6);
+    expect(screen.getByTestId('connector-catalog')).toHaveStyle({
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
+      minWidth: 0,
+    });
     expect(
       within(screen.getByTestId('synthetic-envelope-catalog')).getAllByRole('listitem'),
     ).toHaveLength(3);

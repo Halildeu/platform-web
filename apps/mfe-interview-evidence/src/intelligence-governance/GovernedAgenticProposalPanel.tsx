@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { RefObject } from 'react';
-import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
+import type { ComponentProps, RefObject } from 'react';
+import { Badge as DesignSystemBadge, Button, Card, Stack, Text } from '@mfe/design-system';
 import {
   SYNTHETIC_GOVERNED_AGENTIC_PROPOSALS,
   evaluateGovernedAgenticSurface,
@@ -28,6 +28,10 @@ const STATE_PRESENTATION: Record<
 const ACTION_BLOCK_REASON =
   'PRE-G0 sentetik yüzey: approval execution değildir. Trusted identity/issuer, legal, owner ve production gate kapalıdır.';
 
+function Badge({ style, ...props }: ComponentProps<typeof DesignSystemBadge>) {
+  return <DesignSystemBadge {...props} style={{ ...RESPONSIVE_BADGE_STYLE, ...style }} />;
+}
+
 export function GovernedAgenticProposalPanel({
   proposals = SYNTHETIC_GOVERNED_AGENTIC_PROPOSALS,
 }: {
@@ -50,7 +54,12 @@ export function GovernedAgenticProposalPanel({
 
   return (
     <Card variant="outlined" padding="sm">
-      <Stack direction="column" gap={4} data-testid="governed-agentic-proposal-panel">
+      <Stack
+        direction="column"
+        gap={4}
+        data-testid="governed-agentic-proposal-panel"
+        style={RESPONSIVE_PANEL_STYLE}
+      >
         <Stack direction="row" justify="between" align="start" gap={2} wrap>
           <Stack direction="column" gap={1}>
             <Text as="h4" size="lg" weight="semibold">
@@ -184,6 +193,7 @@ export function GovernedAgenticProposalPanel({
                 disabled
                 accessReason={ACTION_BLOCK_REASON}
                 aria-describedby="agentic-action-block-reason"
+                style={RESPONSIVE_ACTION_BUTTON_STYLE}
               >
                 İncelemeyi başlat
               </Button>
@@ -192,6 +202,7 @@ export function GovernedAgenticProposalPanel({
                 disabled
                 accessReason={ACTION_BLOCK_REASON}
                 aria-describedby="agentic-action-block-reason"
+                style={RESPONSIVE_ACTION_BUTTON_STYLE}
               >
                 Revizyon iste
               </Button>
@@ -200,6 +211,7 @@ export function GovernedAgenticProposalPanel({
                 disabled
                 accessReason={ACTION_BLOCK_REASON}
                 aria-describedby="agentic-action-block-reason"
+                style={RESPONSIVE_ACTION_BUTTON_STYLE}
               >
                 Öneriyi reddet · proposal only
               </Button>
@@ -209,6 +221,7 @@ export function GovernedAgenticProposalPanel({
                 accessReason={ACTION_BLOCK_REASON}
                 aria-describedby="agentic-action-block-reason"
                 data-testid="agentic-approve-button"
+                style={RESPONSIVE_ACTION_BUTTON_STYLE}
               >
                 Aksiyon için onayla · çalıştırmaz
               </Button>
@@ -519,6 +532,30 @@ const SELECTABLE_CARD_STYLE = {
   cursor: 'pointer',
   minWidth: 0,
   font: 'inherit',
+} as const;
+
+const RESPONSIVE_PANEL_STYLE = {
+  minWidth: 0,
+  maxWidth: '100%',
+  overflowWrap: 'anywhere',
+} as const;
+
+const RESPONSIVE_BADGE_STYLE = {
+  maxWidth: '100%',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  textAlign: 'center',
+} as const;
+
+const RESPONSIVE_ACTION_BUTTON_STYLE = {
+  minWidth: 0,
+  maxWidth: '100%',
+  height: 'auto',
+  minHeight: '2.25rem',
+  paddingBlock: '0.5rem',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  textAlign: 'center',
 } as const;
 
 const REF_STYLE = { overflowWrap: 'anywhere' } as const;

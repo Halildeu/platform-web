@@ -25,7 +25,21 @@ const pickFile = (name: string, type: string, content: string) => {
 describe('ConsentRecordingPanel (F1/F2 demo akışı)', () => {
   test('açık-rıza UX: ön-seçili durum yok → kaydet düğmesi disabled; aydınlatma beyandan önce', () => {
     render(<ConsentRecordingPanel />);
+    expect(screen.getByTestId('consent-recording-panel')).toHaveStyle({
+      gridTemplateColumns: 'minmax(0, 1fr)',
+      minWidth: 0,
+      width: '100%',
+    });
     expect(screen.getByTestId('consent-disclosure')).toBeInTheDocument();
+    expect(screen.getByTestId('upload-file-input')).toHaveStyle({
+      width: '100%',
+      minWidth: 0,
+      maxWidth: '100%',
+    });
+    const consentState = screen.getByTestId('consent-state-select');
+    expect(screen.getByLabelText('Rıza durumu')).toBe(consentState);
+    expect(consentState).toHaveAttribute('id');
+    expect(consentState.id).not.toBe('');
     typeInto('consent-subject-input', 'sub-opak-1');
     expect(screen.getByTestId('consent-save-button')).toBeDisabled();
   });

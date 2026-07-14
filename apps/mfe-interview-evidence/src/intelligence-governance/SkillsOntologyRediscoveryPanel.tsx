@@ -591,8 +591,13 @@ const RESPONSIVE_BADGE_STYLE = {
 } as const;
 
 const RESPONSIVE_ACTION_BUTTON_STYLE = {
+  minWidth: 0,
   maxWidth: '100%',
+  height: 'auto',
+  minHeight: '2.25rem',
+  paddingBlock: '0.5rem',
   whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
   textAlign: 'center',
 } as const;
 

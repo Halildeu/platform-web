@@ -19,6 +19,15 @@ describe('GovernedAgenticProposalPanel', () => {
     expect(screen.getByTestId('agentic-closed-gates')).toHaveTextContent('LEGAL · NOT_MET');
     expect(screen.getByTestId('agentic-closed-gates')).toHaveTextContent('PRODUCTION · FALSE');
     expect(screen.getByTestId('agentic-approve-button')).toBeDisabled();
+    expect(screen.getByTestId('agentic-approve-button')).toHaveStyle({
+      minWidth: 0,
+      maxWidth: '100%',
+      height: 'auto',
+      minHeight: '2.25rem',
+      paddingBlock: '0.5rem',
+      whiteSpace: 'normal',
+      overflowWrap: 'anywhere',
+    });
   });
 
   test('approval, execution ve rollback anlamlarini ayri urun gercekleri olarak sunar', () => {

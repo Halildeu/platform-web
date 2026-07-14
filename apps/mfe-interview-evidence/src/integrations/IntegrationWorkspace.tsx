@@ -125,7 +125,7 @@ function CanonicalWorkspace({ registry }: { registry: IntegrationPlatformRegistr
           data-testid="connector-catalog"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
             gap: '0.75rem',
             minWidth: 0,
           }}
@@ -273,7 +273,7 @@ function ConnectorDetail({ connector }: { connector: IntegrationConnectorV1 }) {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
               gap: '0.75rem',
               minWidth: 0,
             }}
@@ -286,7 +286,7 @@ function ConnectorDetail({ connector }: { connector: IntegrationConnectorV1 }) {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
             gap: '0.75rem',
             minWidth: 0,
           }}
@@ -369,7 +369,7 @@ function SyntheticEnvelopeCatalog({
         aria-label="Sentetik entegrasyon zarfları"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
           gap: '0.75rem',
           listStyle: 'none',
           margin: 0,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Badge, Button, Input, Select, Text } from '@mfe/design-system';
 import * as engine from './demoIngestEngine';
 import type { ConsentState, IngestReceipt } from './types';
@@ -29,6 +29,7 @@ export function ConsentRecordingPanel({
    */
   onTranscribed?: (transcriptKey: string, evidenceId: string) => void;
 } = {}) {
+  const consentStateId = useId();
   const [subjectRef, setSubjectRef] = useState('');
   const [state, setState] = useState<ConsentState | ''>('');
   const [savedState, setSavedState] = useState<ConsentState | null>(null);
@@ -65,14 +66,14 @@ export function ConsentRecordingPanel({
     <section
       aria-label="Rıza ve kayıt yükleme"
       data-testid="consent-recording-panel"
-      style={{ display: 'grid', gap: 12, maxWidth: 560 }}
+      style={{ ...REFLOW_GRID_STYLE, gap: 12, maxWidth: 560, width: '100%' }}
     >
       <Text as="h2" size="lg" weight="semibold">
         Rıza ve kayıt yükleme (F1/F2)
       </Text>
 
       {/* Aydınlatma — beyan kaydından ÖNCE görünür (KVKK m.10) */}
-      <div data-testid="consent-disclosure" style={{ display: 'grid', gap: 4 }}>
+      <div data-testid="consent-disclosure" style={{ ...REFLOW_GRID_STYLE, gap: 4 }}>
         <Text as="p" size="sm">
           Görüşme kaydı yalnız açık rıza VERİLDİYSE işlenir; rıza her an geri çekilebilir. Yapay
           zeka yalnız kanıt/alıntı çıkarımında yardımcıdır; kararı insan verir.
@@ -88,18 +89,21 @@ export function ConsentRecordingPanel({
         </Text>
       </div>
 
-      <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ ...REFLOW_GRID_STYLE, gap: 8 }}>
         <Input
           label="Kişi referansı (opak ref — PII girmeyin)"
           value={subjectRef}
           onChange={(e) => setSubjectRef(e.target.value)}
           data-testid="consent-subject-input"
         />
-        <div style={{ display: 'grid', gap: 4 }}>
-          <Text as="span" size="sm" weight="medium">
-            Rıza durumu
-          </Text>
+        <div style={{ ...REFLOW_GRID_STYLE, gap: 4 }}>
+          <label htmlFor={consentStateId}>
+            <Text as="span" size="sm" weight="medium">
+              Rıza durumu
+            </Text>
+          </label>
           <Select
+            id={consentStateId}
             options={CONSENT_OPTIONS}
             placeholder="Durum seçin (ön-seçili yok — açık rıza)"
             value={state}
@@ -140,16 +144,17 @@ export function ConsentRecordingPanel({
         )}
       </div>
 
-      <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ ...REFLOW_GRID_STYLE, gap: 8 }}>
         <Text as="h3" size="base" weight="semibold">
           Görüşme kaydını yükle
         </Text>
-        <label style={{ display: 'grid', gap: 4, fontSize: 14 }}>
+        <label style={{ ...REFLOW_GRID_STYLE, gap: 4, fontSize: 14 }}>
           Kayıt dosyası (kapalı allowlist: wav/mpeg/mp4/webm ses + mp4/webm video)
           <input
             type="file"
             accept="audio/wav,audio/mpeg,audio/mp4,audio/webm,video/mp4,video/webm"
             data-testid="upload-file-input"
+            style={{ width: '100%', minWidth: 0, maxWidth: '100%' }}
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
               setReceipt(null);
@@ -180,7 +185,7 @@ export function ConsentRecordingPanel({
         </Button>
 
         {receipt && (
-          <div data-testid="upload-receipt" style={{ display: 'grid', gap: 4 }}>
+          <div data-testid="upload-receipt" style={{ ...REFLOW_GRID_STYLE, gap: 4 }}>
             <Badge variant="success">Yükleme makbuzu alındı</Badge>
             <Text as="p" size="sm">
               Kanıt: <code>{receipt.evidenceId}</code> · defter sırası {receipt.ledgerSequence}{' '}
@@ -217,3 +222,9 @@ export function ConsentRecordingPanel({
     </section>
   );
 }
+
+const REFLOW_GRID_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr)',
+  minWidth: 0,
+} as const;

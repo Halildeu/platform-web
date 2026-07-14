@@ -335,6 +335,7 @@ export function QualityOfHireEvidencePanel({
               disabled
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="qoh-action-block-reason"
+              style={REFLOW_ACTION_STYLE}
             >
               Düzeltme isteği oluştur
             </Button>
@@ -343,6 +344,7 @@ export function QualityOfHireEvidencePanel({
               disabled
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="qoh-action-block-reason"
+              style={REFLOW_ACTION_STYLE}
             >
               Aggregate evidence dışa aktar
             </Button>
@@ -352,6 +354,7 @@ export function QualityOfHireEvidencePanel({
               accessReason={ACTION_BLOCK_REASON}
               aria-describedby="qoh-action-block-reason"
               data-testid="qoh-activate-button"
+              style={REFLOW_ACTION_STYLE}
             >
               Gerçek veri aktivasyonu
             </Button>
@@ -430,6 +433,16 @@ function GateLine({ label, value }: { label: string; value: string }) {
 }
 
 const REF_STYLE = { overflowWrap: 'anywhere', minWidth: 0 } as const;
+
+const REFLOW_ACTION_STYLE = {
+  minWidth: 0,
+  maxWidth: '100%',
+  height: 'auto',
+  minHeight: '2.25rem',
+  paddingBlock: '0.5rem',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+} as const;
 
 const RESPONSIVE_GRID_STYLE = {
   display: 'grid',

@@ -424,7 +424,7 @@ function StatusBadge({ status }: { status: IntegrityStatus }) {
           ? 'warning'
           : 'error';
   return (
-    <Badge variant={variant}>
+    <Badge variant={variant} style={RESPONSIVE_STATUS_BADGE_STYLE}>
       {INTEGRITY_STATUS_LABELS[status] ?? 'UNKNOWN STATUS · FAIL-CLOSED'}
     </Badge>
   );
@@ -663,6 +663,13 @@ const SELECTABLE_CARD_STYLE = {
   textAlign: 'left',
   cursor: 'pointer',
   minWidth: 0,
+} as const;
+
+const RESPONSIVE_STATUS_BADGE_STYLE = {
+  maxWidth: '100%',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  textAlign: 'center',
 } as const;
 
 const BOUNDARY_STYLE = {
