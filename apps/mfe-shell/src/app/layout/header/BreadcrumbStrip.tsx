@@ -45,7 +45,11 @@ const BreadcrumbItem: React.FC<BreadcrumbItemProps> = ({ entry, isLast }) => {
       >
         <span>{entry.label}</span>
         {hasSiblings && !isLast && (
-          <ChevronDown className="h-3 w-3 text-text-subtle opacity-0 transition-opacity group-hover:opacity-100" style={{ opacity: dropdownOpen ? 1 : undefined }} aria-hidden />
+          <ChevronDown
+            className="h-3 w-3 text-text-subtle opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ opacity: dropdownOpen ? 1 : undefined }}
+            aria-hidden
+          />
         )}
       </button>
 
@@ -76,11 +80,10 @@ const BreadcrumbItem: React.FC<BreadcrumbItemProps> = ({ entry, isLast }) => {
 };
 
 interface BreadcrumbStripProps {
-  showSidebar?: boolean;
   maxItems?: number;
 }
 
-export const BreadcrumbStrip: React.FC<BreadcrumbStripProps> = ({ showSidebar, maxItems }) => {
+export const BreadcrumbStrip: React.FC<BreadcrumbStripProps> = ({ maxItems }) => {
   const { items, hasContent } = useBreadcrumb();
 
   if (!hasContent) return null;
@@ -102,7 +105,6 @@ export const BreadcrumbStrip: React.FC<BreadcrumbStripProps> = ({ showSidebar, m
   return (
     <div
       className="flex h-8 items-center border-b border-border-subtle/30 bg-surface-header/60 px-4"
-      style={{ paddingLeft: showSidebar ? 'calc(var(--shell-sidebar-w, 0px) + 1rem)' : undefined }}
       aria-label="Breadcrumb"
     >
       {/* Home icon */}
@@ -119,12 +121,16 @@ export const BreadcrumbStrip: React.FC<BreadcrumbStripProps> = ({ showSidebar, m
         <React.Fragment key={entry.path}>
           <ChevronRight className="mx-0.5 h-3 w-3 text-text-subtle/50" aria-hidden />
           {/* Ellipsis before last item when truncated */}
-          {visibleItems.truncated && i === visibleItems.items.length - 1 && visibleItems.items.length > 1 && (
-            <>
-              <span className="px-1 text-[12px] text-text-subtle" aria-hidden>...</span>
-              <ChevronRight className="mx-0.5 h-3 w-3 text-text-subtle/50" aria-hidden />
-            </>
-          )}
+          {visibleItems.truncated &&
+            i === visibleItems.items.length - 1 &&
+            visibleItems.items.length > 1 && (
+              <>
+                <span className="px-1 text-[12px] text-text-subtle" aria-hidden>
+                  ...
+                </span>
+                <ChevronRight className="mx-0.5 h-3 w-3 text-text-subtle/50" aria-hidden />
+              </>
+            )}
           <BreadcrumbItem entry={entry} isLast={i === visibleItems.items.length - 1} />
         </React.Fragment>
       ))}
