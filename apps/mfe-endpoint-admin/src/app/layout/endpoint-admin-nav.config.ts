@@ -8,7 +8,6 @@ import {
   IconClock,
   IconLock,
   IconRefresh,
-  IconCheck,
   IconShield,
   IconInfo,
   IconSettings,
@@ -23,16 +22,22 @@ import {
  * Faz 22 product-surface completion (platform-web #922, owner goal 2026-07-15,
  * Codex istişare 019f67ba). Before this, only `/endpoint-admin/devices` had a
  * shell mega-menu entry; the remaining ~13 fully-built, backend-wired routes
- * (enrollment/TPM, catalog authoring, agent-update releases, software bundles,
- * the compliance suite, fleet software-triage, the approval inbox, fleet audit,
- * fleet health) were reachable ONLY by typing the URL — invisible to authorized
- * users. This is the domain's own left-nav (rendered by {@link EndpointAdminLayout}
- * via the design-system `AppSidebar`), so every shipped fleet-level surface is
+ * (device enrollment, catalog authoring, agent-update releases, software bundles,
+ * the compliance suite, fleet software-triage, fleet audit, service status) were
+ * reachable ONLY by typing the URL — invisible to authorized users. This is the
+ * domain's own left-nav (rendered by {@link EndpointAdminLayout} via the
+ * design-system `AppSidebar`), so every shipped fleet-level surface is
  * discoverable. The shell keeps its single "Uç Birim Yönetimi" entry.
  *
  * Grouping mirrors the industry-standard UEM console IA (Intune / Action1 /
  * NinjaOne / ManageEngine Endpoint Central): Devices · Software & Deployment ·
- * Jobs & Approvals · Security & Compliance · Audit.
+ * Security & Compliance · Audit.
+ *
+ * The approval inbox is deliberately NOT surfaced here yet: its page still runs
+ * on a mock actor + a browser-localStorage policy-approval pilot (not the real
+ * backend maker-checker queue), so listing it fleet-wide would be false
+ * discoverability. It returns once real OpenFGA authz + a backend-backed global
+ * inbox land (slice S3).
  *
  * Device- and session-scoped surfaces (remote-response terminal, VIEW_ONLY
  * viewer, device-scoped uninstall/approval-case pages) are intentionally NOT
@@ -58,6 +63,21 @@ export interface EndpointAdminNavSection {
 
 /** Base mount the shell gives the endpoint-admin remote. */
 export const ENDPOINT_ADMIN_BASE = '/endpoint-admin';
+
+/**
+ * Resolve which nav item is active for the current absolute location.
+ *
+ * Base-agnostic: nav paths are router-relative (`compliance/policies`), and the
+ * layout runs both under the shell (`/endpoint-admin/*`) and standalone (`/*`,
+ * dev port 3009). Matching the location's path SUFFIX at a segment boundary
+ * works in both mounts, and the longest match wins so `compliance/policies`
+ * beats `compliance`. Pure so {@link EndpointAdminLayout} stays declarative and
+ * this is unit-testable without the design-system/router runtime.
+ */
+export function resolveActiveNavPath(pathname: string, navPaths: readonly string[]): string {
+  const matches = navPaths.filter((path) => pathname.endsWith(`/${path}`));
+  return matches.sort((a, b) => b.length - a.length)[0] ?? '';
+}
 
 export const ENDPOINT_ADMIN_NAV: EndpointAdminNavSection[] = [
   {
@@ -107,18 +127,6 @@ export const ENDPOINT_ADMIN_NAV: EndpointAdminNavSection[] = [
         labelKey: 'endpointAdmin.nav.softwareDiff',
         path: 'software-diff-list',
         icon: IconRefresh,
-      },
-    ],
-  },
-  {
-    key: 'approvals',
-    titleKey: 'endpointAdmin.nav.section.approvals',
-    items: [
-      {
-        key: 'approvals',
-        labelKey: 'endpointAdmin.nav.approvals',
-        path: 'approvals',
-        icon: IconCheck,
       },
     ],
   },

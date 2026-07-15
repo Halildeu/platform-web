@@ -1,52 +1,55 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { ENDPOINT_ADMIN_NAV, ENDPOINT_ADMIN_BASE } from '../endpoint-admin-nav.config';
+import {
+  ENDPOINT_ADMIN_NAV,
+  ENDPOINT_ADMIN_BASE,
+  resolveActiveNavPath,
+} from '../endpoint-admin-nav.config';
 import { createEndpointAdminT } from '../../../i18n';
+import {
+  ENDPOINT_ADMIN_ROUTES,
+  FLEET_DISCOVERABLE_PATHS,
+} from '../../router/endpoint-admin-routes';
 
 /**
  * Guards the Faz 22 product-surface IA nav (platform-web #922 slice S1) against
- * the two ways it silently rots: a nav item pointing at a route that doesn't
- * exist (dead link), and a label whose i18n key was never added (raw-key leak to
- * the user). Both are "looks wired but isn't" failures the owner goal targets.
+ * the ways it silently rots: a nav item pointing at a route that doesn't exist
+ * (dead link), a shippable fleet route left OUT of the nav (the "built but
+ * invisible" gap the owner goal targets), a label whose i18n key was never added
+ * (raw-key leak), and active-state that mis-highlights. The route manifest is the
+ * single source of truth; drift from the actual router `<Route>` set fails here.
  */
-
-// Fleet-level routes declared in `router/EndpointAdminRouter.tsx` that the IA
-// nav is allowed to target. Device-/session-scoped routes (remote-response,
-// remote-access viewer, device-scoped uninstall/approval-case, propose-form)
-// are intentionally excluded — they need a device/session context (slice S2).
-// Keep in sync with the router when fleet routes change.
-const ROUTER_FLEET_PATHS = new Set([
-  'status',
-  'devices',
-  'audit',
-  'compliance',
-  'compliance/policies',
-  'compliance/gaps',
-  'approvals',
-  'enrollments',
-  'catalog/items',
-  'agent-updates/releases',
-  'software-bundles',
-  'outdated-software-list',
-  'prohibited-software-list',
-  'software-diff-list',
-]);
 
 const tTr = createEndpointAdminT('tr');
 const tEn = createEndpointAdminT('en');
 const allItems = ENDPOINT_ADMIN_NAV.flatMap((section) => section.items);
+const navPaths = allItems.map((item) => item.path);
 
 describe('endpoint-admin IA nav config (platform-web #922 S1)', () => {
   it('mounts at the shell-provided endpoint-admin base', () => {
     expect(ENDPOINT_ADMIN_BASE).toBe('/endpoint-admin');
   });
 
-  it('targets only real fleet-level router routes (no dead nav links)', () => {
-    for (const item of allItems) {
-      expect(
-        ROUTER_FLEET_PATHS.has(item.path),
-        `nav item "${item.key}" path "${item.path}" is not a declared fleet route`,
-      ).toBe(true);
+  it('nav paths EXACTLY equal the manifest fleet+discoverable routes (both directions)', () => {
+    // ⊆ : no dead nav links. ⊇ : no shippable fleet surface left invisible.
+    expect([...navPaths].sort()).toEqual([...FLEET_DISCOVERABLE_PATHS].sort());
+  });
+
+  it('route manifest matches the router declared <Route> paths (no drift)', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(resolve(here, '../../router/EndpointAdminRouter.tsx'), 'utf8');
+    const routerPaths: string[] = [];
+    const routeRegex = /<Route\s+path="([^"]+)"/g;
+    let match = routeRegex.exec(src);
+    while (match !== null) {
+      if (match[1] !== '*') routerPaths.push(match[1]);
+      match = routeRegex.exec(src);
     }
+    expect([...routerPaths].sort()).toEqual(
+      [...ENDPOINT_ADMIN_ROUTES.map((route) => route.path)].sort(),
+    );
   });
 
   it('resolves every section + item label in tr and en (no raw-key leak)', () => {
@@ -62,12 +65,33 @@ describe('endpoint-admin IA nav config (platform-web #922 S1)', () => {
 
   it('has unique, relative, non-empty keys and paths', () => {
     const keys = allItems.map((item) => item.key);
-    const paths = allItems.map((item) => item.path);
     expect(new Set(keys).size, 'duplicate item keys').toBe(keys.length);
-    expect(new Set(paths).size, 'duplicate item paths').toBe(paths.length);
+    expect(new Set(navPaths).size, 'duplicate item paths').toBe(navPaths.length);
     for (const item of allItems) {
       expect(item.path, `empty path for ${item.key}`).not.toBe('');
       expect(item.path.startsWith('/'), `path "${item.path}" must be router-relative`).toBe(false);
     }
+  });
+});
+
+describe('resolveActiveNavPath', () => {
+  it('picks the longest matching path under the shell mount', () => {
+    expect(resolveActiveNavPath('/endpoint-admin/compliance/policies', navPaths)).toBe(
+      'compliance/policies',
+    );
+    expect(resolveActiveNavPath('/endpoint-admin/compliance/gaps', navPaths)).toBe(
+      'compliance/gaps',
+    );
+    expect(resolveActiveNavPath('/endpoint-admin/compliance', navPaths)).toBe('compliance');
+  });
+
+  it('works standalone (no /endpoint-admin prefix)', () => {
+    expect(resolveActiveNavPath('/compliance/policies', navPaths)).toBe('compliance/policies');
+    expect(resolveActiveNavPath('/devices', navPaths)).toBe('devices');
+  });
+
+  it('does not partial-match across a segment boundary', () => {
+    expect(resolveActiveNavPath('/endpoint-admin/devices-extra', navPaths)).toBe('');
+    expect(resolveActiveNavPath('/endpoint-admin/unknown', navPaths)).toBe('');
   });
 });

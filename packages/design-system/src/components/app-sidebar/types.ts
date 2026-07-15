@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import type { AccessControlledProps } from '../../internal/access-controller';
 
 /* ------------------------------------------------------------------ */
@@ -102,8 +102,13 @@ export interface AppSidebarNavItemProps {
   badge?: ReactNode;
   /** Disables the item. */
   disabled?: boolean;
-  /** Click handler. */
-  onClick?: () => void;
+  /**
+   * Click handler. Receives the native click event so link-backed callers
+   * (an item rendered as an `<a href>`) can implement client-side/SPA
+   * navigation via `event.preventDefault()` while preserving anchor
+   * semantics (middle-click, cmd/ctrl-click open-in-new-tab, copy-link).
+   */
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
   /** Tooltip text shown when the sidebar is collapsed. */
   tooltip?: string;
   /** Nested nav items (up to 3 levels deep). */
