@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const ATS_ROUTE = '/admin/interview-evidence';
+const ATS_ROUTE = '/admin/ats';
 
 function seriousOrCriticalViolations(
   violations: Awaited<ReturnType<AxeBuilder['analyze']>>['violations'],
@@ -18,33 +18,43 @@ test.describe('Full ATS authorized product access', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto('/home', { waitUntil: 'domcontentloaded' });
 
-    const navigationLink = page.getByRole('link', { name: /Interview Evidence/ });
+    const navigationLink = page.getByRole('link', { name: /ATS Ürün Merkezi|ATS Product Hub/ });
     await expect(navigationLink).toBeVisible();
     await expect(navigationLink).toHaveAttribute('href', ATS_ROUTE);
 
     await page.getByRole('button', { name: /^(Ara|Search)$/ }).click();
     const commandPalette = page.getByRole('dialog');
     await expect(commandPalette).toBeVisible();
-    await commandPalette.getByRole('textbox', { name: 'Command search' }).fill('mülakat');
+    const queryInput = commandPalette.getByRole('textbox', { name: 'Command search' });
+    await queryInput.click();
+    await queryInput.pressSequentially('mülakat');
+    await expect(queryInput).toHaveValue('mülakat');
     await commandPalette
-      .getByRole('button', { name: /Interview Evidence/ })
+      .getByRole('button', { name: /ATS Ürün Merkezi|ATS Product Hub/ })
       .first()
       .click();
 
-    const productSurface = page.getByTestId('ats-product-availability');
+    const productSurface = page.getByTestId('ats-product-hub');
     await expect(productSurface).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`${ATS_ROUTE}/?$`));
     await expect(page.locator('main')).toHaveCount(1);
-    await expect(productSurface.getByRole('heading', { name: 'ATS ürün alanı' })).toBeVisible();
-    await expect(productSurface).toContainText('Menü ve adresiniz hazır; yetkiniz korunuyor.');
-    await expect(productSurface.locator('article')).toHaveCount(8);
+    await expect(productSurface.getByRole('heading', { name: 'ATS Ürün Merkezi' })).toBeVisible();
+    await expect(productSurface).toContainText('henüz açık değil');
+    await expect(productSurface.locator('article')).toHaveCount(9);
+    await expect(productSurface.getByTestId('ats-live-module-gated')).toBeVisible();
 
     const candidateFilter = productSurface.getByRole('button', { name: 'Aday', exact: true });
     await candidateFilter.focus();
     await page.keyboard.press('Enter');
     await expect(candidateFilter).toHaveAttribute('aria-pressed', 'true');
-    await expect(productSurface).toContainText('2 özellik gösteriliyor');
-    await expect(productSurface.locator('article')).toHaveCount(2);
+    await expect(productSurface).toContainText('3 özellik gösteriliyor');
+    await expect(productSurface.locator('article')).toHaveCount(3);
+    await expect(productSurface.getByTestId('ats-candidate-role-boundary')).toContainText(
+      'Bu yönetici adresi adaya verilmez',
+    );
+    await expect(
+      productSurface.getByTestId('ats-capability-candidate-cv-pdf-import'),
+    ).toContainText('gerçek CV/PII işlenmez');
 
     const preview = productSurface.getByText('Güvenli örneği incele').first();
     await preview.focus();
@@ -61,7 +71,7 @@ test.describe('Full ATS authorized product access', () => {
     }
 
     const accessibility = await new AxeBuilder({ page })
-      .include('[data-testid="ats-product-availability"]')
+      .include('[data-testid="ats-product-hub"]')
       .analyze();
     expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
 
@@ -78,8 +88,8 @@ test.describe('Full ATS authorized product access', () => {
     await page.goto('/home', { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /Menüyü aç|Open menu/ }).click();
     await page.getByRole('button', { name: /^(İK|HR|Personal|RRHH)$/ }).click();
-    await page.getByRole('button', { name: /Interview Evidence/ }).click();
-    const productSurface = page.getByTestId('ats-product-availability');
+    await page.getByRole('button', { name: /ATS Ürün Merkezi|ATS Product Hub/ }).click();
+    const productSurface = page.getByTestId('ats-product-hub');
     await expect(productSurface).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`${ATS_ROUTE}/?$`));
 
@@ -87,7 +97,7 @@ test.describe('Full ATS authorized product access', () => {
     await auditorFilter.focus();
     await page.keyboard.press('Enter');
     await expect(auditorFilter).toHaveAttribute('aria-pressed', 'true');
-    await expect(productSurface).toContainText('Bu sayfanın açmadığı kapılar');
+    await expect(productSurface).toContainText('Bu merkezin açmadığı kapılar');
     await expect(productSurface).toContainText('otomatik eleme veya sıralama');
 
     const preview = productSurface.getByText('Güvenli örneği incele').first();
@@ -96,9 +106,7 @@ test.describe('Full ATS authorized product access', () => {
     await expect(productSurface).toContainText('üretim kaydı kullanılmaz');
 
     const overflow = await page.evaluate(() => {
-      const surface = document.querySelector<HTMLElement>(
-        '[data-testid="ats-product-availability"]',
-      );
+      const surface = document.querySelector<HTMLElement>('[data-testid="ats-product-hub"]');
       return {
         viewportWidth: window.innerWidth,
         documentWidth: document.documentElement.scrollWidth,
@@ -121,7 +129,7 @@ test.describe('Full ATS authorized product access', () => {
     expect(boundaryBox!.y + boundaryBox!.height).toBeLessThanOrEqual(mobileNavigationBox!.y);
 
     const accessibility = await new AxeBuilder({ page })
-      .include('[data-testid="ats-product-availability"]')
+      .include('[data-testid="ats-product-hub"]')
       .analyze();
     expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
 

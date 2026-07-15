@@ -1,5 +1,5 @@
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
-import { ATS_PRODUCT_ENTRY } from '../../../features/ats-product-catalog/model/ats-capability-registry';
+import { ATS_PRODUCT_HUB_ENTRY } from '../../../features/ats-product-catalog/model/ats-capability-registry';
 
 /* ------------------------------------------------------------------ */
 /*  Searchable items for GlobalSearch / CommandPalette                  */
@@ -45,11 +45,11 @@ export const SEARCHABLE_ITEMS: SearchableItem[] = [
     permission: MODULE_KEYS.ETHIC,
   },
   {
-    id: `nav-${ATS_PRODUCT_ENTRY.id}`,
-    titleKey: 'shell.mega.hr.interviewEvidence',
-    descriptionKey: 'shell.mega.hr.interviewEvidence.desc',
+    id: `nav-${ATS_PRODUCT_HUB_ENTRY.id}`,
+    titleKey: 'shell.mega.hr.atsProductHub',
+    descriptionKey: 'shell.mega.hr.atsProductHub.desc',
     group: 'navigation',
-    path: ATS_PRODUCT_ENTRY.route,
+    path: ATS_PRODUCT_HUB_ENTRY.route,
     keywords: [
       'ats',
       'interview evidence',
@@ -58,10 +58,13 @@ export const SEARCHABLE_ITEMS: SearchableItem[] = [
       'aday',
       'degerlendirme',
       'değerlendirme',
+      'özgeçmiş',
+      'cv',
+      'pdf',
     ],
     // Authorization only: the shell-owned safe surface remains useful while
     // the federated remote is OFF, so this item intentionally has no remoteFlag.
-    permission: ATS_PRODUCT_ENTRY.requiredModule,
+    permission: ATS_PRODUCT_HUB_ENTRY.requiredModule,
   },
   {
     id: 'nav-users',

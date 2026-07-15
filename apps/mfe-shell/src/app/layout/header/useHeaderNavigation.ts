@@ -21,6 +21,7 @@ export interface ResolvedNavItem {
   description?: string;
   path: string;
   icon: NavGroupItem['icon'];
+  activePathPrefixes?: readonly string[];
 }
 
 export interface ResolvedNavGroup {
@@ -89,6 +90,7 @@ export function useHeaderNavigation(): HeaderNavigationState {
           description: item.descriptionKey ? t(item.descriptionKey) : undefined,
           path: item.path,
           icon: item.icon,
+          activePathPrefixes: item.activePathPrefixes,
         });
         return items;
       }, []);
@@ -131,17 +133,19 @@ export function useHeaderNavigation(): HeaderNavigationState {
         continue;
       }
       for (const item of group.items ?? []) {
-        const len = item.path.length;
-        if (item.path === '/') {
-          if (pathname === '/' && len >= bestLen) {
+        for (const activePath of [item.path, ...(item.activePathPrefixes ?? [])]) {
+          const len = activePath.length;
+          if (activePath === '/') {
+            if (pathname === '/' && len >= bestLen) {
+              bestGroupKey = group.key;
+              bestItemKey = item.key;
+              bestLen = len;
+            }
+          } else if (pathname.startsWith(activePath) && len > bestLen) {
             bestGroupKey = group.key;
             bestItemKey = item.key;
             bestLen = len;
           }
-        } else if (pathname.startsWith(item.path) && len > bestLen) {
-          bestGroupKey = group.key;
-          bestItemKey = item.key;
-          bestLen = len;
         }
       }
     }
