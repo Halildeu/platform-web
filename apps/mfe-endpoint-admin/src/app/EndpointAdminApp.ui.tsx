@@ -13,6 +13,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
 import EndpointAdminRouter from './router/EndpointAdminRouter';
+import EndpointAdminLayout from './layout/EndpointAdminLayout';
 import { endpointAdminApi } from './services/endpointAdminApi';
 import { endpointAdminReduxContext } from './services/redux-context';
 
@@ -115,7 +116,9 @@ export const EndpointAdminApp: React.FC = () => {
   return (
     <EndpointAdminAppErrorBoundary>
       <EndpointAdminAppProviders>
-        <EndpointAdminRouter />
+        <EndpointAdminLayout>
+          <EndpointAdminRouter />
+        </EndpointAdminLayout>
       </EndpointAdminAppProviders>
     </EndpointAdminAppErrorBoundary>
   );
