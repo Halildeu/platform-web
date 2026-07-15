@@ -65,17 +65,43 @@ export interface EndpointAdminNavSection {
 export const ENDPOINT_ADMIN_BASE = '/endpoint-admin';
 
 /**
- * Resolve which nav item is active for the current absolute location.
+ * Normalise an absolute location to a router-relative path — strips the optional
+ * shell mount (`/endpoint-admin`) and surrounding slashes. `/endpoint-admin` and
+ * `/` both normalise to `''`.
+ */
+export function toRelativePath(pathname: string): string {
+  const trimmed = pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  const baseBare = ENDPOINT_ADMIN_BASE.replace(/^\/+/, ''); // 'endpoint-admin'
+  if (trimmed === baseBare) return '';
+  if (trimmed.startsWith(`${baseBare}/`)) return trimmed.slice(baseBare.length + 1);
+  return trimmed;
+}
+
+/**
+ * Absolute navigation target for a nav item, aware of whether the layout is
+ * mounted under the shell (`/endpoint-admin/*`) or standalone (`/*`, dev 3009).
  *
- * Base-agnostic: nav paths are router-relative (`compliance/policies`), and the
- * layout runs both under the shell (`/endpoint-admin/*`) and standalone (`/*`,
- * dev port 3009). Matching the location's path SUFFIX at a segment boundary
- * works in both mounts, and the longest match wins so `compliance/policies`
- * beats `compliance`. Pure so {@link EndpointAdminLayout} stays declarative and
- * this is unit-testable without the design-system/router runtime.
+ * Used as a plain `href` — NOT react-router relative resolution: under a
+ * multi-segment splat route (`/endpoint-admin/*`) a relative `to` appends to the
+ * CURRENT location (`/endpoint-admin/devices/status`) instead of resolving a
+ * sibling. Computing the absolute target explicitly avoids that.
+ */
+export function resolveEndpointAdminTo(pathname: string, itemPath: string): string {
+  const shellMounted =
+    pathname === ENDPOINT_ADMIN_BASE || pathname.startsWith(`${ENDPOINT_ADMIN_BASE}/`);
+  return `${shellMounted ? ENDPOINT_ADMIN_BASE : ''}/${itemPath}`;
+}
+
+/**
+ * The active nav item for the current absolute location. Base-agnostic:
+ * normalises to a router-relative path, then longest boundary-match so
+ * `compliance/policies` beats `compliance`, a trailing slash is ignored, and a
+ * detail route (`compliance/policies/123`) still highlights its parent item.
+ * Pure so {@link EndpointAdminLayout} stays declarative + this is unit-testable.
  */
 export function resolveActiveNavPath(pathname: string, navPaths: readonly string[]): string {
-  const matches = navPaths.filter((path) => pathname.endsWith(`/${path}`));
+  const rel = toRelativePath(pathname);
+  const matches = navPaths.filter((path) => rel === path || rel.startsWith(`${path}/`));
   return matches.sort((a, b) => b.length - a.length)[0] ?? '';
 }
 

@@ -139,7 +139,6 @@ export const AppSidebarNavItem = React.forwardRef<
           className={sharedClasses}
           aria-current={active ? 'page' : undefined}
           aria-disabled={disabled || undefined}
-          onClick={onClick}
           onMouseEnter={showTooltip}
           onMouseLeave={hideTooltip}
           onFocus={showTooltip}

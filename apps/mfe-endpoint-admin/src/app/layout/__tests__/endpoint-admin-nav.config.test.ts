@@ -6,6 +6,7 @@ import {
   ENDPOINT_ADMIN_NAV,
   ENDPOINT_ADMIN_BASE,
   resolveActiveNavPath,
+  resolveEndpointAdminTo,
 } from '../endpoint-admin-nav.config';
 import { createEndpointAdminT } from '../../../i18n';
 import {
@@ -90,8 +91,36 @@ describe('resolveActiveNavPath', () => {
     expect(resolveActiveNavPath('/devices', navPaths)).toBe('devices');
   });
 
+  it('ignores a trailing slash and highlights the parent of a detail route', () => {
+    expect(resolveActiveNavPath('/endpoint-admin/compliance/policies/', navPaths)).toBe(
+      'compliance/policies',
+    );
+    expect(resolveActiveNavPath('/endpoint-admin/compliance/policies/123', navPaths)).toBe(
+      'compliance/policies',
+    );
+  });
+
   it('does not partial-match across a segment boundary', () => {
     expect(resolveActiveNavPath('/endpoint-admin/devices-extra', navPaths)).toBe('');
     expect(resolveActiveNavPath('/endpoint-admin/unknown', navPaths)).toBe('');
+  });
+});
+
+describe('resolveEndpointAdminTo (mount-aware absolute target)', () => {
+  it('prefixes the shell base for a sibling, not the current path', () => {
+    // The bug this guards: react-router relative resolution under the
+    // /endpoint-admin/* splat would append -> /endpoint-admin/devices/status.
+    expect(resolveEndpointAdminTo('/endpoint-admin/devices', 'status')).toBe(
+      '/endpoint-admin/status',
+    );
+    expect(resolveEndpointAdminTo('/endpoint-admin/compliance/policies', 'audit')).toBe(
+      '/endpoint-admin/audit',
+    );
+    expect(resolveEndpointAdminTo('/endpoint-admin', 'devices')).toBe('/endpoint-admin/devices');
+  });
+
+  it('emits a root-relative target when standalone', () => {
+    expect(resolveEndpointAdminTo('/devices', 'status')).toBe('/status');
+    expect(resolveEndpointAdminTo('/compliance/policies', 'audit')).toBe('/audit');
   });
 });
