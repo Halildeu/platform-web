@@ -56,10 +56,58 @@ test.describe('Full ATS authorized product access', () => {
       productSurface.getByTestId('ats-capability-candidate-cv-pdf-import'),
     ).toContainText('gerçek CV/PII işlenmez');
 
-    const preview = productSurface.getByText('Güvenli örneği incele').first();
-    await preview.focus();
+    const cvImport = productSurface.getByTestId('ats-capability-candidate-cv-pdf-import');
+    await expect(cvImport.locator('input[type="file"]')).toHaveCount(0);
+    const cvDemo = cvImport.getByRole('button', { name: 'Sentetik PDF taslak akışını dene' });
+    await cvDemo.focus();
     await page.keyboard.press('Enter');
-    await expect(productSurface).toContainText('Talep gönderilmez');
+    await expect(cvImport).toContainText('Dosya seçimi, gerçek PDF/PII');
+    await cvImport.getByRole('button', { name: 'Sentetik PDF örneğini işle' }).click();
+    await expect(cvImport.locator('[data-testid^="ats-resume-field-"]')).toHaveCount(5);
+    const emailInput = cvImport.getByLabel('E-posta');
+    await emailInput.selectText();
+    await emailInput.pressSequentially('playwright@example.invalid');
+    await expect(emailInput).toHaveValue('playwright@example.invalid');
+    await expect(emailInput).not.toHaveAttribute('readonly', '');
+    await cvImport.getByRole('button', { name: 'Deneyim alanını kabul et' }).click();
+    await cvImport.getByRole('button', { name: 'Eğitim alanını reddet' }).click();
+    await cvImport.getByTestId('ats-resume-transfer-selected').click();
+    const localDraft = cvImport.getByTestId('ats-synthetic-resume-draft');
+    await expect(localDraft).toContainText('playwright@example.invalid');
+    await expect(localDraft).toContainText('Sentetik Ürün Uzmanı');
+    await expect(localDraft).not.toContainText('Örnek Üniversite');
+    await expect(localDraft).toContainText('başvuru gönderilmedi');
+    await expect(cvImport.locator('input[type="file"]')).toHaveCount(0);
+
+    const roleCapabilityCounts = [
+      ['Aday', 3],
+      ['İşe alım uzmanı', 8],
+      ['İşe alım yöneticisi', 6],
+      ['Mülakatçı', 3],
+      ['Denetçi', 7],
+      ['Yönetici', 6],
+    ] as const;
+    for (const [role, count] of roleCapabilityCounts) {
+      await productSurface.getByRole('button', { name: role, exact: true }).click();
+      await expect(productSurface.locator('article[data-testid^="ats-capability-"]')).toHaveCount(
+        count,
+      );
+    }
+    await productSurface.getByRole('button', { name: 'Tüm roller', exact: true }).click();
+    await expect(productSurface.locator('article[data-testid^="ats-capability-"]')).toHaveCount(9);
+
+    const coaching = productSurface.getByTestId('ats-capability-citation-backed-coaching');
+    await coaching.getByRole('button', { name: 'Koçluk önerisini dene' }).click();
+    await coaching.getByRole('button', { name: 'Sentetik çıktıyı üret' }).click();
+    await expect(coaching).toContainText('Öneri uygulanamaz');
+    await expect(coaching).toContainText('ağ isteği, kayıt, bildirim veya karar üretilmedi');
+
+    const agentic = productSurface.getByTestId('ats-capability-agentic-screening');
+    await agentic.getByRole('button', { name: 'Ajan önerisini güvenle dene' }).click();
+    await agentic.getByRole('button', { name: 'Sentetik çıktıyı üret' }).click();
+    await expect(agentic).toContainText('Mesaj gönderilmez');
+    await expect(agentic).toContainText('red/teklif/sıralama üretilmez');
+    await expect(agentic).toContainText('toplu onay yoktur');
 
     for (const forbiddenAction of [
       'Adayı reddet',
@@ -100,10 +148,12 @@ test.describe('Full ATS authorized product access', () => {
     await expect(productSurface).toContainText('Bu merkezin açmadığı kapılar');
     await expect(productSurface).toContainText('otomatik eleme veya sıralama');
 
-    const preview = productSurface.getByText('Güvenli örneği incele').first();
+    const correction = productSurface.getByTestId('ats-capability-candidate-review-and-appeal');
+    const preview = correction.getByRole('button', { name: 'Düzeltme taslağını dene' });
     await preview.focus();
     await page.keyboard.press('Enter');
-    await expect(productSurface).toContainText('üretim kaydı kullanılmaz');
+    await correction.getByRole('button', { name: 'Sentetik çıktıyı üret' }).click();
+    await expect(correction).toContainText('üretim kaydı kullanılmaz');
 
     const overflow = await page.evaluate(() => {
       const surface = document.querySelector<HTMLElement>('[data-testid="ats-product-hub"]');

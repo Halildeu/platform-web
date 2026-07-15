@@ -35,6 +35,10 @@ describe('ATS capability registry', () => {
     expect(cvImport?.liveDependency).toContain('Halildeu/ats#163');
     expect(cvImport?.actionCeiling).toContain('gerçek CV/PII işlenmez');
     expect(cvImport?.safePreview).toBeNull();
+    expect(cvImport?.safeExperience).toEqual({
+      kind: 'SYNTHETIC_RESUME_DRAFT',
+      actionLabel: 'Sentetik PDF taslak akışını dene',
+    });
   });
 
   it('makes the required product-role matrix discoverable', () => {
@@ -67,6 +71,25 @@ describe('ATS capability registry', () => {
           capability.mode === 'SYNTHETIC_SANDBOX' || capability.mode === 'PROPOSAL_ONLY',
       ),
     ).toBe(true);
+    expect(
+      ATS_CAPABILITY_REGISTRY.filter(
+        (capability) => capability.safeExperience?.kind === 'SCENARIO_RUNNER',
+      ).every(
+        (capability) =>
+          capability.mode === 'SYNTHETIC_SANDBOX' || capability.mode === 'PROPOSAL_ONLY',
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps agentic screening usable only as a non-mutating proposal exercise', () => {
+    const agentic = ATS_CAPABILITY_REGISTRY.find(
+      (capability) => capability.id === 'agentic-screening',
+    );
+
+    expect(agentic?.mode).toBe('PROPOSAL_ONLY');
+    expect(agentic?.safeExperience?.kind).toBe('SCENARIO_RUNNER');
+    expect(agentic?.actionCeiling).toContain('otomatik eleme');
+    expect(agentic?.safePreview?.boundary).toContain('Mesaj gönderilmez');
   });
 
   it('promotes only the declared Interview Evidence capability to live read when remote is on', () => {
