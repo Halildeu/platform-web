@@ -125,7 +125,7 @@ describe('IntelligenceGovernanceLab', () => {
     );
   });
 
-  test('interviewer coaching seciminde dedicated citation detail panelini acar', () => {
+  test('interviewer coaching seciminde dedicated citation detail panelini acar', async () => {
     render(<IntelligenceGovernanceLab />);
     expect(screen.queryByTestId('citation-backed-coaching-panel')).not.toBeInTheDocument();
 
@@ -134,6 +134,7 @@ describe('IntelligenceGovernanceLab', () => {
     const panel = screen.getByTestId('citation-backed-coaching-panel');
     expect(panel).toHaveTextContent('PROPOSAL ONLY');
     expect(panel).toHaveTextContent('AI_SUGGESTED');
+    expect(await screen.findByText('PINNED PROFILE + DIGEST VERIFIED')).toBeInTheDocument();
     expect(panel).toHaveTextContent('SUPPORTED citation');
     expect(screen.getByTestId('coaching-apply-button')).toBeDisabled();
   });

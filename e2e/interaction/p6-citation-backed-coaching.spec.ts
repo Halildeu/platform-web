@@ -32,6 +32,8 @@ test.describe('P6.2 citation-backed coaching browser acceptance', () => {
 
     await expect(panel).toContainText('PROPOSAL ONLY');
     await expect(panel).toContainText('AI_SUGGESTED');
+    await expect(panel).toContainText('PINNED PROFILE + DIGEST VERIFIED');
+    await expect(panel).toContainText('ARCHIVAL WINDOW EXPIRED');
     await expect(page.getByTestId('coaching-suggestion')).toHaveCount(2);
     await expect(
       page.getByTestId('coaching-suggestion-list').getByText('1 SUPPORTED citation', {
@@ -74,6 +76,18 @@ test.describe('P6.2 citation-backed coaching browser acceptance', () => {
     await expect(page.getByTestId('coaching-governance-lineage')).toContainText(
       'audit:coaching:synthetic:v1',
     );
+    await expect(page.getByTestId('coaching-governance-lineage')).toContainText(
+      'Halildeu/ats@37353c4e9eeda90235d66e24ee22aa30ad148e7a',
+    );
+    await expect(page.getByTestId('coaching-governance-lineage')).toContainText(
+      'sha256:7a8eaa981ee2fdf412a5139abedb71853ee958c477391b3e75dae1e343e5c380',
+    );
+    await expect(page.getByTestId('coaching-governance-lineage')).toContainText(
+      'canlı freshness veya production authenticity kanıtı değildir',
+    );
+    await expect(page.getByTestId('coaching-governance-lineage')).toContainText(
+      'EXPIRED — yalnız arşiv demo; canlı freshness için geçersiz',
+    );
 
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="intelligence-governance-lab"]')
@@ -98,7 +112,7 @@ test.describe('P6.2 citation-backed coaching browser acceptance', () => {
       'ölçülen kurtarma süresi belirtilmemiş',
     );
     await expect(page.getByTestId('coaching-governance-lineage')).toContainText(
-      `sha256:${'7'.repeat(64)}`,
+      'sha256:7a8eaa981ee2fdf412a5139abedb71853ee958c477391b3e75dae1e343e5c380',
     );
     await expect(page.getByTestId('coaching-action-block-reason')).toContainText(
       'legal/audit/owner gate olmadan uygulanamaz',
