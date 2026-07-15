@@ -14,8 +14,10 @@ import {
   Lightbulb,
   Scale,
   Monitor,
+  FileText,
 } from 'lucide-react';
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
+import { ATS_PRODUCT_ENTRY } from '../../../features/ats-product-catalog/model/ats-capability-registry';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation types                                                   */
@@ -87,6 +89,17 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Scale,
         module: MODULE_KEYS.ETHIC,
         remoteFlag: 'ethic',
+      },
+      {
+        key: ATS_PRODUCT_ENTRY.id,
+        labelKey: 'shell.mega.hr.interviewEvidence',
+        descriptionKey: 'shell.mega.hr.interviewEvidence.desc',
+        path: ATS_PRODUCT_ENTRY.route,
+        icon: FileText,
+        // Unlike the federated remote, the safe product destination is always
+        // discoverable after authorization. Remote readiness is handled inside
+        // InterviewEvidenceRoute and must not hide this entry.
+        module: ATS_PRODUCT_ENTRY.requiredModule,
       },
       {
         key: 'compensation',
@@ -219,6 +232,11 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
   // HR
   { pattern: '/suggestions', labelKey: 'shell.breadcrumb.suggestions', parent: '/' },
   { pattern: '/ethic', labelKey: 'shell.breadcrumb.ethic', parent: '/' },
+  {
+    pattern: ATS_PRODUCT_ENTRY.route,
+    labelKey: 'shell.breadcrumb.interviewEvidence',
+    parent: '/',
+  },
 
   // Admin
   {

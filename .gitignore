@@ -51,6 +51,7 @@ apps/*/dist/
 
 # Dedicated P6 browser acceptance output (CI artifact, never source).
 /playwright-report-p6/
+/playwright-report-fullats-access/
 /test-results/
 
 # PERF-INIT-V2 PR-B3d0-impl: source-map-explorer CSS attribution artifacts

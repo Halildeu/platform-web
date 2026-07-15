@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import { BreadcrumbStrip } from '../BreadcrumbStrip';
@@ -53,6 +53,11 @@ describe('BreadcrumbStrip', () => {
   it('renders home icon', () => {
     render(<BreadcrumbStrip />);
     expect(screen.getByLabelText('Home')).toBeInTheDocument();
+  });
+
+  it('leaves sidebar offset ownership to the shell content container', () => {
+    render(<BreadcrumbStrip />);
+    expect(screen.getByLabelText('Breadcrumb')).not.toHaveAttribute('style');
   });
 
   it('marks last item as current page', () => {

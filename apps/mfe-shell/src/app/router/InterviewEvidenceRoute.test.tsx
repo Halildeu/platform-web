@@ -1,0 +1,117 @@
+// @vitest-environment jsdom
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { InterviewEvidenceRoute } from './InterviewEvidenceRoute';
+
+const authState = {
+  auth: {
+    token: 'valid-token' as string | null,
+    initialized: true,
+  },
+};
+
+const permissionsMock = {
+  hasModule: vi.fn((module: string) => module === 'INTERVIEW_EVIDENCE'),
+  isSuperAdmin: vi.fn(() => false),
+  authorizationReady: true,
+};
+
+vi.mock('../store/store.hooks', () => ({
+  useAppSelector: (selector: (state: typeof authState) => unknown) => selector(authState),
+}));
+
+vi.mock('../auth/auth-config', () => ({
+  isPermitAllMode: () => false,
+}));
+
+vi.mock('@mfe/auth', () => ({
+  usePermissions: () => permissionsMock,
+}));
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return (
+    <div>
+      <span>Unauthorized destination</span>
+      <span data-testid="route-location">{location.pathname}</span>
+      <span data-testid="route-reason">
+        {String((location.state as { reason?: string } | null)?.reason ?? 'none')}
+      </span>
+    </div>
+  );
+};
+
+const renderRoute = (remoteEnabled: boolean) =>
+  render(
+    <MemoryRouter initialEntries={['/admin/interview-evidence']}>
+      <Routes>
+        <Route
+          path="/admin/interview-evidence/*"
+          element={
+            <InterviewEvidenceRoute
+              remoteEnabled={remoteEnabled}
+              remoteContent={<div>Real Interview Evidence MFE</div>}
+            />
+          }
+        />
+        <Route path="/unauthorized" element={<LocationProbe />} />
+        <Route path="/login" element={<div>Login destination</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+describe('InterviewEvidenceRoute', () => {
+  beforeEach(() => {
+    authState.auth.token = 'valid-token';
+    authState.auth.initialized = true;
+    permissionsMock.hasModule.mockImplementation(
+      (module: string) => module === 'INTERVIEW_EVIDENCE',
+    );
+    permissionsMock.isSuperAdmin.mockReturnValue(false);
+    permissionsMock.authorizationReady = true;
+  });
+
+  afterEach(() => cleanup());
+
+  it('renders the safe product surface for an authorized user when the remote is off', () => {
+    renderRoute(false);
+
+    expect(screen.getByRole('heading', { name: 'ATS ürün alanı' })).toBeInTheDocument();
+    expect(screen.queryByText('Real Interview Evidence MFE')).not.toBeInTheDocument();
+  });
+
+  it('renders the real MFE for an authorized user when the remote is on', () => {
+    renderRoute(true);
+
+    expect(screen.getByText('Real Interview Evidence MFE')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ATS ürün alanı' })).not.toBeInTheDocument();
+  });
+
+  it('rejects a direct URL when the module grant is missing in both modes', () => {
+    permissionsMock.hasModule.mockReturnValue(false);
+
+    renderRoute(false);
+    expect(screen.getByText('Unauthorized destination')).toBeInTheDocument();
+    expect(screen.getByTestId('route-location')).toHaveTextContent('/unauthorized');
+    expect(screen.getByTestId('route-reason')).toHaveTextContent('module_denied');
+    expect(screen.queryByRole('heading', { name: 'ATS ürün alanı' })).not.toBeInTheDocument();
+
+    cleanup();
+    permissionsMock.hasModule.mockReturnValue(false);
+    renderRoute(true);
+    expect(screen.getByText('Unauthorized destination')).toBeInTheDocument();
+    expect(screen.queryByText('Real Interview Evidence MFE')).not.toBeInTheDocument();
+  });
+
+  it('keeps anonymous direct URLs behind the login boundary', () => {
+    authState.auth.token = null;
+
+    renderRoute(false);
+
+    expect(screen.getByText('Login destination')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ATS ürün alanı' })).not.toBeInTheDocument();
+  });
+});
