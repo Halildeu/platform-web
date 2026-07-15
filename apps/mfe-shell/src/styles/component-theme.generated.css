@@ -1,0 +1,87 @@
+/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */
+/* Safe bounded regeneration: npm run tokens:build:component-theme */
+
+:root {
+  --component-badge-foreground-default: oklch(21.01% 0.0318 264.66);
+  --component-badge-foreground-muted: oklch(37.29% 0.0306 259.73);
+  --component-badge-dot-neutral: oklch(44.61% 0.0263 256.8);
+  --component-badge-dot-primary: oklch(48.82% 0.2172 264.38);
+  --component-badge-dot-info: oklch(48.82% 0.2172 264.38);
+  --component-badge-dot-success: oklch(52.73% 0.1371 150.07);
+  --component-badge-dot-warning: oklch(55.53% 0.1455 49);
+  --component-badge-dot-danger: oklch(50.54% 0.1905 27.52);
+}
+
+:root[data-theme='serban-light'],
+[data-theme-scope][data-theme='serban-light'] {
+  --component-badge-foreground-default: oklch(21.01% 0.0318 264.66);
+  --component-badge-foreground-muted: oklch(37.29% 0.0306 259.73);
+  --component-badge-dot-neutral: oklch(44.61% 0.0263 256.8);
+  --component-badge-dot-primary: oklch(48.82% 0.2172 264.38);
+  --component-badge-dot-info: oklch(48.82% 0.2172 264.38);
+  --component-badge-dot-success: oklch(52.73% 0.1371 150.07);
+  --component-badge-dot-warning: oklch(55.53% 0.1455 49);
+  --component-badge-dot-danger: oklch(50.54% 0.1905 27.52);
+}
+
+:root[data-theme='serban-dark'],
+[data-theme-scope][data-theme='serban-dark'] {
+  --component-badge-foreground-default: oklch(92.88% 0.0126 255.51);
+  --component-badge-foreground-muted: oklch(86.9% 0.0198 252.89);
+  --component-badge-dot-neutral: oklch(86.9% 0.0198 252.89);
+  --component-badge-dot-primary: oklch(71.37% 0.1434 254.62);
+  --component-badge-dot-info: oklch(71.37% 0.1434 254.62);
+  --component-badge-dot-success: oklch(80.03% 0.1821 151.71);
+  --component-badge-dot-warning: oklch(83.69% 0.1644 84.43);
+  --component-badge-dot-danger: oklch(71.06% 0.1661 22.22);
+}
+
+:root[data-theme='serban-hc'],
+[data-theme-scope][data-theme='serban-hc'] {
+  --component-badge-foreground-default: oklch(100% 0 0);
+  --component-badge-foreground-muted: oklch(100% 0 0);
+  --component-badge-dot-neutral: oklch(100% 0 0);
+  --component-badge-dot-primary: oklch(71.37% 0.1434 254.62);
+  --component-badge-dot-info: oklch(75.54% 0.1534 231.64);
+  --component-badge-dot-success: oklch(86.64% 0.2948 142.5);
+  --component-badge-dot-warning: oklch(88.68% 0.1822 95.33);
+  --component-badge-dot-danger: oklch(62.8% 0.2577 29.23);
+}
+
+:root[data-theme='serban-compact'],
+[data-theme-scope][data-theme='serban-compact'] {
+  --component-badge-foreground-default: oklch(21.01% 0.0318 264.66);
+  --component-badge-foreground-muted: oklch(37.29% 0.0306 259.73);
+  --component-badge-dot-neutral: oklch(44.61% 0.0263 256.8);
+  --component-badge-dot-primary: oklch(48.82% 0.2172 264.38);
+  --component-badge-dot-info: oklch(48.82% 0.2172 264.38);
+  --component-badge-dot-success: oklch(52.73% 0.1371 150.07);
+  --component-badge-dot-warning: oklch(55.53% 0.1455 49);
+  --component-badge-dot-danger: oklch(50.54% 0.1905 27.52);
+}
+
+:root[data-mode='dark']:not([data-theme='serban-hc']),
+[data-theme-scope][data-mode='dark']:not([data-theme='serban-hc']) {
+  --component-badge-foreground-default: oklch(92.88% 0.0126 255.51);
+  --component-badge-foreground-muted: oklch(86.9% 0.0198 252.89);
+  --component-badge-dot-neutral: oklch(86.9% 0.0198 252.89);
+  --component-badge-dot-primary: oklch(71.37% 0.1434 254.62);
+  --component-badge-dot-info: oklch(71.37% 0.1434 254.62);
+  --component-badge-dot-success: oklch(80.03% 0.1821 151.71);
+  --component-badge-dot-warning: oklch(83.69% 0.1644 84.43);
+  --component-badge-dot-danger: oklch(71.06% 0.1661 22.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-mode='system']:not([data-theme='serban-hc']),
+  [data-theme-scope][data-mode='system']:not([data-theme='serban-hc']) {
+    --component-badge-foreground-default: oklch(92.88% 0.0126 255.51);
+    --component-badge-foreground-muted: oklch(86.9% 0.0198 252.89);
+    --component-badge-dot-neutral: oklch(86.9% 0.0198 252.89);
+    --component-badge-dot-primary: oklch(71.37% 0.1434 254.62);
+    --component-badge-dot-info: oklch(71.37% 0.1434 254.62);
+    --component-badge-dot-success: oklch(80.03% 0.1821 151.71);
+    --component-badge-dot-warning: oklch(83.69% 0.1644 84.43);
+    --component-badge-dot-danger: oklch(71.06% 0.1661 22.22);
+  }
+}

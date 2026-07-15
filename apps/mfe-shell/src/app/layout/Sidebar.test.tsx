@@ -50,6 +50,7 @@ vi.mock('../shell-navigation', () => ({
   isSuggestionsRemoteEnabled: () => true,
   isEthicRemoteEnabled: () => true,
   isMeetingRemoteEnabled: () => true,
+  isInterviewEvidenceRemoteEnabled: () => false,
 }));
 
 const LocationViewer = () => {
@@ -171,42 +172,40 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(transcriptGranted?.href).toBe('/admin/meetings');
   });
 
-  it('gates the interview-evidence item by INTERVIEW_EVIDENCE and the remote flag', () => {
-    // ATS-0019 mirror of the meetings gate: default-off remote means the item is
-    // disabled with no href even when the module is granted. Both the remote flag
-    // AND the module (or super-admin) must hold before it links to the route.
-    const denied = pick(buildSidebarNavItems(false, denyAll), 'interview-evidence');
+  it('keeps the permanent ATS product hub discoverable independently of remote readiness', () => {
+    const denied = pick(buildSidebarNavItems(false, denyAll), 'ats-product-hub');
     expect(denied?.disabled).toBe(true);
     expect(denied?.href).toBeUndefined();
 
-    // Module granted but remote OFF (default 4th arg false) → still disabled.
+    // Module granted + remote OFF → guarded safe product surface remains reachable.
     const remoteDisabled = pick(
       buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE')),
-      'interview-evidence',
+      'ats-product-hub',
     );
-    expect(remoteDisabled?.disabled).toBe(true);
-    expect(remoteDisabled?.href).toBeUndefined();
+    expect(remoteDisabled?.disabled).toBe(false);
+    expect(remoteDisabled?.href).toBe('/admin/ats');
+    expect(remoteDisabled?.badge).toBeDefined();
 
     // Remote ON but no module → disabled (no ungated leak through the flag).
-    const moduleMissing = pick(
-      buildSidebarNavItems(false, denyAll, true, true),
-      'interview-evidence',
-    );
+    const moduleMissing = pick(buildSidebarNavItems(false, denyAll, true, true), 'ats-product-hub');
     expect(moduleMissing?.disabled).toBe(true);
     expect(moduleMissing?.href).toBeUndefined();
+    expect(moduleMissing?.badge).toBeUndefined();
 
     // Remote ON + module granted → active link.
     const granted = pick(
       buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE'), true, true),
-      'interview-evidence',
+      'ats-product-hub',
     );
     expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/admin/interview-evidence');
+    expect(granted?.href).toBe('/admin/ats');
+    expect(granted?.badge).toBeUndefined();
 
-    // Super-admin + remote ON → active even without an explicit module grant.
-    const superAdmin = pick(buildSidebarNavItems(true, denyAll, true, true), 'interview-evidence');
+    // Super-admin remains active even when the remote is OFF and sees safe-preview status.
+    const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'ats-product-hub');
     expect(superAdmin?.disabled).toBe(false);
-    expect(superAdmin?.href).toBe('/admin/interview-evidence');
+    expect(superAdmin?.href).toBe('/admin/ats');
+    expect(superAdmin?.badge).toBeDefined();
   });
 
   it('keeps every privileged item gated (no ungated leak)', () => {

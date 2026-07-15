@@ -363,6 +363,25 @@ const keycloakClientId =
   process.env.WEB_KEYCLOAK_CLIENT_ID ||
   'frontend';
 
+const STAGE_EXPORT_PROFILE_JSON = JSON.stringify({
+  version: 1,
+  binding: { interviewId: 'iv-smoke-1' },
+  generatorVersionRef: 'ats-app-boot-stage',
+  locale: 'tr-TR',
+  timezone: 'Europe/Istanbul',
+  aiAssistanceDisclosureRef: 'disclosure-eu-ai-act-m50-v1',
+  rubricVersionRef: 'rubric-stage-v1',
+  redactionPolicyRef: 'redaction-policy-stage-v1',
+  redactionRunRef: 'redaction-run-stage-smoke',
+  retentionPolicyRef: 'retention-policy-stage-v1',
+  signatureRef: 'signature-stage-smoke',
+  schemaDigest: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  criteria: [
+    { criterionId: 'crit-communication', jobRelatednessRationaleRef: 'jr-communication-v1' },
+    { criterionId: 'crit-experience', jobRelatednessRationaleRef: 'jr-experience-v1' },
+  ],
+});
+
 const shellEnv = {
   SINGLE_DOMAIN_BUILD: '1',
   APP_BASE_PATH: '/',
@@ -431,6 +450,27 @@ const shellEnv = {
         VITE_MFE_INTERVIEW_EVIDENCE_URL: remoteEntryUrlFor('interview-evidence'),
         SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
         VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
+      }
+    : {}),
+  // 39d-6: STAGE'de canlı /api/ats READ EXPLICIT enjekte edilir (Codex 019f50b7:
+  // "STAGE olduğu için otomatik" değil, STAGE dalının açık değer yazması).
+  // Prod'da anahtar YOK → MFE default 'demo' (fail-safe). iv-smoke-1 = 39d-4
+  // D29 smoke'unun SENTETİK fixture interview'u (gerçek aday verisi DEĞİL;
+  // ATS-0016/G0 sınırı) — uygulama koduna hardcode edilmez, buradan enjekte edilir.
+  ...(interviewEvidenceEnabled && publicOrigin === STAGE_PUBLIC_ORIGIN
+    ? {
+        INTERVIEW_EVIDENCE_DATA_MODE: 'live',
+        VITE_INTERVIEW_EVIDENCE_DATA_MODE: 'live',
+        INTERVIEW_EVIDENCE_INTERVIEW_ID: 'iv-smoke-1',
+        VITE_INTERVIEW_EVIDENCE_INTERVIEW_ID: 'iv-smoke-1',
+        // 39d-7d export (F7) profili — SENTETİK stage değerleri (opak pointer;
+        // secret YOK; binding iv-smoke-1'e kilitli — yanlış mülakata export
+        // MFE'de fail-closed). Şema: mfe-interview-evidence exportProfile.ts
+        // ExportProfileV1 (strict parser). Backend schemaDigest'i yalnız
+        // 64-hex FORMAT doğrular (ExportService.validateContext) — eşleşme
+        // kontrolü packet-integrity alanına gömülür.
+        INTERVIEW_EVIDENCE_EXPORT_PROFILE: STAGE_EXPORT_PROFILE_JSON,
+        VITE_INTERVIEW_EVIDENCE_EXPORT_PROFILE: STAGE_EXPORT_PROFILE_JSON,
       }
     : {}),
   // Faz 24 mfe-meeting — interview-evidence mirror. Kapalıysa (prod default) boş

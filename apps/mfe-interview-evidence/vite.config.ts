@@ -38,6 +38,18 @@ const sharedCore = {
   'react-router-dom': hostOnly('react-router-dom'),
   '@tanstack/react-query': singleton('@tanstack/react-query'),
 };
+// Dedicated browser acceptance loads this MFE without the shell host. Keep the
+// production/default remote contract host-only, but allow an explicit local
+// harness to provide the same singleton fallbacks so the real page can render.
+const standaloneAcceptanceSharedCore = {
+  react: singleton('react'),
+  'react-dom': singleton('react-dom'),
+  'react/jsx-runtime': singleton('react/jsx-runtime', 'react'),
+  'react/jsx-dev-runtime': singleton('react/jsx-dev-runtime', 'react'),
+  'react-router': singleton('react-router'),
+  'react-router-dom': singleton('react-router-dom'),
+  '@tanstack/react-query': singleton('@tanstack/react-query'),
+};
 // @mfe/design-system MF singleton (mfe-users pattern): shell zaten eager singleton
 // olarak sağlar; remote prod'da host'un tek örneğini tüketir (çift-bundle YOK).
 // Dev'de DS kopyası bundle edilir; ancak react/react-dom hostOnly (import:false)
@@ -57,7 +69,15 @@ function readEnvString(keys: string[], fallback: string): string {
   return fallback;
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  const standaloneAcceptanceRequested =
+    readEnvString(['VITE_MFE_INTERVIEW_EVIDENCE_STANDALONE_ACCEPTANCE'], '0') === '1';
+  if (standaloneAcceptanceRequested && (command !== 'serve' || mode === 'production')) {
+    throw new Error(
+      'VITE_MFE_INTERVIEW_EVIDENCE_STANDALONE_ACCEPTANCE is development-serve only; production host-only sharing must remain unchanged.',
+    );
+  }
+  const standaloneAcceptance = standaloneAcceptanceRequested;
   const shellRemoteEntry = readEnvString(
     ['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'],
     'http://localhost:3000/remoteEntry.js',
@@ -81,9 +101,12 @@ export default defineConfig(({ mode }) => {
         },
         exposes: {
           './InterviewEvidenceApp': './src/App.tsx',
+          // 39d-6 shell-token köprüsü (mfe-meeting deseni): shell mount ÖNCESİ
+          // configureShellServices çağırır — canlı /api/ats Bearer zinciri.
+          './shell-services': './src/shell-services.ts',
         },
         shared: {
-          ...sharedCore,
+          ...(standaloneAcceptance ? standaloneAcceptanceSharedCore : sharedCore),
           ...(mode === 'production' ? sharedProdOnly : {}),
         },
       }),

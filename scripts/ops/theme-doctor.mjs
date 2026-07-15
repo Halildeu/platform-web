@@ -25,13 +25,14 @@
  *  16. forwardRef coverage       (interactive components)
  *
  * Usage:
- *   node scripts/ops/theme-doctor.mjs [--json] [--fix-hint]
+ *   node scripts/ops/theme-doctor.mjs [--json] [--fix-hint] [--baseline path] [--strict-zero]
+ *     [--authoritative-baseline-ref <full merge-base SHA>]
  *
- * Exit: 0 = healthy, 1 = issues found
+ * Exit: 0 = gate accepted, 1 = regression/strict failure, 2 = stale or invalid baseline
  */
 
-import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
-import { join, dirname, relative } from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import { register as checks_theme_token } from './theme-doctor/checks-theme-token.mjs';
@@ -45,9 +46,27 @@ import { register as checks_token_quality } from './theme-doctor/checks-token-qu
 import { register as checks_api_health } from './theme-doctor/checks-api-health.mjs';
 import { register as checks_token_gaps } from './theme-doctor/checks-token-gaps.mjs';
 import { register as checks_preview_coverage } from './theme-doctor/checks-preview-coverage.mjs';
+import {
+  extractCssRuleBodies,
+  extractRootBodies,
+  extractThemeInlineBodies,
+  readCssLayers,
+} from './theme-doctor/lib/css-layers.mjs';
+import { normalizeCheckResult } from './theme-doctor/lib/result-model.mjs';
+import {
+  BASELINED_CHECK_IDS,
+  createBaselineCandidate,
+  createImprovementBaseline,
+  evaluateRatchet,
+  loadBaseline,
+  writeBaselineAtomic,
+} from './theme-doctor/lib/ratchet-baseline.mjs';
+import { verifyRepositoryBaselineProvenance } from './theme-doctor/lib/baseline-provenance.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..', '..');
+const ROOT = process.env.THEME_DOCTOR_SCAN_ROOT
+  ? resolve(process.env.THEME_DOCTOR_SCAN_ROOT)
+  : join(__dirname, '..', '..');
 const DS_SRC = join(ROOT, 'packages', 'design-system', 'src');
 const SHELL_STYLES = join(ROOT, 'apps', 'mfe-shell', 'src', 'styles');
 const SHELL_INDEX_CSS = join(ROOT, 'apps', 'mfe-shell', 'src', 'index.css');
@@ -56,10 +75,34 @@ const THEME_CSS = join(SHELL_STYLES, 'theme.css');
 const TOKEN_BRIDGE_CSS = join(SHELL_STYLES, 'token-bridge.css');
 const TOKENS_CSS = join(ROOT, 'packages', 'design-system', 'src', 'tokens', 'build', 'tokens.css');
 const THEME_INLINE_CSS = join(SHELL_STYLES, 'generated-theme-inline.css');
+const THEME_EXTENSION_CSS = join(SHELL_STYLES, 'theme.extensions.css');
+const THEME_INLINE_EXTENSION_CSS = join(SHELL_STYLES, 'theme-inline.extensions.css');
 
-const flags = new Set(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const flags = new Set(argv);
 const JSON_MODE = flags.has('--json');
 const FIX_HINT = flags.has('--fix-hint');
+const STRICT_ZERO = flags.has('--strict-zero');
+const PRINT_BASELINE_CANDIDATE = flags.has('--print-baseline-candidate');
+const UPDATE_BASELINE_IMPROVEMENTS = flags.has('--update-baseline-improvements');
+const RATCHET_MEASUREMENT_ONLY = flags.has('--ratchet-measurement-only');
+const baselineFlagIndex = argv.indexOf('--baseline');
+const BASELINE_PATH = baselineFlagIndex >= 0 ? argv[baselineFlagIndex + 1] : undefined;
+const authoritativeFlagIndex = argv.indexOf('--authoritative-baseline-ref');
+const AUTHORITATIVE_BASE_COMMIT = authoritativeFlagIndex >= 0 ? argv[authoritativeFlagIndex + 1] : undefined;
+
+if (baselineFlagIndex >= 0 && (!BASELINE_PATH || BASELINE_PATH.startsWith('--'))) {
+  console.error('Theme Doctor: --baseline requires a path');
+  process.exit(2);
+}
+if (authoritativeFlagIndex >= 0 && (!AUTHORITATIVE_BASE_COMMIT || AUTHORITATIVE_BASE_COMMIT.startsWith('--'))) {
+  console.error('Theme Doctor: --authoritative-baseline-ref requires a full Git SHA');
+  process.exit(2);
+}
+if (PRINT_BASELINE_CANDIDATE && UPDATE_BASELINE_IMPROVEMENTS) {
+  console.error('Theme Doctor: candidate and update modes are mutually exclusive');
+  process.exit(2);
+}
 
 
 /* ------------------------------------------------------------------ */
@@ -67,26 +110,31 @@ const FIX_HINT = flags.has('--fix-hint');
 /* ------------------------------------------------------------------ */
 
 const results = [];
-let passCount = 0;
-let warnCount = 0;
-let failCount = 0;
+const checkIds = new Set();
 
 function check(id, label, fn) {
+  if (checkIds.has(id)) {
+    throw new Error(`Duplicate Theme Doctor check id: ${id}`);
+  }
+  checkIds.add(id);
+  if (RATCHET_MEASUREMENT_ONLY && !BASELINED_CHECK_IDS.includes(id)) return;
   try {
-    const result = fn();
-    const status = result.status; // 'pass' | 'warn' | 'fail'
-    if (status === 'pass') passCount++;
-    else if (status === 'warn') warnCount++;
-    else failCount++;
-    results.push({ id, label, ...result });
+    results.push(normalizeCheckResult({ id, label, result: fn() }));
   } catch (err) {
-    failCount++;
-    results.push({ id, label, status: 'fail', message: `Exception: ${err.message}` });
+    results.push(normalizeCheckResult({ id, label, error: err }));
   }
 }
 
 function readSafe(path) {
   try { return readFileSync(path, 'utf-8'); } catch { return ''; }
+}
+
+function readThemeCss() {
+  return readCssLayers([THEME_CSS, THEME_EXTENSION_CSS]);
+}
+
+function readThemeInlineCss() {
+  return readCssLayers([THEME_INLINE_CSS, THEME_INLINE_EXTENSION_CSS]);
 }
 
 function srgbToHex(srgb) {
@@ -146,9 +194,11 @@ function extractCSSVars(css) {
 
 
 const ctx = {
-  check, readSafe, srgbToHex, parseCssVarsFlat, walkDir, extractCSSVars,
+  check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat,
+  walkDir, extractCSSVars, extractCssRuleBodies, extractRootBodies, extractThemeInlineBodies,
   ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
-  THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT,
+  THEME_CSS, THEME_EXTENSION_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS,
+  THEME_INLINE_CSS, THEME_INLINE_EXTENSION_CSS, FIX_HINT,
 };
 
 checks_theme_token(ctx);
@@ -167,23 +217,100 @@ checks_preview_coverage(ctx);
 /*  Report                                                             */
 /* ------------------------------------------------------------------ */
 
+const observed = {
+  pass: results.filter(({ status }) => status === 'pass').length,
+  warn: results.filter(({ status }) => status === 'warn').length,
+  fail: results.filter(({ status }) => status === 'fail').length,
+  total: results.length,
+};
+
+function sourceCommit() {
+  return execSync('git rev-parse HEAD', { cwd: ROOT, encoding: 'utf8' }).trim();
+}
+
+let baseline;
+let evaluation;
+let fatalBaselineError;
+let baselineProvenance;
+try {
+  baseline = BASELINE_PATH ? loadBaseline(resolve(ROOT, BASELINE_PATH)) : undefined;
+  evaluation = evaluateRatchet(results, baseline, { strictZero: STRICT_ZERO });
+  if (baseline && !RATCHET_MEASUREMENT_ONLY) {
+    baselineProvenance = verifyRepositoryBaselineProvenance(baseline, {
+      repoRoot: ROOT,
+      scannerPath: fileURLToPath(import.meta.url),
+      currentResults: results,
+      authoritativeBaseCommit: AUTHORITATIVE_BASE_COMMIT,
+      requireAuthoritativeBase: Boolean(process.env.CI),
+      requireCurrentExact: evaluation.exitCode === 0,
+    });
+  }
+} catch (error) {
+  fatalBaselineError = error;
+  evaluation = {
+    exitCode: 2,
+    verdict: 'baseline-invalid',
+    checks: results.map((result) => ({ ...result, gateStatus: 'baseline-error', gateReason: error.message })),
+    knownDebt: [],
+    regressions: [],
+    improvements: [],
+    baselineErrors: [{ id: 'baseline', reason: error.message }],
+  };
+}
+
+if (PRINT_BASELINE_CANDIDATE) {
+  try {
+    const candidate = createBaselineCandidate(results, sourceCommit());
+    console.log(JSON.stringify(candidate, null, 2));
+    process.exit(0);
+  } catch (error) {
+    console.error(`Theme Doctor baseline candidate refused: ${error.message}`);
+    process.exit(2);
+  }
+}
+
+if (UPDATE_BASELINE_IMPROVEMENTS) {
+  if (!BASELINE_PATH || !baseline || fatalBaselineError) {
+    console.error('Theme Doctor: --update-baseline-improvements requires a valid --baseline');
+    process.exit(2);
+  }
+  try {
+    const improved = createImprovementBaseline(baseline, evaluation);
+    writeBaselineAtomic(resolve(ROOT, BASELINE_PATH), improved);
+    console.log(`Theme Doctor baseline updated with verified improvements: ${BASELINE_PATH}`);
+    process.exit(0);
+  } catch (error) {
+    console.error(`Theme Doctor baseline update refused: ${error.message}`);
+    process.exit(2);
+  }
+}
+
+const gateSummary = {
+  verdict: evaluation.verdict,
+  knownDebt: evaluation.knownDebt.length,
+  regressions: evaluation.regressions.length,
+  improvements: evaluation.improvements.length,
+  baselineErrors: evaluation.baselineErrors.length,
+};
+
 if (JSON_MODE) {
   const report = {
     tool: 'theme-doctor',
-    version: '7.1.0',
+    version: '8.0.0',
     timestamp: new Date().toISOString(),
-    summary: { pass: passCount, warn: warnCount, fail: failCount, total: results.length },
-    checks: results,
+    summary: { ...observed, observed, gate: gateSummary },
+    baselineProvenance,
+    checks: evaluation.checks,
   };
   console.log(JSON.stringify(report, null, 2));
 } else {
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log(`║         🩺 Theme Doctor v7.1 (${results.length} checks)                ║`);
+  console.log(`║         🩺 Theme Doctor v8.0 (${results.length} checks)                ║`);
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log('');
 
-  for (const r of results) {
+  for (const r of evaluation.checks) {
     const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️ ' : '❌';
     console.log(`  ${icon} [${r.id}] ${r.label}`);
     console.log(`     ${r.message}`);
@@ -196,12 +323,18 @@ if (JSON_MODE) {
       if (items.length > 8) console.log(`       ... and ${items.length - 8} more`);
     }
     if (r.fix) console.log(`     💡 Fix: ${r.fix}`);
+    if (r.gateStatus === 'known-debt') console.log('     🧾 Gate: reviewed known debt — exact fingerprint match');
+    else if (r.gateStatus && r.gateStatus !== 'pass') console.log(`     🚧 Gate: ${r.gateStatus} — ${r.gateReason}`);
     console.log('');
   }
 
   console.log('─'.repeat(62));
-  console.log(`  Summary: ${passCount} pass, ${warnCount} warn, ${failCount} fail (${results.length} checks)`);
+  console.log(`  Observed: ${observed.pass} pass, ${observed.warn} warn, ${observed.fail} fail (${results.length} checks)`);
+  console.log(`  Gate: ${gateSummary.verdict} — ${gateSummary.knownDebt} exact known debt, ${gateSummary.regressions} regression, ${gateSummary.improvements} improvement, ${gateSummary.baselineErrors} baseline error`);
+  if (baselineProvenance) {
+    console.log(`  Baseline provenance: ${baselineProvenance.sourceCommit} (${baselineProvenance.authorityKind}, current=${baselineProvenance.currentBinding})`);
+  }
   console.log('');
 }
 
-process.exit(failCount > 0 ? 1 : 0);
+process.exit(evaluation.exitCode);

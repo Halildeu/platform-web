@@ -69,3 +69,11 @@ To align the key with the Vault-canonical model and remove the rebuild requireme
 the key could be served at runtime: `kv/platform/web` → `ExternalSecret` → mounted
 `env.js` → `window.__env__`. Renewals would then be a Vault update + pod restart with
 no image rebuild. Tracked separately; not required for the build-time model above.
+
+## Renewal log
+
+| Date | Action |
+|---|---|
+| 2026-06-02 | Trial expired; watermark on all Enterprise grids. |
+| 2026-06-08 | Perpetual key added to `AG_GRID_LICENSE_KEY`; rebuild → testai `0e85fab` + prod `b85ca389` LIVE (browser-verified). |
+| 2026-07-15 | License **renewed** (updates/support term); key rotated in `AG_GRID_LICENSE_KEY` secret. This commit triggers the rebuild that bakes the renewed key into both frontend variants. |

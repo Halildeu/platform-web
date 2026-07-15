@@ -49,7 +49,7 @@ Migration is gradual:
 
 ### L2 — Token Drift Gate (build-time)
 
-`tokens:build --check` and `tokens:build:theme --check` already exist (both scripts support `--check` mode and exit non-zero on drift). PR-1 wires them into CI as a required job. Output drift, semantic token presence in `generated-theme-inline.css`, and `theme.css` alias resolution are validated. Token rename is detected at build time, not at runtime.
+`tokens:build --check` and `tokens:build:theme --check` both exit non-zero on drift and run in the required `token-drift-required` job. The runtime generator compares all five owned artifacts byte-for-byte, rejects any generated/curated declaration-identity overlap, and validates the exact production/CSSOM import order. Declaration identity includes ordered at-rule ancestry, normalized selector and property; the payload includes normalized value and `!important`, with duplicate occurrence counts preserved. Curated extensions remain visible to CSSOM tests but are never generator outputs. Token rename, selector/media movement, value drift and later conflicting overrides are therefore detected at build time.
 
 A second-wave PR adds the impacted-component map (which components consume which token); PR-1 covers only drift detection.
 

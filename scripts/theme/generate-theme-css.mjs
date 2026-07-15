@@ -5,21 +5,59 @@
  * paths (color.surface.default.bg -> --surface-default-bg) and grouped per
  * runtime axis (appearance/density/radius/elevation/motion).
  */
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs';
 import path from 'path';
+import {
+  assertExpectedImportOrder,
+  assertNoCuratedShadow,
+  writeFileAtomicIfChanged,
+} from './theme-css-contract.mjs';
+import { assertThemeOwnershipDecisionContract } from './theme-ownership-decision-contract.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
+const isMain = process.argv[1]
+  ? import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+  : false;
 
 const TOKEN_FILE = path.resolve(repoRoot, 'design-tokens/figma.tokens.json');
 const OUTPUT_CSS = path.resolve(repoRoot, 'apps/mfe-shell/src/styles/theme.css');
-const OUTPUT_THEME_INLINE = path.resolve(repoRoot, 'apps/mfe-shell/src/styles/generated-theme-inline.css');
+const OUTPUT_THEME_INLINE = path.resolve(
+  repoRoot,
+  'apps/mfe-shell/src/styles/generated-theme-inline.css',
+);
+const OUTPUT_COMPONENT_THEME = path.resolve(
+  repoRoot,
+  'apps/mfe-shell/src/styles/component-theme.generated.css',
+);
 const OUTPUT_CONTRACT = path.resolve(repoRoot, 'design-tokens/generated/theme-contract.json');
 const OUTPUT_TOKEN_TYPES = path.resolve(repoRoot, 'design-tokens/generated/token-types.ts');
+const OWNERSHIP_DECISIONS = path.resolve(
+  repoRoot,
+  'design-tokens/migrations/theme-ownership-decisions.v1.json',
+);
+const THEME_EXTENSION_CSS = path.resolve(
+  repoRoot,
+  'apps/mfe-shell/src/styles/theme.extensions.css',
+);
+const THEME_INLINE_EXTENSION_CSS = path.resolve(
+  repoRoot,
+  'apps/mfe-shell/src/styles/theme-inline.extensions.css',
+);
+const SHELL_ENTRY_CSS = path.resolve(repoRoot, 'apps/mfe-shell/src/index.css');
+const CSSOM_HARNESS_CSS = path.resolve(
+  repoRoot,
+  'packages/design-system/src/__tests__/cssom-harness.css',
+);
 
 const isCheckMode = process.argv.includes('--check');
+const isComponentOnlyMode = process.argv.includes('--component-only');
+
+if (isCheckMode && isComponentOnlyMode) {
+  throw new Error('⚠️ --check and --component-only are mutually exclusive.');
+}
 
 const AXIS_ATTRIBUTE = {
   radius: 'data-radius',
@@ -28,13 +66,18 @@ const AXIS_ATTRIBUTE = {
   motion: 'data-motion',
 };
 
-const tokens = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+const tokenSourceContent = fs.readFileSync(TOKEN_FILE, 'utf8');
+const tokens = JSON.parse(tokenSourceContent);
 const themeContract = tokens?.meta?.themeContract;
 if (!themeContract || typeof themeContract !== 'object') {
-  throw new Error('⚠️ meta.themeContract missing in figma.tokens.json (required for single-chain).');
+  throw new Error(
+    '⚠️ meta.themeContract missing in figma.tokens.json (required for single-chain).',
+  );
 }
 
 const colorTokens = flattenSemantic(tokens.semantic.color, ['color']);
+const componentColorTokens = colorTokens.filter((entry) => entry.path[1] === 'component');
+const globalColorTokens = colorTokens.filter((entry) => entry.path[1] !== 'component');
 const axisTokens = {
   radius: flattenSemantic(tokens.semantic.radius, ['radius']),
   density: flattenSemantic(tokens.semantic.density, ['density']),
@@ -45,29 +88,35 @@ const accentPalettes = extractAccentPalettes(tokens);
 const surfaceTones = tokens?.semantic?.color?.surface?.tones ?? {};
 
 const cssChunks = [];
-cssChunks.push('/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */');
+cssChunks.push(
+  '/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */',
+);
 cssChunks.push('');
 
 const appearanceThemes = extractAppearanceModes(tokens);
 if (appearanceThemes.length === 0) {
-  throw new Error('⚠️ No appearance themes found in figma.tokens.json (semantic.color.surface.default.bg.modes)');
+  throw new Error(
+    '⚠️ No appearance themes found in figma.tokens.json (semantic.color.surface.default.bg.modes)',
+  );
 }
 
 const overlayConfig = extractOverlayConfig(tokens, appearanceThemes[0]);
 
 const defaultAppearance = appearanceThemes[0];
-const rootDeclarations = buildDeclarations(colorTokens, defaultAppearance);
+const rootDeclarations = buildDeclarations(globalColorTokens, defaultAppearance);
 if (accentPalettes.length > 0) {
   const [defaultAccent] = accentPalettes;
   rootDeclarations.push(...buildAccentDeclarations(defaultAccent.entry, defaultAccent.key));
 }
-rootDeclarations.push(`  --font-family-base: ${resolveValue('{raw.typography.font.family.base}')};`);
+rootDeclarations.push(
+  `  --font-family-base: ${resolveValue('{raw.typography.font.family.base}')};`,
+);
 rootDeclarations.push('  --surface-page-bg: var(--surface-default-bg);');
 pushBlock(':root', rootDeclarations);
 
 for (const theme of appearanceThemes) {
   const selector = `:root[data-theme="${theme}"], [data-theme-scope][data-theme="${theme}"]`;
-  pushBlock(selector, buildDeclarations(colorTokens, theme));
+  pushBlock(selector, buildDeclarations(globalColorTokens, theme));
 }
 
 for (const [axis, entries] of Object.entries(axisTokens)) {
@@ -117,12 +166,17 @@ if (Object.keys(surfaceTones).length > 0) {
 
 /**
  * Bridge alias definitions: [aliasVar, varExpression, ...semanticTokenPaths]
- * semanticTokenPaths are used to resolve the dark-mode value from the token tree.
+ * tokenPaths are used to resolve the dark-mode value from the token tree.
+ * Paths without an explicit raw.* prefix are relative to semantic.*.
  * The first resolvable path wins.
  */
 const bridgeAliases = [
   // Action
-  ['--action-primary', 'var(--action-primary-bg, var(--accent-primary))', ['color.action.primary.bg']],
+  [
+    '--action-primary',
+    'var(--action-primary-bg, var(--accent-primary))',
+    ['raw.color.brand.primary.500'],
+  ],
   ['--action-primary-hover', 'var(--accent-primary-hover)', ['color.action.primary.hover.bg']],
   ['--action-primary-active', 'var(--accent-primary-hover)', ['color.action.primary.hover.bg']],
   ['--action-primary-soft', 'var(--accent-soft)', ['color.action.primary.soft.bg']],
@@ -130,9 +184,17 @@ const bridgeAliases = [
   // Surface
   ['--surface-canvas', 'var(--surface-default-bg)', ['color.surface.default.bg']],
   ['--surface-raised', 'var(--surface-raised-bg)', ['color.surface.raised.bg']],
-  ['--surface-page', 'var(--surface-page-bg, var(--surface-default-bg))', ['color.surface.default.bg']],
+  [
+    '--surface-page',
+    'var(--surface-page-bg, var(--surface-default-bg))',
+    ['color.surface.default.bg'],
+  ],
   ['--surface-overlay', 'var(--surface-overlay-bg)', ['color.surface.overlay.bg']],
-  ['--surface-primary', 'var(--action-primary-bg, var(--accent-primary))', ['color.action.primary.bg']],
+  [
+    '--surface-primary',
+    'var(--action-primary-bg, var(--accent-primary))',
+    ['raw.color.brand.primary.500'],
+  ],
   ['--surface-accent', 'var(--accent-soft)', ['color.action.primary.soft.bg']],
   ['--surface-active', 'var(--selection-bg)', ['color.selection.bg']],
   ['--surface-inverse', 'var(--surface-overlay-bg)', ['color.surface.overlay.bg']],
@@ -155,24 +217,36 @@ const bridgeAliases = [
   ['--state-error-border', 'var(--state-danger-border)', ['color.state.danger.border']],
   // State short aliases
   ['--state-danger', 'var(--state-danger-text)', ['color.state.danger.text']],
-  ['--state-success', 'var(--state-success-text)', ['color.state.success.text']],
+  ['--state-success', 'var(--state-success-text)', ['raw.color.success.500']],
   ['--state-warning', 'var(--state-warning-text)', ['color.state.warning.text']],
   ['--state-info', 'var(--state-info-text)', ['color.state.info.text']],
   // Feedback aliases
-  ['--feedback-error', 'var(--state-danger-text)', ['color.state.danger.text']],
-  ['--feedback-success', 'var(--state-success-text)', ['color.state.success.text']],
-  ['--feedback-warning', 'var(--state-warning-text)', ['color.state.warning.text']],
-  ['--feedback-info', 'var(--state-info-text)', ['color.state.info.text']],
+  ['--feedback-error', 'var(--state-danger-text)', ['color.state.danger.text'], 'reference'],
+  ['--feedback-success', 'var(--state-success-text)', ['color.state.success.text'], 'reference'],
+  ['--feedback-warning', 'var(--state-warning-text)', ['color.state.warning.text'], 'reference'],
+  ['--feedback-info', 'var(--state-info-text)', ['color.state.info.text'], 'reference'],
   // Legacy
-  ['--danger-color', 'var(--state-danger-text)', ['color.state.danger.text']],
-  ['--success-color', 'var(--state-success-text)', ['color.state.success.text']],
-  ['--warning-color', 'var(--state-warning-text)', ['color.state.warning.text']],
-  ['--info-color', 'var(--state-info-text)', ['color.state.info.text']],
-  ['--bg-primary', 'var(--action-primary-bg, var(--accent-primary))', ['color.action.primary.bg']],
-  ['--ring-primary', 'var(--action-primary-bg, var(--accent-primary))', ['color.action.primary.bg']],
-  ['--ring-focus', 'var(--focus-outline)', ['color.focus.outline']],
-  ['--ring-error', 'var(--state-danger-border)', ['color.state.danger.border']],
-  ['--ring-color', 'var(--focus-outline)', ['color.focus.outline']],
+  ['--danger-color', 'var(--state-danger-text)', ['color.state.danger.text'], 'reference'],
+  ['--success-color', 'var(--state-success-text)', ['color.state.success.text'], 'reference'],
+  ['--warning-color', 'var(--state-warning-text)', ['color.state.warning.text'], 'reference'],
+  ['--info-color', 'var(--state-info-text)', ['color.state.info.text'], 'reference'],
+  [
+    '--bg-primary',
+    'var(--action-primary-bg, var(--accent-primary))',
+    ['color.action.primary.bg'],
+    'reference',
+    'var(--action-primary-bg)',
+  ],
+  [
+    '--ring-primary',
+    'var(--action-primary-bg, var(--accent-primary))',
+    ['color.action.primary.bg'],
+    'reference',
+    'var(--action-primary-bg)',
+  ],
+  ['--ring-focus', 'var(--focus-outline)', ['color.focus.outline'], 'reference'],
+  ['--ring-error', 'var(--state-danger-border)', ['color.state.danger.border'], 'reference'],
+  ['--ring-color', 'var(--focus-outline)', ['color.focus.outline'], 'reference'],
   ['--accent-primary-muted', 'var(--accent-soft)', ['color.action.primary.soft.bg']],
 ];
 
@@ -205,36 +279,44 @@ cssChunks.push(...bridgeLines);
 cssChunks.push('');
 
 /* Build [data-mode="dark"] bridge overrides from token tree */
-const darkAppearanceKey = Object.entries(themeContract.modes || {})
-  .find(([, info]) => info.appearance === 'dark')?.[0];
+const darkAppearanceKey = Object.entries(themeContract.modes || {}).find(
+  ([, info]) => info.appearance === 'dark',
+)?.[0];
 
 if (darkAppearanceKey) {
   const darkBridgeLines = [];
   darkBridgeLines.push('/* Dark mode bridge overrides */');
   darkBridgeLines.push('[data-mode="dark"] {');
 
-  for (const [alias, , tokenPaths] of bridgeAliases) {
+  for (const [alias, expression, tokenPaths, darkStrategy, darkExpression] of bridgeAliases) {
     if (!tokenPaths || tokenPaths.length === 0) continue;
-    let resolved = null;
-    for (const tokenPath of tokenPaths) {
-      const segments = ['semantic'].concat(tokenPath.split('.'));
-      let node = tokens;
-      let valid = true;
-      for (const seg of segments) {
-        if (node && typeof node === 'object' && seg in node) {
-          node = node[seg];
-        } else {
-          valid = false;
-          break;
+    let resolved = darkStrategy === 'reference' ? (darkExpression ?? expression) : null;
+    if (darkStrategy !== 'reference') {
+      for (const tokenPath of tokenPaths) {
+        const segments = tokenPath.startsWith('raw.')
+          ? tokenPath.split('.')
+          : ['semantic'].concat(tokenPath.split('.'));
+        let node = tokens;
+        let valid = true;
+        for (const seg of segments) {
+          if (node && typeof node === 'object' && seg in node) {
+            node = node[seg];
+          } else {
+            valid = false;
+            break;
+          }
         }
-      }
-      if (valid && node?.modes?.[darkAppearanceKey]) {
-        try {
-          resolved = resolveValue(node.modes[darkAppearanceKey].value);
-        } catch {
-          resolved = null;
+        const sourceValue = valid
+          ? (node?.modes?.[darkAppearanceKey]?.value ?? node?.value)
+          : undefined;
+        if (typeof sourceValue !== 'undefined') {
+          try {
+            resolved = resolveValue(sourceValue);
+          } catch {
+            resolved = null;
+          }
+          if (resolved) break;
         }
-        if (resolved) break;
       }
     }
     if (resolved) {
@@ -251,9 +333,18 @@ if (darkAppearanceKey) {
   const systemLines = [];
   systemLines.push('/* System preference fallback (prefers-color-scheme) */');
   systemLines.push('@media (prefers-color-scheme: dark) {');
-  systemLines.push('  [data-mode="system"] {');
+  systemLines.push(
+    '  :root[data-mode="system"]:not([data-theme="serban-hc"]), [data-theme-scope][data-mode="system"]:not([data-theme="serban-hc"]) {',
+  );
   for (const line of darkBridgeLines) {
-    if (line.startsWith('  ') && line.includes(':') && !line.startsWith('/*') && !line.startsWith('[') && !line.startsWith('}')) {
+    if (
+      line.startsWith('  ') &&
+      line.includes(':') &&
+      !line.trimStart().startsWith('color-scheme:') &&
+      !line.startsWith('/*') &&
+      !line.startsWith('[') &&
+      !line.startsWith('}')
+    ) {
       systemLines.push(`  ${line}`);
     }
   }
@@ -281,15 +372,21 @@ cssChunks.push('  --table-surface-border: var(--border-subtle);');
 cssChunks.push('  --table-surface-bg: var(--surface-table-normal-bg);');
 cssChunks.push('}');
 cssChunks.push('');
-cssChunks.push(':root[data-table-surface-tone="soft"], [data-theme-scope][data-table-surface-tone="soft"] {');
+cssChunks.push(
+  ':root[data-table-surface-tone="soft"], [data-theme-scope][data-table-surface-tone="soft"] {',
+);
 cssChunks.push('  --table-surface-bg: var(--surface-table-soft-bg);');
 cssChunks.push('}');
 cssChunks.push('');
-cssChunks.push(':root[data-table-surface-tone="strong"], [data-theme-scope][data-table-surface-tone="strong"] {');
+cssChunks.push(
+  ':root[data-table-surface-tone="strong"], [data-theme-scope][data-table-surface-tone="strong"] {',
+);
 cssChunks.push('  --table-surface-bg: var(--surface-table-strong-bg);');
 cssChunks.push('}');
 cssChunks.push('');
-cssChunks.push(':root[data-table-surface-tone="normal"], [data-theme-scope][data-table-surface-tone="normal"] {');
+cssChunks.push(
+  ':root[data-table-surface-tone="normal"], [data-theme-scope][data-table-surface-tone="normal"] {',
+);
 cssChunks.push('  --table-surface-bg: var(--surface-table-normal-bg);');
 cssChunks.push('}');
 cssChunks.push('');
@@ -301,44 +398,108 @@ if (accentPalettes.length > 0) {
   }
 }
 
-const cssOutput = cssChunks.filter((line, index) => !(line === '' && cssChunks[index - 1] === '')).join('\n');
-const cssWithEol = `${cssOutput}\n`;
+const cssOutput = cssChunks
+  .filter((line, index) => !(line === '' && cssChunks[index - 1] === ''))
+  .join('\n');
+const cssWithEol = `${cssOutput.trimEnd()}\n`;
 const contractWithEol = `${JSON.stringify(themeContract, null, 2)}\n`;
+const componentThemeOutput = buildComponentThemeCss(
+  componentColorTokens,
+  appearanceThemes,
+  defaultAppearance,
+  darkAppearanceKey,
+);
 
 /* ---- Build @theme inline block for TW4 utility generation ---- */
 const themeInlineOutput = buildThemeInlineBlock(colorTokens, bridgeAliases);
 const tokenTypesOutput = buildTokenTypes(themeInlineOutput);
 
-/**
- * Extract CSS custom property names from a CSS string.
- * Returns a Set of property names (e.g. "--surface-default-bg").
- */
-function extractCssProperties(css) {
-  const props = new Set();
-  for (const m of css.matchAll(/(--[\w-]+)\s*:/g)) {
-    props.add(m[1]);
+export const generatedThemeArtifacts = Object.freeze({
+  repoRoot,
+  themeCss: Object.freeze({ path: OUTPUT_CSS, content: cssWithEol }),
+  themeInlineCss: Object.freeze({ path: OUTPUT_THEME_INLINE, content: themeInlineOutput }),
+  componentThemeCss: Object.freeze({ path: OUTPUT_COMPONENT_THEME, content: componentThemeOutput }),
+  themeContract: Object.freeze({ path: OUTPUT_CONTRACT, content: contractWithEol }),
+  tokenTypes: Object.freeze({ path: OUTPUT_TOKEN_TYPES, content: tokenTypesOutput }),
+});
+
+const generatedArtifacts = Object.freeze([
+  ['theme.css', OUTPUT_CSS, cssWithEol],
+  ['generated-theme-inline.css', OUTPUT_THEME_INLINE, themeInlineOutput],
+  ['component-theme.generated.css', OUTPUT_COMPONENT_THEME, componentThemeOutput],
+  ['theme-contract.json', OUTPUT_CONTRACT, contractWithEol],
+  ['token-types.ts', OUTPUT_TOKEN_TYPES, tokenTypesOutput],
+]);
+
+function readRequired(filePath, label) {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    throw new Error(`Missing required ${label}: ${path.relative(repoRoot, filePath)}`, {
+      cause: error,
+    });
   }
-  return props;
 }
 
-if (isCheckMode) {
+/** Validate ownership and cascade order without mutating any artifact. */
+function assertThemeOwnershipContract({ enforceDecisionContract = false } = {}) {
+  const themeExtension = readRequired(THEME_EXTENSION_CSS, 'curated theme extension');
+  const themeInlineExtension = readRequired(
+    THEME_INLINE_EXTENSION_CSS,
+    'curated theme-inline extension',
+  );
+
+  assertNoCuratedShadow(cssWithEol, themeExtension);
+  assertNoCuratedShadow(componentThemeOutput, themeExtension);
+  assertNoCuratedShadow(themeInlineOutput, themeInlineExtension);
+
+  if (enforceDecisionContract) {
+    assertThemeOwnershipDecisionContract({
+      manifest: JSON.parse(readRequired(OWNERSHIP_DECISIONS, 'ownership decision manifest')),
+      tokenSourceContent,
+      tokens,
+      generatedThemeCss: cssWithEol,
+      themeExtensionCss: themeExtension,
+      generatedThemeInlineCss: themeInlineOutput,
+      themeInlineExtensionCss: themeInlineExtension,
+    });
+  }
+
+  assertExpectedImportOrder(
+    readRequired(SHELL_ENTRY_CSS, 'shell CSS entry'),
+    [
+      'tailwindcss',
+      './styles/generated-theme-inline.css',
+      './styles/theme-inline.extensions.css',
+      './styles/theme.css',
+      './styles/theme.extensions.css',
+      './styles/component-theme.generated.css',
+    ],
+    { allowAdditional: false },
+  );
+  assertExpectedImportOrder(
+    readRequired(CSSOM_HARNESS_CSS, 'CSSOM harness'),
+    [
+      'tailwindcss',
+      '../../../../apps/mfe-shell/src/styles/generated-theme-inline.css',
+      '../../../../apps/mfe-shell/src/styles/theme-inline.extensions.css',
+      '../../../../apps/mfe-shell/src/styles/theme.css',
+      '../../../../apps/mfe-shell/src/styles/theme.extensions.css',
+      '../../../../apps/mfe-shell/src/styles/component-theme.generated.css',
+    ],
+    { allowAdditional: false },
+  );
+}
+
+if (isMain && isCheckMode) {
   const errors = [];
 
-  // CSS files use superset check: all generated properties must be present
-  // in the on-disk file. Hand-curated additions (aliases, chart tokens, etc.)
-  // are allowed and will not trigger drift.
-  for (const [label, outputPath, content] of [
-    ['theme.css', OUTPUT_CSS, cssWithEol],
-    ['generated-theme-inline.css', OUTPUT_THEME_INLINE, themeInlineOutput],
-  ]) {
+  for (const [, outputPath, content] of generatedArtifacts) {
     try {
       const existing = fs.readFileSync(outputPath, 'utf8');
-      const expectedProps = extractCssProperties(content);
-      const actualProps = extractCssProperties(existing);
-      const missing = [...expectedProps].filter((p) => !actualProps.has(p));
-      if (missing.length > 0) {
+      if (existing !== content) {
         errors.push(
-          `- Drift: ${path.relative(repoRoot, outputPath)} is missing ${missing.length} generated properties: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '...' : ''}`
+          `- Drift: ${path.relative(repoRoot, outputPath)} differs byte-for-byte from generated output.`,
         );
       }
     } catch {
@@ -346,19 +507,10 @@ if (isCheckMode) {
     }
   }
 
-  // JSON and TypeScript files use exact match (no hand-curated content expected).
-  for (const [label, outputPath, content] of [
-    ['theme-contract.json', OUTPUT_CONTRACT, contractWithEol],
-    ['token-types.ts', OUTPUT_TOKEN_TYPES, tokenTypesOutput],
-  ]) {
-    try {
-      const existing = fs.readFileSync(outputPath, 'utf8');
-      if (existing !== content) {
-        errors.push(`- Drift: ${path.relative(repoRoot, outputPath)} generated output is not up to date.`);
-      }
-    } catch {
-      errors.push(`- Missing: ${path.relative(repoRoot, outputPath)} does not exist.`);
-    }
+  try {
+    assertThemeOwnershipContract({ enforceDecisionContract: true });
+  } catch (error) {
+    errors.push(`- Ownership/import contract: ${error.message}`);
   }
 
   if (errors.length > 0) {
@@ -367,16 +519,27 @@ if (isCheckMode) {
     process.exit(1);
   }
 
-  console.log(`✅ tokens:build --check OK (4 files)`);
-} else {
-  fs.mkdirSync(path.dirname(OUTPUT_CONTRACT), { recursive: true });
-  fs.writeFileSync(OUTPUT_CONTRACT, contractWithEol);
-  fs.writeFileSync(OUTPUT_CSS, cssWithEol);
-  fs.writeFileSync(OUTPUT_THEME_INLINE, themeInlineOutput);
-  fs.writeFileSync(OUTPUT_TOKEN_TYPES, tokenTypesOutput);
-  console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_CSS)} from ${path.relative(repoRoot, TOKEN_FILE)}`);
+  console.log(`✅ tokens:build --check OK (5 files)`);
+} else if (isMain && isComponentOnlyMode) {
+  assertThemeOwnershipContract();
+  writeFileAtomicIfChanged(OUTPUT_COMPONENT_THEME, componentThemeOutput);
+  writeFileAtomicIfChanged(OUTPUT_TOKEN_TYPES, tokenTypesOutput);
+  console.log(`✅ Generated bounded component token bundle (2 files)`);
+  console.log(`  - ${path.relative(repoRoot, OUTPUT_COMPONENT_THEME)}`);
+  console.log(`  - ${path.relative(repoRoot, OUTPUT_TOKEN_TYPES)}`);
+} else if (isMain) {
+  // Fail closed before the first byte changes: generated and curated ownership
+  // must be disjoint and both runtime entry points must preserve cascade order.
+  assertThemeOwnershipContract();
+  for (const [, outputPath, content] of generatedArtifacts) {
+    writeFileAtomicIfChanged(outputPath, content);
+  }
+  console.log(
+    `✅ Generated ${path.relative(repoRoot, OUTPUT_CSS)} from ${path.relative(repoRoot, TOKEN_FILE)}`,
+  );
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_CONTRACT)}`);
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_THEME_INLINE)} (@theme inline)`);
+  console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_COMPONENT_THEME)} (component tokens)`);
   console.log(`✅ Generated ${path.relative(repoRoot, OUTPUT_TOKEN_TYPES)} (TypeScript types)`);
 }
 
@@ -425,10 +588,7 @@ function extractOverlayConfig(root, appearanceKey) {
     pickByAppearance(intensityNode?.default) ?? min,
     'intensity.default',
   );
-  const defaultOpacity = toNumber(
-    pickByAppearance(opacityNode?.default) ?? 10,
-    'opacity.default',
-  );
+  const defaultOpacity = toNumber(pickByAppearance(opacityNode?.default) ?? 10, 'opacity.default');
 
   return { min, max, defaultIntensity, defaultOpacity };
 }
@@ -443,6 +603,59 @@ function buildDeclarations(entries, mode) {
     lines.push(`  ${varName}: ${resolved};`);
   }
   return lines;
+}
+
+/**
+ * Build the exact-owned runtime stylesheet for component-scoped color tokens.
+ * Keeping this artifact separate prevents a bounded component change from
+ * rewriting the global generated and curated theme ownership layers.
+ */
+function buildComponentThemeCss(entries, themes, defaultTheme, darkTheme) {
+  const lines = [
+    '/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */',
+    '/* Safe bounded regeneration: npm run tokens:build:component-theme */',
+    '',
+  ];
+
+  const addBlock = (selector, mode, indentation = '', trailingBlank = true) => {
+    const declarations = buildDeclarations(entries, mode);
+    if (declarations.length === 0) return;
+    const indentedSelector = selector
+      .split('\n')
+      .map((line) => `${indentation}${line}`)
+      .join('\n');
+    lines.push(`${indentedSelector} {`);
+    for (const declaration of declarations) {
+      lines.push(`${indentation}${declaration}`);
+    }
+    lines.push(`${indentation}}`);
+    if (trailingBlank) lines.push('');
+  };
+
+  addBlock(':root', defaultTheme);
+
+  for (const theme of themes) {
+    addBlock(`:root[data-theme='${theme}'],\n[data-theme-scope][data-theme='${theme}']`, theme);
+  }
+
+  if (darkTheme) {
+    addBlock(
+      ":root[data-mode='dark']:not([data-theme='serban-hc']),\n[data-theme-scope][data-mode='dark']:not([data-theme='serban-hc'])",
+      darkTheme,
+    );
+
+    lines.push('@media (prefers-color-scheme: dark) {');
+    addBlock(
+      ":root[data-mode='system']:not([data-theme='serban-hc']),\n[data-theme-scope][data-mode='system']:not([data-theme='serban-hc'])",
+      darkTheme,
+      '  ',
+      false,
+    );
+    lines.push('}');
+    lines.push('');
+  }
+
+  return `${lines.join('\n').trimEnd()}\n`;
 }
 
 function extractAccentPalettes(root) {
@@ -532,7 +745,12 @@ function normalizeCssValue(raw) {
     return raw;
   }
   const value = raw.trim();
-  if (value.startsWith('var(') || value === 'transparent' || value === 'none' || value === 'inherit') {
+  if (
+    value.startsWith('var(') ||
+    value === 'transparent' ||
+    value === 'none' ||
+    value === 'inherit'
+  ) {
     return value;
   }
   const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -560,7 +778,9 @@ function normalizeCssValue(raw) {
       }
       const rgba = match.match(/^rgba?\(([^)]+)\)$/i);
       if (rgba) {
-        const [r = '0', g = '0', b = '0', a = '1'] = rgba[1].split(',').map((segment) => segment.trim());
+        const [r = '0', g = '0', b = '0', a = '1'] = rgba[1]
+          .split(',')
+          .map((segment) => segment.trim());
         return formatColor(
           parseFloat(r),
           parseFloat(g),
@@ -575,7 +795,13 @@ function normalizeCssValue(raw) {
 }
 
 function hexToColor(hex) {
-  const normalized = hex.length === 3 ? hex.split('').map((ch) => ch + ch).join('') : hex;
+  const normalized =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((ch) => ch + ch)
+          .join('')
+      : hex;
   const r = parseInt(normalized.slice(0, 2), 16);
   const g = parseInt(normalized.slice(2, 4), 16);
   const b = parseInt(normalized.slice(4, 6), 16);
@@ -589,14 +815,22 @@ function hexToColor(hex) {
  */
 function buildThemeInlineBlock(colorEntries, aliases) {
   const lines = [];
-  lines.push('/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */');
+  lines.push(
+    '/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */',
+  );
   lines.push('/* Run: npm run tokens:build:theme to regenerate. */');
   lines.push('');
   lines.push('@theme inline {');
 
   /* --- Surface colors --- */
   lines.push('  /* Surface colors */');
-  const surfaceTokens = colorEntries.filter(e => e.path[1] === 'surface' && e.path.at(-1) === 'bg' && e.path[2] !== 'table' && e.path[2] !== 'tones');
+  const surfaceTokens = colorEntries.filter(
+    (e) =>
+      e.path[1] === 'surface' &&
+      e.path.at(-1) === 'bg' &&
+      e.path[2] !== 'table' &&
+      e.path[2] !== 'tones',
+  );
   for (const entry of surfaceTokens) {
     const varName = toVarName(entry.path);
     const segments = entry.path.slice(1); // drop 'color'
@@ -610,7 +844,7 @@ function buildThemeInlineBlock(colorEntries, aliases) {
   /* --- Text colors --- */
   lines.push('');
   lines.push('  /* Text colors */');
-  const textTokens = colorEntries.filter(e => e.path[1] === 'text');
+  const textTokens = colorEntries.filter((e) => e.path[1] === 'text');
   for (const entry of textTokens) {
     const varName = toVarName(entry.path);
     const twName = entry.path.slice(1).join('-');
@@ -620,11 +854,23 @@ function buildThemeInlineBlock(colorEntries, aliases) {
   lines.push('  --color-text-tertiary: var(--text-tertiary);');
   lines.push('  --color-text-disabled: var(--text-disabled);');
 
+  /* --- Component-scoped colors --- */
+  const componentTokens = colorEntries.filter((entry) => entry.path[1] === 'component');
+  if (componentTokens.length > 0) {
+    lines.push('');
+    lines.push('  /* Component colors */');
+    for (const entry of componentTokens) {
+      const varName = toVarName(entry.path);
+      const twName = entry.path.slice(1).join('-');
+      lines.push(`  --color-${twName}: var(${varName});`);
+    }
+  }
+
   /* --- Border colors --- */
   lines.push('');
   lines.push('  /* Border colors */');
   lines.push('  --color-border: var(--border-default);');
-  const borderTokens = colorEntries.filter(e => e.path[1] === 'border');
+  const borderTokens = colorEntries.filter((e) => e.path[1] === 'border');
   for (const entry of borderTokens) {
     const varName = toVarName(entry.path);
     const twName = entry.path.slice(1).join('-');
@@ -739,7 +985,7 @@ function buildThemeInlineBlock(colorEntries, aliases) {
   lines.push('}');
   lines.push('');
 
-  return lines.join('\n') + '\n';
+  return `${lines.join('\n').trimEnd()}\n`;
 }
 
 /**
@@ -748,7 +994,9 @@ function buildThemeInlineBlock(colorEntries, aliases) {
  */
 function buildTokenTypes(themeInlineCss) {
   const lines = [];
-  lines.push('/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */');
+  lines.push(
+    '/* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */',
+  );
   lines.push('/* Run: npm run tokens:build:theme to regenerate. */');
   lines.push('');
 
@@ -762,16 +1010,19 @@ function buildTokenTypes(themeInlineCss) {
     const m = line.match(/^\s+--([\w-]+):/);
     if (!m) continue;
     const name = m[1];
-    if (name.startsWith('color-')) colorTokens.push(name.slice(6)); // strip 'color-' prefix
+    if (name.startsWith('color-'))
+      colorTokens.push(name.slice(6)); // strip 'color-' prefix
     else if (name.startsWith('radius-')) radiusTokens.push(name);
     else if (name.startsWith('shadow-')) shadowTokens.push(name);
     else if (name.startsWith('spacing-')) spacingTokens.push(name);
     else if (name.startsWith('ring-')) ringTokens.push(name);
   }
 
-  const toUnion = (arr) => arr.map(t => `  | '${t}'`).join('\n');
+  const toUnion = (arr) => arr.map((t) => `  | '${t}'`).join('\n');
 
-  lines.push('/** Semantic color token names available as TW4 utilities (bg-*, text-*, border-*) */');
+  lines.push(
+    '/** Semantic color token names available as TW4 utilities (bg-*, text-*, border-*) */',
+  );
   lines.push('export type TokenColor =');
   lines.push(toUnion(colorTokens) + ';');
   lines.push('');
@@ -790,8 +1041,12 @@ function buildTokenTypes(themeInlineCss) {
   lines.push('export type DesignToken = TokenColor | TokenRadius | TokenShadow;');
   lines.push('');
 
-  lines.push(`/** Total token count: ${colorTokens.length} colors, ${radiusTokens.length} radius, ${shadowTokens.length} shadows */`);
-  lines.push(`export const TOKEN_COUNT = { color: ${colorTokens.length}, radius: ${radiusTokens.length}, shadow: ${shadowTokens.length} } as const;`);
+  lines.push(
+    `/** Total token count: ${colorTokens.length} colors, ${radiusTokens.length} radius, ${shadowTokens.length} shadows */`,
+  );
+  lines.push(
+    `export const TOKEN_COUNT = { color: ${colorTokens.length}, radius: ${radiusTokens.length}, shadow: ${shadowTokens.length} } as const;`,
+  );
   lines.push('');
 
   return lines.join('\n');
@@ -819,9 +1074,9 @@ function formatColor(r, g, b, a = 1) {
   const m_ = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
   const s_ = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
 
-  const L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
-  const A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
-  const B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+  const L = 0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_;
+  const A = 1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_;
+  const B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_;
 
   /* OKLab → OKLCH */
   const C = Math.sqrt(A * A + B * B);

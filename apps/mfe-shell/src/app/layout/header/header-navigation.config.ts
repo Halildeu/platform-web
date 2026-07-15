@@ -14,8 +14,13 @@ import {
   Lightbulb,
   Scale,
   Monitor,
+  FileText,
 } from 'lucide-react';
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
+import {
+  ATS_PRODUCT_HUB_ENTRY,
+  INTERVIEW_EVIDENCE_ENTRY,
+} from '../../../features/ats-product-catalog/model/ats-capability-registry';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation types                                                   */
@@ -33,6 +38,8 @@ export interface NavGroupItem {
   module?: string;
   /** If true, item is only shown when the corresponding remote is enabled. */
   remoteFlag?: 'suggestions' | 'ethic' | 'endpointAdmin';
+  /** Additional routes that keep this navigation item active. */
+  activePathPrefixes?: readonly string[];
 }
 
 export interface NavGroup {
@@ -87,6 +94,17 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Scale,
         module: MODULE_KEYS.ETHIC,
         remoteFlag: 'ethic',
+      },
+      {
+        key: ATS_PRODUCT_HUB_ENTRY.id,
+        labelKey: 'shell.mega.hr.atsProductHub',
+        descriptionKey: 'shell.mega.hr.atsProductHub.desc',
+        path: ATS_PRODUCT_HUB_ENTRY.route,
+        icon: FileText,
+        // The permanent product hub remains discoverable regardless of remote
+        // readiness; the real module is launched separately from the hub.
+        module: ATS_PRODUCT_HUB_ENTRY.requiredModule,
+        activePathPrefixes: [INTERVIEW_EVIDENCE_ENTRY.route],
       },
       {
         key: 'compensation',
@@ -219,6 +237,16 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
   // HR
   { pattern: '/suggestions', labelKey: 'shell.breadcrumb.suggestions', parent: '/' },
   { pattern: '/ethic', labelKey: 'shell.breadcrumb.ethic', parent: '/' },
+  {
+    pattern: ATS_PRODUCT_HUB_ENTRY.route,
+    labelKey: 'shell.breadcrumb.atsProductHub',
+    parent: '/',
+  },
+  {
+    pattern: INTERVIEW_EVIDENCE_ENTRY.route,
+    labelKey: 'shell.breadcrumb.interviewEvidence',
+    parent: ATS_PRODUCT_HUB_ENTRY.route,
+  },
 
   // Admin
   {

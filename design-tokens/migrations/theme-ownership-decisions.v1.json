@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "kind": "theme-ownership-migration-decisions",
+  "baseline": {
+    "commit": "da548d7bd356990bf78d6e3a23d5a4c6d3be85b6",
+    "themeCss": {
+      "path": "apps/mfe-shell/src/styles/theme.css",
+      "sha256": "c373abccca9c43b77a6dfeb194660e891f38dec6307c721ec80fcc08b6cfe7b6"
+    },
+    "themeInlineCss": {
+      "path": "apps/mfe-shell/src/styles/generated-theme-inline.css",
+      "sha256": "94de2b7cbf11552de4b4155ad897fbfe5b41ebdb26a84b28083a374b5950e982"
+    },
+    "tokens": {
+      "path": "design-tokens/figma.tokens.json",
+      "sha256": "7417b3bab63f60003e4e56800e9e7e7a7d1d8ccf00e4ceb5a03186dc87375280"
+    },
+    "generator": {
+      "path": "scripts/theme/generate-theme-css.mjs",
+      "sha256": "9d1fb5b131fc13896892aadb18738cf4986d826a90743cbeca090637c45b1768"
+    },
+    "unreconciledGeneratedThemeSha256": "8b470212cd0c70ac8b531af1c521c36a439786f03d811a417abb8b498c03abce"
+  },
+  "inventory": {
+    "themeDeclarationTotal": 1446,
+    "themeCustomPropertyDeclarations": 1444,
+    "themeCustomPropertyIdentities": 1442,
+    "generatedThemeDeclarationTotal": 713,
+    "generatedThemeCustomPropertyIdentities": 711,
+    "curatedThemeCustomPropertyIdentities": 731,
+    "valueDriftIdentities": 39,
+    "duplicateConflictIdentities": 2,
+    "themeInlineDeclarations": 138,
+    "generatedThemeInlineDeclarations": 98,
+    "curatedThemeInlineDeclarations": 40
+  },
+  "decisions": [
+    {
+      "id": "preserve-reviewed-product-values-in-token-source",
+      "action": "preserve-runtime-in-token-source",
+      "candidateIdentityCount": 13,
+      "targets": [
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-light/value",
+          "expectedValue": "oklch(56% 0.2 259.81deg)",
+          "affectedIdentityCount": 2
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-dark/value",
+          "expectedValue": "oklch(56% 0.2 259.81deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-hc/value",
+          "expectedValue": "oklch(88.68% 0.1822 95.33deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/bg/modes/serban-compact/value",
+          "expectedValue": "oklch(56% 0.2 259.81deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/primary/text/modes/serban-hc/value",
+          "expectedValue": "oklch(0% 0 0deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/action/secondary/border/modes/serban-hc/value",
+          "expectedValue": "oklch(88.68% 0.1822 95.33deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/state/success/text/modes/serban-light/value",
+          "expectedValue": "oklch(55% 0.17 152deg)",
+          "affectedIdentityCount": 2
+        },
+        {
+          "jsonPointer": "/semantic/color/state/success/text/modes/serban-dark/value",
+          "expectedValue": "oklch(55% 0.17 152deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/state/success/text/modes/serban-compact/value",
+          "expectedValue": "oklch(55% 0.17 152deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/text/inverse/modes/serban-dark/value",
+          "expectedValue": "oklch(100% 0 0deg)",
+          "affectedIdentityCount": 1
+        },
+        {
+          "jsonPointer": "/semantic/color/surface/overlay/bg/modes/serban-hc/value",
+          "expectedValue": "oklch(12% 0 0deg)",
+          "affectedIdentityCount": 1
+        }
+      ],
+      "reason": "The reviewed runtime values include product contrast and high-contrast decisions. Replacing them with the stale generated preview would change the product surface."
+    },
+    {
+      "id": "preserve-legacy-dark-bridge-indirection",
+      "action": "preserve-runtime-indirection-in-generator",
+      "candidateIdentityCount": 26,
+      "bindings": [
+        { "property": "--feedback-error", "expectedValue": "var(--state-danger-text)" },
+        { "property": "--feedback-success", "expectedValue": "var(--state-success-text)" },
+        { "property": "--feedback-warning", "expectedValue": "var(--state-warning-text)" },
+        { "property": "--feedback-info", "expectedValue": "var(--state-info-text)" },
+        { "property": "--danger-color", "expectedValue": "var(--state-danger-text)" },
+        { "property": "--success-color", "expectedValue": "var(--state-success-text)" },
+        { "property": "--warning-color", "expectedValue": "var(--state-warning-text)" },
+        { "property": "--info-color", "expectedValue": "var(--state-info-text)" },
+        { "property": "--bg-primary", "expectedValue": "var(--action-primary-bg)" },
+        { "property": "--ring-primary", "expectedValue": "var(--action-primary-bg)" },
+        { "property": "--ring-focus", "expectedValue": "var(--focus-outline)" },
+        { "property": "--ring-error", "expectedValue": "var(--state-danger-border)" },
+        { "property": "--ring-color", "expectedValue": "var(--focus-outline)" }
+      ],
+      "reason": "Dark and system-dark legacy aliases remain bound to semantic runtime properties instead of freezing copied terminal colors."
+    },
+    {
+      "id": "remove-redundant-ring-color-overrides",
+      "action": "remove-redundant-override",
+      "candidateIdentityCount": 2,
+      "property": "--ring-color",
+      "scopes": [
+        "[data-mode=\"dark\"]",
+        "@media (prefers-color-scheme:dark) > :root[data-mode=\"system\"]:not([data-theme=\"serban-hc\"]),[data-theme-scope][data-mode=\"system\"]:not([data-theme=\"serban-hc\"])"
+      ],
+      "expectedValue": "oklch(68% 0.19 263deg)",
+      "important": false,
+      "reason": "The later literals duplicate the focus-outline result and create conflicting ownership. The generated alias is retained and browser-computed equivalence is required."
+    }
+  ],
+  "result": {
+    "tokenSourceSha256": "433a73813b9a23ecc5f3974aa570f6d06be9b69af837b476a9db9ee99371f545",
+    "generatedThemeCssSha256": "233d5e2ec141453896df9b4a6aaeb14d2cfe0b5e66f9bb8c3bbb87036439af2a",
+    "themeExtensionCssSha256": "9e29d452e7b6c89ae7b371557d21a5b4a2617ac47876e923f27827730d8bd7f8",
+    "generatedThemeInlineCssSha256": "c348fe2c1bd25b8e9f1dc864f541acbdadf1743822cb6f769e05594941f9cf57",
+    "themeInlineExtensionCssSha256": "5ef1f38a2e467c47567407ef550a75f2376304f9732d16efbc8ca8d4e2b46b8c",
+    "removedRedundantDeclarations": 2,
+    "composedThemeCustomPropertyIdentities": 1442,
+    "composedThemeInlineDeclarations": 138
+  },
+  "evidence": {
+    "sourceFix": "https://github.com/Halildeu/platform-web/pull/906",
+    "wholeMfeAcceptance": "https://github.com/Halildeu/platform-web/pull/903",
+    "wholeMfeRun": "https://github.com/Halildeu/platform-web/actions/runs/29300421023",
+    "reviewBoundary": "Real headless MiniMax M3 and independent Codex; no application window"
+  }
+}

@@ -7,8 +7,59 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execSync } from 'node:child_process';
 
+const COLOR_LEAK_PATTERNS = Object.freeze([
+  /* 1. Inline style hex: style={{ color: '#fff' }} or backgroundColor: '#000' */
+  { name: 'inline-hex', re: /(?:color|background|backgroundColor|borderColor|fill|stroke|boxShadow)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
+  /* 2. SVG attribute hex: fill="#fff", stroke="#000" (not var()) */
+  { name: 'svg-hex', re: /\b(?:fill|stroke|stop-color|flood-color)="(?!var\()#[0-9a-fA-F]{3,8}"/g },
+  /* 3. rgb/rgba in inline style */
+  { name: 'inline-rgb', re: /(?:color|background|backgroundColor|borderColor|border|outline)\s*[:=]\s*[`'"](?:rgba?\([^)]+\))/g },
+  /* 4. JS variable with hardcoded hex: color: '#ffffff', const c = '#ff0' */
+  { name: 'js-hex', re: /\b(?:color|background|bg|fill|stroke)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
+]);
+
+/**
+ * Return the canonical, occurrence-sensitive fingerprint for one source file.
+ * Overlapping detector patterns still count a source span once, while repeated
+ * occurrences of the same file + detector + canonical value remain visible.
+ */
+export function collectColorLeakFileOccurrences(content, relativePath) {
+  const fileMatches = new Map();
+  const occupiedSpans = [];
+  for (const { name, re } of COLOR_LEAK_PATTERNS) {
+    let match;
+    /* Skip var(--token, #fallback) pattern — fallback hex inside var() is acceptable */
+    while ((match = re.exec(content)) !== null) {
+      const raw = match[0];
+      if (raw.includes('var(')) continue;
+      const start = match.index;
+      const end = start + raw.length;
+      if (occupiedSpans.some((span) => start < span.end && end > span.start)) continue;
+      occupiedSpans.push({ start, end });
+      const display = raw.trim().replace(/\s+/g, ' ');
+      const canonical = display.replace(/\s+/g, '').toLowerCase();
+      const dedupeKey = `${name}\0${canonical}`;
+      const existing = fileMatches.get(dedupeKey);
+      if (existing) existing.count += 1;
+      else fileMatches.set(dedupeKey, { name, canonical, display, count: 1 });
+    }
+    re.lastIndex = 0;
+  }
+
+  const values = [...fileMatches.values()]
+    .sort((a, b) => `${a.name}:${a.canonical}`.localeCompare(`${b.name}:${b.canonical}`));
+  return {
+    count: values.reduce((sum, item) => sum + item.count, 0),
+    samples: values.slice(0, 4).map(({ display }) => display),
+    fingerprintItems: values.map(({ name, canonical, count }) => ({
+      key: JSON.stringify([relativePath, name, canonical]),
+      count,
+    })),
+  };
+}
+
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -40,12 +91,11 @@ check('attr-consistency', 'Theme attribute consistency (controller sets data-the
 // 2. @theme inline
 check('theme-inline', '@theme inline directive in index.css (TW4 runtime resolution)', () => {
   const css = readSafe(SHELL_INDEX_CSS);
-  const hasThemeInline = css.includes('@theme inline');
-  const hasOldTheme = /^@theme\s*\{/m.test(css.replace(/@theme\s+inline/, ''));
+  const hasThemeInline = readThemeInlineCss().includes('@theme inline');
   // Check we removed the :root override block
   const hasRootOverride = css.includes(':root,\n:root[data-theme]') || css.includes(':root, :root[data-theme]');
 
-  if (hasThemeInline && !hasRootOverride) return { status: 'pass', message: '@theme inline active, no redundant :root override block' };
+  if (hasThemeInline && !hasRootOverride) return { status: 'pass', message: 'Composed @theme inline layers active, no redundant :root override block' };
   const issues = [];
   if (!hasThemeInline) issues.push('Missing @theme inline — utilities use static build-time values');
   if (hasRootOverride) issues.push('Redundant :root override block still present — remove it');
@@ -93,7 +143,7 @@ check('raw-token-drift', 'Figma raw token ↔ DTCG code alignment', () => {
 
 // 5. Surface tone integrity (dark tones ≠ light defaults)
 check('surface-tone-dark', 'Dark mode surface tone override integrity', () => {
-  const css = readSafe(THEME_CSS);
+  const css = readThemeCss();
   const darkTonePattern = /data-theme="serban-dark"\]\[data-surface-tone/g;
   const darkToneMatches = css.match(darkTonePattern) || [];
   if (darkToneMatches.length === 0) {
@@ -105,7 +155,7 @@ check('surface-tone-dark', 'Dark mode surface tone override integrity', () => {
 // 6. Token bridge staleness
 check('token-bridge', 'Token bridge fallback staleness', () => {
   const bridge = readSafe(TOKEN_BRIDGE_CSS);
-  const theme = readSafe(THEME_CSS);
+  const theme = readThemeCss();
   const themeVars = parseCssVarsFlat(theme);
 
   /* Extract bridge entries: --short-name: var(--theme-name, <fallback>); */
@@ -183,17 +233,7 @@ check('color-leaks', 'Hardcoded color values in production code (all patterns)',
   const scanDirs = [DS_SRC, join(ROOT, 'packages/x-form-builder/src'), join(ROOT, 'packages/x-charts/src'), join(ROOT, 'packages/x-data-grid/src'), join(ROOT, 'packages/x-editor/src'), join(ROOT, 'packages/x-kanban/src'), join(ROOT, 'packages/x-scheduler/src'), join(ROOT, 'apps/mfe-shell/src'), join(ROOT, 'apps/mfe-audit/src'), join(ROOT, 'apps/mfe-users/src'), join(ROOT, 'apps/mfe-access/src'), join(ROOT, 'apps/mfe-reporting/src'), join(ROOT, 'apps/mfe-ethic/src'), join(ROOT, 'apps/mfe-suggestions/src')];
   const internalPaths = ['design-lab', 'demos/', 'playground/', 'showcase/', '__stories__'];
   const violations = [];
-  const patterns = [
-    /* 1. Inline style hex: style={{ color: '#fff' }} or backgroundColor: '#000' */
-    { name: 'inline-hex', re: /(?:color|background|backgroundColor|borderColor|fill|stroke|boxShadow)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
-    /* 2. SVG attribute hex: fill="#fff", stroke="#000" (not var()) */
-    { name: 'svg-hex', re: /\b(?:fill|stroke|stop-color|flood-color)="(?!var\()#[0-9a-fA-F]{3,8}"/g },
-    /* 3. rgb/rgba in inline style */
-    { name: 'inline-rgb', re: /(?:color|background|backgroundColor|borderColor|border|outline)\s*[:=]\s*[`'"](?:rgba?\([^)]+\))/g },
-    /* 4. JS variable with hardcoded hex: color: '#ffffff', const c = '#ff0' */
-    { name: 'js-hex', re: /\b(?:color|background|bg|fill|stroke)\s*[:=]\s*['"]#[0-9a-fA-F]{3,8}['"]/g },
-  ];
-
+  const fingerprintItems = [];
   for (const dir of scanDirs) {
     const tsxFiles = [...walkDir(dir, '.tsx'), ...walkDir(dir, '.ts')];
     for (const file of tsxFiles) {
@@ -202,29 +242,33 @@ check('color-leaks', 'Hardcoded color values in production code (all patterns)',
       /* Color pickers naturally use dynamic rgba — skip */
       if (rel.includes('ColorPicker') || rel.includes('color-picker')) continue;
       const content = readSafe(file);
-      const fileMatches = new Set();
-      for (const { re } of patterns) {
-        const matches = content.match(re) || [];
-        /* Skip var(--token, #fallback) pattern — fallback hex inside var() is acceptable */
-        for (const m of matches) {
-          if (m.includes('var(')) continue;
-          fileMatches.add(m.trim().substring(0, 60));
-        }
-        re.lastIndex = 0;
-      }
-      if (fileMatches.size > 0) {
-        violations.push({ file: rel, count: fileMatches.size, samples: [...fileMatches].slice(0, 4) });
+      const measured = collectColorLeakFileOccurrences(content, rel);
+      if (measured.count > 0) {
+        violations.push({ file: rel, count: measured.count, samples: measured.samples });
+        fingerprintItems.push(...measured.fingerprintItems);
       }
     }
   }
 
-  if (violations.length === 0) return { status: 'pass', message: 'No hardcoded color values in production code (hex, rgb, SVG, JS vars)' };
+  const ratchet = {
+    measurementVersion: 2,
+    dimensions: {
+      violations: {
+        direction: 'lower-is-better',
+        value: fingerprintItems.reduce((sum, item) => sum + item.count, 0),
+        items: fingerprintItems,
+      },
+    },
+    context: { semantics: 'occurrence count per whitespace-insensitive lowercase match, file, and rule' },
+  };
+  if (violations.length === 0) return { status: 'pass', message: 'No hardcoded color values in production code (hex, rgb, SVG, JS vars)', ratchet };
   const total = violations.reduce((s, v) => s + v.count, 0);
   return {
     status: total > 10 ? 'fail' : 'warn',
     message: `${total} hardcoded colors in ${violations.length} production files (inline hex, SVG hex, rgb/rgba, JS vars)`,
     details: violations.slice(0, 10),
     fix: FIX_HINT ? 'Replace with var(--token, fallback): color: "#fff" → color: "var(--text-inverse, #fff)"; fill="#000" → fill="var(--text-primary, #000)"' : undefined,
+    ratchet,
   };
 });
 

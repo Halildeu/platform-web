@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 export function register(ctx) {
-  const { check, readSafe, srgbToHex, parseCssVarsFlat, walkDir,
+  const { check, readSafe, readThemeCss, readThemeInlineCss, srgbToHex, parseCssVarsFlat, walkDir,
+    extractThemeInlineBodies,
     ROOT, DS_SRC, SHELL_STYLES, SHELL_INDEX_CSS, FIGMA_PATH,
     THEME_CSS, TOKEN_BRIDGE_CSS, TOKENS_CSS, THEME_INLINE_CSS, FIX_HINT } = ctx;
 
@@ -184,21 +185,16 @@ check('undefined-tw-prefix', 'Undefined Tailwind class prefixes in production TS
 
 // 19. Phantom classes — used in code but NOT in @theme (won't generate CSS)
 check('phantom-classes', 'Tailwind classes using tokens not defined in @theme inline', () => {
-  /* Extract all token names from @theme inline block (may be in index.css or generated file) */
-  let indexCss = readSafe(SHELL_INDEX_CSS);
-  let themeBlock = indexCss.match(/@theme\s+inline\s*\{([\s\S]*?)\}/);
-  if (!themeBlock) {
-    /* Check for imported generated file */
-    const genPath = join(SHELL_STYLES, 'generated-theme-inline.css');
-    const genCss = readSafe(genPath);
-    themeBlock = genCss.match(/@theme\s+inline\s*\{([\s\S]*?)\}/);
-  }
-  if (!themeBlock) return { status: 'warn', message: 'No @theme inline block found in index.css or generated-theme-inline.css' };
+  /* Extract token names from every generated and curated @theme inline block. */
+  const inlineBlocks = extractThemeInlineBodies(readThemeInlineCss());
+  if (inlineBlocks.length === 0) return { status: 'warn', message: 'No @theme inline block found in composed theme-inline layers' };
 
   const themeTokens = new Set();
-  for (const line of themeBlock[1].split('\n')) {
-    const m = line.match(/^\s+--([\w-]+):/);
-    if (m) themeTokens.add(m[1]);
+  for (const block of inlineBlocks) {
+    for (const line of block.split('\n')) {
+      const m = line.match(/^\s+--([\w-]+):/);
+      if (m) themeTokens.add(m[1]);
+    }
   }
 
   /* Also extract token-bridge.css tokens (they provide component-level aliases) */
@@ -209,7 +205,7 @@ check('phantom-classes', 'Tailwind classes using tokens not defined in @theme in
   }
 
   /* Also add theme.css tokens */
-  const theme = readSafe(THEME_CSS);
+  const theme = readThemeCss();
   for (const line of theme.split('\n')) {
     const m = line.trim().match(/^--([\w-]+):/);
     if (m) themeTokens.add(m[1]);
@@ -362,6 +358,8 @@ check('palette-over-token', 'Tailwind palette colors used instead of design toke
   const internalPaths = ['design-lab', 'demos/', 'playground/', 'showcase/'];
   const prodViolations = [];
   const internalViolations = [];
+  const prodFingerprintItems = [];
+  const internalFingerprintItems = [];
 
   for (const dir of scanDirs) {
     const files = walkDir(join(ROOT, dir), '.tsx');
@@ -372,30 +370,51 @@ check('palette-over-token', 'Tailwind palette colors used instead of design toke
       const rel = relative(ROOT, file);
       const isInternal = internalPaths.some(p => rel.includes(p));
       const entry = { file: rel, count: matches.length, samples: [...new Set(matches)].slice(0, 5) };
-      if (isInternal) internalViolations.push(entry);
-      else prodViolations.push(entry);
+      const counts = new Map();
+      for (const className of matches) counts.set(className, (counts.get(className) || 0) + 1);
+      const items = [...counts.entries()].map(([className, count]) => ({
+        key: JSON.stringify([rel, className]),
+        count,
+      }));
+      if (isInternal) {
+        internalViolations.push(entry);
+        internalFingerprintItems.push(...items);
+      } else {
+        prodViolations.push(entry);
+        prodFingerprintItems.push(...items);
+      }
     }
   }
 
   const prodTotal = prodViolations.reduce((s, v) => s + v.count, 0);
   const internalTotal = internalViolations.reduce((s, v) => s + v.count, 0);
+  const ratchet = {
+    measurementVersion: 1,
+    dimensions: {
+      internal: { direction: 'lower-is-better', value: internalTotal, items: internalFingerprintItems },
+      production: { direction: 'lower-is-better', value: prodTotal, items: prodFingerprintItems },
+    },
+    context: { productionFiles: prodViolations.length, internalFiles: internalViolations.length },
+  };
 
-  if (prodTotal === 0 && internalTotal === 0) return { status: 'pass', message: 'No hardcoded Tailwind palette colors — all use design tokens' };
+  if (prodTotal === 0 && internalTotal === 0) return { status: 'pass', message: 'No hardcoded Tailwind palette colors — all use design tokens', ratchet };
   if (prodTotal === 0) return {
     status: 'pass',
     message: `Production code clean. ${internalTotal} palette colors in ${internalViolations.length} internal/design-lab files (cosmetic)`,
+    ratchet,
   };
   return {
     status: prodTotal > 20 ? 'fail' : 'warn',
     message: `${prodTotal} palette colors in ${prodViolations.length} production files + ${internalTotal} in ${internalViolations.length} internal files`,
     details: prodViolations.slice(0, 10),
     fix: FIX_HINT ? 'Replace palette colors with token utilities: bg-red-500→bg-state-danger-text, text-gray-500→text-text-secondary, dark:bg-zinc-800→dark:bg-surface-default, border-gray-200→border-border-subtle' : undefined,
+    ratchet,
   };
 });
 
 // 21. Token-eligible hardcodes — hex values matching known tokens but not using var()
 check('token-eligible', 'Hardcoded hex values that match known design tokens', () => {
-  const themeCss = readSafe(THEME_CSS);
+  const themeCss = readThemeCss();
   const bridgeCss = readSafe(TOKEN_BRIDGE_CSS);
   const tokenMap = new Map();
 

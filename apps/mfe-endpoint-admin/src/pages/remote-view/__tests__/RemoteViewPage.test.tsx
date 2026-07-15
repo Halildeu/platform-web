@@ -80,24 +80,40 @@ describe('RemoteViewPage', () => {
       tokenResolver: () => 'tkn',
     });
 
-    // Locale-agnostic (the jsdom env may resolve to tr or en): match both.
-    expect(screen.getByTestId('remote-view-badge-viewonly')).toHaveTextContent(
-      /YALNIZ İZLEME|VIEW-ONLY/,
+    expect(screen.queryByTestId('remote-view-badge-viewonly')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-recording-off')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-attended')).toBeNull();
+    expect(screen.queryByTestId('remote-view-no-input-note')).toBeNull();
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-metadata-trusted',
+      'false',
     );
-    // recording-OFF defaults on (fail-safe) and stays on after the meta event.
-    expect(screen.getByTestId('remote-view-badge-recording-off')).toBeInTheDocument();
-    expect(screen.getByTestId('remote-view-no-input-note').textContent).toMatch(
-      /iletilmez|not forwarded/,
-    );
+    expect(screen.getByTestId('remote-view-page')).not.toHaveAttribute('data-viewer-id');
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
     await act(async () => {
       sse.push(
-        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY"}\n\n',
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
       );
-      sse.push('event: frame\ndata: {"seq":1,"contentType":"image/png","dataB64":"iVBOR"}\n\n');
+      sse.push(
+        'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":110,"dataB64":"iVBOR"}\n\n',
+      );
     });
     await flush();
+
+    expect(screen.getByTestId('remote-view-badge-viewonly')).toHaveTextContent(
+      /YALNIZ İZLEME|VIEW-ONLY/,
+    );
+    expect(screen.getByTestId('remote-view-badge-recording-off')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-view-badge-attended')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute('data-metadata-trusted', 'true');
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute('data-viewer-id', 'vw-opaque');
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute('data-frame-seq', '1');
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute('data-frame-observed-at', '100');
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute('data-frame-sent-at', '110');
+    expect(screen.getByTestId('remote-view-no-input-note').textContent).toMatch(
+      /iletilmez|not forwarded/,
+    );
 
     const img = await screen.findByTestId('remote-view-frame');
     expect(img.getAttribute('src')).toBe('data:image/png;base64,iVBOR');
@@ -125,6 +141,110 @@ describe('RemoteViewPage', () => {
     sse.end();
   });
 
+  it('acknowledges only metadata after the current image has rendered', async () => {
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve({ status: 204, ok: true } as Response);
+      }
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+      nowFn: () => 250,
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":7,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":120,"dataB64":"FRAME"}\n\n',
+      );
+    });
+    const img = await screen.findByTestId('remote-view-frame');
+    fireEvent.load(img);
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+    const [ackUrl, ackInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect(ackUrl).toContain('/sess-1/view?streamId=op-1');
+    expect(ackInit.method).toBe('POST');
+    expect((ackInit.headers as Record<string, string>).Authorization).toBe('Bearer tkn');
+    expect(JSON.parse(String(ackInit.body))).toEqual({ viewerId: 'vw-opaque', frameSeq: 7 });
+    expect(String(ackInit.body)).not.toContain('FRAME');
+    expect(String(ackInit.body)).not.toMatch(/"dataB64"|"payload"|"image"/i);
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-accepted-count',
+        '1',
+      ),
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-attempted-count',
+      '1',
+    );
+    expect(screen.getByTestId('remote-view-frame-age')).toHaveTextContent('0s');
+    sse.end();
+  });
+
+  it('bounds render acknowledgement traffic to one in-flight plus latest pending frame', async () => {
+    const sse = controllableSse();
+    let resolveFirstAck!: (response: Response) => void;
+    const firstAck = new Promise<Response>((resolve) => {
+      resolveFirstAck = resolve;
+    });
+    let postCount = 0;
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        postCount += 1;
+        return postCount === 1 ? firstAck : Promise.resolve({ status: 204, ok: true } as Response);
+      }
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"A"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      sse.push(
+        'event: frame\ndata: {"seq":2,"contentType":"image/png","observedAtEpochMillis":110,"sentAtEpochMillis":111,"dataB64":"B"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+    await act(async () => {
+      sse.push(
+        'event: frame\ndata: {"seq":3,"contentType":"image/png","observedAtEpochMillis":120,"sentAtEpochMillis":121,"dataB64":"C"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // GET + seq=1 POST; seq=2 was replaced by seq=3
+
+    resolveFirstAck({ status: 204, ok: true } as Response);
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(3));
+    const latestAck = fetchImpl.mock.calls[2][1] as RequestInit;
+    expect(JSON.parse(String(latestAck.body))).toEqual({ viewerId: 'vw-opaque', frameSeq: 3 });
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-attempted-count',
+      '2',
+    );
+    sse.end();
+  });
+
   it('STOP closes a live view and disables the button', async () => {
     const sse = controllableSse(); // never ended → stays live
     const fetchImpl = vi.fn().mockResolvedValue(sse.response);
@@ -142,6 +262,44 @@ describe('RemoteViewPage', () => {
       /Oturum kapandı|Session closed/,
     );
     expect(stopBtn).toBeDisabled();
+    sse.end();
+  });
+
+  it('STOP clears the last frame and cancels a scheduled render acknowledgement', async () => {
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve({ status: 204, ok: true } as Response);
+      }
+      return Promise.resolve(sse.response);
+    });
+    let scheduledAck: (() => void) | undefined;
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => {
+        scheduledAck = callback;
+      },
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":7,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":120,"dataB64":"FRAME"}\n\n',
+      );
+    });
+    const img = await screen.findByTestId('remote-view-frame');
+    fireEvent.load(img);
+    expect(scheduledAck).toBeTypeOf('function');
+
+    fireEvent.click(screen.getByTestId('remote-view-stop'));
+    expect(screen.queryByTestId('remote-view-frame')).toBeNull();
+    scheduledAck?.();
+    await flush();
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1); // SSE GET only; no post-STOP acknowledgement
     sse.end();
   });
 
@@ -170,6 +328,90 @@ describe('RemoteViewPage', () => {
     );
   });
 
+  it('renders no frame, trusted badges or acknowledgement when a frame precedes metadata', async () => {
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve({ status: 204, ok: true } as Response);
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"EARLY"}\n\n',
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-status')).toHaveTextContent(/Hata|error/i),
+    );
+    expect(screen.queryByTestId('remote-view-frame')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-viewonly')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-recording-off')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-attended')).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed on partial metadata and never sends a render acknowledgement', async () => {
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve({ status: 204, ok: true } as Response);
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY"}\n\n',
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-status')).toHaveTextContent(/Hata|error/i),
+    );
+    expect(screen.queryByTestId('remote-view-frame')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-viewonly')).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an unsafe viewer id before rendering or acknowledgement', async () => {
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve({ status: 204, ok: true } as Response);
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"../bad"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"NO"}\n\n',
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-status')).toHaveTextContent(/Hata|error/i),
+    );
+    expect(screen.queryByTestId('remote-view-frame')).toBeNull();
+    expect(screen.queryByTestId('remote-view-badge-viewonly')).toBeNull();
+    expect(screen.queryByTestId('remote-view-no-input-note')).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('clears the previous frame when the stream target changes (no stale-frame leak)', async () => {
     const sseA = controllableSse();
     const sseB = controllableSse(); // sess-B stays live but never pushes a frame
@@ -181,7 +423,12 @@ describe('RemoteViewPage', () => {
     render(<NavHarness fetchImpl={fetchImpl as unknown as typeof fetch} />);
     await waitFor(() => expect(fetchImpl).toHaveBeenCalled());
     await act(async () => {
-      sseA.push('event: frame\ndata: {"seq":1,"contentType":"image/png","dataB64":"AAA"}\n\n');
+      sseA.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-A"}\n\n',
+      );
+      sseA.push(
+        'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"AAA"}\n\n',
+      );
     });
     expect(await screen.findByTestId('remote-view-frame')).toBeInTheDocument();
 
@@ -190,6 +437,7 @@ describe('RemoteViewPage', () => {
     });
     // The sess-A screen frame must NOT remain visible under the new sess-B target.
     await waitFor(() => expect(screen.queryByTestId('remote-view-frame')).toBeNull());
+    expect(screen.queryByTestId('remote-view-badge-viewonly')).toBeNull();
     sseA.end();
     sseB.end();
   });
@@ -205,7 +453,12 @@ describe('RemoteViewPage', () => {
     render(<NavHarness fetchImpl={fetchImpl as unknown as typeof fetch} />);
     await waitFor(() => expect(fetchImpl).toHaveBeenCalled());
     await act(async () => {
-      sseA.push('event: frame\ndata: {"seq":1,"contentType":"image/png","dataB64":"AAA"}\n\n');
+      sseA.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-A"}\n\n',
+      );
+      sseA.push(
+        'event: frame\ndata: {"seq":1,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"AAA"}\n\n',
+      );
     });
     await screen.findByTestId('remote-view-frame');
 
@@ -216,7 +469,9 @@ describe('RemoteViewPage', () => {
 
     // A late frame delivered on the OLD (superseded) sess-A stream must not repaint sess-B.
     await act(async () => {
-      sseA.push('event: frame\ndata: {"seq":2,"contentType":"image/png","dataB64":"BBB"}\n\n');
+      sseA.push(
+        'event: frame\ndata: {"seq":2,"contentType":"image/png","observedAtEpochMillis":110,"sentAtEpochMillis":111,"dataB64":"BBB"}\n\n',
+      );
     });
     await flush();
     expect(screen.queryByTestId('remote-view-frame')).toBeNull();

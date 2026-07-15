@@ -26,15 +26,21 @@ export type RemoteViewStatus =
  * authoritative server state rather than a hardcoded client assumption.
  */
 export interface RemoteViewMeta {
-  recording: boolean;
-  attended: boolean;
-  capability: string;
+  readonly recording: false;
+  readonly attended: true;
+  readonly capability: 'VIEW_ONLY';
+  /** Opaque, server-generated id that binds render telemetry to this live subscription. */
+  readonly viewerId: string;
 }
 
 /** One relayed screen frame (base64 image payload, latest-wins upstream). */
 export interface RemoteViewFrame {
   seq: number;
   contentType: string;
+  /** Broker receipt time; authority for end-to-end frame age. */
+  observedAtEpochMillis: number;
+  /** Time the backend handed the frame to the authenticated SSE response. */
+  sentAtEpochMillis: number;
   dataB64: string;
 }
 

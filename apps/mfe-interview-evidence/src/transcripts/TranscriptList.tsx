@@ -23,7 +23,7 @@ export function TranscriptList({
     <section
       aria-label="Vaka ve transkript listesi"
       data-testid="transcript-list-panel"
-      style={{ display: 'grid', gap: 12 }}
+      style={{ ...REFLOW_GRID_STYLE, gap: 12, width: '100%' }}
     >
       <Text as="h2" size="lg" weight="semibold">
         Vakalar / Transkriptler
@@ -34,25 +34,34 @@ export function TranscriptList({
       </Text>
       <ul
         data-testid="transcript-list"
-        style={{ display: 'grid', gap: 6, listStyle: 'none', padding: 0, margin: 0 }}
+        style={{ ...REFLOW_GRID_STYLE, gap: 6, listStyle: 'none', padding: 0, margin: 0 }}
       >
         {transcripts.map((t) => {
           const selected = t.transcriptKey === selectedKey;
           return (
             <li
               key={t.transcriptKey}
-              style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                minWidth: 0,
+              }}
             >
               <Button
                 variant={selected ? 'primary' : 'ghost'}
                 aria-pressed={selected}
                 data-testid={`transcript-select-${t.transcriptKey}`}
                 onClick={() => onSelect(t.transcriptKey)}
+                style={REFLOW_BUTTON_STYLE}
               >
                 {t.label} — <code>{t.transcriptKey}</code>
               </Button>
-              <Badge variant={t.origin === 'DEMO' ? 'muted' : 'info'}>
-                {t.origin === 'DEMO' ? 'Demo' : 'Yükleme'}
+              <Badge
+                variant={t.origin === 'DEMO' ? 'muted' : t.origin === 'LIVE' ? 'success' : 'info'}
+              >
+                {t.origin === 'DEMO' ? 'Demo' : t.origin === 'LIVE' ? 'Canlı' : 'Yükleme'}
               </Badge>
               {t.erasure && (
                 <Badge variant="error" data-testid={`transcript-erased-${t.transcriptKey}`}>
@@ -66,3 +75,20 @@ export function TranscriptList({
     </section>
   );
 }
+
+const REFLOW_GRID_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr)',
+  minWidth: 0,
+} as const;
+
+const REFLOW_BUTTON_STYLE = {
+  minWidth: 0,
+  maxWidth: '100%',
+  height: 'auto',
+  minHeight: '2.25rem',
+  paddingBlock: '0.5rem',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  textAlign: 'left',
+} as const;

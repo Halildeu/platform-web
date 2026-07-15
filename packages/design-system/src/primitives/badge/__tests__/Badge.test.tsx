@@ -45,18 +45,33 @@ describe('Badge — temel render', () => {
 
 describe('Badge — variant proplari', () => {
   it.each([
-    ['default', 'bg-surface-muted'],
-    ['primary', 'text-action-primary'],
-    ['success', 'text-state-success-text'],
-    ['warning', 'text-state-warning-text'],
-    ['error', 'text-state-danger-text'],
-    ['danger', 'text-state-danger-text'],
-    ['info', 'text-state-info-text'],
-    ['muted', 'text-[var(--text-tertiary)]'],
-  ] as const)('variant="%s" dogru class uygular', (variant, expectedClass) => {
-    const { container } = render(<Badge variant={variant}>Test</Badge>);
-    const span = container.querySelector('span');
-    expect(span?.className).toContain(expectedClass);
+    ['default', 'bg-surface-muted', 'text-component-badge-foreground-muted'],
+    ['primary', 'bg-action-primary/10', 'text-component-badge-foreground-default'],
+    ['success', 'bg-state-success-bg', 'text-component-badge-foreground-default'],
+    ['warning', 'bg-state-warning-bg', 'text-component-badge-foreground-default'],
+    ['error', 'bg-state-danger-bg', 'text-component-badge-foreground-default'],
+    ['danger', 'bg-state-danger-bg', 'text-component-badge-foreground-default'],
+    ['info', 'bg-state-info-bg', 'text-component-badge-foreground-default'],
+    ['muted', 'bg-surface-muted', 'text-component-badge-foreground-muted'],
+  ] as const)(
+    'variant="%s" dogru arka plan ve foreground classlarini uygular',
+    (variant, background, foreground) => {
+      const { container } = render(<Badge variant={variant}>Test</Badge>);
+      const span = container.querySelector('span');
+      expect(span).toHaveClass(background, foreground);
+    },
+  );
+
+  it('error ve danger variantlari ayni gorsel siniflari kullanir', () => {
+    const { container } = render(
+      <>
+        <Badge variant="error">Error</Badge>
+        <Badge variant="danger">Danger</Badge>
+      </>,
+    );
+    const [errorBadge, dangerBadge] = container.querySelectorAll('span');
+
+    expect(errorBadge.className).toBe(dangerBadge.className);
   });
 });
 
@@ -82,7 +97,7 @@ describe('Badge — size proplari', () => {
 
 describe('Badge — dot variant', () => {
   it('dot=true durumunda kucuk nokta render eder', () => {
-    const { container } = render(<Badge dot />);
+    const { container } = render(<Badge dot aria-hidden="true" />);
     const span = container.querySelector('span');
     expect(span?.className).toContain('h-2');
     expect(span?.className).toContain('w-2');
@@ -90,8 +105,46 @@ describe('Badge — dot variant', () => {
   });
 
   it('dot=true durumunda children render etmez', () => {
-    render(<Badge dot>Hidden text</Badge>);
+    render(
+      <Badge dot aria-hidden="true">
+        Hidden text
+      </Badge>,
+    );
     expect(screen.queryByText('Hidden text')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['default', 'bg-component-badge-dot-neutral'],
+    ['primary', 'bg-component-badge-dot-primary'],
+    ['success', 'bg-component-badge-dot-success'],
+    ['warning', 'bg-component-badge-dot-warning'],
+    ['error', 'bg-component-badge-dot-danger'],
+    ['danger', 'bg-component-badge-dot-danger'],
+    ['info', 'bg-component-badge-dot-info'],
+    ['muted', 'bg-component-badge-dot-neutral'],
+  ] as const)(
+    'dot variant="%s" acik component dot utilitysini kullanir',
+    (variant, expectedClass) => {
+      const { container } = render(
+        <Badge dot variant={variant} role="img" aria-label={`${variant} status`} />,
+      );
+      const span = container.querySelector('span');
+
+      expect(span).toHaveClass(expectedClass);
+      expect(span?.className).not.toContain('bg-component-badge-foreground-');
+    },
+  );
+
+  it('dot error ve danger variantlari ayni gorsel siniflari kullanir', () => {
+    const { container } = render(
+      <>
+        <Badge dot variant="error" role="img" aria-label="Error status" />
+        <Badge dot variant="danger" role="img" aria-label="Danger status" />
+      </>,
+    );
+    const [errorDot, dangerDot] = container.querySelectorAll('span');
+
+    expect(errorDot.className).toBe(dangerDot.className);
   });
 });
 
@@ -134,7 +187,16 @@ describe('Badge — a11y', () => {
 /* ------------------------------------------------------------------ */
 
 describe('Badge — all variant types render (deepening)', () => {
-  const allVariants = ['default', 'primary', 'success', 'warning', 'error', 'danger', 'info', 'muted'] as const;
+  const allVariants = [
+    'default',
+    'primary',
+    'success',
+    'warning',
+    'error',
+    'danger',
+    'info',
+    'muted',
+  ] as const;
 
   it.each(allVariants)('variant="%s" renders a span element with children', (variant) => {
     render(<Badge variant={variant}>Label</Badge>);
@@ -147,7 +209,9 @@ describe('Badge — all variant types render (deepening)', () => {
     const { container } = render(
       <div>
         {allVariants.map((v) => (
-          <Badge key={v} variant={v}>{v}</Badge>
+          <Badge key={v} variant={v}>
+            {v}
+          </Badge>
         ))}
       </div>,
     );
@@ -176,16 +240,20 @@ describe('Badge — size variants (deepening)', () => {
   });
 
   it('size does not affect variant styling', () => {
-    const { container } = render(<Badge variant="success" size="lg">OK</Badge>);
+    const { container } = render(
+      <Badge variant="success" size="lg">
+        OK
+      </Badge>,
+    );
     const span = container.querySelector('span');
-    expect(span?.className).toContain('text-state-success-text');
+    expect(span?.className).toContain('text-component-badge-foreground-default');
     expect(span?.className).toContain('px-2.5');
   });
 });
 
 describe('Badge — dot mode (deepening)', () => {
   it('dot renders a fixed 8x8px circle (h-2 w-2)', () => {
-    const { container } = render(<Badge dot />);
+    const { container } = render(<Badge dot aria-hidden="true" />);
     const span = container.querySelector('span');
     expect(span?.className).toContain('h-2');
     expect(span?.className).toContain('w-2');
@@ -194,20 +262,19 @@ describe('Badge — dot mode (deepening)', () => {
   });
 
   it('dot with variant="success" applies success background color', () => {
-    const { container } = render(<Badge dot variant="success" />);
+    const { container } = render(<Badge dot variant="success" aria-hidden="true" />);
     const span = container.querySelector('span');
-    // The dot extracts bg- from the variant's text- color
-    expect(span?.className).toContain('bg-state-success-text');
+    expect(span?.className).toContain('bg-component-badge-dot-success');
   });
 
   it('dot with variant="default" applies secondary background', () => {
-    const { container } = render(<Badge dot variant="default" />);
+    const { container } = render(<Badge dot variant="default" aria-hidden="true" />);
     const span = container.querySelector('span');
-    expect(span?.className).toContain('bg-text-secondary');
+    expect(span?.className).toContain('bg-component-badge-dot-neutral');
   });
 
   it('dot ignores size prop (always renders as small dot)', () => {
-    const { container } = render(<Badge dot size="lg" />);
+    const { container } = render(<Badge dot size="lg" aria-hidden="true" />);
     const span = container.querySelector('span');
     // Should NOT contain size-specific padding classes
     expect(span?.className).not.toContain('px-2.5');
@@ -215,7 +282,7 @@ describe('Badge — dot mode (deepening)', () => {
   });
 
   it('dot forwards className', () => {
-    const { container } = render(<Badge dot className="extra-dot" />);
+    const { container } = render(<Badge dot className="extra-dot" aria-hidden="true" />);
     const span = container.querySelector('span');
     expect(span?.className).toContain('extra-dot');
   });
@@ -241,7 +308,9 @@ describe('Badge — with icon (deepening)', () => {
   it('badge with icon has inline-flex for proper alignment', () => {
     const { container } = render(
       <Badge>
-        <svg className="h-3 w-3" viewBox="0 0 16 16"><circle cx="8" cy="8" r="8" /></svg>
+        <svg className="h-3 w-3" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="8" />
+        </svg>
         Count
       </Badge>,
     );
@@ -254,14 +323,15 @@ describe('Badge — with icon (deepening)', () => {
     expect(() => {
       render(
         <Badge variant="error">
-          <svg data-testid="icon-only" viewBox="0 0 16 16"><path d="M8 0L16 16H0Z" /></svg>
+          <svg data-testid="icon-only" viewBox="0 0 16 16">
+            <path d="M8 0L16 16H0Z" />
+          </svg>
         </Badge>,
       );
     }).not.toThrow();
     expect(screen.getByTestId('icon-only')).toBeInTheDocument();
   });
 });
-
 
 /* ------------------------------------------------------------------ */
 /*  userEvent & getByRole coverage                                     */
@@ -287,7 +357,11 @@ describe('Badge — interaction & role', () => {
 describe('Badge — quality signals', () => {
   it('responds to user interaction on interactive elements', async () => {
     const user = userEvent.setup();
-    const { container } = render(<div role="button" tabIndex={0} data-testid="interactive">Click me</div>);
+    const { container } = render(
+      <div role="button" tabIndex={0} data-testid="interactive">
+        Click me
+      </div>,
+    );
     const el = container.querySelector('[data-testid="interactive"]')!;
     await user.click(el);
     await user.tab();
@@ -299,7 +373,11 @@ describe('Badge — quality signals', () => {
   });
 
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container } = render(<div role="textbox" tabIndex={0} data-testid="focusable">Content</div>);
+    const { container } = render(
+      <div role="textbox" tabIndex={0} data-testid="focusable">
+        Content
+      </div>,
+    );
     const el = container.querySelector('[data-testid="focusable"]')!;
     fireEvent.focus(el);
     fireEvent.keyDown(el, { key: 'Escape' });
@@ -309,7 +387,11 @@ describe('Badge — quality signals', () => {
   });
 
   it('handles disabled state correctly', () => {
-    const { container } = render(<button disabled data-testid="disabled-el">Disabled</button>);
+    render(
+      <button disabled data-testid="disabled-el">
+        Disabled
+      </button>,
+    );
     const el = screen.getByTestId('disabled-el');
     expect(el).toBeDisabled();
     expect(el).toHaveTextContent('Disabled');
@@ -317,7 +399,11 @@ describe('Badge — quality signals', () => {
   });
 
   it('renders empty state when no data is provided', () => {
-    const { container } = render(<div data-testid="empty-state" data-empty="true">No data available</div>);
+    render(
+      <div data-testid="empty-state" data-empty="true">
+        No data available
+      </div>,
+    );
     const el = screen.getByTestId('empty-state');
     expect(el).toBeInTheDocument();
     expect(el).toHaveTextContent('No data available');
@@ -325,12 +411,20 @@ describe('Badge — quality signals', () => {
   });
 
   it('uses semantic roles for accessibility', () => {
-    const { container } = render(
+    render(
       <div>
-        <nav role="navigation" aria-label="test nav"><a href="#" role="link">Link</a></nav>
-        <main role="main"><section role="region" aria-label="content">Content</section></main>
+        <nav role="navigation" aria-label="test nav">
+          <a href="#" role="link">
+            Link
+          </a>
+        </nav>
+        <main role="main">
+          <section role="region" aria-label="content">
+            Content
+          </section>
+        </main>
         <footer role="contentinfo">Footer</footer>
-      </div>
+      </div>,
     );
     expect(screen.getByRole('navigation')).toBeInTheDocument();
     expect(screen.getByRole('link')).toBeInTheDocument();
@@ -340,7 +434,7 @@ describe('Badge — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');

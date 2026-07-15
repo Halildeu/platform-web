@@ -10,8 +10,9 @@ const permissionsMock = {
   isSuperAdmin: vi.fn(() => false),
 };
 
+let currentPath = '/home';
 vi.mock('react-router-dom', () => ({
-  useLocation: () => ({ pathname: '/home' }),
+  useLocation: () => ({ pathname: currentPath }),
 }));
 
 vi.mock('@mfe/auth', () => ({
@@ -54,6 +55,7 @@ const adminItems = () => {
 
 describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
   beforeEach(() => {
+    currentPath = '/home';
     suggestionsEnabled = true;
     ethicEnabled = true;
     endpointAdminEnabled = true;
@@ -83,7 +85,28 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
 
   it('shows all HR items for a super admin', () => {
     permissionsMock.isSuperAdmin.mockImplementation(() => true);
-    expect(hrItems()).toEqual(['suggestions', 'ethic', 'compensation', 'demographic']);
+    expect(hrItems()).toEqual([
+      'suggestions',
+      'ethic',
+      'ats-product-hub',
+      'compensation',
+      'demographic',
+    ]);
+  });
+
+  it('shows the ATS Product Hub with only its module grant and no remote-readiness gate', () => {
+    permissionsMock.hasModule.mockImplementation((module) => module === 'INTERVIEW_EVIDENCE');
+    expect(groupKeys()).toContain('hr');
+    expect(hrItems()).toEqual(['ats-product-hub']);
+  });
+
+  it('keeps the product-hub item active while the separate live module is open', () => {
+    currentPath = '/admin/interview-evidence/readiness';
+    permissionsMock.hasModule.mockImplementation((module) => module === 'INTERVIEW_EVIDENCE');
+
+    const result = renderHook(() => useHeaderNavigation()).result.current;
+    expect(result.activeGroupKey).toBe('hr');
+    expect(result.activeItemKey).toBe('ats-product-hub');
   });
 
   it('keeps the remote-flag gate independent of the module gate', () => {
@@ -97,6 +120,7 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
 
 describe('useHeaderNavigation — Yönetim (admin) mega-menu endpointAdmin gating', () => {
   beforeEach(() => {
+    currentPath = '/home';
     suggestionsEnabled = true;
     ethicEnabled = true;
     endpointAdminEnabled = true;

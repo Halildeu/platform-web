@@ -619,7 +619,7 @@ describe('Badge — depth', () => {
   });
 
   it('renders dot variant', () => {
-    render(<Badge dot data-testid="dot-badge" />);
+    render(<Badge dot data-testid="dot-badge" aria-hidden="true" />);
     const el = screen.getByTestId('dot-badge');
     expect(el.className).toContain('rounded-full');
     expect(document.body.innerHTML.length).toBeGreaterThan(0);

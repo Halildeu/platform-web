@@ -82,4 +82,20 @@ describe('isSearchableItemVisible — global search permission gate', () => {
     expect(isSearchableItemVisible(navEthic, ctx({ hasModule: (m) => m === 'ETHIC' }))).toBe(true);
     expect(isSearchableItemVisible(navEthic, ctx({ isSuperAdmin: true }))).toBe(true);
   });
+
+  it('keeps the ATS Product Hub searchable by authorization without a remote flag', () => {
+    const productHub = pick('nav-ats-product-hub');
+    expect(productHub.path).toBe('/admin/ats');
+    expect(productHub.permission).toBe('INTERVIEW_EVIDENCE');
+    expect(productHub.remoteFlag).toBeUndefined();
+    expect(productHub.keywords).toEqual(expect.arrayContaining(['mülakat', 'cv', 'pdf']));
+    expect(isSearchableItemVisible(productHub, ctx())).toBe(false);
+    expect(
+      isSearchableItemVisible(
+        productHub,
+        ctx({ hasModule: (module) => module === 'INTERVIEW_EVIDENCE' }),
+      ),
+    ).toBe(true);
+    expect(isSearchableItemVisible(productHub, ctx({ isSuperAdmin: true }))).toBe(true);
+  });
 });

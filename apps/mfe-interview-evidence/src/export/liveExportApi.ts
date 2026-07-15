@@ -1,0 +1,506 @@
+import { getShellServices } from '../shell-services';
+import type { InterviewEvidenceShellServices } from '../shell-services';
+import { AtsClientValidationError, AtsContractError } from '../transcripts/liveTranscriptApi';
+import type { ExportProfileV1 } from './exportProfile';
+
+/**
+ * 39d-7d canlı export (F7) — Codex 019f535a 3-iter plan-AGREE(şartlı).
+ * Kontrat (ExportApiController + ExportService kaynak-kanıtlı):
+ *   POST /interviews/{id}/export {caseKey, citationKeys[], context{14 alan}}
+ *     → 201 {artifactKey, evidenceId, packetDigest, claimCount}
+ * Rol: ats.export.write. YALNIZ FINALIZED vaka; başarı vakayı EXPORTED terminal
+ * durumuna taşır (tek-export).
+ *
+ * SINGLE-EXPORT İNVARYANTI FRONTEND'DE DEĞİL DB'DEDİR: worm_ledger
+ * UNIQUE(tenant_id, idempotency_key) + ExportService deterministik key
+ * (tenant:interview:export:caseKey) + PostgresEvidenceLedger 23505'te
+ * içerik-birebir-değilse fail-closed → aynı case için en fazla BİR
+ * ledger-bağlı etkili export. Buradaki guard yalnız best-effort
+ * duplicate-submit azaltmasıdır (aynı sekme kazara tekrarları).
+ *
+ * OUTCOME-CERTAINTY (kaynak-kanıtlı): ExportService'te İLK side-effect
+ * artifactStore.put'tur; NOT_FOUND YALNIZ ondan ÖNCE üretilir (case-find
+ * satır ~115 + citation-find ~134) → 404+NOT_FOUND kesin not-applied.
+ * 400+INVALID hem pre-validate hem markExported-fail'den (artifact+ledger
+ * MEVCUT!) dönebilir → kind:'validation' + sanitized-reason AMA certainty
+ * UNRESOLVED. 503 ledger-fail dallarından (telafi-fail'de artifact kalır)
+ * → unresolved. Non-idempotent POST OTOMATİK RETRY EDİLMEZ.
+ */
+export interface LiveExportReceipt {
+  artifactKey: string;
+  evidenceId: string;
+  packetDigest: string;
+  claimCount: number;
+  /** 39d-13: true = makbuz idempotent-replay'le alındı (200+X-ATS-Replay). */
+  replayed: boolean;
+}
+
+export type ExportOutcomeCertainty = 'not-applied' | 'unresolved';
+
+export interface ClassifiedExportError {
+  kind:
+    | 'authn'
+    | 'authz'
+    | 'tenant-scope'
+    | 'validation'
+    | 'not-found'
+    | 'r4-in-progress'
+    | 'generic';
+  detail: string;
+  certainty: ExportOutcomeCertainty;
+}
+
+export interface ExportRequestContext {
+  profile: ExportProfileV1;
+  consentRefs: string[];
+  wormChainRefs: string[];
+  citationCriterion: Record<string, string>;
+}
+
+/** Guard-key: tuple-safe encode (opak kimliklerde ':' collision'ı engellenir). */
+export function exportGuardKey(interviewId: string, caseKey: string): string {
+  return [
+    'ats.export.unresolved',
+    encodeURIComponent(interviewId),
+    encodeURIComponent(caseKey),
+  ].join(':');
+}
+
+async function resolveServices(): Promise<InterviewEvidenceShellServices> {
+  const services = getShellServices();
+  const ready = await services.auth.ready();
+  if (!ready.ok) {
+    const error = new Error(ready.error || ready.reason);
+    error.name =
+      ready.reason === 'unauthenticated'
+        ? 'InterviewEvidenceUnauthenticatedError'
+        : 'InterviewEvidenceAuthError';
+    throw error;
+  }
+  return services;
+}
+
+function assertNonEmptyRefs(name: string, values: string[]): void {
+  if (values.length === 0) {
+    throw new AtsClientValidationError(`${name} en az bir referans içermeli.`);
+  }
+  for (const v of values) {
+    if (typeof v !== 'string' || !v.trim()) {
+      throw new AtsClientValidationError(`${name} listesinde boş/geçersiz referans olamaz.`);
+    }
+  }
+}
+
+/**
+ * citationCriterion own-property kopyası: __proto__/constructor/prototype gibi
+ * opak anahtarlar normal veri anahtarı olarak serialize edilir; prototype
+ * kirliliği yapısal olarak imkânsız (Object.create(null) + defineProperty).
+ */
+function ownPropertyMap(entries: [string, string][]): Record<string, string> {
+  const map = Object.create(null) as Record<string, string>;
+  for (const [k, v] of entries) {
+    Object.defineProperty(map, k, {
+      value: v,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return map;
+}
+
+export async function executeLiveExport(
+  interviewId: string,
+  caseKey: string,
+  citationKeys: string[],
+  ctx: ExportRequestContext,
+): Promise<LiveExportReceipt> {
+  if (!interviewId.trim()) throw new AtsClientValidationError('interviewId zorunlu.');
+  if (!caseKey.trim()) throw new AtsClientValidationError('caseKey zorunlu.');
+  assertNonEmptyRefs('citationKeys', citationKeys);
+  assertNonEmptyRefs('consentRefs', ctx.consentRefs);
+  assertNonEmptyRefs('wormChainRefs', ctx.wormChainRefs);
+  if (ctx.profile.binding.interviewId !== interviewId) {
+    // Yapısal koruma — panel zaten fail-closed kapatır; API sınırında da doğrulanır.
+    throw new AtsClientValidationError(
+      'Export profili bu mülakata ait değil (binding uyuşmazlığı).',
+    );
+  }
+  // Mapping exact-coverage: her citation TAM bir kritere; fazladan mapping YOK.
+  const mappingKeys = Object.keys(ctx.citationCriterion).sort();
+  const sortedCitations = [...new Set(citationKeys)].sort();
+  if (
+    mappingKeys.length !== sortedCitations.length ||
+    mappingKeys.some((k, i) => k !== sortedCitations[i])
+  ) {
+    throw new AtsClientValidationError(
+      'Her kanıt-alıntı tam bir rubric kriterine eşlenmeli (eksik/fazla eşleme var).',
+    );
+  }
+  const criterionIds = new Set(ctx.profile.criteria.map((c) => c.criterionId));
+  const mappingEntries: [string, string][] = [];
+  for (const k of mappingKeys) {
+    const v = ctx.citationCriterion[k];
+    if (typeof v !== 'string' || !criterionIds.has(v)) {
+      throw new AtsClientValidationError('Eşlenen kriter profil kriterleri içinde değil.');
+    }
+    mappingEntries.push([k, v]);
+  }
+
+  const services = await resolveServices();
+  const response = await services.http.post<{
+    artifactKey?: unknown;
+    evidenceId?: unknown;
+    packetDigest?: unknown;
+    claimCount?: unknown;
+  }>(
+    `/ats/v1/interviews/${encodeURIComponent(interviewId)}/export`,
+    {
+      caseKey,
+      citationKeys: sortedCitations,
+      context: {
+        generatorVersionRef: ctx.profile.generatorVersionRef,
+        locale: ctx.profile.locale,
+        timezone: ctx.profile.timezone,
+        aiAssistanceDisclosureRef: ctx.profile.aiAssistanceDisclosureRef,
+        consentRefs: ctx.consentRefs,
+        rubricVersionRef: ctx.profile.rubricVersionRef,
+        criteria: ctx.profile.criteria.map((c) => ({
+          criterionId: c.criterionId,
+          jobRelatednessRationaleRef: c.jobRelatednessRationaleRef,
+        })),
+        citationCriterion: ownPropertyMap(mappingEntries),
+        wormChainRefs: ctx.wormChainRefs,
+        redactionPolicyRef: ctx.profile.redactionPolicyRef,
+        redactionRunRef: ctx.profile.redactionRunRef,
+        retentionPolicyRef: ctx.profile.retentionPolicyRef,
+        schemaDigest: ctx.profile.schemaDigest,
+        signatureRef: ctx.profile.signatureRef,
+      },
+    },
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+  const d = response.data;
+  // 39d-13 (Codex A-kararı): 200 YALNIZ X-ATS-Replay:true ile meşru (idempotent
+  // replay — backend #107); header'sız-200 ve header'lı-201 kontrat-dışı.
+  const replayHeader = String(
+    (response as { headers?: Record<string, unknown> }).headers?.['x-ats-replay'] ?? '',
+  )
+    .trim()
+    .toLowerCase();
+  const replayed = response.status === 200;
+  if (
+    (response.status !== 201 && response.status !== 200) ||
+    (response.status === 200 && replayHeader !== 'true') ||
+    (response.status === 201 && replayHeader === 'true') ||
+    typeof d?.artifactKey !== 'string' ||
+    !d.artifactKey.trim() ||
+    typeof d?.evidenceId !== 'string' ||
+    !d.evidenceId.trim() ||
+    typeof d?.packetDigest !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(d.packetDigest) ||
+    !Number.isSafeInteger(d?.claimCount) ||
+    // claimCount ≥1 KAYNAK-KANITLI: citationKeys≥1 + INSUFFICIENT sessizce
+    // filtrelenmez (INVALID'e düşer) + claimCount=claims.size().
+    (d.claimCount as number) < 1
+  ) {
+    throw new AtsContractError(
+      'export cevabı beklenen 201-created / 200+X-ATS-Replay {artifactKey, evidenceId, packetDigest(64-hex), claimCount≥1} şeklinde değil',
+    );
+  }
+  return {
+    artifactKey: d.artifactKey,
+    evidenceId: d.evidenceId,
+    packetDigest: d.packetDigest,
+    claimCount: d.claimCount as number,
+    replayed,
+  };
+}
+
+type HttpishError = {
+  response?: { status?: number; data?: { error?: unknown; reason?: unknown } };
+  request?: unknown;
+};
+
+function safeReason(data: { reason?: unknown } | undefined): string | null {
+  if (!data || typeof data.reason !== 'string' || !data.reason.trim()) return null;
+  // eslint-disable-next-line no-control-regex
+  const cleaned = data.reason.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  return cleaned ? cleaned.slice(0, 200) : null;
+}
+
+export function classifyExportError(error: unknown): ClassifiedExportError {
+  if (error instanceof AtsClientValidationError) {
+    return { kind: 'validation', detail: error.message, certainty: 'not-applied' };
+  }
+  if (error instanceof Error && error.name === 'InterviewEvidenceUnauthenticatedError') {
+    return {
+      kind: 'authn',
+      detail: 'Oturum doğrulanamadı — yeniden giriş gerekebilir; rol ataması bu hatayı çözmez.',
+      certainty: 'not-applied',
+    };
+  }
+  if (error instanceof Error && error.name === 'InterviewEvidenceAuthError') {
+    return { kind: 'generic', detail: error.message, certainty: 'not-applied' };
+  }
+  if (error instanceof AtsContractError) {
+    // 2xx/malformed-201 — export UYGULANMIŞ olabilir (receipt kayıp).
+    return {
+      kind: 'generic',
+      detail: 'Backend yanıt verdi ancak export makbuzu doğrulanamadı (kontrat).',
+      certainty: 'unresolved',
+    };
+  }
+  const e = error as HttpishError | null;
+  const response = e && typeof e === 'object' ? e.response : undefined;
+  if (!response) {
+    return {
+      kind: 'generic',
+      detail: 'İsteğin sonucu doğrulanamadı (bağlantı).',
+      certainty: 'unresolved',
+    };
+  }
+  const status = typeof response.status === 'number' ? response.status : 0;
+  const code = typeof response.data?.error === 'string' ? response.data.error : null;
+
+  // EXACT status×code (7c deseni): yalnız kanıtlı çiftler özel sınıf alır.
+  if (status === 401 && code === 'UNAUTHENTICATED') {
+    return {
+      kind: 'authn',
+      detail: 'Oturum doğrulanamadı (401) — yeniden giriş; rol ataması bu hatayı çözmez.',
+      certainty: 'not-applied', // filter-chain, handler öncesi
+    };
+  }
+  if (status === 403 && code === 'DENIED') {
+    return {
+      kind: 'authz',
+      detail: 'Export için yetkiniz yok (ats.export.write rolü — rol-kapısı fail-closed).',
+      certainty: 'not-applied', // filter-chain, handler öncesi
+    };
+  }
+  if (status === 403 && code === 'TENANT_SCOPE_VIOLATION') {
+    return {
+      kind: 'tenant-scope',
+      detail:
+        'İstenen kaynaklardan en az biri tenant/mülakat kapsamı ihlali bildirdi; export sonucunun uygulanıp uygulanmadığı doğrulanamadı.',
+      certainty: 'unresolved', // export akışında üretim noktası kanıtsız — fail-closed
+    };
+  }
+  if (status === 409 && code === 'UNSUPPORTED_IN_GATE') {
+    // 39d-11: export kaydı var ama EXPORTED geçişi tamamlanmamış (R4) —
+    // her retry deterministik 409; onarım onay-kapılı repair yolu.
+    return {
+      kind: 'r4-in-progress',
+      detail:
+        'Export kaydı var ama geçiş tamamlanmamış (R4): makbuz durumu için makbuz sorgusu' +
+        ' (INCOMPLETE); onarım onay-kapılı repair adımıyla yapılır. Yeniden üretim yapılmaz.',
+      certainty: 'unresolved',
+    };
+  }
+  if (status === 404 && code === 'NOT_FOUND') {
+    return {
+      kind: 'not-found',
+      // Kaynak kanıtı: ExportService NOT_FOUND yalnız case-find (~115) ve
+      // citation-find (~134) noktalarında üretir — İKİSİ DE ilk side-effect
+      // (artifactStore.put) ÖNCESİ → kesin not-applied.
+      detail: withReason(
+        'Vaka ya da kanıt-alıntı bulunamadı (tenant kapsamı).',
+        safeReason(response.data),
+      ),
+      certainty: 'not-applied',
+    };
+  }
+  if (status === 400 && code === 'INVALID') {
+    return {
+      kind: 'validation',
+      // reason operatöre değerli (FINALIZED-değil / iş-ilişkililik kopuk /
+      // markExported-fail) — GÖSTERİLİR ama certainty UNRESOLVED: markExported
+      // -fail 400'ü artifact+ledger YAZILDIKTAN sonra döner (iki-eksen ayrımı).
+      detail: withReason('Export backend doğrulamasından geçemedi.', safeReason(response.data)),
+      certainty: 'unresolved',
+    };
+  }
+  // 503 (ledger-fail dalları; telafi-fail'de artifact kalır), bilinmeyen 5xx,
+  // mismatch kombinasyonlar: hepsi unresolved + reason yankılanmaz.
+  return {
+    kind: 'generic',
+    detail:
+      'Backend hata yanıtı beklenen kontratla eşleşmedi ya da geçici hata; export kısmen uygulanmış olabilir.',
+    certainty: 'unresolved',
+  };
+}
+
+function withReason(base: string, reason: string | null): string {
+  return reason ? `${base} — teknik ayrıntı: ${reason}` : base;
+}
+
+/**
+ * 39d-8b makbuz-kurtarma (R2) — backend 39d-8/#103 kontratı (OpenAPI-snapshot pinli):
+ *   GET /interviews/{id}/export/receipt?caseKey=
+ *     → 200 {caseKey, caseState, transitionStatus, artifactKey, evidenceId,
+ *            packetDigest, claimCount, ledgerRecordedAt}
+ * Rol: ats.export.read VEYA ats.export.write. Salt-okuma + idempotent →
+ * POST'un aksine YENİDEN DENENEBİLİR.
+ *
+ * 404+NOT_FOUND NEGATİF-ORACLE DEĞİLDİR (Codex 8b blocker-1) — POST kilidini
+ * ÇÖZEMEZ, üç sebeple:
+ *  1. Backend verifyLedgerReceipt review-store'un TÜM non-OK sonuçlarını
+ *     NOT_FOUND'a düzler (vaka-yok / tenant-scope / store-hatası ayrımsız);
+ *     "ledger satırı kesin yok" anlamı taşımaz.
+ *  2. GET, ambiguous POST hâlâ in-flight iken yarışabilir: o anda satır
+ *     görünmemesi POST'un birazdan append ETMEYECEĞİNİ kanıtlamaz.
+ *  3. Telafi-fail (R1) öksüz artifact bırakır; ledger'sız olduğundan yine
+ *     404 döner — "önceki deneme hiç iz bırakmadı" copy'si yanlış olur.
+ * → kind:'not-found-unresolved': kilit KORUNUR; yalnız receipt GET tekrar
+ * denenebilir; retry-unlock ancak gelecekte quiescence/terminal-status
+ * kontratı veren bir backend prerequisite ile açılabilir.
+ */
+export interface RecoveredExportReceipt extends LiveExportReceipt {
+  caseKey: string;
+  ledgerRecordedAt: string;
+}
+
+export type ReceiptRecoveryResult =
+  | { kind: 'completed'; receipt: RecoveredExportReceipt }
+  | { kind: 'incomplete-r4' }
+  | { kind: 'not-found-unresolved'; detail: string }
+  | { kind: 'authn'; detail: string }
+  | { kind: 'authz'; detail: string }
+  | { kind: 'unresolved'; detail: string };
+
+function receiptShapeValid(d: {
+  caseKey?: unknown;
+  artifactKey?: unknown;
+  evidenceId?: unknown;
+  packetDigest?: unknown;
+  claimCount?: unknown;
+  ledgerRecordedAt?: unknown;
+}): boolean {
+  return (
+    typeof d.caseKey === 'string' &&
+    !!d.caseKey.trim() &&
+    typeof d.artifactKey === 'string' &&
+    !!d.artifactKey.trim() &&
+    typeof d.evidenceId === 'string' &&
+    !!d.evidenceId.trim() &&
+    typeof d.packetDigest === 'string' &&
+    /^[0-9a-f]{64}$/.test(d.packetDigest) &&
+    Number.isSafeInteger(d.claimCount) &&
+    (d.claimCount as number) >= 1 &&
+    typeof d.ledgerRecordedAt === 'string' &&
+    // Backend Instant.parse().toString() canonical UTC üretir — biçim PİNLİ
+    // (Date.parse tek başına tarih-only/gevşek biçimleri de kabul ederdi).
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(d.ledgerRecordedAt) &&
+    Number.isFinite(Date.parse(d.ledgerRecordedAt))
+  );
+}
+
+export async function fetchExportReceipt(
+  interviewId: string,
+  caseKey: string,
+): Promise<ReceiptRecoveryResult> {
+  if (!interviewId.trim() || !caseKey.trim()) {
+    return { kind: 'unresolved', detail: 'interviewId/caseKey zorunlu (istemci hatası).' };
+  }
+  let services: InterviewEvidenceShellServices;
+  try {
+    services = await resolveServices();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'InterviewEvidenceUnauthenticatedError') {
+      return {
+        kind: 'authn',
+        detail: 'Oturum doğrulanamadı — yeniden giriş gerekebilir.',
+      };
+    }
+    return { kind: 'unresolved', detail: 'Kimlik servisi hazır değil; makbuz sorgulanamadı.' };
+  }
+  let response: { status: number; data: unknown };
+  try {
+    response = await services.http.get<unknown>(
+      `/ats/v1/interviews/${encodeURIComponent(interviewId)}/export/receipt?caseKey=${encodeURIComponent(caseKey)}`,
+      { headers: { Accept: 'application/json' } },
+    );
+  } catch (error) {
+    const e = error as HttpishError | null;
+    const resp = e && typeof e === 'object' ? e.response : undefined;
+    if (!resp) {
+      return { kind: 'unresolved', detail: 'Makbuz sorgusunun sonucu doğrulanamadı (bağlantı).' };
+    }
+    const status = typeof resp.status === 'number' ? resp.status : 0;
+    const code = typeof resp.data?.error === 'string' ? resp.data.error : null;
+    // EXACT status×code (7c deseni) — yalnız kanıtlı çiftler özel sınıf alır:
+    if (status === 401 && code === 'UNAUTHENTICATED') {
+      return { kind: 'authn', detail: 'Oturum doğrulanamadı (401) — yeniden giriş.' };
+    }
+    if (status === 403 && code === 'DENIED') {
+      return {
+        kind: 'authz',
+        detail: 'Makbuz okumak için ats.export.read (veya .write) yetkisi gerekli.',
+      };
+    }
+    if (status === 404 && code === 'NOT_FOUND') {
+      // Kilit ÇÖZÜLMEZ (üstteki 3-sebep bloğu): yalnız "şu anda makbuz yok".
+      return {
+        kind: 'not-found-unresolved',
+        detail:
+          'Şu anda doğrulanabilir export ledger kaydı bulunamadı; bu, önceki isteğin hâlâ ' +
+          'ilerlemediğini veya öksüz artifact bulunmadığını KANITLAMAZ. Kilit korunuyor — ' +
+          'makbuz sorgusunu tekrar deneyebilir veya vaka durumunu doğrulayabilirsiniz.',
+      };
+    }
+    if (status === 400 && code === 'INVALID') {
+      // Backend bütünlük/state-whitelist ihlali işaretledi — bu 'yok' DEĞİL,
+      // operasyonel alarm; kilit ÇÖZÜLMEZ.
+      return {
+        kind: 'unresolved',
+        detail: withReason(
+          'Makbuz bütünlük doğrulamasından geçemedi (operasyonel inceleme gerekir).',
+          safeReason(resp.data),
+        ),
+      };
+    }
+    // Gövdesiz 403 (eski backend / bilinmeyen), 5xx, mismatch: unresolved.
+    return {
+      kind: 'unresolved',
+      detail: 'Makbuz sorgusu beklenen kontratla eşleşmedi; kilit korunuyor.',
+    };
+  }
+  const d = (response.data ?? {}) as {
+    caseKey?: unknown;
+    caseState?: unknown;
+    transitionStatus?: unknown;
+    artifactKey?: unknown;
+    evidenceId?: unknown;
+    packetDigest?: unknown;
+    claimCount?: unknown;
+    ledgerRecordedAt?: unknown;
+  };
+  if (response.status !== 200 || !receiptShapeValid(d) || d.caseKey !== caseKey) {
+    return {
+      kind: 'unresolved',
+      detail: 'Makbuz cevabı beklenen kontrat şeklinde değil (ya da başka vakaya ait).',
+    };
+  }
+  if (d.caseState === 'EXPORTED' && d.transitionStatus === 'COMPLETED') {
+    return {
+      kind: 'completed',
+      receipt: {
+        caseKey,
+        artifactKey: d.artifactKey as string,
+        evidenceId: d.evidenceId as string,
+        packetDigest: d.packetDigest as string,
+        claimCount: d.claimCount as number,
+        ledgerRecordedAt: d.ledgerRecordedAt as string,
+      },
+    };
+  }
+  if (d.caseState === 'FINALIZED' && d.transitionStatus === 'INCOMPLETE') {
+    // R4: ledger+artifact var, EXPORTED geçişi düşmüş — tamamlanmış export
+    // DEĞİL; runbook repair gerekir. Retry AÇILMAZ (ledger satırı mevcut).
+    return { kind: 'incomplete-r4' };
+  }
+  return {
+    kind: 'unresolved',
+    detail: 'Makbuz durumu bilinen kontrat kombinasyonlarında değil (operasyonel inceleme).',
+  };
+}

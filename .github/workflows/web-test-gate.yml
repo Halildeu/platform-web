@@ -2,9 +2,10 @@ name: Web Test Gate
 
 # Foundation gate — see docs/architecture/frontend/adr-test-environment-strategy.md
 #
-# Required jobs (branch protection points to the aggregator below):
+# Required-set jobs (the aggregator below enforces this dependency set):
 #   - unit-required          — Vitest jsdom across the workspace
-#   - token-drift-required   — tokens:build --check + tokens:build:theme --check
+#   - token-drift-required   — exact token/theme ownership contract +
+#                              Theme Doctor ratchet + shell import build
 #   - cssom-canary-required  — curated manifest: Tailwind layer sentinel +
 #                              ThemeProvider + 13 primitives (Button, Input,
 #                              Checkbox, Switch, Radio, Card, Dialog,
@@ -18,6 +19,12 @@ name: Web Test Gate
 #                              cascade + state-variant matrix), PR-16 added
 #                              Skeleton + Spinner + Avatar (loading-state
 #                              cascade locks).
+#                              Also runs the real-Chromium Badge WCAG matrix
+#                              (themes/scopes/surfaces + forced-colors) as a
+#                              required product-surface acceptance gate.
+#   - p5-deployment-readiness-required — real Chromium whole-MFE acceptance
+#                              at desktop, 390px and 320 CSS px, including
+#                              keyboard, reflow, Badge geometry and Axe.
 #
 # Advisory jobs (run, but do not block merge by default):
 #   - cssom-full-advisory          — full *.cssom.test.{ts,tsx} suite
@@ -30,8 +37,11 @@ name: Web Test Gate
 #
 # Aggregator:
 #   - web-test-gate-required — `needs:` against the required set; this is the
-#                              single check pinned in branch protection. When
-#                              repo variable STRICT_GATES=true, the aggregator
+#                              single check intended for branch-protection
+#                              pinning. Live GitHub rules must be verified
+#                              separately; repo issue #908 tracks the current
+#                              unprotected-main gap. When repo variable
+#                              STRICT_GATES=true, the aggregator
 #                              also fails on advisory infra failure (NOT on
 #                              warning count — see lint advisory comment).
 #
@@ -114,11 +124,16 @@ jobs:
         run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts src/modules/hr-demographic-report/__tests__/api-filter.test.ts src/modules/hr-demographic-report/__tests__/DemographicDashboard.contract.test.tsx
 
   token-drift-required:
-    name: Token Drift (build --check)
+    name: Token & Theme Ownership
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The ownership ledger verifies its reviewed baseline from real Git
+          # objects, while Theme Doctor materializes the canonical base and
+          # compares its debt ceiling to HEAD. Depth-1 cannot supply either proof.
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -128,8 +143,54 @@ jobs:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
-      - name: Token drift gate (build artifacts and theme CSS)
+      - name: Resolve authoritative ownership and ratchet merge-base
+        id: theme_baseline_base
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+          elif [[ "$EVENT_NAME" == "push" && "$PUSH_BEFORE_SHA" =~ ^[0-9a-f]{40}$ && "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            base="$PUSH_BEFORE_SHA"
+          else
+            if [[ -z "$DEFAULT_BRANCH" ]]; then
+              echo "Canonical default branch is unavailable for $EVENT_NAME" >&2
+              exit 2
+            fi
+            canonical_ref="refs/remotes/origin/$DEFAULT_BRANCH"
+            if ! base="$(git rev-parse --verify "${canonical_ref}^{commit}")"; then
+              echo "Canonical authority ref is unavailable: $canonical_ref" >&2
+              exit 2
+            fi
+          fi
+          if [[ ! "$base" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Theme Doctor authoritative base is not a full SHA: $base" >&2
+            exit 2
+          fi
+          merge_base="$(git merge-base HEAD "$base")"
+          if [[ "$merge_base" != "$base" ]]; then
+            echo "Theme Doctor base $base is not the exact merge-base $merge_base" >&2
+            exit 2
+          fi
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+      - name: Theme ownership contract tests
+        env:
+          THEME_OWNERSHIP_AUTHORITY_REF: ${{ steps.theme_baseline_base.outputs.sha }}
+        run: pnpm run test:theme-contract
+      - name: Token source validation
+        run: pnpm run tokens:validate
+      - name: Token drift gate (exact generated artifacts and curated ownership)
+        env:
+          THEME_OWNERSHIP_AUTHORITY_REF: ${{ steps.theme_baseline_base.outputs.sha }}
         run: pnpm run tokens:drift
+      - name: Theme Doctor regression ratchet
+        run: pnpm run lint:theme -- --authoritative-baseline-ref "${{ steps.theme_baseline_base.outputs.sha }}"
+      - name: Shell theme import build
+        run: pnpm --filter mfe-shell build
 
   semantic-layer-required:
     name: Semantic Layer (no-raw-hex)
@@ -168,6 +229,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: CSSOM canary suite (Tailwind layer + ThemeProvider + 13 primitives)
         run: pnpm run test:cssom:canary
+      - name: Badge WCAG contrast matrix (real Chromium, required)
+        run: pnpm run test:browser:badge
 
   cssom-full-advisory:
     name: CSSOM Full (advisory)
@@ -649,6 +712,10 @@ jobs:
             playwright-report
             test-results
 
+  p5-deployment-readiness-required:
+    name: P5 Deployment Readiness (Chromium)
+    uses: ./.github/workflows/faz25-p5-deployment-readiness.yml
+
   web-test-gate-required:
     name: Web Test Gate (aggregator)
     runs-on: ubuntu-latest
@@ -660,6 +727,7 @@ jobs:
       - cssom-full-advisory
       - lint-warn-visibility-advisory
       - visual-invariant-required
+      - p5-deployment-readiness-required
     # Always run so the aggregator can read advisory results when STRICT_GATES=true.
     # Skip on baseline-only manual runs (visual-invariant-required is skipped).
     if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline')
@@ -672,12 +740,14 @@ jobs:
           semantic_result="${{ needs.semantic-layer-required.result }}"
           cssom_result="${{ needs.cssom-canary-required.result }}"
           visual_result="${{ needs.visual-invariant-required.result }}"
+          p5_result="${{ needs.p5-deployment-readiness-required.result }}"
           echo "unit-required: $unit_result"
           echo "token-drift-required: $token_result"
           echo "semantic-layer-required: $semantic_result"
           echo "cssom-canary-required: $cssom_result"
           echo "visual-invariant-required: $visual_result"
-          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" ]]; then
+          echo "p5-deployment-readiness-required: $p5_result"
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" || "$p5_result" != "success" ]]; then
             echo "::error::A required job failed."
             exit 1
           fi

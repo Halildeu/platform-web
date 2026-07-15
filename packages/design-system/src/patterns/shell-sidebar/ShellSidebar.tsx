@@ -101,6 +101,10 @@ const ShellSidebarInner: React.FC<ShellSidebarInnerProps> = ({
     if (!cssWidthVar) return;
     const w = isCollapsed ? `${collapsedWidth}px` : `${expandedWidth}px`;
     document.documentElement.style.setProperty(cssWidthVar, w);
+
+    return () => {
+      document.documentElement.style.removeProperty(cssWidthVar);
+    };
   }, [cssWidthVar, isCollapsed, collapsedWidth, expandedWidth]);
 
   const handleNavItemClick = useCallback(

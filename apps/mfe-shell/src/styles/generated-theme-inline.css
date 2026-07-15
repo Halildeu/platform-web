@@ -1,5 +1,4 @@
 /* ⚠️ Auto-generated via scripts/theme/generate-theme-css.mjs. Do NOT edit manually. */
-
 /* Run: npm run tokens:build:theme to regenerate. */
 
 @theme inline {
@@ -20,6 +19,16 @@
   --color-text-inverse: var(--text-inverse);
   --color-text-tertiary: var(--text-tertiary);
   --color-text-disabled: var(--text-disabled);
+
+  /* Component colors */
+  --color-component-badge-foreground-default: var(--component-badge-foreground-default);
+  --color-component-badge-foreground-muted: var(--component-badge-foreground-muted);
+  --color-component-badge-dot-neutral: var(--component-badge-dot-neutral);
+  --color-component-badge-dot-primary: var(--component-badge-dot-primary);
+  --color-component-badge-dot-info: var(--component-badge-dot-info);
+  --color-component-badge-dot-success: var(--component-badge-dot-success);
+  --color-component-badge-dot-warning: var(--component-badge-dot-warning);
+  --color-component-badge-dot-danger: var(--component-badge-dot-danger);
 
   /* Border colors */
   --color-border: var(--border-default);
@@ -121,76 +130,17 @@
   --color-on-elevated: var(--text-primary);
   --color-hover: var(--surface-muted-bg);
 
-  /* Border Radius — semantic tokens */
+  /* Border Radius */
   --radius-control: 0.375rem;
   --radius-surface: 0.75rem;
 
-  /* Border Radius — Tailwind scale → theme axis aware */
-  --radius-xs: calc(var(--radius-control) * 0.33);
-  --radius-sm: calc(var(--radius-control) * 0.5);
-  --radius-md: var(--radius-control);
-  --radius-lg: var(--radius-surface);
-  --radius-xl: calc(var(--radius-surface) * 1.33);
-  --radius-2xl: calc(var(--radius-surface) * 1.67);
-  --radius-3xl: calc(var(--radius-surface) * 2);
-
-  /* Shadows — semantic tokens */
+  /* Shadows */
   --shadow-surface: var(--elevation-surface);
   --shadow-overlay: var(--elevation-overlay);
-
-  /* Shadows — Tailwind scale → elevation axis aware */
-  --shadow-xs: var(--elevation-sm);
-  --shadow-sm: var(--elevation-surface);
-  --shadow: var(--elevation-surface);
-  --shadow-md: var(--elevation-surface);
-  --shadow-lg: var(--elevation-overlay);
-  --shadow-xl: var(--elevation-dialog);
-  --shadow-2xl: var(--elevation-dialog);
 
   /* Spacing */
   --spacing-density: 0.5rem;
 
   /* Ring */
   --ring-color: var(--focus-outline);
-
-  /* Missing semantic tokens (added for component coverage) */
-  --color-surface-card: var(--surface-card);
-  --color-surface-card-alt: var(--surface-card-alt);
-  --color-surface-hover: var(--surface-hover);
-  --color-surface-elevated: var(--surface-elevated);
-  --color-interactive-primary: var(--interactive-primary);
-  --color-text-accent: var(--text-accent);
-  --color-shadow: var(--shadow-color);
-
-  /* Elevation: complete system */
-  --shadow-tooltip: var(--elevation-tooltip);
-  --shadow-dialog: var(--elevation-dialog);
-
-  /* Chart colors */
-  --color-chart-purple: var(--chart-purple);
-  --color-chart-pink: var(--chart-pink);
-  --color-chart-cyan: var(--chart-cyan);
-  --color-chart-emerald: var(--chart-emerald);
-  --color-chart-amber: var(--chart-amber);
-
-  /* Segmented control */
-  --color-segmented-active: var(--segmented-active-bg);
-  --color-segmented-text: var(--segmented-text);
-
-  /* Brand & Surface aliases */
-  --color-brand-primary: var(--brand-primary);
-  --color-surface-subtle: var(--surface-subtle);
-
-  /* Additional surface/text semantic aliases */
-  --color-surface-default-raw: var(--surface-default);
-  --color-surface-muted-raw: var(--surface-muted);
-  --color-surface-code: var(--surface-code);
-  --color-text-on-elevated: var(--text-on-elevated);
-  --color-text-on-accent: var(--text-on-accent);
-  --color-state-warning-bg-hover: var(--state-warning-bg-hover);
-
-  /* Typography & spacing tokens */
-  --font-size-md: var(--font-size-md);
-  --spacing-1: var(--spacing-1);
 }
-

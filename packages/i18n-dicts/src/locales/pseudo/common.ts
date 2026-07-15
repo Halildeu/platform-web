@@ -41,6 +41,12 @@ const pseudo = {
   'shell.launcher.ethic.description': 'Éthíçs répórtíñg módúlé',
   'shell.launcher.access.description': 'Rólé & pólíçy máñágéméñt',
   'shell.launcher.users.description': 'Úsér máñágéméñt',
+  'shell.mega.hr.interviewEvidence': 'Íñtérvíéw Évídéñçé',
+  'shell.mega.hr.interviewEvidence.desc': 'Íñtérvíéw évídéñçé áñd húmáñ révíéw wórkspáçé',
+  'shell.mega.hr.atsProductHub': 'ÁTS Próduçt Húb',
+  'shell.mega.hr.atsProductHub.desc': 'ÁTS çápábílítíés, sáfé prévïéws, áñd lívé-módúlé láúñçh',
+  'shell.breadcrumb.interviewEvidence': 'Íñtérvíéw Évídéñçé',
+  'shell.breadcrumb.atsProductHub': 'ÁTS Próduçt Húb',
   'shell.shortcuts.searchSoon.title': 'Glóbál séárçh shórtçút ís çómíñg sóóñ',
   'shell.shortcuts.searchSoon.description':
     'Úsé thé ñávígátíóñ méñú úñtíl thé çómmáñd pálétté ís réády.',

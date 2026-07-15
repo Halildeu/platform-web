@@ -74,7 +74,7 @@ const ShellChrome: React.FC = () => {
           paddingLeft: showSidebar && !isMobile ? 'var(--shell-sidebar-w, 0px)' : undefined,
         }}
       >
-        <BreadcrumbStrip showSidebar={showSidebar} maxItems={isMobile ? 3 : undefined} />
+        <BreadcrumbStrip maxItems={isMobile ? 3 : undefined} />
         {showAuditSummary ? <AuditSummaryStrip /> : null}
         <main
           className="flex min-h-0 flex-1 flex-col px-6 py-4"

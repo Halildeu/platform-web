@@ -25,6 +25,11 @@ import {
   EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
+import { AtsProductHubRoute, InterviewEvidenceRoute } from './InterviewEvidenceRoute';
+import {
+  ATS_PRODUCT_HUB_ENTRY,
+  INTERVIEW_EVIDENCE_ENTRY,
+} from '../../features/ats-product-catalog/model/ats-capability-registry';
 const ReportBuilderWizard = React.lazy(() =>
   import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
     default: m.ReportBuilderWizard,
@@ -296,18 +301,19 @@ export const AppRouter: React.FC = () => {
         />
         <Route path="/meetings/*" element={<Navigate to="/admin/meetings" replace />} />
         <Route path="/meetings" element={<Navigate to="/admin/meetings" replace />} />
-        {/* ATS-0019: interview-evidence MFE (default-disabled STUB; testai'de flag ON, 39c-3).
-            UI-visibility gate MODULE_KEYS.INTERVIEW_EVIDENCE — backend ats.* scope AYRI. */}
+        {/* FULLATS-WEB-ACCESS-04: the protected product hub is permanent. Remote readiness
+            controls only the real module launch and never hides the catalog. */}
         <Route
-          path="/admin/interview-evidence/*"
+          path={ATS_PRODUCT_HUB_ENTRY.routePattern}
+          element={<AtsProductHubRoute remoteEnabled={interviewEvidenceEnabled} />}
+        />
+        <Route
+          path={INTERVIEW_EVIDENCE_ENTRY.routePattern}
           element={
-            interviewEvidenceEnabled ? (
-              <ProtectedRoute requiredModule={MODULE_KEYS.INTERVIEW_EVIDENCE}>
-                <InterviewEvidenceModule />
-              </ProtectedRoute>
-            ) : (
-              <Navigate to={defaultShellPath} replace />
-            )
+            <InterviewEvidenceRoute
+              remoteEnabled={interviewEvidenceEnabled}
+              remoteContent={<InterviewEvidenceModule />}
+            />
           }
         />
         <Route

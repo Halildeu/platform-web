@@ -1,7 +1,12 @@
 import { defineConfig } from 'vitest/config';
-import { playwright } from '@vitest/browser-playwright';
+import { defineBrowserCommand, playwright } from '@vitest/browser-playwright';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+
+type EmulatedMediaOptions = {
+  colorScheme: 'dark' | 'light' | 'no-preference' | null;
+  forcedColors: 'active' | 'none' | null;
+};
 
 /**
  * Vitest browser provider config (Chromium).
@@ -40,8 +45,18 @@ export default defineConfig({
     root: path.resolve(__dirname),
     browser: {
       enabled: true,
+      // Required even outside CI: Badge acceptance must never open an app window.
+      headless: true,
       provider: playwright(),
       instances: [{ browser: 'chromium' }],
+      commands: {
+        emulateBadgeMedia: defineBrowserCommand(async ({ page }, options: EmulatedMediaOptions) => {
+          await page.emulateMedia({
+            colorScheme: options.colorScheme,
+            forcedColors: options.forcedColors,
+          });
+        }),
+      },
     },
     include: ['src/**/*.browser.test.{ts,tsx}', 'src/**/*.cssom.test.{ts,tsx}'],
     setupFiles: ['./src/__tests__/cssom-setup.ts'],
