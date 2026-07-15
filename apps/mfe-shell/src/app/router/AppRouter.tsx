@@ -25,8 +25,11 @@ import {
   EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
-import { InterviewEvidenceRoute } from './InterviewEvidenceRoute';
-import { ATS_PRODUCT_ENTRY } from '../../features/ats-product-catalog/model/ats-capability-registry';
+import { AtsProductHubRoute, InterviewEvidenceRoute } from './InterviewEvidenceRoute';
+import {
+  ATS_PRODUCT_HUB_ENTRY,
+  INTERVIEW_EVIDENCE_ENTRY,
+} from '../../features/ats-product-catalog/model/ats-capability-registry';
 const ReportBuilderWizard = React.lazy(() =>
   import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
     default: m.ReportBuilderWizard,
@@ -298,10 +301,14 @@ export const AppRouter: React.FC = () => {
         />
         <Route path="/meetings/*" element={<Navigate to="/admin/meetings" replace />} />
         <Route path="/meetings" element={<Navigate to="/admin/meetings" replace />} />
-        {/* FULLATS-WEB-ACCESS-01: permission is always the outer gate. Remote readiness
-            selects live MFE vs safe catalog and never silently redirects an authorized user. */}
+        {/* FULLATS-WEB-ACCESS-04: the protected product hub is permanent. Remote readiness
+            controls only the real module launch and never hides the catalog. */}
         <Route
-          path={ATS_PRODUCT_ENTRY.routePattern}
+          path={ATS_PRODUCT_HUB_ENTRY.routePattern}
+          element={<AtsProductHubRoute remoteEnabled={interviewEvidenceEnabled} />}
+        />
+        <Route
+          path={INTERVIEW_EVIDENCE_ENTRY.routePattern}
           element={
             <InterviewEvidenceRoute
               remoteEnabled={interviewEvidenceEnabled}

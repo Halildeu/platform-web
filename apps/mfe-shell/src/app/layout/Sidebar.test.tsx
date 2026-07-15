@@ -172,25 +172,22 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(transcriptGranted?.href).toBe('/admin/meetings');
   });
 
-  it('keeps interview-evidence discoverable for granted users independently of remote readiness', () => {
-    const denied = pick(buildSidebarNavItems(false, denyAll), 'interview-evidence');
+  it('keeps the permanent ATS product hub discoverable independently of remote readiness', () => {
+    const denied = pick(buildSidebarNavItems(false, denyAll), 'ats-product-hub');
     expect(denied?.disabled).toBe(true);
     expect(denied?.href).toBeUndefined();
 
     // Module granted + remote OFF → guarded safe product surface remains reachable.
     const remoteDisabled = pick(
       buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE')),
-      'interview-evidence',
+      'ats-product-hub',
     );
     expect(remoteDisabled?.disabled).toBe(false);
-    expect(remoteDisabled?.href).toBe('/admin/interview-evidence');
+    expect(remoteDisabled?.href).toBe('/admin/ats');
     expect(remoteDisabled?.badge).toBeDefined();
 
     // Remote ON but no module → disabled (no ungated leak through the flag).
-    const moduleMissing = pick(
-      buildSidebarNavItems(false, denyAll, true, true),
-      'interview-evidence',
-    );
+    const moduleMissing = pick(buildSidebarNavItems(false, denyAll, true, true), 'ats-product-hub');
     expect(moduleMissing?.disabled).toBe(true);
     expect(moduleMissing?.href).toBeUndefined();
     expect(moduleMissing?.badge).toBeUndefined();
@@ -198,16 +195,16 @@ describe('buildSidebarNavItems — module gating', () => {
     // Remote ON + module granted → active link.
     const granted = pick(
       buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE'), true, true),
-      'interview-evidence',
+      'ats-product-hub',
     );
     expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/admin/interview-evidence');
+    expect(granted?.href).toBe('/admin/ats');
     expect(granted?.badge).toBeUndefined();
 
     // Super-admin remains active even when the remote is OFF and sees safe-preview status.
-    const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'interview-evidence');
+    const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'ats-product-hub');
     expect(superAdmin?.disabled).toBe(false);
-    expect(superAdmin?.href).toBe('/admin/interview-evidence');
+    expect(superAdmin?.href).toBe('/admin/ats');
     expect(superAdmin?.badge).toBeDefined();
   });
 

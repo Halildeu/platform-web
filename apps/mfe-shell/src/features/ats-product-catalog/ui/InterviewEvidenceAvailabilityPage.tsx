@@ -1,14 +1,20 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Badge } from '@mfe/design-system/primitives';
 import { PageHeader } from '@mfe/design-system/patterns';
 import {
-  ATS_CAPABILITY_REGISTRY,
   ATS_PRODUCT_ROLES,
+  INTERVIEW_EVIDENCE_ENTRY,
+  resolveAtsCapabilities,
   type AtsCapabilityMode,
   type AtsProductRole,
 } from '../model/ats-capability-registry';
 
 type RoleFilter = 'ALL' | AtsProductRole;
+
+export interface AtsProductHubPageProps {
+  remoteEnabled: boolean;
+}
 
 const MODE_PRESENTATION: Record<
   AtsCapabilityMode,
@@ -35,49 +41,79 @@ const ROLE_FILTERS: readonly RoleFilter[] = [
 const roleLabel = (role: RoleFilter): string =>
   role === 'ALL' ? 'Tüm roller' : ATS_PRODUCT_ROLES[role];
 
-const InterviewEvidenceAvailabilityPage: React.FC = () => {
+/**
+ * Permanent shell-owned ATS product hub.
+ *
+ * The hub remains available while the Interview Evidence remote is OFF or ON.
+ * `remoteEnabled` changes only the declared runtime presentation and launch
+ * action; ProtectedRoute remains the authorization boundary outside this page.
+ */
+const InterviewEvidenceAvailabilityPage: React.FC<AtsProductHubPageProps> = ({ remoteEnabled }) => {
   const [activeRole, setActiveRole] = useState<RoleFilter>('ALL');
+  const capabilities = useMemo(() => resolveAtsCapabilities(remoteEnabled), [remoteEnabled]);
   const visibleCapabilities = useMemo(
     () =>
       activeRole === 'ALL'
-        ? ATS_CAPABILITY_REGISTRY
-        : ATS_CAPABILITY_REGISTRY.filter((capability) =>
+        ? capabilities
+        : capabilities.filter((capability) =>
             (capability.targetRoles as readonly AtsProductRole[]).includes(activeRole),
           ),
-    [activeRole],
+    [activeRole, capabilities],
   );
 
   return (
     <div
       className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-24 pt-6 sm:px-6 sm:pb-6 lg:px-8"
-      data-testid="ats-product-availability"
+      data-testid="ats-product-hub"
     >
       <PageHeader
-        title="ATS ürün alanı"
-        subtitle="Erişiminiz açık. Canlı Interview Evidence çalışma alanı bu dağıtımda henüz etkin değil; kullanabileceğiniz güvenli önizlemeleri ve açılmayı bekleyen bağımlılıkları burada görebilirsiniz."
+        title="ATS Ürün Merkezi"
+        subtitle="Yetkinizin izin verdiği ürün yollarını, güvenli denemeleri ve açılmayı bekleyen kapıları tek yerde inceleyin. Rol filtreleri hedef deneyimi anlatır; kullanıcı yetkisi vermez."
       />
 
-      <div
-        className="rounded-2xl border border-state-info-border bg-state-info-bg p-4 text-sm text-text-primary"
-        role="status"
-        data-testid="ats-remote-unavailable-status"
+      <section
+        className={`rounded-2xl border p-4 text-sm text-text-primary ${
+          remoteEnabled
+            ? 'border-state-success-border bg-state-success-bg'
+            : 'border-state-info-border bg-state-info-bg'
+        }`}
+        aria-labelledby="ats-runtime-heading"
+        data-testid="ats-runtime-status"
       >
-        <p className="font-semibold">Menü ve adresiniz hazır; yetkiniz korunuyor.</p>
+        <h2 id="ats-runtime-heading" className="font-semibold">
+          {remoteEnabled
+            ? 'Canlı mülakat çalışma alanı bu dağıtımda hazır.'
+            : 'Canlı mülakat çalışma alanı bu dağıtımda henüz açık değil.'}
+        </h2>
         <p className="mt-1 text-text-secondary">
-          Bu sayfa sessizce ana ekrana yönlendirmez. Canlı modül açıldığında aynı adres gerçek
-          çalışma alanını gösterecek. Aşağıdaki örnekler sentetiktir ve hiçbir üretim kaydını
-          değiştirmez.
+          {remoteEnabled
+            ? 'Ürün Merkezi görünür kalır. Gerçek çalışma alanı ayrı açılır ve kullanıcının rol/policy tavanını aşmaz.'
+            : 'Ürün Merkezi sessiz yönlendirme yapmadan görünür kalır. Güvenli örnekler sentetiktir ve hiçbir üretim kaydını değiştirmez.'}
         </p>
-      </div>
+        {remoteEnabled ? (
+          <Link
+            to={INTERVIEW_EVIDENCE_ENTRY.route}
+            className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-action-primary px-4 py-2 font-semibold text-action-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+            data-testid="ats-live-interview-evidence-link"
+          >
+            Canlı Interview Evidence modülünü aç
+          </Link>
+        ) : (
+          <p className="mt-3 font-medium text-text-secondary" data-testid="ats-live-module-gated">
+            Canlı modül bağlantısı, deployment bağımlılığı hazır olmadan gösterilmez.
+          </p>
+        )}
+      </section>
 
       <section aria-labelledby="ats-role-filter-heading" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="ats-role-filter-heading" className="text-lg font-semibold text-text-primary">
-              Rolünüze göre özellikler
+              Rol yoluna göre özellikler
             </h2>
             <p className="mt-1 text-sm text-text-secondary">
-              Bir rol seçerek o rolün ürün yolunu ve işlem sınırlarını inceleyin.
+              Bir hedef rol seçerek o deneyimde planlanan özellikleri ve işlem sınırlarını
+              inceleyin.
             </p>
           </div>
           <p className="text-sm font-medium text-text-secondary" aria-live="polite">
@@ -106,6 +142,18 @@ const InterviewEvidenceAvailabilityPage: React.FC = () => {
             );
           })}
         </div>
+
+        {activeRole === 'CANDIDATE' ? (
+          <p
+            className="rounded-xl border border-state-warning-border bg-state-warning-bg p-3 text-sm text-text-secondary"
+            role="note"
+            data-testid="ats-candidate-role-boundary"
+          >
+            Aday filtresi, aday portalında sunulması planlanan deneyimi anlatır. Bu yönetici adresi
+            adaya verilmez; gerçek CV/PII yükleme ve aday hesabı aktivasyonu ayrı kimlik, Legal/DPO
+            ve owner kapılarına bağlıdır.
+          </p>
+        ) : null}
       </section>
 
       <section
@@ -190,10 +238,10 @@ const InterviewEvidenceAvailabilityPage: React.FC = () => {
         className="rounded-2xl border border-state-warning-border bg-state-warning-bg p-4 text-sm"
         data-testid="ats-product-boundary"
       >
-        <h2 className="font-semibold text-text-primary">Bu sayfanın açmadığı kapılar</h2>
+        <h2 className="font-semibold text-text-primary">Bu merkezin açmadığı kapılar</h2>
         <p className="mt-1 text-text-secondary">
-          Gerçek aday verisi, kayıt başlatma, üretim mutasyonu, otomatik eleme veya sıralama,
-          istihdam kararı, Legal/DPO, owner ve müşteri onayı bu katalogla açılmaz.
+          Gerçek aday verisi, CV/PII yükleme, kayıt başlatma, üretim mutasyonu, otomatik eleme veya
+          sıralama, istihdam kararı, Legal/DPO, owner ve müşteri onayı bu merkezle açılmaz.
         </p>
       </aside>
     </div>
