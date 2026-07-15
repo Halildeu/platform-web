@@ -1,4 +1,5 @@
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
+import { ATS_PRODUCT_ENTRY } from '../../../features/ats-product-catalog/model/ats-capability-registry';
 
 /* ------------------------------------------------------------------ */
 /*  Searchable items for GlobalSearch / CommandPalette                  */
@@ -42,6 +43,25 @@ export const SEARCHABLE_ITEMS: SearchableItem[] = [
     keywords: ['ethic', 'etik'],
     remoteFlag: 'ethic',
     permission: MODULE_KEYS.ETHIC,
+  },
+  {
+    id: `nav-${ATS_PRODUCT_ENTRY.id}`,
+    titleKey: 'shell.mega.hr.interviewEvidence',
+    descriptionKey: 'shell.mega.hr.interviewEvidence.desc',
+    group: 'navigation',
+    path: ATS_PRODUCT_ENTRY.route,
+    keywords: [
+      'ats',
+      'interview evidence',
+      'mulakat',
+      'mülakat',
+      'aday',
+      'degerlendirme',
+      'değerlendirme',
+    ],
+    // Authorization only: the shell-owned safe surface remains useful while
+    // the federated remote is OFF, so this item intentionally has no remoteFlag.
+    permission: ATS_PRODUCT_ENTRY.requiredModule,
   },
   {
     id: 'nav-users',

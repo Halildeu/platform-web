@@ -31,6 +31,8 @@ import {
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
 import { isInterviewEvidenceRemoteEnabled, isMeetingRemoteEnabled } from '../shell-navigation';
+import { Badge } from '@mfe/design-system/primitives';
+import { ATS_PRODUCT_ENTRY } from '../../features/ats-product-catalog/model/ats-capability-registry';
 
 const STORAGE_KEY = 'shell.sidebar.mode';
 const defaultReportingRoute = getSharedReport('users-overview').webRoute;
@@ -59,11 +61,10 @@ export const buildSidebarNavItems = (
   const canMeeting = sa || hasModule(MODULE_KEYS.MEETING) || hasModule(MODULE_KEYS.TRANSCRIPT);
   const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
   const canUseMeeting = meetingEnabled && canMeeting;
-  // ATS-0019: interview-evidence remote (default-off). Meeting ile aynı çift-kapı:
-  // remote flag AÇIK + modül grant. Kapalıysa item disabled (href yok) — route guard
-  // reddine tıklanamaz (schema-explorer/meetings ile aynı sözleşme).
-  const canInterviewEvidence = sa || hasModule(MODULE_KEYS.INTERVIEW_EVIDENCE);
-  const canUseInterviewEvidence = interviewEvidenceEnabled && canInterviewEvidence;
+  // FULLATS-WEB-ACCESS-01: authorization and remote readiness are separate.
+  // Authorized users keep a stable product destination when the remote is OFF;
+  // the guarded route renders a shell-owned safe catalog instead of a dead nav.
+  const canInterviewEvidence = sa || hasModule(ATS_PRODUCT_ENTRY.requiredModule);
   const homePath = '/home';
 
   return [
@@ -108,11 +109,17 @@ export const buildSidebarNavItems = (
     },
     {
       key: 'interview-evidence',
-      label: 'Interview Evidence',
-      href: canUseInterviewEvidence ? '/admin/interview-evidence' : undefined,
+      label: ATS_PRODUCT_ENTRY.label,
+      href: canInterviewEvidence ? ATS_PRODUCT_ENTRY.route : undefined,
       icon: <FileText aria-hidden />,
       dataTestId: 'nav-interview-evidence',
-      disabled: !canUseInterviewEvidence,
+      disabled: !canInterviewEvidence,
+      badge:
+        canInterviewEvidence && !interviewEvidenceEnabled ? (
+          <Badge variant="info" size="sm">
+            Güvenli önizleme
+          </Badge>
+        ) : undefined,
     },
     {
       key: 'services',

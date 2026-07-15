@@ -1,0 +1,80 @@
+name: Full ATS Access Browser Acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fullats-access-browser.yml'
+      - 'apps/mfe-shell/src/app/layout/Sidebar.tsx'
+      - 'apps/mfe-shell/src/app/layout/Sidebar.test.tsx'
+      - 'apps/mfe-shell/src/app/layout/header/header-navigation.config.ts'
+      - 'apps/mfe-shell/src/app/layout/header/header-search.config.ts'
+      - 'apps/mfe-shell/src/app/layout/header/__tests__/header-search.config.test.ts'
+      - 'apps/mfe-shell/src/app/layout/header/__tests__/useHeaderNavigation.test.ts'
+      - 'apps/mfe-shell/src/app/router/AppRouter.tsx'
+      - 'apps/mfe-shell/src/app/router/InterviewEvidenceRoute.tsx'
+      - 'apps/mfe-shell/src/app/router/InterviewEvidenceRoute.test.tsx'
+      - 'apps/mfe-shell/src/features/ats-product-catalog/**'
+      - 'packages/i18n-dicts/src/locales/**/common.ts'
+      - 'e2e/interaction/fullats-authorized-access.spec.ts'
+      - 'playwright.fullats-access.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/fullats-access-browser.yml'
+      - 'apps/mfe-shell/src/app/layout/Sidebar.tsx'
+      - 'apps/mfe-shell/src/app/layout/Sidebar.test.tsx'
+      - 'apps/mfe-shell/src/app/layout/header/header-navigation.config.ts'
+      - 'apps/mfe-shell/src/app/layout/header/header-search.config.ts'
+      - 'apps/mfe-shell/src/app/layout/header/__tests__/header-search.config.test.ts'
+      - 'apps/mfe-shell/src/app/layout/header/__tests__/useHeaderNavigation.test.ts'
+      - 'apps/mfe-shell/src/app/router/AppRouter.tsx'
+      - 'apps/mfe-shell/src/app/router/InterviewEvidenceRoute.tsx'
+      - 'apps/mfe-shell/src/app/router/InterviewEvidenceRoute.test.tsx'
+      - 'apps/mfe-shell/src/features/ats-product-catalog/**'
+      - 'packages/i18n-dicts/src/locales/**/common.ts'
+      - 'e2e/interaction/fullats-authorized-access.spec.ts'
+      - 'playwright.fullats-access.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fullats-access-browser-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fullats-access-browser:
+    name: Full ATS authorized remote-off surface (Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22.12'
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium runtime
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build remote-off shell and run authorized access acceptance
+        run: pnpm e2e:fullats-access:acceptance
+      - name: Upload browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: fullats-access-browser-${{ github.run_attempt }}
+          path: |
+            playwright-report-fullats-access
+            test-results/fullats-access-acceptance
+          if-no-files-found: warn
+          retention-days: 7

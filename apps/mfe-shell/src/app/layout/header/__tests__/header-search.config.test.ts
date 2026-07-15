@@ -82,4 +82,19 @@ describe('isSearchableItemVisible — global search permission gate', () => {
     expect(isSearchableItemVisible(navEthic, ctx({ hasModule: (m) => m === 'ETHIC' }))).toBe(true);
     expect(isSearchableItemVisible(navEthic, ctx({ isSuperAdmin: true }))).toBe(true);
   });
+
+  it('keeps Interview Evidence searchable by authorization without a remote flag', () => {
+    const interviewEvidence = pick('nav-interview-evidence');
+    expect(interviewEvidence.path).toBe('/admin/interview-evidence');
+    expect(interviewEvidence.permission).toBe('INTERVIEW_EVIDENCE');
+    expect(interviewEvidence.remoteFlag).toBeUndefined();
+    expect(isSearchableItemVisible(interviewEvidence, ctx())).toBe(false);
+    expect(
+      isSearchableItemVisible(
+        interviewEvidence,
+        ctx({ hasModule: (module) => module === 'INTERVIEW_EVIDENCE' }),
+      ),
+    ).toBe(true);
+    expect(isSearchableItemVisible(interviewEvidence, ctx({ isSuperAdmin: true }))).toBe(true);
+  });
 });

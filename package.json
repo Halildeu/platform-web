@@ -226,6 +226,7 @@
     "e2e": "playwright test",
     "e2e:p4:acceptance": "playwright test --config playwright.p4.config.ts",
     "e2e:p6:acceptance": "playwright test --config playwright.p6.config.ts",
+    "e2e:fullats-access:acceptance": "playwright test --config playwright.fullats-access.config.ts",
     "e2e:visual": "playwright test e2e/visual/",
     "e2e:interaction": "playwright test e2e/interaction/",
     "e2e:responsive": "playwright test e2e/responsive/",

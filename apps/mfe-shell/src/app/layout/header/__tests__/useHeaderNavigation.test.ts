@@ -83,7 +83,19 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
 
   it('shows all HR items for a super admin', () => {
     permissionsMock.isSuperAdmin.mockImplementation(() => true);
-    expect(hrItems()).toEqual(['suggestions', 'ethic', 'compensation', 'demographic']);
+    expect(hrItems()).toEqual([
+      'suggestions',
+      'ethic',
+      'interview-evidence',
+      'compensation',
+      'demographic',
+    ]);
+  });
+
+  it('shows Interview Evidence with only its module grant and no remote-readiness gate', () => {
+    permissionsMock.hasModule.mockImplementation((module) => module === 'INTERVIEW_EVIDENCE');
+    expect(groupKeys()).toContain('hr');
+    expect(hrItems()).toEqual(['interview-evidence']);
   });
 
   it('keeps the remote-flag gate independent of the module gate', () => {
