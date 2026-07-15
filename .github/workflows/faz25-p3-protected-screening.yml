@@ -1,0 +1,67 @@
+name: Faz 25 P3 Protected Screening Reviewer
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: faz25-p3-protected-screening-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reviewer-browser-acceptance:
+    name: Screening Reviewer 4-width + Keyboard + Axe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VITE_MFE_INTERVIEW_EVIDENCE_STANDALONE_ACCEPTANCE: '1'
+      VITE_INTERVIEW_EVIDENCE_DATA_MODE: live
+      VITE_INTERVIEW_EVIDENCE_INTERVIEW_ID: iv-screening-browser
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start isolated interview-evidence acceptance harness
+        run: |
+          pnpm --filter mfe-interview-evidence exec vite --host 127.0.0.1 --port 3011 > /tmp/p3-screening-mfe.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3011/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 /tmp/p3-screening-mfe.log || true
+          exit 1
+
+      - name: Chromium product acceptance
+        run: >-
+          pnpm exec playwright test
+          tests/playwright/faz25-p3-protected-screening.spec.ts
+          --config tests/playwright/playwright.config.ts
+          --project=chromium
+          --workers=1
+
+      - name: Upload browser diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: faz25-p3-screening-browser-diagnostics
+          if-no-files-found: ignore
+          path: |
+            /tmp/p3-screening-mfe.log
+            test-results/
+            playwright-report/
