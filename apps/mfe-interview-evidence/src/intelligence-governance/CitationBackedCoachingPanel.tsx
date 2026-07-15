@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
-import { SYNTHETIC_COACHING_PROPOSAL } from './syntheticCoachingProposal';
+import {
+  resolveSyntheticCoachingSource,
+  SYNTHETIC_COACHING_SOURCE,
+  verifyCanonicalCoachingDigest,
+} from './syntheticCoachingProposal';
 import type {
   SyntheticCoachingCitation,
-  SyntheticCoachingProposal,
+  SyntheticCoachingSourceEnvelope,
 } from './syntheticCoachingProposal';
 
 const SIGNAL_LABELS = {
@@ -16,16 +20,43 @@ const SIGNAL_LABELS = {
 const ACTION_BLOCK_REASON =
   'PRE-G0 sentetik proposal; insan review/rationale ve legal/audit/owner gate olmadan uygulanamaz.';
 
+const SOURCE_BLOCK_REASON =
+  'Canonical ATS sözleşmesi ve içerik digest’i doğrulanmadı; öneriler gösterilmez, uygulama ve mutation kapalı kalır.';
+
+type DigestStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
+
 export function CitationBackedCoachingPanel({
-  proposal = SYNTHETIC_COACHING_PROPOSAL,
+  source = SYNTHETIC_COACHING_SOURCE,
 }: {
-  proposal?: SyntheticCoachingProposal;
+  source?: SyntheticCoachingSourceEnvelope;
 }) {
+  const resolution = useMemo(() => resolveSyntheticCoachingSource(source), [source]);
+  const [digestStatus, setDigestStatus] = useState<DigestStatus>('PENDING');
+
+  useEffect(() => {
+    let active = true;
+    if (resolution.status === 'REJECTED') {
+      setDigestStatus('REJECTED');
+      return () => {
+        active = false;
+      };
+    }
+    setDigestStatus('PENDING');
+    void verifyCanonicalCoachingDigest(resolution.receipt).then((verified) => {
+      if (active) setDigestStatus(verified ? 'VERIFIED' : 'REJECTED');
+    });
+    return () => {
+      active = false;
+    };
+  }, [resolution]);
+
+  const proposal =
+    resolution.status === 'VALIDATED' && digestStatus === 'VERIFIED' ? resolution.proposal : null;
   const citations = useMemo(
-    () => proposal.suggestions.flatMap((suggestion) => suggestion.citations),
+    () => proposal?.suggestions.flatMap((suggestion) => suggestion.citations) ?? [],
     [proposal],
   );
-  const [selectedCitationRef, setSelectedCitationRef] = useState(citations[0]?.citationRef ?? '');
+  const [selectedCitationRef, setSelectedCitationRef] = useState('');
   const citationDetailRef = useRef<HTMLDivElement>(null);
   const selectedCitation = citations.find(
     (citation) => citation.citationRef === selectedCitationRef,
@@ -40,6 +71,15 @@ export function CitationBackedCoachingPanel({
     citationDetailRef.current?.focus();
   };
 
+  const rejectionReason =
+    resolution.status === 'REJECTED'
+      ? resolution.reasonCode
+      : digestStatus === 'REJECTED'
+        ? 'PROPOSAL_DIGEST_MISMATCH_OR_CRYPTO_UNAVAILABLE'
+        : null;
+  const actionBlockReason = proposal ? ACTION_BLOCK_REASON : SOURCE_BLOCK_REASON;
+  const archivalWindowExpired = proposal ? Date.now() >= Date.parse(proposal.expiresAt) : false;
+
   return (
     <Card variant="outlined" padding="sm">
       <Stack direction="column" gap={3} data-testid="citation-backed-coaching-panel">
@@ -49,29 +89,37 @@ export function CitationBackedCoachingPanel({
               Citation-backed Coaching detail
             </Text>
             <Text as="p" size="sm" variant="secondary">
-              Her öneri kendi rubric kriteri ve destekli sentetik citation ile kapanır.
+              Yalnız canonical ATS sözleşmesine, izinli kanıta ve içerik digest’ine bağlanan
+              öneriler gösterilir.
             </Text>
           </Stack>
           <Stack direction="row" gap={2} wrap>
             <Badge variant="info">PROPOSAL ONLY</Badge>
             <Badge variant="warning">AI_SUGGESTED</Badge>
-            <Badge variant="muted">SENTETİK</Badge>
+            <Badge variant="muted">ARŞİV SENTETİK</Badge>
+            {proposal ? (
+              <Badge variant="success">PINNED PROFILE + DIGEST VERIFIED</Badge>
+            ) : digestStatus === 'PENDING' ? (
+              <Badge variant="warning">KAYNAK DOĞRULANIYOR</Badge>
+            ) : (
+              <Badge variant="error">KAYNAK REDDEDİLDİ</Badge>
+            )}
+            {archivalWindowExpired ? (
+              <Badge variant="warning">ARCHIVAL WINDOW EXPIRED</Badge>
+            ) : null}
           </Stack>
         </Stack>
 
-        <div
-          data-testid="coaching-suggestion-list"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
-            gap: 12,
-          }}
-        >
-          {proposal.suggestions.map((suggestion) => {
-            const supported = suggestion.citations.filter(
-              (citation) => citation.entailment === 'SUPPORTED',
-            );
-            return (
+        {proposal ? (
+          <div
+            data-testid="coaching-suggestion-list"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
+              gap: 12,
+            }}
+          >
+            {proposal.suggestions.map((suggestion) => (
               <div
                 key={suggestion.suggestionRef}
                 data-testid="coaching-suggestion"
@@ -84,17 +132,15 @@ export function CitationBackedCoachingPanel({
                       <Text as="h5" size="base" weight="semibold">
                         {suggestion.label}
                       </Text>
-                      <Badge variant={supported.length > 0 ? 'success' : 'error'}>
-                        {supported.length > 0
-                          ? `${supported.length} SUPPORTED citation`
-                          : 'KANIT YOK · AKSİYON KAPALI'}
+                      <Badge variant="success">
+                        {suggestion.citations.length} SUPPORTED citation
                       </Badge>
                     </Stack>
                     <Text as="p" size="sm">
                       <strong>Rubric kriteri:</strong> {suggestion.criterionLabel}
                     </Text>
                     <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
-                      {suggestion.criterionRef}
+                      {suggestion.criterionRef} · {suggestion.templateRef}
                     </Text>
                     <Stack
                       direction="row"
@@ -102,7 +148,7 @@ export function CitationBackedCoachingPanel({
                       wrap
                       aria-label={`${suggestion.label} citations`}
                     >
-                      {supported.map((citation) => (
+                      {suggestion.citations.map((citation) => (
                         <button
                           key={citation.citationRef}
                           type="button"
@@ -118,79 +164,113 @@ export function CitationBackedCoachingPanel({
                   </Stack>
                 </Card>
               </div>
-            );
-          })}
-        </div>
-
-        {selectedCitation ? (
-          <CitationDetail citation={selectedCitation} detailRef={citationDetailRef} />
+            ))}
+          </div>
         ) : (
           <Card variant="outlined" padding="sm">
-            <Stack direction="column" gap={1} data-testid="coaching-citation-empty-state">
-              <Badge variant="error">CITATION EKSİK</Badge>
+            <Stack
+              direction="column"
+              gap={1}
+              role="alert"
+              data-testid="coaching-source-rejected-state"
+            >
+              <Badge variant={digestStatus === 'PENDING' ? 'warning' : 'error'}>
+                {digestStatus === 'PENDING' ? 'DOĞRULAMA BEKLENİYOR' : 'ÖNERİLER GİZLENDİ'}
+              </Badge>
               <Text as="p" size="sm">
-                Öneri gösterilebilir; fakat citation closure yoksa uygulama ve mutation kapalı
-                kalır.
+                {SOURCE_BLOCK_REASON}
               </Text>
+              {rejectionReason ? (
+                <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
+                  Güvenli hata kodu: {rejectionReason}
+                </Text>
+              ) : null}
             </Stack>
           </Card>
         )}
 
-        <Card variant="outlined" padding="sm">
-          <Stack direction="column" gap={2} data-testid="coaching-quality-signals">
-            <Text as="h5" size="base" weight="semibold">
-              Structured quality signals · kategorik
-            </Text>
-            <div
-              data-testid="coaching-quality-signal-grid"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
-                gap: 8,
-                minWidth: 0,
-              }}
-            >
-              {proposal.qualitySignals.map((signal) => (
-                <div key={signal.signalRef} style={{ minWidth: 0 }}>
-                  <Stack direction="row" gap={2} align="center" wrap>
-                    <Badge variant={signal.state === 'INSUFFICIENT_EVIDENCE' ? 'warning' : 'info'}>
-                      {SIGNAL_LABELS[signal.state]}
-                    </Badge>
-                    <Text as="span" size="sm" weight="semibold">
-                      {signal.label}
-                    </Text>
-                  </Stack>
-                  <Text as="p" size="xs" variant="secondary">
-                    Oturum düzeyi · kişi profili veya sayısal puan değil
-                  </Text>
-                </div>
-              ))}
-            </div>
-          </Stack>
-        </Card>
+        {proposal && selectedCitation ? (
+          <CitationDetail citation={selectedCitation} detailRef={citationDetailRef} />
+        ) : null}
 
-        <Card variant="outlined" padding="sm">
-          <Stack direction="column" gap={2} data-testid="coaching-governance-lineage">
-            <Text as="h5" size="base" weight="semibold">
-              Correction, appeal ve audit lineage
-            </Text>
-            <Text as="p" size="sm" style={REF_STYLE}>
-              <strong>Appeal:</strong> {proposal.appealPathRef}
-            </Text>
-            <Text as="p" size="sm" style={REF_STYLE}>
-              <strong>Correction:</strong> {proposal.correctionPathRef}
-            </Text>
-            <Text as="p" size="sm" style={REF_STYLE}>
-              <strong>Audit:</strong> {proposal.auditLineageRefs.join(', ')}
-            </Text>
-            <Text as="p" size="sm" style={REF_STYLE}>
-              <strong>AI output:</strong> {proposal.aiOutputVersionRef}
-            </Text>
-            <Text as="p" size="sm" style={REF_STYLE}>
-              <strong>Digest:</strong> {proposal.proposalDigest}
-            </Text>
-          </Stack>
-        </Card>
+        {proposal ? (
+          <>
+            <Card variant="outlined" padding="sm">
+              <Stack direction="column" gap={2} data-testid="coaching-quality-signals">
+                <Text as="h5" size="base" weight="semibold">
+                  Structured quality signals · kategorik
+                </Text>
+                <div
+                  data-testid="coaching-quality-signal-grid"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  {proposal.qualitySignals.map((signal) => (
+                    <div key={signal.signalRef} style={{ minWidth: 0 }}>
+                      <Stack direction="row" gap={2} align="center" wrap>
+                        <Badge
+                          variant={signal.state === 'INSUFFICIENT_EVIDENCE' ? 'warning' : 'info'}
+                        >
+                          {SIGNAL_LABELS[signal.state]}
+                        </Badge>
+                        <Text as="span" size="sm" weight="semibold">
+                          {signal.label}
+                        </Text>
+                      </Stack>
+                      <Text as="p" size="xs" variant="secondary">
+                        Oturum düzeyi · kişi profili veya sayısal puan değil
+                      </Text>
+                      <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
+                        Kanıt: {signal.citationRefs.join(', ')}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              </Stack>
+            </Card>
+
+            <Card variant="outlined" padding="sm">
+              <Stack direction="column" gap={2} data-testid="coaching-governance-lineage">
+                <Text as="h5" size="base" weight="semibold">
+                  Correction, appeal ve audit lineage
+                </Text>
+                <Text as="p" size="sm" style={REF_STYLE}>
+                  <strong>Appeal:</strong> {proposal.appealPathRef}
+                </Text>
+                <Text as="p" size="sm" style={REF_STYLE}>
+                  <strong>Correction:</strong> {proposal.correctionPathRef}
+                </Text>
+                <Text as="p" size="sm" style={REF_STYLE}>
+                  <strong>Audit:</strong> {proposal.auditLineageRefs.join(', ')}
+                </Text>
+                <Text as="p" size="sm" style={REF_STYLE}>
+                  <strong>AI output:</strong> {proposal.aiOutputVersionRef}
+                </Text>
+                <Text as="p" size="sm" style={REF_STYLE}>
+                  <strong>Digest:</strong> {proposal.proposalDigest}
+                </Text>
+                <Text as="p" size="sm" style={REF_STYLE}>
+                  <strong>Arşiv receipt window:</strong> {proposal.createdAt} → {proposal.expiresAt}
+                  {archivalWindowExpired
+                    ? ' · EXPIRED — yalnız arşiv demo; canlı freshness için geçersiz'
+                    : ' · arşiv penceresi içinde'}
+                </Text>
+                <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
+                  <strong>Canonical contract:</strong> {proposal.contractRef} ·{' '}
+                  {proposal.contractSha256}
+                </Text>
+                <Text as="p" size="xs" variant="secondary">
+                  Yerel pinned contract profili ve içerik bütünlüğü doğrulandı; bu rozet ATS kaynak
+                  deposunun imzası, canlı freshness veya production authenticity kanıtı değildir.
+                </Text>
+              </Stack>
+            </Card>
+          </>
+        ) : null}
 
         <Stack direction="column" gap={2}>
           <Text
@@ -200,13 +280,13 @@ export function CitationBackedCoachingPanel({
             variant="secondary"
             data-testid="coaching-action-block-reason"
           >
-            {ACTION_BLOCK_REASON}
+            {actionBlockReason}
           </Text>
           <Stack direction="row" gap={2} wrap>
             <Button
               variant="outline"
               disabled
-              accessReason={ACTION_BLOCK_REASON}
+              accessReason={actionBlockReason}
               aria-describedby="coaching-action-block-reason"
               style={RESPONSIVE_ACTION_BUTTON_STYLE}
             >
@@ -214,8 +294,8 @@ export function CitationBackedCoachingPanel({
             </Button>
             <Button
               variant="primary"
-              disabled={!proposal.actionAllowed}
-              accessReason={ACTION_BLOCK_REASON}
+              disabled
+              accessReason={actionBlockReason}
               aria-describedby="coaching-action-block-reason"
               data-testid="coaching-apply-button"
               style={RESPONSIVE_ACTION_BUTTON_STYLE}
@@ -252,14 +332,15 @@ function CitationDetail({
             <Text as="h5" size="base" weight="semibold">
               Citation detayı
             </Text>
-            <Badge variant="success">SUPPORTED</Badge>
+            <Badge variant="success">{citation.entailment}</Badge>
             <Badge variant="muted">{citation.evidenceType}</Badge>
           </Stack>
           <Text as="p" size="sm">
             {citation.sourceExcerpt}
           </Text>
           <Text as="p" size="xs" variant="secondary" style={REF_STYLE}>
-            {citation.citationRef} · {citation.sourceSegmentRef} · {citation.provenanceRef}
+            {citation.evidenceRef} · {citation.citationRef} · {citation.criterionRef} ·{' '}
+            {citation.sourceSegmentRefs.join(', ')} · {citation.provenanceRef}
           </Text>
         </Stack>
       </Card>
