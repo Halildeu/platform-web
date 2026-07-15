@@ -14,6 +14,7 @@ import { DeploymentReadinessConsole } from './deployment-readiness/DeploymentRea
 import { IntelligenceGovernanceLab } from './intelligence-governance/IntelligenceGovernanceLab';
 import { resolveExportProfile } from './export/exportProfile';
 import type { CitationEntailment } from './review/liveCitationApi';
+import { ProtectedAttributeScreeningPanel } from './screening/ProtectedAttributeScreeningPanel';
 import { TranscriptList } from './transcripts/TranscriptList';
 import {
   listTranscripts,
@@ -161,6 +162,12 @@ function LiveReadApp() {
     (CitationReceiptRef & { entailment: CitationEntailment }) | null
   >(null);
   const exportProfile = useMemo(() => resolveExportProfile(), []);
+  // Receipt başka transcript/interview seçimine taşınamaz. LiveReviewCasePanel kendi içinde de
+  // doğrular; screening/export çağrılarına yalnız exact bağlı pointer verilir (#913 M3 review).
+  const scopedCitationReceipt =
+    citationReceipt?.interviewId === interviewId && citationReceipt.transcriptKey === selectedKey
+      ? citationReceipt
+      : null;
   // 39d-7a: transcribe sonrası hedef seçim — refresh'te bulunamazsa
   // CONSISTENCY hatası (sessizce ilk transkripte GEÇİLMEZ; Codex #6).
   const pendingTargetKey = useRef<string | null>(null);
@@ -353,11 +360,23 @@ function LiveReadApp() {
 
           {selectedKey && (
             <Card variant="outlined" padding="md">
+              <ProtectedAttributeScreeningPanel
+                key={selectedKey}
+                interviewId={interviewId}
+                transcriptKey={selectedKey}
+                segments={segments.phase === 'ready' ? segments.segments : []}
+                citationReceipt={scopedCitationReceipt}
+              />
+            </Card>
+          )}
+
+          {selectedKey && (
+            <Card variant="outlined" padding="md">
               <LiveReviewCasePanel
                 key={selectedKey}
                 interviewId={interviewId}
                 transcriptKey={selectedKey}
-                citationReceipt={citationReceipt}
+                citationReceipt={scopedCitationReceipt}
               />
             </Card>
           )}
@@ -378,8 +397,8 @@ function LiveReadApp() {
               selectedTranscriptKey={selectedKey || null}
               profileResolution={exportProfile}
               citationSuggestion={
-                citationReceipt && citationReceipt.entailment !== 'INSUFFICIENT'
-                  ? citationReceipt
+                scopedCitationReceipt && scopedCitationReceipt.entailment !== 'INSUFFICIENT'
+                  ? scopedCitationReceipt
                   : null
               }
             />
@@ -389,14 +408,15 @@ function LiveReadApp() {
             <Stack direction="column" gap={2} data-testid="live-write-surfaces-note">
               <Badge variant="info">
                 Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a) + kanıt-alıntı taslağı
-                (39d-7b) + insan incelemesi/finalize (39d-7b-2) + DSAR/silme (39d-7c) + kanıt-paketi
-                export (39d-7d)
+                (39d-7b) + korumalı-özellik uyum taraması + insan incelemesi/finalize (39d-7b-2) +
+                DSAR/silme (39d-7c) + kanıt-paketi export (39d-7d)
               </Badge>
               <Text as="p" size="sm" variant="secondary">
                 39d canlı ürün yüzeyi F1→F10 hattında tamamlandı (rıza → yükleme → transkripsiyon →
-                kanıt-alıntı → insan onayı/finalize → export → DSAR). Demo motorlar canlı transkript
-                anahtarlarını tanımadığı için burada gösterilmezler (dürüst sınır); tam ürün akışı
-                demo modunda da çalışır durumda.
+                kanıt-alıntı → pointer-only korumalı-özellik taraması → insan onayı/finalize →
+                export → DSAR). Tarama üretme ve kayıtlı taramayı okuma yetkileri ayrıdır; yetkisi
+                olmayan işlem aynı oturumda kapatılır. Demo motorlar canlı transkript anahtarlarını
+                tanımadığı için burada gösterilmezler (dürüst sınır).
               </Text>
             </Stack>
           </Card>
