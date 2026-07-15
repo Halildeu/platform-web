@@ -25,6 +25,13 @@ export interface AtsSafePreview {
   boundary: string;
 }
 
+export type AtsSafeExperienceKind = 'SCENARIO_RUNNER' | 'SYNTHETIC_RESUME_DRAFT';
+
+export interface AtsSafeExperience {
+  kind: AtsSafeExperienceKind;
+  actionLabel: string;
+}
+
 export interface AtsCapabilityDefinition {
   id: string;
   title: string;
@@ -36,6 +43,7 @@ export interface AtsCapabilityDefinition {
   liveDependency: string;
   actionCeiling: string;
   safePreview: AtsSafePreview | null;
+  safeExperience: AtsSafeExperience | null;
   remoteEnabledMode?: AtsCapabilityMode;
   remoteEnabledActionCeiling?: string;
 }
@@ -81,6 +89,7 @@ export const ATS_CAPABILITY_REGISTRY = [
     actionCeiling:
       'Bu dağıtımda yalnız ürün kapsamı görülebilir; gerçek kayıt veya aday verisi açılamaz.',
     safePreview: null,
+    safeExperience: null,
     remoteEnabledMode: 'LIVE_READ',
     remoteEnabledActionCeiling:
       'Canlı çalışma alanı açılabilir; işlemler kullanıcının gerçek rol ve policy tavanını aşamaz. Bu katalog yönetim yetkisi vermez.',
@@ -97,8 +106,12 @@ export const ATS_CAPABILITY_REGISTRY = [
     liveDependency:
       'Halildeu/ats#163; aday portalı, açık rıza/aydınlatma, zararlı dosya taraması, veri saklama ve alan-güven skoru sözleşmesi',
     actionCeiling:
-      'Bu dilimde yükleme kontrolü açılmaz; gerçek CV/PII işlenmez. Yalnız planlanan düzenlenebilir taslak akışının sınırı görünür.',
+      'Bu dilimde yükleme kontrolü açılmaz; gerçek CV/PII işlenmez. Yalnız paket içi sentetik örnekle düzenlenebilir taslak ve aday kontrolü denenir.',
     safePreview: null,
+    safeExperience: {
+      kind: 'SYNTHETIC_RESUME_DRAFT',
+      actionLabel: 'Sentetik PDF taslak akışını dene',
+    },
   },
   {
     id: 'candidate-review-and-appeal',
@@ -117,6 +130,10 @@ export const ATS_CAPABILITY_REGISTRY = [
       output: 'İnsan incelemesine gönderilecek kanıta bağlı düzeltme taslağı gösterilir.',
       boundary: 'Talep gönderilmez; aday kimliği, kişisel veri ve üretim kaydı kullanılmaz.',
     },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Düzeltme taslağını dene',
+    },
   },
   {
     id: 'citation-backed-coaching',
@@ -134,6 +151,10 @@ export const ATS_CAPABILITY_REGISTRY = [
       scenario: 'Sentetik görüşmede bir yetkinlik için takip sorusu eksik kalır.',
       output: 'İlgili kanıt alıntısına bağlı, tarafsız bir takip sorusu taslağı gösterilir.',
       boundary: 'Öneri uygulanamaz; duygu, kişilik, aldatma veya uygunluk çıkarımı yapılmaz.',
+    },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Koçluk önerisini dene',
     },
   },
   {
@@ -154,6 +175,10 @@ export const ATS_CAPABILITY_REGISTRY = [
       output: 'Tutarlılık farkı, örneklem uyarısı ve insan inceleme önerisi gösterilir.',
       boundary: 'Gerçek aday, korunan özellik, sıralama veya otomatik aksiyon kullanılmaz.',
     },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Adalet senaryosunu dene',
+    },
   },
   {
     id: 'quality-of-hire',
@@ -171,6 +196,10 @@ export const ATS_CAPABILITY_REGISTRY = [
       scenario: 'Sentetik bir işe alım kohortunda kanıt kapsama oranı zaman içinde izlenir.',
       output: 'Eksik kanıt alanları ve ölçüm belirsizliği gösterilir.',
       boundary: 'Kişi puanı, performans tahmini, sıralama veya iş akışı mutasyonu yoktur.',
+    },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Kalite ölçümünü dene',
     },
   },
   {
@@ -190,6 +219,10 @@ export const ATS_CAPABILITY_REGISTRY = [
       output: 'Kanıt alıntısı ve insanın onaylayabileceği beceri etiketi taslağı gösterilir.',
       boundary: 'Etiket kaydedilmez ve aday hakkında nihai çıkarım yapılmaz.',
     },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Beceri kanıtını dene',
+    },
   },
   {
     id: 'media-integrity',
@@ -208,6 +241,10 @@ export const ATS_CAPABILITY_REGISTRY = [
       output: 'Teknik yeniden-doğrulama uyarısı ve insan inceleme adımı gösterilir.',
       boundary: 'Kişi niyeti veya aldatma çıkarımı yapılmaz; aday kararı etkilenmez.',
     },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Bütünlük incelemesini dene',
+    },
   },
   {
     id: 'agentic-screening',
@@ -217,10 +254,22 @@ export const ATS_CAPABILITY_REGISTRY = [
     route: ATS_PRODUCT_HUB_ENTRY.route,
     requiredModule: ATS_PRODUCT_HUB_ENTRY.requiredModule,
     targetRoles: ['RECRUITER', 'HIRING_MANAGER', 'AUDITOR', 'ADMIN'],
-    mode: 'OWNER_GATED',
+    mode: 'PROPOSAL_ONLY',
     liveDependency: 'Owner, Legal/DPO, müşteri ve yüksek-risk uygunluk kararı',
-    actionCeiling: 'Kapalıdır; otomatik eleme, sıralama, iletişim veya üretim mutasyonu yapılamaz.',
-    safePreview: null,
+    actionCeiling:
+      'Yalnız sentetik sonraki-adım önerisi denenir; otomatik eleme, sıralama, iletişim veya üretim mutasyonu yapılamaz.',
+    safePreview: {
+      scenario:
+        'Sentetik bir başvuruda eksik insan inceleme adımı için açıklanabilir sonraki-adım taslağı istenir.',
+      output:
+        'Gerekçe, gerekli insan onayları ve uygulanamayacak eylemlerle birlikte salt-okunur öneri gösterilir.',
+      boundary:
+        'Mesaj gönderilmez, aday durumu değişmez, red/teklif/sıralama üretilmez ve toplu onay yoktur.',
+    },
+    safeExperience: {
+      kind: 'SCENARIO_RUNNER',
+      actionLabel: 'Ajan önerisini güvenle dene',
+    },
   },
 ] as const satisfies readonly AtsCapabilityDefinition[];
 

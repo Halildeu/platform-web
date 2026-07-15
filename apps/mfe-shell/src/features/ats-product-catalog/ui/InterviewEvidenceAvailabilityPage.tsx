@@ -9,6 +9,8 @@ import {
   type AtsCapabilityMode,
   type AtsProductRole,
 } from '../model/ats-capability-registry';
+import SafeScenarioRunner from './SafeScenarioRunner';
+import SyntheticResumeDraftDemo from './SyntheticResumeDraftDemo';
 
 type RoleFilter = 'ALL' | AtsProductRole;
 
@@ -203,26 +205,20 @@ const InterviewEvidenceAvailabilityPage: React.FC<AtsProductHubPageProps> = ({ r
                 </div>
               </dl>
 
-              {capability.safePreview ? (
-                <details className="mt-4 rounded-xl border border-border-subtle bg-surface-muted p-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-text-primary underline decoration-action-primary decoration-2 underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
-                    Güvenli örneği incele
-                  </summary>
-                  <dl className="mt-3 space-y-2 text-sm text-text-secondary">
-                    <div>
-                      <dt className="font-semibold text-text-primary">Senaryo</dt>
-                      <dd>{capability.safePreview.scenario}</dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-text-primary">Gösterilecek çıktı</dt>
-                      <dd>{capability.safePreview.output}</dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-text-primary">Güvenlik sınırı</dt>
-                      <dd>{capability.safePreview.boundary}</dd>
-                    </div>
-                  </dl>
-                </details>
+              {capability.safeExperience?.kind === 'SYNTHETIC_RESUME_DRAFT' ? (
+                <SyntheticResumeDraftDemo />
+              ) : capability.safeExperience?.kind === 'SCENARIO_RUNNER' &&
+                capability.safePreview ? (
+                <SafeScenarioRunner
+                  capabilityId={capability.id}
+                  actionLabel={capability.safeExperience.actionLabel}
+                  preview={capability.safePreview}
+                />
+              ) : capability.mode === 'LIVE_READ' ? (
+                <p className="mt-4 rounded-xl border border-state-info-border bg-state-info-bg p-3 text-sm text-text-secondary">
+                  Canlı salt-okunur görünüm ayrı modül bağlantısından açılır; bu kart işlem veya
+                  mutasyon başlatmaz.
+                </p>
               ) : (
                 <p className="mt-4 rounded-xl border border-border-subtle bg-surface-muted p-3 text-sm text-text-secondary">
                   Bu özellik için güvenli önizleme yok; gerekli kapılar açılmadan işlem
