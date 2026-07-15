@@ -163,7 +163,7 @@ export const NAV_GROUPS: NavGroup[] = [
         key: 'endpointAdmin',
         labelKey: 'shell.mega.admin.endpointAdmin',
         descriptionKey: 'shell.mega.admin.endpointAdmin.desc',
-        path: '/endpoint-admin/devices',
+        path: '/endpoint-admin',
         icon: Monitor,
         // remoteFlag = build/deploy capability gate (AppRouter redirects to /home
         // when endpoint-admin remote disabled, see createEndpointAdminApp.tsx).
@@ -253,30 +253,30 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
     pattern: '/admin/users',
     labelKey: 'shell.breadcrumb.users',
     parent: '/',
-    siblings: ['/access/roles', '/audit/events', '/admin/services', '/endpoint-admin/devices'],
+    siblings: ['/access/roles', '/audit/events', '/admin/services', '/endpoint-admin'],
   },
   {
     pattern: '/access/roles',
     labelKey: 'shell.breadcrumb.access',
     parent: '/',
-    siblings: ['/admin/users', '/audit/events', '/admin/services', '/endpoint-admin/devices'],
+    siblings: ['/admin/users', '/audit/events', '/admin/services', '/endpoint-admin'],
   },
   {
     pattern: '/audit/events',
     labelKey: 'shell.breadcrumb.audit',
     parent: '/',
-    siblings: ['/admin/users', '/access/roles', '/admin/services', '/endpoint-admin/devices'],
+    siblings: ['/admin/users', '/access/roles', '/admin/services', '/endpoint-admin'],
   },
   {
     pattern: '/admin/services',
     labelKey: 'shell.breadcrumb.services',
     parent: '/',
-    siblings: ['/admin/users', '/access/roles', '/audit/events', '/endpoint-admin/devices'],
+    siblings: ['/admin/users', '/access/roles', '/audit/events', '/endpoint-admin'],
   },
 
   // Endpoint Admin
   {
-    pattern: '/endpoint-admin/devices',
+    pattern: '/endpoint-admin',
     labelKey: 'shell.breadcrumb.endpointAdmin',
     parent: '/',
     siblings: ['/admin/users', '/access/roles', '/audit/events', '/admin/services'],
