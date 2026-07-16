@@ -30,6 +30,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
  * grid-using routes must mirror the same `Promise.all([setup, page])`
  * wrapper so the setup runs before the page's first render.
  */
+// Faz 22 product-surface slice S5 — fleet Overview dashboard (the mount's index).
+const EndpointOverviewPage = React.lazy(() => import('../../pages/overview/EndpointOverviewPage'));
 const EndpointStatusPage = React.lazy(() => import('../../pages/status/EndpointStatusPage'));
 const EndpointDevicesPage = React.lazy(async () => {
   const [, mod] = await Promise.all([
@@ -114,6 +116,8 @@ export const EndpointAdminRouter: React.FC = () => {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
+        <Route index element={<Navigate to="overview" replace />} />
+        <Route path="overview" element={<EndpointOverviewPage />} />
         <Route path="status" element={<EndpointStatusPage />} />
         <Route path="devices" element={<EndpointDevicesPage />} />
         <Route path="audit" element={<EndpointAuditPage />} />

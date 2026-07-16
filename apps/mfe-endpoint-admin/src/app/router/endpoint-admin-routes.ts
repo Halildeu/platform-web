@@ -33,6 +33,7 @@ export interface EndpointAdminRoute {
 }
 
 export const ENDPOINT_ADMIN_ROUTES: readonly EndpointAdminRoute[] = [
+  { path: 'overview', scope: 'fleet', discoverable: true },
   { path: 'devices', scope: 'fleet', discoverable: true },
   { path: 'status', scope: 'fleet', discoverable: true },
   { path: 'catalog/items', scope: 'fleet', discoverable: true },

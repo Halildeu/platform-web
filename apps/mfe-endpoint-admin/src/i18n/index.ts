@@ -1601,6 +1601,54 @@ const DICT_TR = {
   'endpointAdmin.remoteView.lastFrame': 'Son kare',
   'endpointAdmin.remoteView.noInputNote':
     'Bu görünüm yalnızca izlemedir — fare/klavye girişi uzak cihaza iletilmez.',
+
+  // Faz 22 ürün-yüzeyi Genel Bakış paneli (platform-web #922, slice S5 — Codex GO).
+  'endpointAdmin.nav.section.overview': 'Genel Bakış',
+  'endpointAdmin.nav.overview': 'Panel',
+  'endpointAdmin.overview.title': 'Genel Bakış',
+  'endpointAdmin.overview.subtitle': 'Filo, uyum, cihaz kaydı ve onay durumunun tek ekranda özeti.',
+  // Kartlar arası paylaşılan durum metinleri.
+  'endpointAdmin.overview.state.error': 'Veri alınamadı',
+  'endpointAdmin.overview.state.retry': 'Yeniden dene',
+  'endpointAdmin.overview.state.forbidden': 'Bu veriyi görüntüleme yetkiniz yok',
+  'endpointAdmin.overview.state.notEnabled': 'Bu özellik bu ortamda etkin değil',
+  'endpointAdmin.overview.state.updating': 'Güncelleniyor…',
+  'endpointAdmin.overview.state.loading': 'Yükleniyor…',
+  'endpointAdmin.overview.state.empty': 'Bulunmadı',
+  // Kart 1 — Filo durumu. STALE = "son bağlantısı gecikmiş" (asla "stale envanter").
+  'endpointAdmin.overview.fleet.title': 'Filo durumu',
+  'endpointAdmin.overview.fleet.managedTotal': 'Yönetilen cihaz',
+  'endpointAdmin.overview.fleet.online': 'Çevrimiçi',
+  'endpointAdmin.overview.fleet.stale': 'Son bağlantısı gecikmiş',
+  'endpointAdmin.overview.fleet.offline': 'Çevrimdışı',
+  'endpointAdmin.overview.fleet.pendingEnrollment': 'Kayıt bekleyen',
+  'endpointAdmin.overview.fleet.decommissioned': 'Hizmet dışı',
+  // Kart 2 — Uyum riskleri (birleşik "% uyumlu" skoru YOK; her metrik ayrı).
+  'endpointAdmin.overview.compliance.title': 'Uyum riskleri',
+  'endpointAdmin.overview.compliance.nonCompliant': 'Uyumsuz',
+  'endpointAdmin.overview.compliance.unauthorized': 'Yetkisiz',
+  'endpointAdmin.overview.compliance.unknown': 'Bilinmiyor',
+  // Kart 3 — Kritik uyum boşlukları (yalnızca GÖZLEMLENEN cihazlar, tüm filo değil).
+  'endpointAdmin.overview.gaps.title': 'Kritik uyum boşlukları',
+  'endpointAdmin.overview.gaps.metric': 'Boşluk barındıran cihaz',
+  'endpointAdmin.overview.gaps.freshness':
+    'Son 7 günde gözlemlenen cihazlar · {computedAt} itibarıyla',
+  'endpointAdmin.overview.gaps.observedNote': 'Yalnızca gözlemlenen cihazlar (tüm filo değil)',
+  // Kart 4 — Kayıt sağlığı.
+  'endpointAdmin.overview.enrollment.title': 'Kayıt sağlığı',
+  'endpointAdmin.overview.enrollment.pending': 'Bekleyen',
+  'endpointAdmin.overview.enrollment.expired': 'Süresi dolmuş',
+  'endpointAdmin.overview.enrollment.consumed': 'Kullanılmış',
+  // Kart 5 — Onay bekleyen yayın taslakları.
+  'endpointAdmin.overview.drafts.title': 'Onay bekleyen yayın taslakları',
+  'endpointAdmin.overview.drafts.agentUpdates': 'Ajan güncelleme taslakları',
+  'endpointAdmin.overview.drafts.softwareBundles': 'Yazılım paketi taslakları',
+  'endpointAdmin.overview.drafts.total': 'Toplam taslak',
+  // Kart 6 — Son etkinlikler (liste kartı, toplam-sayı KPI'ı değil).
+  'endpointAdmin.overview.activity.title': 'Son etkinlikler',
+  'endpointAdmin.overview.activity.viewAll': 'Tümünü gör',
+  'endpointAdmin.overview.activity.empty': 'Henüz etkinlik yok',
+  'endpointAdmin.overview.activity.unknownActor': 'Bilinmeyen',
 } as const;
 
 const DICT_EN: Record<keyof typeof DICT_TR, string> = {
@@ -3163,6 +3211,55 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.remoteView.lastFrame': 'Last frame',
   'endpointAdmin.remoteView.noInputNote':
     'This view is observation-only — mouse/keyboard input is not forwarded to the remote device.',
+
+  // Faz 22 product-surface Overview dashboard (platform-web #922, slice S5 — Codex GO).
+  'endpointAdmin.nav.section.overview': 'Overview',
+  'endpointAdmin.nav.overview': 'Dashboard',
+  'endpointAdmin.overview.title': 'Overview',
+  'endpointAdmin.overview.subtitle':
+    'Fleet, compliance, enrollment and approval status at a glance.',
+  // Shared card state strings.
+  'endpointAdmin.overview.state.error': 'Could not load data',
+  'endpointAdmin.overview.state.retry': 'Retry',
+  'endpointAdmin.overview.state.forbidden': "You don't have permission to view this data",
+  'endpointAdmin.overview.state.notEnabled': 'This feature is not enabled in this environment',
+  'endpointAdmin.overview.state.updating': 'Updating…',
+  'endpointAdmin.overview.state.loading': 'Loading…',
+  'endpointAdmin.overview.state.empty': 'None found',
+  // Card 1 — Fleet status. STALE = "delayed contact" (never "stale inventory").
+  'endpointAdmin.overview.fleet.title': 'Fleet status',
+  'endpointAdmin.overview.fleet.managedTotal': 'Managed devices',
+  'endpointAdmin.overview.fleet.online': 'Online',
+  'endpointAdmin.overview.fleet.stale': 'Delayed contact',
+  'endpointAdmin.overview.fleet.offline': 'Offline',
+  'endpointAdmin.overview.fleet.pendingEnrollment': 'Pending enrollment',
+  'endpointAdmin.overview.fleet.decommissioned': 'Decommissioned',
+  // Card 2 — Compliance risks (no combined "% compliant" score; each metric separate).
+  'endpointAdmin.overview.compliance.title': 'Compliance risks',
+  'endpointAdmin.overview.compliance.nonCompliant': 'Non-compliant',
+  'endpointAdmin.overview.compliance.unauthorized': 'Unauthorized',
+  'endpointAdmin.overview.compliance.unknown': 'Unknown',
+  // Card 3 — Critical compliance gaps (OBSERVED devices only, not fleet-wide).
+  'endpointAdmin.overview.gaps.title': 'Critical compliance gaps',
+  'endpointAdmin.overview.gaps.metric': 'Devices with gaps',
+  'endpointAdmin.overview.gaps.freshness':
+    'Devices observed in the last 7 days · as of {computedAt}',
+  'endpointAdmin.overview.gaps.observedNote': 'Observed devices only (not fleet-wide)',
+  // Card 4 — Enrollment health.
+  'endpointAdmin.overview.enrollment.title': 'Enrollment health',
+  'endpointAdmin.overview.enrollment.pending': 'Pending',
+  'endpointAdmin.overview.enrollment.expired': 'Expired',
+  'endpointAdmin.overview.enrollment.consumed': 'Consumed',
+  // Card 5 — Release drafts pending approval.
+  'endpointAdmin.overview.drafts.title': 'Release drafts pending approval',
+  'endpointAdmin.overview.drafts.agentUpdates': 'Agent-update drafts',
+  'endpointAdmin.overview.drafts.softwareBundles': 'Software-bundle drafts',
+  'endpointAdmin.overview.drafts.total': 'Total drafts',
+  // Card 6 — Recent activity (a list card, not a total-count KPI).
+  'endpointAdmin.overview.activity.title': 'Recent activity',
+  'endpointAdmin.overview.activity.viewAll': 'View all',
+  'endpointAdmin.overview.activity.empty': 'No activity yet',
+  'endpointAdmin.overview.activity.unknownActor': 'Unknown',
 };
 
 function resolveLocale(): 'tr' | 'en' {
