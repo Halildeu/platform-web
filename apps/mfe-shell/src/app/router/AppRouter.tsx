@@ -87,6 +87,9 @@ const NotificationPreferencesPage = React.lazy(
 const UnsubscribeLandingPage = React.lazy(
   () => import('../../pages/notifications/unsubscribe/UnsubscribeLandingPage.ui'),
 );
+const CandidateApplicationPage = React.lazy(
+  () => import('../../pages/jobs/CandidateApplicationPage'),
+);
 
 /* ------------------------------------------------------------------ */
 /*  AppRouter — All application routes                                 */
@@ -386,6 +389,12 @@ export const AppRouter: React.FC = () => {
             an email read on a logged-out device must reach the success
             state without a login prompt. */}
         <Route path="/notifications/unsubscribe" element={<UnsubscribeLandingPage />} />
+        {/* Faz 25 FULLATS-WEB-APPLY-01: public candidate entry. Job links must
+            remain usable on logged-out devices, so this route deliberately
+            sits outside ProtectedRoute. The first slice is local-only and
+            never uploads the selected PDF or submits candidate data. */}
+        <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
+        <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />

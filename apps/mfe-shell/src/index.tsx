@@ -13,6 +13,29 @@ import './index.css';
 // attached before any chunk-loading code can fire its first
 // dynamic import.
 import { installStaleBundleRecovery } from './app/runtime/stale-bundle-recovery';
+import { isCandidateApplicationPath } from './app/public-entry-routes';
 installStaleBundleRecovery();
 // AG Grid + other CSS loaded via Vite native CSS handling
-import('./app/bootstrap');
+// Public candidate applications must not wait for the authenticated shell,
+// auth bootstrap or any internal Module Federation remote. A failed admin
+// remote must never turn the applicant-facing form into a blank page.
+const showBootstrapFailure = () => {
+  const container = document.getElementById('root');
+  if (!container) return;
+  const alert = document.createElement('div');
+  alert.setAttribute('role', 'alert');
+  alert.style.cssText =
+    'max-width:42rem;margin:4rem auto;padding:1.5rem;border:1px solid #cbd5e1;border-radius:1rem;font:500 1rem/1.6 system-ui,sans-serif;color:#0f172a;background:#fff';
+  alert.textContent =
+    'Sayfa şu anda yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yeniden deneyin.';
+  container.replaceChildren(alert);
+};
+
+const applicationBootstrap = isCandidateApplicationPath(
+  window.location.pathname,
+  import.meta.env.BASE_URL,
+)
+  ? import('./app/public-candidate-bootstrap')
+  : import('./app/bootstrap');
+
+void applicationBootstrap.catch(showBootstrapFailure);
