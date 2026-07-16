@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import {
+  IconHome,
   IconTable,
   IconChart,
   IconFolder,
@@ -106,6 +107,13 @@ export function resolveActiveNavPath(pathname: string, navPaths: readonly string
 }
 
 export const ENDPOINT_ADMIN_NAV: EndpointAdminNavSection[] = [
+  {
+    key: 'overview',
+    titleKey: 'endpointAdmin.nav.section.overview',
+    items: [
+      { key: 'overview', labelKey: 'endpointAdmin.nav.overview', path: 'overview', icon: IconHome },
+    ],
+  },
   {
     key: 'devices',
     titleKey: 'endpointAdmin.nav.section.devices',
