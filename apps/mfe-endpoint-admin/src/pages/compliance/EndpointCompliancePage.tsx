@@ -15,6 +15,7 @@ import {
   CapabilityState,
   classifyCapabilityError,
   FLEET_CAPABILITY_POLICY,
+  RETRYABLE_KINDS,
 } from '../../widgets/capability-state';
 
 /**
@@ -350,12 +351,17 @@ export const EndpointCompliancePage: React.FC = () => {
         </>
       ) : null}
 
-      <DeviceDetailDrawer
-        open={Boolean(selectedDevice)}
-        device={selectedDevice}
-        onClose={onDrawerClose}
-        initialTab="compliance"
-      />
+      {/* Suppress the cached device drawer (its detail tabs + command-mutation
+          surface) under a NON-retryable capability state — mirrors the list
+          suppression so "no access" never leaves a live drawer (Codex S4a P1-3). */}
+      {(!error || RETRYABLE_KINDS.has(classifyCapabilityError(error, FLEET_CAPABILITY_POLICY))) && (
+        <DeviceDetailDrawer
+          open={Boolean(selectedDevice)}
+          device={selectedDevice}
+          onClose={onDrawerClose}
+          initialTab="compliance"
+        />
+      )}
     </div>
   );
 };

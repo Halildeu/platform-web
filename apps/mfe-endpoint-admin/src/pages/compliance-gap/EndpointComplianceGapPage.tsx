@@ -16,6 +16,7 @@ import {
   CapabilityState,
   classifyCapabilityError,
   FLEET_CAPABILITY_POLICY,
+  RETRYABLE_KINDS,
 } from '../../widgets/capability-state';
 
 /**
@@ -387,14 +388,18 @@ export const EndpointComplianceGapPage: React.FC = () => {
         </>
       )}
 
-      {selectedDevice && (
-        <DeviceDetailDrawer
-          open
-          device={selectedDevice}
-          onClose={onDrawerClose}
-          initialTab="compliance"
-        />
-      )}
+      {/* Suppress the cached device drawer under a NON-retryable capability state
+          (forbidden/notEnabled/disabled) — mirrors the list (Codex S4a P1-3). */}
+      {selectedDevice &&
+        (!error ||
+          RETRYABLE_KINDS.has(classifyCapabilityError(error, FLEET_CAPABILITY_POLICY))) && (
+          <DeviceDetailDrawer
+            open
+            device={selectedDevice}
+            onClose={onDrawerClose}
+            initialTab="compliance"
+          />
+        )}
     </div>
   );
 };

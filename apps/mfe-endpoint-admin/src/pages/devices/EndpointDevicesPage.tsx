@@ -915,11 +915,17 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
           </React.Suspense>
         </div>
       ) : null}
-      <DeviceDetailDrawer
-        open={selectedDevice != null}
-        device={selectedDevice ?? null}
-        onClose={() => setSelectedDeviceId(null)}
-      />
+      {/* Gate the detail drawer on the SAME non-retryable suppression as the grid:
+          a forbidden/notEnabled/disabled load error must not leave a cached device
+          drawer (its inventory/compliance/audit tabs + command-mutation surface +
+          polling) open under "no access" (Codex S4a P1-3 follow-up). */}
+      {showGrid ? (
+        <DeviceDetailDrawer
+          open={selectedDevice != null}
+          device={selectedDevice ?? null}
+          onClose={() => setSelectedDeviceId(null)}
+        />
+      ) : null}
     </section>
   );
 };
