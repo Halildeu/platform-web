@@ -31,6 +31,11 @@ const authModeMock = {
   permitAll: false,
 };
 
+const jwt = (payload: Record<string, unknown>) => {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  return `header.${encoded}.signature`;
+};
+
 vi.mock('../store/store.hooks', () => ({
   useAppSelector: (selector: any) => selector(authState),
 }));
@@ -85,6 +90,23 @@ const renderWithAnyModuleRoute = () =>
           }
         />
         <Route path="/login" element={<LocationViewer label="Login Page" />} />
+        <Route path="/unauthorized" element={<LocationViewer label="Unauthorized Page" />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+const renderWithRoleRoute = () =>
+  render(
+    <MemoryRouter initialEntries={['/endpoint-admin/remote-access/sessions/session-1/view']}>
+      <Routes>
+        <Route
+          path="/endpoint-admin/remote-access/sessions/:sessionId/view"
+          element={
+            <ProtectedRoute requiredRole="remote-bridge-operator">
+              <div>Remote View Content</div>
+            </ProtectedRoute>
+          }
+        />
         <Route path="/unauthorized" element={<LocationViewer label="Unauthorized Page" />} />
       </Routes>
     </MemoryRouter>,
@@ -154,6 +176,24 @@ describe('ProtectedRoute', () => {
 
     expect(screen.getByText('Unauthorized Page')).toBeInTheDocument();
     expect(screen.getByTestId('location-state')).toHaveTextContent('module_denied');
+  });
+
+  it('renders a transport-specific route only for the exact realm role', () => {
+    authState.auth.token = jwt({ realm_access: { roles: ['remote-bridge-operator'] } });
+
+    renderWithRoleRoute();
+
+    expect(screen.getByText('Remote View Content')).toBeInTheDocument();
+  });
+
+  it('does not let OpenFGA super-admin bypass a transport-specific realm role', () => {
+    authState.auth.token = jwt({ realm_access: { roles: ['admin'] } });
+    permissionsMock.isSuperAdmin = () => true;
+
+    renderWithRoleRoute();
+
+    expect(screen.getByText('Unauthorized Page')).toBeInTheDocument();
+    expect(screen.getByTestId('location-state')).toHaveTextContent('role_denied');
   });
 
   it('permitAll modunda bootstrap sonrası token olmasa da children render eder', () => {

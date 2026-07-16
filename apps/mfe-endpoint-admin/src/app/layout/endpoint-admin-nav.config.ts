@@ -65,6 +65,13 @@ export interface EndpointAdminNavSection {
 /** Base mount the shell gives the endpoint-admin remote. */
 export const ENDPOINT_ADMIN_BASE = '/endpoint-admin';
 
+const REMOTE_VIEW_PATH = /^\/(?:endpoint-admin\/)?remote-access\/sessions\/[^/]+\/view\/?$/;
+
+/** Session-bound viewer is not a fleet-management surface. */
+export function isRemoteViewPath(pathname: string): boolean {
+  return REMOTE_VIEW_PATH.test(pathname);
+}
+
 /**
  * Normalise an absolute location to a router-relative path — strips the optional
  * shell mount (`/endpoint-admin`) and surrounding slashes. `/endpoint-admin` and

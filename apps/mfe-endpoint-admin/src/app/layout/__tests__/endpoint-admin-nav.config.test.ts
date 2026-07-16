@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ENDPOINT_ADMIN_NAV,
   ENDPOINT_ADMIN_BASE,
+  isRemoteViewPath,
   resolveActiveNavPath,
   resolveEndpointAdminTo,
 } from '../endpoint-admin-nav.config';
@@ -122,6 +123,20 @@ describe('resolveEndpointAdminTo (mount-aware absolute target)', () => {
   it('emits a root-relative target when standalone', () => {
     expect(resolveEndpointAdminTo('/devices', 'status')).toBe('/status');
     expect(resolveEndpointAdminTo('/compliance/policies', 'audit')).toBe('/audit');
+  });
+});
+
+describe('isRemoteViewPath', () => {
+  it('recognizes only the session-bound VIEW_ONLY route', () => {
+    expect(isRemoteViewPath('/endpoint-admin/remote-access/sessions/session-1/view')).toBe(true);
+    expect(isRemoteViewPath('/remote-access/sessions/session-1/view')).toBe(true);
+    expect(isRemoteViewPath('/endpoint-admin/remote-access/sessions/session-1/view/')).toBe(true);
+  });
+
+  it('does not classify fleet or malformed paths as restricted remote view', () => {
+    expect(isRemoteViewPath('/endpoint-admin/devices')).toBe(false);
+    expect(isRemoteViewPath('/endpoint-admin/remote-access/sessions/session-1')).toBe(false);
+    expect(isRemoteViewPath('/endpoint-admin/remote-access/sessions/a/b/view')).toBe(false);
   });
 });
 

@@ -35,6 +35,7 @@ import {
   INTERVIEW_EVIDENCE_ENTRY,
 } from '../../features/ats-product-catalog/model/ats-capability-registry';
 import { RECRUITER_WORKSPACE_ENTRY } from '../../features/ats-portals/model/ats-portal-registry';
+import { EndpointAdminRouteBoundary } from './EndpointAdminRouteBoundary';
 const ReportBuilderWizard = React.lazy(() =>
   import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
     default: m.ReportBuilderWizard,
@@ -193,13 +194,9 @@ export const AppRouter: React.FC = () => {
         <Route
           path="/endpoint-admin/*"
           element={
-            endpointAdminEnabled ? (
-              <ProtectedRoute requiredModule="ENDPOINT_ADMIN">
-                <EndpointAdminModule />
-              </ProtectedRoute>
-            ) : (
-              <Navigate to={defaultShellPath} replace />
-            )
+            <EndpointAdminRouteBoundary enabled={endpointAdminEnabled}>
+              <EndpointAdminModule />
+            </EndpointAdminRouteBoundary>
           }
         />
         <Route
