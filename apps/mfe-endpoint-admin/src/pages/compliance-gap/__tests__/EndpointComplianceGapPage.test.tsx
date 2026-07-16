@@ -121,16 +121,18 @@ describe('EndpointComplianceGapPage', () => {
     expect(screen.getByTestId('compliance-gap-empty')).toBeTruthy();
   });
 
-  it('renders forbidden state on 403', () => {
+  it('renders forbidden capability state on 403', () => {
     mockGap({ error: { status: 403 } });
     render(<EndpointComplianceGapPage />);
-    expect(screen.getByTestId('compliance-gap-forbidden')).toBeTruthy();
+    const state = screen.getByTestId('compliance-gap-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('forbidden');
   });
 
-  it('renders generic error state on non-403 error', () => {
+  it('renders generic error capability state on non-403 error', () => {
     mockGap({ error: { status: 500 } });
     render(<EndpointComplianceGapPage />);
-    expect(screen.getByTestId('compliance-gap-error')).toBeTruthy();
+    const state = screen.getByTestId('compliance-gap-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('error');
   });
 
   it('renders a single-device row with the gap badge and strength label', () => {

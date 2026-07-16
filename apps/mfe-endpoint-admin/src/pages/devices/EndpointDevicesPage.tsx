@@ -28,6 +28,12 @@ import { useEndpointAdminI18n } from '../../i18n';
 import type { DeviceStatus, OsType } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
 import DeviceBulkActionsMenu, { type BulkSelectableDevice } from './DeviceBulkActionsMenu';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+  RETRYABLE_KINDS,
+} from '../../widgets/capability-state';
 
 /**
  * Devices surface — #1154 PR-3: SERVER-MODE grid.
@@ -237,7 +243,21 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     skip: selectedDeviceId == null,
   });
 
-  const forbidden = loadError?.code === '403';
+  // Feed the grid's DeviceGridExportError to the ONE classifier: its transport
+  // `httpStatus` (kept apart from the app `code`, so `403 { code: 'ACCESS_DENIED' }`
+  // still classifies as forbidden — Codex P1-2) drives the kind, and any structured
+  // `code` takes the durable problem-code path.
+  const loadErrorKind = loadError
+    ? classifyCapabilityError(
+        { status: loadError.httpStatus, data: { code: loadError.code } },
+        FLEET_CAPABILITY_POLICY,
+      )
+    : undefined;
+  // Keep the grid MOUNTED only when the error is retryable (so `refreshServerSide`
+  // can recover). A non-retryable state (forbidden/notEnabled/disabled) must
+  // SUPPRESS the grid — no stale rows / export / bulk-actions under "no access"
+  // (Codex P1-3); those states offer no retry, so unmounting dead-ends nothing.
+  const showGrid = loadErrorKind === undefined || RETRYABLE_KINDS.has(loadErrorKind);
 
   const statusLabel = React.useCallback(
     (status: string) => t(`endpointAdmin.devices.status.${status}`),
@@ -807,17 +827,6 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     gridApiRef.current?.refreshServerSide({ purge: true });
   }, []);
 
-  if (forbidden) {
-    return (
-      <section role="alert" aria-live="polite" style={{ padding: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t(preset.headingKey)}</h2>
-        <p style={{ marginTop: 12, color: 'var(--danger-color)' }}>
-          {t('endpointAdmin.devices.forbidden')} (HTTP 403)
-        </p>
-      </section>
-    );
-  }
-
   return (
     <section style={{ padding: 24 }} data-testid={preset.dataTestId}>
       <div
@@ -870,51 +879,53 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
           {bulkNotice.message}
         </p>
       ) : null}
-      {loadError && !forbidden ? (
-        <p
-          role="alert"
-          data-testid="grid-load-error"
-          style={{ marginTop: 12, color: 'var(--danger-color)', fontSize: 13 }}
-        >
-          {t('endpointAdmin.devices.error')}
-        </p>
+      {loadErrorKind ? (
+        <CapabilityState kind={loadErrorKind} onRetry={refreshGrid} testId="devices-load-state" />
       ) : null}
-      <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
-        <React.Suspense fallback={<div style={{ height: 400 }} />}>
-          <EntityGridTemplate<DeviceGridRow>
-            gridId={preset.gridId}
-            gridSchemaVersion={GRID_SCHEMA_VERSION}
-            columnDefs={columnDefs}
-            gridOptions={gridOptions}
-            dataSourceMode="server"
-            createServerSideDatasource={createServerSideDatasource}
-            onGridReady={onGridReady}
-            exportConfig={exportConfig}
-            onServerExport={handleServerExport}
-            supportsViewExport
-            exportLeadingExtras={
-              <DeviceBulkActionsMenu
-                getSelectedDevices={getSelectedDevices}
-                onNotice={(message, kind) => setBulkNotice({ message, kind })}
-                onAfterRun={refreshGrid}
-              />
-            }
-            themeLabel="Tema"
-            quickFilterLabel="Hızlı Filtre"
-            quickFilterPlaceholder={
-              preset.quickFilterPlaceholderKey
-                ? t(preset.quickFilterPlaceholderKey)
-                : 'Hostname, durum, ajan sürümü…'
-            }
-            resetFiltersLabel="Filtreleri Temizle"
-          />
-        </React.Suspense>
-      </div>
-      <DeviceDetailDrawer
-        open={selectedDevice != null}
-        device={selectedDevice ?? null}
-        onClose={() => setSelectedDeviceId(null)}
-      />
+      {showGrid ? (
+        <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
+          <React.Suspense fallback={<div style={{ height: 400 }} />}>
+            <EntityGridTemplate<DeviceGridRow>
+              gridId={preset.gridId}
+              gridSchemaVersion={GRID_SCHEMA_VERSION}
+              columnDefs={columnDefs}
+              gridOptions={gridOptions}
+              dataSourceMode="server"
+              createServerSideDatasource={createServerSideDatasource}
+              onGridReady={onGridReady}
+              exportConfig={exportConfig}
+              onServerExport={handleServerExport}
+              supportsViewExport
+              exportLeadingExtras={
+                <DeviceBulkActionsMenu
+                  getSelectedDevices={getSelectedDevices}
+                  onNotice={(message, kind) => setBulkNotice({ message, kind })}
+                  onAfterRun={refreshGrid}
+                />
+              }
+              themeLabel="Tema"
+              quickFilterLabel="Hızlı Filtre"
+              quickFilterPlaceholder={
+                preset.quickFilterPlaceholderKey
+                  ? t(preset.quickFilterPlaceholderKey)
+                  : 'Hostname, durum, ajan sürümü…'
+              }
+              resetFiltersLabel="Filtreleri Temizle"
+            />
+          </React.Suspense>
+        </div>
+      ) : null}
+      {/* Gate the detail drawer on the SAME non-retryable suppression as the grid:
+          a forbidden/notEnabled/disabled load error must not leave a cached device
+          drawer (its inventory/compliance/audit tabs + command-mutation surface +
+          polling) open under "no access" (Codex S4a P1-3 follow-up). */}
+      {showGrid ? (
+        <DeviceDetailDrawer
+          open={selectedDevice != null}
+          device={selectedDevice ?? null}
+          onClose={() => setSelectedDeviceId(null)}
+        />
+      ) : null}
     </section>
   );
 };

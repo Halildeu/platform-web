@@ -125,7 +125,7 @@ describe('EnrollmentListPage', () => {
     ).toHaveTextContent('CONSUMED');
   });
 
-  it('shows forbidden message on 403', () => {
+  it('shows forbidden capability state on 403', () => {
     mockedList.mockReturnValue({
       data: undefined,
       error: { status: 403 },
@@ -133,10 +133,11 @@ describe('EnrollmentListPage', () => {
       isFetching: false,
     });
     render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
-    expect(screen.getByTestId('enrollment-list-forbidden')).toBeInTheDocument();
+    const state = screen.getByTestId('enrollment-list-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('forbidden');
   });
 
-  it('shows generic error on non-403 failures', () => {
+  it('shows generic error capability state on non-403 failures', () => {
     mockedList.mockReturnValue({
       data: undefined,
       error: { status: 500 },
@@ -144,7 +145,8 @@ describe('EnrollmentListPage', () => {
       isFetching: false,
     });
     render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
-    expect(screen.getByTestId('enrollment-list-error')).toBeInTheDocument();
+    const state = screen.getByTestId('enrollment-list-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('error');
   });
 
   it('disables create button when canManage is false', () => {
@@ -226,8 +228,10 @@ describe('EnrollmentListPage', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it('shows not-deployed state on 404 (Codex iter-1 P1)', () => {
-    // Codex 019e713c iter-1 must-fix #2: 404 was silently swallowed.
+  it('shows not-enabled (not-deployed) capability state on 404 (Codex iter-1 P1)', () => {
+    // Codex 019e713c iter-1 must-fix #2: 404 was silently swallowed. Under the
+    // FLEET_CAPABILITY_POLICY a fleet-capability 404 classifies as `notEnabled`
+    // ("capability not deployed"), not a generic error.
     mockedList.mockReturnValue({
       data: undefined,
       error: { status: 404 },
@@ -235,8 +239,8 @@ describe('EnrollmentListPage', () => {
       isFetching: false,
     });
     render(<EnrollmentListPage apiUrlOverride="https://example/api/v1/endpoint-agent" />);
-    expect(screen.getByTestId('enrollment-list-not-deployed')).toBeInTheDocument();
-    expect(screen.queryByTestId('enrollment-list-error')).not.toBeInTheDocument();
+    const state = screen.getByTestId('enrollment-list-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('notEnabled');
     expect(screen.queryByTestId('enrollment-list-empty')).not.toBeInTheDocument();
   });
 

@@ -23,8 +23,19 @@ const h = vi.hoisted(() => {
     last: true,
     empty: false,
   };
+  const okResult = {
+    data: page,
+    error: undefined as unknown,
+    isLoading: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  };
   return {
     page,
+    okResult,
+    // Mutable list-query result the mock reads on every render; error specs
+    // reassign it, and afterEach resets it back to the happy path.
+    listResult: okResult as Record<string, unknown>,
     approveMock: vi.fn((_a: { bundleId: string }) => ({ unwrap: () => Promise.resolve({}) })),
     revokeMock: vi.fn((_a: { bundleId: string; body: { revocationReason: string } }) => ({
       unwrap: () => Promise.resolve({}),
@@ -33,12 +44,7 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
-  useListSoftwareBundlesQuery: () => ({
-    data: h.page,
-    error: undefined,
-    isLoading: false,
-    isFetching: false,
-  }),
+  useListSoftwareBundlesQuery: () => h.listResult,
   useApproveSoftwareBundleMutation: () => [h.approveMock, { isLoading: false }],
   useRevokeSoftwareBundleMutation: () => [h.revokeMock, { isLoading: false }],
   useCreateSoftwareBundleMutation: () => [vi.fn(), { isLoading: false }],
@@ -51,6 +57,7 @@ afterEach(() => {
   cleanup();
   h.approveMock.mockClear();
   h.revokeMock.mockClear();
+  h.listResult = h.okResult;
 });
 
 describe('SoftwareBundlesPage', () => {
@@ -95,5 +102,36 @@ describe('SoftwareBundlesPage', () => {
       bundleId: 'b-appr',
       body: { revocationReason: 'deprecated set' },
     });
+  });
+
+  it('list-load 404 → bundles-state capability kind=notEnabled (fleet policy)', () => {
+    h.listResult = {
+      data: undefined,
+      error: { status: 404 },
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    render(<SoftwareBundlesPage />);
+    const state = screen.getByTestId('bundles-state');
+    expect(state).toBeInTheDocument();
+    expect(state.getAttribute('data-capability-kind')).toBe('notEnabled');
+    // list-load error is NOT the approve-action error surface, and the table is hidden
+    expect(screen.queryByTestId('bundles-action-error')).toBeNull();
+    expect(screen.queryByTestId('bundles-table')).toBeNull();
+  });
+
+  it('list-load 403 → bundles-state capability kind=forbidden', () => {
+    h.listResult = {
+      data: undefined,
+      error: { status: 403 },
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    render(<SoftwareBundlesPage />);
+    expect(screen.getByTestId('bundles-state').getAttribute('data-capability-kind')).toBe(
+      'forbidden',
+    );
   });
 });

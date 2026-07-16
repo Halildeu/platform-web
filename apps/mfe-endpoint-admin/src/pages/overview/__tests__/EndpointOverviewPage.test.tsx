@@ -239,7 +239,10 @@ describe('EndpointOverviewPage', () => {
     renderPage();
     const gapsError = screen.getByTestId('overview-gaps-error');
     expect(gapsError.getAttribute('role')).toBe('alert');
-    expect(gapsError.textContent).toContain(t('endpointAdmin.overview.state.forbidden'));
+    // Kind comes from the shared classifier (403 → forbidden) — no local status map.
+    expect(gapsError.textContent).toContain(t('endpointAdmin.capabilityState.forbidden.title'));
+    // A forbidden card offers NO retry (retrying can't change authorization).
+    expect(gapsError.querySelector('button')).toBeNull();
   });
 
   /* ---------------- MUST-FIX 3: exact query args ---------------- */
@@ -318,7 +321,10 @@ describe('EndpointOverviewPage', () => {
     useGetComplianceGapQueryMock.mockReturnValue(errorState(404));
     renderPage();
     const gapsError = screen.getByTestId('overview-gaps-error');
-    expect(gapsError.textContent).toContain(t('endpointAdmin.overview.state.notEnabled'));
+    // 404 under the fleet-capability policy → notEnabled (not a generic error).
+    expect(gapsError.textContent).toContain(t('endpointAdmin.capabilityState.notEnabled.title'));
+    // notEnabled is not retryable either.
+    expect(gapsError.querySelector('button')).toBeNull();
     expect(screen.queryByTestId('overview-gaps-total')).toBeNull();
   });
 
@@ -447,6 +453,46 @@ describe('EndpointOverviewPage', () => {
     expect(screen.getByTestId('overview-drafts-agent-updates-value').textContent).toBe('2');
     expect(screen.getByTestId('overview-drafts-software-bundles-value').textContent).toBe('3');
     expect(screen.getByTestId('overview-drafts-software-bundles-stale-error')).toBeTruthy();
+  });
+
+  it('renderQueryBody card: a NON-retryable (403) refetch drops the cached value for the classified error (Codex P1-3)', () => {
+    setAllReady();
+    const fleetRefetch = vi.fn();
+    useListEndpointDevicesQueryMock.mockReturnValue({
+      data: [{ status: 'ONLINE' }, { status: 'STALE' }],
+      error: { status: 403 },
+      isLoading: false,
+      isFetching: false,
+      refetch: fleetRefetch,
+    });
+    renderPage();
+    // A lost-access refetch must NOT keep showing the stale value or a stale note...
+    expect(screen.queryByTestId('overview-fleet-managed-total')).toBeNull();
+    expect(screen.queryByTestId('overview-fleet-stale-error')).toBeNull();
+    // ...it is replaced by the classified forbidden error, with no retry.
+    const err = screen.getByTestId('overview-fleet-error');
+    expect(err.textContent).toContain(t('endpointAdmin.capabilityState.forbidden.title'));
+    expect(err.querySelector('button')).toBeNull();
+  });
+
+  it('NumberStat: a NON-retryable (404) refetch drops the cached number for the classified error (Codex P1-3)', () => {
+    setAllReady();
+    useGetComplianceDeviceListQueryMock.mockImplementation((args?: { decision?: string }) =>
+      args?.decision === 'NON_COMPLIANT'
+        ? {
+            data: { totalElements: 7 },
+            error: { status: 404 },
+            isLoading: false,
+            isFetching: false,
+            refetch,
+          }
+        : okState({ totalElements: 3 }),
+    );
+    renderPage();
+    expect(screen.queryByTestId('overview-compliance-non-compliant-value')).toBeNull();
+    expect(screen.queryByTestId('overview-compliance-non-compliant-stale-error')).toBeNull();
+    const err = screen.getByTestId('overview-compliance-non-compliant-error');
+    expect(err.textContent).toContain(t('endpointAdmin.capabilityState.notEnabled.title'));
   });
 
   /* ---------------- MUST-FIX 3: audit view-all href is mount-aware ---------------- */

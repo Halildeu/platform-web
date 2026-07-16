@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exportDevices, queryDevices } from '../../../app/services/endpointAdminApi';
 import { DeviceGridExportError, exportViewColumns } from '../types';
+import {
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../../widgets/capability-state';
 
 describe('exportViewColumns', () => {
   it('keeps visible backend colIds, drops AG Grid internal + hidden columns', () => {
@@ -94,6 +98,37 @@ describe('device grid API (queryDevices / exportDevices)', () => {
         quickFilterText: '',
       }),
     ).rejects.toMatchObject({ code: '403' });
+  });
+
+  it('queryDevices keeps the transport httpStatus apart from a structured code (403 + ACCESS_DENIED) so it still classifies forbidden (Codex P1-2)', async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: 'ACCESS_DENIED', message: 'nope' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as typeof fetch;
+
+    const err = (await queryDevices({
+      startRow: 0,
+      endRow: 50,
+      filterModel: {},
+      sortModel: [],
+      quickFilterText: '',
+    }).catch((e) => e)) as DeviceGridExportError;
+
+    // The app `code` is preserved, and the transport status is kept SEPARATELY...
+    expect(err).toBeInstanceOf(DeviceGridExportError);
+    expect(err.code).toBe('ACCESS_DENIED');
+    expect(err.httpStatus).toBe(403);
+    // ...so feeding both to the shared classifier still resolves forbidden, not a
+    // generic error (the bug the earlier string-only adapter had).
+    expect(
+      classifyCapabilityError(
+        { status: err.httpStatus, data: { code: err.code } },
+        FLEET_CAPABILITY_POLICY,
+      ),
+    ).toBe('forbidden');
   });
 
   it('exportDevices POSTs to /export and returns the blob + deterministic filename', async () => {

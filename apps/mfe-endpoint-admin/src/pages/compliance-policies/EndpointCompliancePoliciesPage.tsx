@@ -12,6 +12,11 @@ import type {
 import { CreatePolicyDialog } from '../../widgets/compliance-policy-dialog/CreatePolicyDialog';
 import { EditPolicyDialog } from '../../widgets/compliance-policy-dialog/EditPolicyDialog';
 import { DeletePolicyConfirm } from '../../widgets/compliance-policy-dialog/DeletePolicyConfirm';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 import { useManageGate } from './useManageGate';
 
 /**
@@ -92,17 +97,12 @@ export const EndpointCompliancePoliciesPage: React.FC = () => {
   const [editTarget, setEditTarget] = React.useState<CompliancePolicyItem | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<CompliancePolicyItem | null>(null);
 
-  const { data, error, isLoading, isFetching } = useListCompliancePolicyItemsQuery({
+  const { data, error, isLoading, isFetching, refetch } = useListCompliancePolicyItemsQuery({
     page,
     size: DEFAULT_PAGE_SIZE,
   });
 
   const [deletePolicy, deleteState] = useDeleteCompliancePolicyItemMutation();
-
-  const errStatus =
-    error && 'status' in error
-      ? ((error as { status: number | string }).status as number | string)
-      : null;
 
   const onDeleteConfirm = React.useCallback(async () => {
     if (!deleteTarget) return;
@@ -136,15 +136,12 @@ export const EndpointCompliancePoliciesPage: React.FC = () => {
         </div>
       </header>
 
-      {errStatus === 403 ? (
-        <div className="compliance-policies__forbidden" data-testid="compliance-policies-forbidden">
-          {t('endpointAdmin.compliance.policies.forbidden')}
-        </div>
-      ) : null}
-      {error && errStatus !== 403 ? (
-        <div className="compliance-policies__error" data-testid="compliance-policies-error">
-          {t('endpointAdmin.compliance.policies.error')}
-        </div>
+      {error ? (
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="compliance-policies-state"
+        />
       ) : null}
       {!error && (isLoading || isFetching) ? (
         <div className="compliance-policies__loading" data-testid="compliance-policies-loading">

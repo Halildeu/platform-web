@@ -1,6 +1,11 @@
 import React from 'react';
 import { useGetAgentStatusQuery } from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 
 /**
  * Live status surface — backed by the only public-facing endpoint that
@@ -13,7 +18,7 @@ import { useEndpointAdminI18n } from '../../i18n';
  */
 export const EndpointStatusPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
-  const { data, isLoading, isError, error } = useGetAgentStatusQuery();
+  const { data, isLoading, isError, error, refetch } = useGetAgentStatusQuery();
 
   if (isLoading) {
     return (
@@ -30,15 +35,11 @@ export const EndpointStatusPage: React.FC = () => {
 
   if (isError) {
     return (
-      <section role="alert" aria-live="polite" style={{ padding: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-          {t('endpointAdmin.status.heading')}
-        </h2>
-        <p style={{ marginTop: 12, color: 'var(--danger-color)' }}>
-          {t('endpointAdmin.status.error')}
-          {error && 'status' in error ? ` (HTTP ${String(error.status)})` : null}
-        </p>
-      </section>
+      <CapabilityState
+        kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+        onRetry={refetch}
+        testId="endpoint-status-state"
+      />
     );
   }
 

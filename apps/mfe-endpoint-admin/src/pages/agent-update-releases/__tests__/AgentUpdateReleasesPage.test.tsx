@@ -26,8 +26,19 @@ const h = vi.hoisted(() => {
     last: true,
     empty: false,
   };
+  const okResult = {
+    data: page,
+    error: undefined as unknown,
+    isLoading: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  };
   return {
     page,
+    okResult,
+    // Mutable list-query result the mock reads on every render; error specs
+    // reassign it, and afterEach resets it back to the happy path.
+    listResult: okResult as Record<string, unknown>,
     approveMock: vi.fn((_a: { releaseId: string }) => ({ unwrap: () => Promise.resolve({}) })),
     revokeMock: vi.fn((_a: { releaseId: string; body: { revocationReason: string } }) => ({
       unwrap: () => Promise.resolve({}),
@@ -36,12 +47,7 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
-  useListAgentUpdateReleasesQuery: () => ({
-    data: h.page,
-    error: undefined,
-    isLoading: false,
-    isFetching: false,
-  }),
+  useListAgentUpdateReleasesQuery: () => h.listResult,
   useApproveAgentUpdateReleaseMutation: () => [h.approveMock, { isLoading: false }],
   useRevokeAgentUpdateReleaseMutation: () => [h.revokeMock, { isLoading: false }],
   useCreateAgentUpdateReleaseMutation: () => [vi.fn(), { isLoading: false }],
@@ -54,6 +60,7 @@ afterEach(() => {
   cleanup();
   h.approveMock.mockClear();
   h.revokeMock.mockClear();
+  h.listResult = h.okResult;
 });
 
 describe('AgentUpdateReleasesPage', () => {
@@ -105,5 +112,36 @@ describe('AgentUpdateReleasesPage', () => {
       releaseId: 'rel-appr',
       body: { revocationReason: 'compromised signer' },
     });
+  });
+
+  it('list-load 404 → releases-state capability kind=notEnabled (fleet policy)', () => {
+    h.listResult = {
+      data: undefined,
+      error: { status: 404 },
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    render(<AgentUpdateReleasesPage />);
+    const state = screen.getByTestId('releases-state');
+    expect(state).toBeInTheDocument();
+    expect(state.getAttribute('data-capability-kind')).toBe('notEnabled');
+    // list-load error is NOT the approve-action error surface, and the table is hidden
+    expect(screen.queryByTestId('releases-action-error')).toBeNull();
+    expect(screen.queryByTestId('releases-table')).toBeNull();
+  });
+
+  it('list-load 403 → releases-state capability kind=forbidden', () => {
+    h.listResult = {
+      data: undefined,
+      error: { status: 403 },
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    render(<AgentUpdateReleasesPage />);
+    expect(screen.getByTestId('releases-state').getAttribute('data-capability-kind')).toBe(
+      'forbidden',
+    );
   });
 });

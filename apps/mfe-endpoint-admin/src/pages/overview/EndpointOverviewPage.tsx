@@ -12,6 +12,11 @@ import {
   useListSoftwareBundlesQuery,
 } from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
+import {
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+  RETRYABLE_KINDS,
+} from '../../widgets/capability-state';
 import type { EndpointAuditEvent } from '../../entities/endpoint-audit-event/types';
 import type { ComplianceGapResponse } from '../../entities/endpoint-compliance-gap/types';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
@@ -58,21 +63,20 @@ interface QueryState<T> {
 /*  Pure helpers                                                        */
 /* ------------------------------------------------------------------ */
 
-/** Numeric HTTP status if the RTK error is a FetchBaseQueryError, else undefined. */
-function errorStatus(error: unknown): number | undefined {
-  if (error && typeof error === 'object' && 'status' in error) {
-    const status = (error as { status: unknown }).status;
-    if (typeof status === 'number') return status;
-  }
-  return undefined;
+/**
+ * Compact card copy for a failed query — the KIND comes from the shared
+ * classifier under the fleet-capability policy (403→forbidden, 404→notEnabled,
+ * 503→transient, transport/parse→error), never a local status map. `.title` is
+ * the short form the card renders next to the `—`.
+ */
+function capabilityMessage(error: unknown, t: TranslateFn): string {
+  const kind = classifyCapabilityError(error, FLEET_CAPABILITY_POLICY);
+  return t(`endpointAdmin.capabilityState.${kind}.title`);
 }
 
-/** 403 → forbidden, 404 → feature-not-enabled, everything else → generic. */
-function messageForError(error: unknown, t: TranslateFn): string {
-  const status = errorStatus(error);
-  if (status === 403) return t('endpointAdmin.overview.state.forbidden');
-  if (status === 404) return t('endpointAdmin.overview.state.notEnabled');
-  return t('endpointAdmin.overview.state.error');
+/** Whether a failed query is worth a retry affordance (error/transient, not forbidden/notEnabled). */
+function isRetryable(error: unknown): boolean {
+  return RETRYABLE_KINDS.has(classifyCapabilityError(error, FLEET_CAPABILITY_POLICY));
 }
 
 function formatCount(value: number): string {
@@ -284,10 +288,12 @@ const ErrorBlock: React.FC<{
     <span style={bigNumberStyle} aria-hidden="true">
       —
     </span>
-    <span>{messageForError(error, t)}</span>
-    <button type="button" onClick={onRetry} style={retryButtonStyle}>
-      {t('endpointAdmin.overview.state.retry')}
-    </button>
+    <span>{capabilityMessage(error, t)}</span>
+    {isRetryable(error) && (
+      <button type="button" onClick={onRetry} style={retryButtonStyle}>
+        {t('endpointAdmin.overview.state.retry')}
+      </button>
+    )}
   </div>
 );
 
@@ -371,15 +377,26 @@ function renderQueryBody<T>(
 ): React.ReactNode {
   const { t, testIdBase, skeletonHeight } = opts;
   if (state.data !== undefined) {
-    // 4th state — a cached value whose latest refetch errored and is no
-    // longer in flight: keep the value, but add a polite "not refreshed"
-    // warning + retry so a stale number is never shown as if it were fresh.
-    // (`isFetching` ⇒ a refresh is in progress → the "updating" note owns it.)
-    const staleError = Boolean(state.error) && !state.isFetching;
+    const errored = Boolean(state.error) && !state.isFetching;
+    // A NON-retryable refetch failure (forbidden/notEnabled/disabled) must not
+    // keep showing the cached value as if it were still valid — replace it with
+    // the classified error. Only a retryable failure (transient/generic) keeps the
+    // value + a polite stale note (Codex P1-3, refines the S5 stale-while-revalidate;
+    // `isFetching` ⇒ a refresh is in flight → the "updating" note owns it).
+    if (errored && !isRetryable(state.error)) {
+      return (
+        <ErrorBlock
+          error={state.error}
+          t={t}
+          onRetry={state.refetch}
+          testId={`${testIdBase}-error`}
+        />
+      );
+    }
     return (
       <>
         {renderReady(state.data)}
-        {staleError && (
+        {errored && (
           <StaleErrorNote t={t} onRetry={state.refetch} testId={`${testIdBase}-stale-error`} />
         )}
       </>
@@ -416,10 +433,25 @@ const NumberStat: React.FC<{
   testId: string;
 }> = ({ label, state, t, testId }) => {
   let valueNode: React.ReactNode;
-  if (state.data !== undefined) {
-    // 4th state — cached value + errored, no-longer-in-flight refetch: keep the
-    // value, add a polite stale-error note + retry beside it (mirrors
-    // renderQueryBody). The retry only refetches THIS sub-query.
+  if (
+    state.data !== undefined &&
+    Boolean(state.error) &&
+    !state.isFetching &&
+    !isRetryable(state.error)
+  ) {
+    // Non-retryable refetch failure (forbidden/notEnabled/disabled): drop the
+    // cached number entirely and show the classified error (Codex P1-3).
+    valueNode = (
+      <span role="alert" data-testid={`${testId}-error`} style={inlineErrorStyle}>
+        <span style={statNumberStyle} aria-hidden="true">
+          —
+        </span>
+        <span>{capabilityMessage(state.error, t)}</span>
+      </span>
+    );
+  } else if (state.data !== undefined) {
+    // Cached value present; a retryable refetch error (if any) keeps the value +
+    // a polite stale note + retry beside it (mirrors renderQueryBody).
     const staleError = Boolean(state.error) && !state.isFetching;
     valueNode = (
       <span style={statValueWrapStyle}>
@@ -437,10 +469,12 @@ const NumberStat: React.FC<{
         <span style={statNumberStyle} aria-hidden="true">
           —
         </span>
-        <span>{messageForError(state.error, t)}</span>
-        <button type="button" onClick={state.refetch} style={retryLinkStyle}>
-          {t('endpointAdmin.overview.state.retry')}
-        </button>
+        <span>{capabilityMessage(state.error, t)}</span>
+        {isRetryable(state.error) && (
+          <button type="button" onClick={state.refetch} style={retryLinkStyle}>
+            {t('endpointAdmin.overview.state.retry')}
+          </button>
+        )}
       </span>
     );
   } else {

@@ -11,6 +11,12 @@ import type {
 } from '../../entities/endpoint-device-compliance/types';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+  RETRYABLE_KINDS,
+} from '../../widgets/capability-state';
 
 /**
  * WEB-014B — Cross-device compliance list (Codex 019e6db0 plan-time
@@ -160,7 +166,7 @@ export const EndpointCompliancePage: React.FC = () => {
   // shared cache — no duplicate request.
   const { data: deviceList } = useListEndpointDevicesQuery();
 
-  const { data, error, isLoading, isFetching } = useGetComplianceDeviceListQuery({
+  const { data, error, isLoading, isFetching, refetch } = useGetComplianceDeviceListQuery({
     decision: decisionFilter || undefined,
     page,
     size: DEFAULT_PAGE_SIZE,
@@ -207,11 +213,6 @@ export const EndpointCompliancePage: React.FC = () => {
       : null;
   }, [data, deviceList, hostnameByDeviceId, selectedDeviceId]);
 
-  const errStatus =
-    error && 'status' in error
-      ? ((error as { status: number | string }).status as number | string)
-      : null;
-
   return (
     <div className="compliance-list" data-testid="compliance-list">
       <header className="compliance-list__header">
@@ -238,15 +239,12 @@ export const EndpointCompliancePage: React.FC = () => {
         </select>
       </div>
 
-      {errStatus === 403 ? (
-        <div className="compliance-list__forbidden" data-testid="compliance-list-forbidden">
-          {t('endpointAdmin.compliance.list.forbidden')}
-        </div>
-      ) : null}
-      {error && errStatus !== 403 ? (
-        <div className="compliance-list__error" data-testid="compliance-list-error">
-          {t('endpointAdmin.compliance.list.error')}
-        </div>
+      {error ? (
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="compliance-list-state"
+        />
       ) : null}
       {!error && (isLoading || isFetching) ? (
         <div className="compliance-list__loading" data-testid="compliance-list-loading">
@@ -353,12 +351,17 @@ export const EndpointCompliancePage: React.FC = () => {
         </>
       ) : null}
 
-      <DeviceDetailDrawer
-        open={Boolean(selectedDevice)}
-        device={selectedDevice}
-        onClose={onDrawerClose}
-        initialTab="compliance"
-      />
+      {/* Suppress the cached device drawer (its detail tabs + command-mutation
+          surface) under a NON-retryable capability state — mirrors the list
+          suppression so "no access" never leaves a live drawer (Codex S4a P1-3). */}
+      {(!error || RETRYABLE_KINDS.has(classifyCapabilityError(error, FLEET_CAPABILITY_POLICY))) && (
+        <DeviceDetailDrawer
+          open={Boolean(selectedDevice)}
+          device={selectedDevice}
+          onClose={onDrawerClose}
+          initialTab="compliance"
+        />
+      )}
     </div>
   );
 };

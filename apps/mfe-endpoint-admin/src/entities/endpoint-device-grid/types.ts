@@ -151,22 +151,32 @@ export interface DeviceGridExportArgs {
 
 /** Structured error body from the grid endpoints. */
 export interface DeviceGridErrorBody {
+  /** Application problem code (e.g. `ACCESS_DENIED`, `EXPORT_ROW_LIMIT_EXCEEDED`) — NOT the HTTP status. */
   code: string;
   message: string;
   /** Present only for `EXPORT_ROW_LIMIT_EXCEEDED`. */
   limit?: number;
+  /**
+   * The transport HTTP status, preserved SEPARATELY from `code` so a structured
+   * body (`403 { code: "ACCESS_DENIED" }`) doesn't lose the status the capability
+   * classifier needs (Codex S4a P1-2).
+   */
+  httpStatus?: number;
 }
 
-/** Thrown by `exportDevices` when the backend returns a structured error. */
+/** Thrown by `queryDevices` / `exportDevices` when the backend returns a structured error. */
 export class DeviceGridExportError extends Error {
   readonly code: string;
   readonly limit?: number;
+  /** Transport HTTP status, kept apart from the application `code`. */
+  readonly httpStatus?: number;
 
   constructor(body: DeviceGridErrorBody) {
     super(body.message || body.code);
     this.name = 'DeviceGridExportError';
     this.code = body.code;
     this.limit = body.limit;
+    this.httpStatus = body.httpStatus;
   }
 }
 

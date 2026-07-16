@@ -330,7 +330,14 @@ export async function queryDevices(
     } catch {
       // non-JSON error body — keep the HTTP status as the code
     }
-    throw new DeviceGridExportError({ code, message: `device grid query failed (${code})` });
+    // Preserve the transport status SEPARATELY from the app code so a structured
+    // body (`403 { code: "ACCESS_DENIED" }`) still classifies as forbidden, not a
+    // generic error (Codex S4a P1-2).
+    throw new DeviceGridExportError({
+      code,
+      httpStatus: res.status,
+      message: `device grid query failed (${code})`,
+    });
   }
   return (await res.json()) as DeviceGridQueryResponse;
 }
@@ -361,7 +368,8 @@ export async function exportDevices(
     } catch {
       // keep the status-based fallback
     }
-    throw new DeviceGridExportError(body);
+    // Keep the transport status alongside the app code (mirrors queryDevices).
+    throw new DeviceGridExportError({ ...body, httpStatus: res.status });
   }
   const blob = await res.blob();
   const ext = args.format === 'xlsx' ? 'xlsx' : 'csv';
