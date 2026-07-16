@@ -1656,6 +1656,25 @@ const DICT_TR = {
   'endpointAdmin.overview.activity.viewAll': 'Tümünü gör',
   'endpointAdmin.overview.activity.empty': 'Henüz etkinlik yok',
   'endpointAdmin.overview.activity.unknownActor': 'Bilinmeyen',
+  // Faz 22 S4a — paylaşılan CapabilityState (classifyCapabilityError kind'leri).
+  // Endpoint-özel sınıflandırma UI'a burada dürüst tek dille yansır; ham hata gövdesi UI'da GÖSTERİLMEZ.
+  'endpointAdmin.capabilityState.empty.title': 'Kayıt yok',
+  'endpointAdmin.capabilityState.empty.description': 'Bu görünümde gösterilecek kayıt bulunamadı.',
+  'endpointAdmin.capabilityState.forbidden.title': 'Erişim yetkiniz yok',
+  'endpointAdmin.capabilityState.forbidden.description':
+    'Bu yüzeyi görüntüleme yetkiniz yok. Erişim için yöneticinize başvurun.',
+  'endpointAdmin.capabilityState.notEnabled.title': 'Özellik etkin değil',
+  'endpointAdmin.capabilityState.notEnabled.description':
+    'Bu özellik bu ortamda etkinleştirilmemiş.',
+  'endpointAdmin.capabilityState.disabled.title': 'Özellik devre dışı',
+  'endpointAdmin.capabilityState.disabled.description': 'Bu özellik bu dağıtımda kapatılmış.',
+  'endpointAdmin.capabilityState.temporarilyUnavailable.title': 'Geçici olarak kullanılamıyor',
+  'endpointAdmin.capabilityState.temporarilyUnavailable.description':
+    'Servise şu anda ulaşılamıyor. Birazdan yeniden deneyin.',
+  'endpointAdmin.capabilityState.error.title': 'Veri alınamadı',
+  'endpointAdmin.capabilityState.error.description':
+    'Beklenmeyen bir hata oluştu. Yeniden deneyebilirsiniz.',
+  'endpointAdmin.capabilityState.retry': 'Yeniden dene',
 } as const;
 
 const DICT_EN: Record<keyof typeof DICT_TR, string> = {
@@ -3273,6 +3292,25 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.overview.activity.viewAll': 'View all',
   'endpointAdmin.overview.activity.empty': 'No activity yet',
   'endpointAdmin.overview.activity.unknownActor': 'Unknown',
+  // Faz 22 S4a — shared CapabilityState (classifyCapabilityError kinds).
+  // Endpoint-specific classification surfaces here in one honest voice; no raw error body in the UI.
+  'endpointAdmin.capabilityState.empty.title': 'No records',
+  'endpointAdmin.capabilityState.empty.description': 'There are no records to show in this view.',
+  'endpointAdmin.capabilityState.forbidden.title': "You don't have access",
+  'endpointAdmin.capabilityState.forbidden.description':
+    'You are not authorized to view this surface. Contact your administrator for access.',
+  'endpointAdmin.capabilityState.notEnabled.title': 'Feature not enabled',
+  'endpointAdmin.capabilityState.notEnabled.description':
+    'This feature is not enabled in this environment.',
+  'endpointAdmin.capabilityState.disabled.title': 'Feature disabled',
+  'endpointAdmin.capabilityState.disabled.description':
+    'This feature is switched off in this deployment.',
+  'endpointAdmin.capabilityState.temporarilyUnavailable.title': 'Temporarily unavailable',
+  'endpointAdmin.capabilityState.temporarilyUnavailable.description':
+    "The service can't be reached right now. Try again shortly.",
+  'endpointAdmin.capabilityState.error.title': 'Could not load data',
+  'endpointAdmin.capabilityState.error.description': 'Something went wrong. You can try again.',
+  'endpointAdmin.capabilityState.retry': 'Retry',
 };
 
 function resolveLocale(): 'tr' | 'en' {
