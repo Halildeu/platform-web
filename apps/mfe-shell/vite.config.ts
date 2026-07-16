@@ -572,6 +572,13 @@ export default defineConfig(({ mode }) => {
         name: 'mfe_shell',
         filename: 'remoteEntry.js',
         dts: false,
+        // Keep host initialization in src/index.tsx instead of replacing the
+        // HTML entry with the plugin's eager remote-preload bootstrap. This is
+        // required for public entry routes: index.tsx can select the isolated
+        // candidate application bundle without first waiting for authenticated
+        // admin remotes. Normal shell routes still load the same federated
+        // modules when app/bootstrap.tsx is selected.
+        hostInitInjectLocation: 'entry',
         remotes: buildRemotes(
           endpointAdminBuildEnabled,
           suggestionsOnDemandBuildEnabled,
