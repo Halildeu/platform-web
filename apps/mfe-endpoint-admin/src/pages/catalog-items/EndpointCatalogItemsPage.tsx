@@ -153,7 +153,7 @@ export const EndpointCatalogItemsPage: React.FC = () => {
           </tbody>
         </table>
       )}
-      {data && data.totalPages > 1 && (
+      {data && !error && data.totalPages > 1 && (
         <nav className="catalog-items__pager" aria-label="pagination">
           <button
             type="button"

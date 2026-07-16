@@ -377,15 +377,26 @@ function renderQueryBody<T>(
 ): React.ReactNode {
   const { t, testIdBase, skeletonHeight } = opts;
   if (state.data !== undefined) {
-    // 4th state — a cached value whose latest refetch errored and is no
-    // longer in flight: keep the value, but add a polite "not refreshed"
-    // warning + retry so a stale number is never shown as if it were fresh.
-    // (`isFetching` ⇒ a refresh is in progress → the "updating" note owns it.)
-    const staleError = Boolean(state.error) && !state.isFetching;
+    const errored = Boolean(state.error) && !state.isFetching;
+    // A NON-retryable refetch failure (forbidden/notEnabled/disabled) must not
+    // keep showing the cached value as if it were still valid — replace it with
+    // the classified error. Only a retryable failure (transient/generic) keeps the
+    // value + a polite stale note (Codex P1-3, refines the S5 stale-while-revalidate;
+    // `isFetching` ⇒ a refresh is in flight → the "updating" note owns it).
+    if (errored && !isRetryable(state.error)) {
+      return (
+        <ErrorBlock
+          error={state.error}
+          t={t}
+          onRetry={state.refetch}
+          testId={`${testIdBase}-error`}
+        />
+      );
+    }
     return (
       <>
         {renderReady(state.data)}
-        {staleError && (
+        {errored && (
           <StaleErrorNote t={t} onRetry={state.refetch} testId={`${testIdBase}-stale-error`} />
         )}
       </>
@@ -422,10 +433,25 @@ const NumberStat: React.FC<{
   testId: string;
 }> = ({ label, state, t, testId }) => {
   let valueNode: React.ReactNode;
-  if (state.data !== undefined) {
-    // 4th state — cached value + errored, no-longer-in-flight refetch: keep the
-    // value, add a polite stale-error note + retry beside it (mirrors
-    // renderQueryBody). The retry only refetches THIS sub-query.
+  if (
+    state.data !== undefined &&
+    Boolean(state.error) &&
+    !state.isFetching &&
+    !isRetryable(state.error)
+  ) {
+    // Non-retryable refetch failure (forbidden/notEnabled/disabled): drop the
+    // cached number entirely and show the classified error (Codex P1-3).
+    valueNode = (
+      <span role="alert" data-testid={`${testId}-error`} style={inlineErrorStyle}>
+        <span style={statNumberStyle} aria-hidden="true">
+          —
+        </span>
+        <span>{capabilityMessage(state.error, t)}</span>
+      </span>
+    );
+  } else if (state.data !== undefined) {
+    // Cached value present; a retryable refetch error (if any) keeps the value +
+    // a polite stale note + retry beside it (mirrors renderQueryBody).
     const staleError = Boolean(state.error) && !state.isFetching;
     valueNode = (
       <span style={statValueWrapStyle}>

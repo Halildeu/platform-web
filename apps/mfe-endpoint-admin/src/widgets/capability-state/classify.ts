@@ -110,21 +110,25 @@ export function classifyCapabilityError(
   error: unknown,
   policy: EndpointCapabilityPolicy = {},
 ): CapabilityStateKind {
-  // Durable path: an explicit machine-readable reason wins over any heuristic.
+  const status = httpStatusOf(error);
+  // Transport / parse / custom / unknown FIRST — we never received a real
+  // authenticated HTTP response, so even a stray `data.code` in the body is not
+  // trustworthy evidence of a capability state. Always generic error.
+  if (status === undefined) return 'error';
+  // A 401 is a SESSION concern (token expiry → re-auth at the shell), NOT an
+  // authorization/feature verdict; a `code` inside a 401 body must not reclassify
+  // it either. Keep this ABOVE the problem-code path.
+  if (status === 401) return 'error';
+
+  // Durable path — only WITHIN a valid authenticated HTTP failure: an explicit
+  // machine-readable reason wins over the status/policy heuristics.
   const code = problemCodeOf(error);
   if (code && code in PROBLEM_CODE_KIND) return PROBLEM_CODE_KIND[code];
 
-  const status = httpStatusOf(error);
-  // Transport / parse / custom / unknown — never a capability verdict.
-  if (status === undefined) return 'error';
-
-  // Endpoint policy first, so an endpoint can override a status' plain meaning.
+  // Endpoint policy next, so an endpoint can override a status' plain meaning.
   if (policy.notEnabledOn?.includes(status)) return 'notEnabled';
   if (policy.disabledOn?.includes(status)) return 'disabled';
 
-  // A 401 is a SESSION concern (token expiry → re-auth at the shell), NOT an
-  // authorization verdict; never render it as "forbidden".
-  if (status === 401) return 'error';
   if (status === 403) return 'forbidden';
   // 404 without a `notEnabledOn` policy is a generic not-found, not "not enabled".
   if (status === 404) return 'error';

@@ -211,7 +211,7 @@ export const SoftwareBundlesPage: React.FC = () => {
         </table>
       )}
 
-      {data && data.totalPages > 1 && (
+      {data && !error && data.totalPages > 1 && (
         <nav className="flex items-center gap-3 text-sm" aria-label="pagination">
           <button
             type="button"

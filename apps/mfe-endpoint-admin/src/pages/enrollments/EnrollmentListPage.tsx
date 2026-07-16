@@ -124,11 +124,11 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
         />
       )}
 
-      {data && data.length === 0 && (
+      {data && !error && data.length === 0 && (
         <p data-testid="enrollment-list-empty">{t('endpointAdmin.enrollments.page.empty')}</p>
       )}
 
-      {data && data.length > 0 && (
+      {data && !error && data.length > 0 && (
         <table data-testid="enrollment-list-table" style={{ width: '100%', marginTop: 16 }}>
           <thead>
             <tr>

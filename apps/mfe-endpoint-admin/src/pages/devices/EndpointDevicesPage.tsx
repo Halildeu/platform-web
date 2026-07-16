@@ -32,6 +32,7 @@ import {
   CapabilityState,
   classifyCapabilityError,
   FLEET_CAPABILITY_POLICY,
+  RETRYABLE_KINDS,
 } from '../../widgets/capability-state';
 
 /**
@@ -242,12 +243,21 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     skip: selectedDeviceId == null,
   });
 
-  // Adapt the grid's DeviceGridExportError (string `.code`, e.g. '403') to the
-  // numeric HTTP `status` the shared classifier reads, so the capability kind
-  // (403→forbidden, 404→notEnabled, 503→temporarilyUnavailable, else→error) is
-  // decided by the ONE classifier — no local `code === '403'` interpretation.
-  const loadErrorStatus =
-    loadError && /^\d+$/.test(loadError.code) ? Number(loadError.code) : undefined;
+  // Feed the grid's DeviceGridExportError to the ONE classifier: its transport
+  // `httpStatus` (kept apart from the app `code`, so `403 { code: 'ACCESS_DENIED' }`
+  // still classifies as forbidden — Codex P1-2) drives the kind, and any structured
+  // `code` takes the durable problem-code path.
+  const loadErrorKind = loadError
+    ? classifyCapabilityError(
+        { status: loadError.httpStatus, data: { code: loadError.code } },
+        FLEET_CAPABILITY_POLICY,
+      )
+    : undefined;
+  // Keep the grid MOUNTED only when the error is retryable (so `refreshServerSide`
+  // can recover). A non-retryable state (forbidden/notEnabled/disabled) must
+  // SUPPRESS the grid — no stale rows / export / bulk-actions under "no access"
+  // (Codex P1-3); those states offer no retry, so unmounting dead-ends nothing.
+  const showGrid = loadErrorKind === undefined || RETRYABLE_KINDS.has(loadErrorKind);
 
   const statusLabel = React.useCallback(
     (status: string) => t(`endpointAdmin.devices.status.${status}`),
@@ -869,44 +879,42 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
           {bulkNotice.message}
         </p>
       ) : null}
-      {loadError ? (
-        <CapabilityState
-          kind={classifyCapabilityError({ status: loadErrorStatus }, FLEET_CAPABILITY_POLICY)}
-          onRetry={refreshGrid}
-          testId="devices-load-state"
-        />
+      {loadErrorKind ? (
+        <CapabilityState kind={loadErrorKind} onRetry={refreshGrid} testId="devices-load-state" />
       ) : null}
-      <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
-        <React.Suspense fallback={<div style={{ height: 400 }} />}>
-          <EntityGridTemplate<DeviceGridRow>
-            gridId={preset.gridId}
-            gridSchemaVersion={GRID_SCHEMA_VERSION}
-            columnDefs={columnDefs}
-            gridOptions={gridOptions}
-            dataSourceMode="server"
-            createServerSideDatasource={createServerSideDatasource}
-            onGridReady={onGridReady}
-            exportConfig={exportConfig}
-            onServerExport={handleServerExport}
-            supportsViewExport
-            exportLeadingExtras={
-              <DeviceBulkActionsMenu
-                getSelectedDevices={getSelectedDevices}
-                onNotice={(message, kind) => setBulkNotice({ message, kind })}
-                onAfterRun={refreshGrid}
-              />
-            }
-            themeLabel="Tema"
-            quickFilterLabel="Hızlı Filtre"
-            quickFilterPlaceholder={
-              preset.quickFilterPlaceholderKey
-                ? t(preset.quickFilterPlaceholderKey)
-                : 'Hostname, durum, ajan sürümü…'
-            }
-            resetFiltersLabel="Filtreleri Temizle"
-          />
-        </React.Suspense>
-      </div>
+      {showGrid ? (
+        <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
+          <React.Suspense fallback={<div style={{ height: 400 }} />}>
+            <EntityGridTemplate<DeviceGridRow>
+              gridId={preset.gridId}
+              gridSchemaVersion={GRID_SCHEMA_VERSION}
+              columnDefs={columnDefs}
+              gridOptions={gridOptions}
+              dataSourceMode="server"
+              createServerSideDatasource={createServerSideDatasource}
+              onGridReady={onGridReady}
+              exportConfig={exportConfig}
+              onServerExport={handleServerExport}
+              supportsViewExport
+              exportLeadingExtras={
+                <DeviceBulkActionsMenu
+                  getSelectedDevices={getSelectedDevices}
+                  onNotice={(message, kind) => setBulkNotice({ message, kind })}
+                  onAfterRun={refreshGrid}
+                />
+              }
+              themeLabel="Tema"
+              quickFilterLabel="Hızlı Filtre"
+              quickFilterPlaceholder={
+                preset.quickFilterPlaceholderKey
+                  ? t(preset.quickFilterPlaceholderKey)
+                  : 'Hostname, durum, ajan sürümü…'
+              }
+              resetFiltersLabel="Filtreleri Temizle"
+            />
+          </React.Suspense>
+        </div>
+      ) : null}
       <DeviceDetailDrawer
         open={selectedDevice != null}
         device={selectedDevice ?? null}

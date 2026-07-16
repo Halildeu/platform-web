@@ -109,6 +109,28 @@ describe('classifyCapabilityError — structured problem code is the durable con
   it('an unknown code falls through to the status/policy path', () => {
     expect(classifyCapabilityError(http(403, { code: 'SOMETHING_ELSE' }))).toBe('forbidden');
   });
+
+  it('a code does NOT override the transport boundary (Codex P1-1)', () => {
+    // A structured code is only trustworthy inside a real authenticated HTTP
+    // failure — not in a transport/parse error where we got no HTTP response.
+    expect(
+      classifyCapabilityError({ status: 'CUSTOM_ERROR', data: { code: 'MODULE_NOT_INSTALLED' } }),
+    ).toBe('error');
+    expect(
+      classifyCapabilityError({
+        status: 'PARSING_ERROR',
+        originalStatus: 503,
+        data: { code: 'FEATURE_DISABLED' },
+      }),
+    ).toBe('error');
+  });
+
+  it('a code does NOT override a 401 session boundary (Codex P1-1)', () => {
+    expect(classifyCapabilityError(http(401, { code: 'FEATURE_DISABLED' }))).toBe('error');
+    expect(
+      classifyCapabilityError(http(401, { code: 'MODULE_NOT_INSTALLED' }), FLEET_CAPABILITY_POLICY),
+    ).toBe('error');
+  });
 });
 
 describe('httpStatusOf', () => {

@@ -455,6 +455,46 @@ describe('EndpointOverviewPage', () => {
     expect(screen.getByTestId('overview-drafts-software-bundles-stale-error')).toBeTruthy();
   });
 
+  it('renderQueryBody card: a NON-retryable (403) refetch drops the cached value for the classified error (Codex P1-3)', () => {
+    setAllReady();
+    const fleetRefetch = vi.fn();
+    useListEndpointDevicesQueryMock.mockReturnValue({
+      data: [{ status: 'ONLINE' }, { status: 'STALE' }],
+      error: { status: 403 },
+      isLoading: false,
+      isFetching: false,
+      refetch: fleetRefetch,
+    });
+    renderPage();
+    // A lost-access refetch must NOT keep showing the stale value or a stale note...
+    expect(screen.queryByTestId('overview-fleet-managed-total')).toBeNull();
+    expect(screen.queryByTestId('overview-fleet-stale-error')).toBeNull();
+    // ...it is replaced by the classified forbidden error, with no retry.
+    const err = screen.getByTestId('overview-fleet-error');
+    expect(err.textContent).toContain(t('endpointAdmin.capabilityState.forbidden.title'));
+    expect(err.querySelector('button')).toBeNull();
+  });
+
+  it('NumberStat: a NON-retryable (404) refetch drops the cached number for the classified error (Codex P1-3)', () => {
+    setAllReady();
+    useGetComplianceDeviceListQueryMock.mockImplementation((args?: { decision?: string }) =>
+      args?.decision === 'NON_COMPLIANT'
+        ? {
+            data: { totalElements: 7 },
+            error: { status: 404 },
+            isLoading: false,
+            isFetching: false,
+            refetch,
+          }
+        : okState({ totalElements: 3 }),
+    );
+    renderPage();
+    expect(screen.queryByTestId('overview-compliance-non-compliant-value')).toBeNull();
+    expect(screen.queryByTestId('overview-compliance-non-compliant-stale-error')).toBeNull();
+    const err = screen.getByTestId('overview-compliance-non-compliant-error');
+    expect(err.textContent).toContain(t('endpointAdmin.capabilityState.notEnabled.title'));
+  });
+
   /* ---------------- MUST-FIX 3: audit view-all href is mount-aware ---------------- */
 
   it('audit view-all href respects the shell mount vs standalone', () => {
