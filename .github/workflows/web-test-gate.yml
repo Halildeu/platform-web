@@ -84,6 +84,8 @@ jobs:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
+      - name: Immutable build-info root entry contract
+        run: pnpm run test:build-info-contract
       - name: Vitest workspace (jsdom)
         run: pnpm run test:workspace
       - name: mfe-meeting ws-stream consumer contract
@@ -191,6 +193,10 @@ jobs:
         run: pnpm run lint:theme -- --authoritative-baseline-ref "${{ steps.theme_baseline_base.outputs.sha }}"
       - name: Shell theme import build
         run: pnpm --filter mfe-shell build
+      - name: Real shell root entry provenance contract
+        env:
+          BUILD_INFO_REAL_SHELL_DIST: apps/mfe-shell/dist
+        run: pnpm run test:build-info-contract
 
   semantic-layer-required:
     name: Semantic Layer (no-raw-hex)
