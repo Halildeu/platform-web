@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { parse } from 'parse5';
 
 export const BUILD_INFO_SCHEMA_VERSION = 'acik.platform.web-build-info/v2';
 
@@ -53,15 +54,23 @@ function sha256File(filePath) {
 export function collectRootEntrypoints(distDir) {
   const indexHtmlPath = path.join(distDir, 'index.html');
   const html = readFileSync(indexHtmlPath, 'utf8');
-  // Commented-out script examples are not runtime dependencies and must not
-  // become phantom manifest entries.
-  const runtimeHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+  // Parse with HTML5 tokenizer semantics so comment-shaped bytes in raw text
+  // or attributes cannot hide a script that a browser will load. Scripts in
+  // inert template content are not part of the document tree and stay out.
+  const document = parse(html, { scriptingEnabled: true });
   const scriptSources = [];
-  const scriptPattern = /<script\b[^>]*\bsrc\s*=\s*(["'])([^"']+)\1[^>]*>/gi;
-  let match;
-  while ((match = scriptPattern.exec(runtimeHtml)) !== null) {
-    scriptSources.push(normalizeRootScriptPath(match[2]));
+
+  function visit(node) {
+    if (node.nodeName === 'script' && node.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+      const source = node.attrs?.find(({ name }) => name === 'src')?.value;
+      if (source !== undefined) {
+        scriptSources.push(normalizeRootScriptPath(source));
+      }
+    }
+    for (const child of node.childNodes ?? []) visit(child);
   }
+  visit(document);
+
   if (scriptSources.length === 0) {
     throw new Error('index.html has no content-addressable root script');
   }

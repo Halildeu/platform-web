@@ -99,6 +99,68 @@ test('ignores script examples inside HTML comments', (t) => {
   ]);
 });
 
+test('fails closed when an unterminated HTML comment hides the remaining script markup', (t) => {
+  const fx = fixture();
+  t.after(() => fx.cleanup());
+  fx.write('index.html', '<!-- <script src="/phantom.js"></script>');
+
+  assert.throws(
+    () => collectRootEntrypoints(fx.root),
+    /no content-addressable root script/,
+  );
+});
+
+test('does not treat comment-shaped bytes in raw text or attributes as HTML comments', (t) => {
+  const fx = fixture();
+  t.after(() => fx.cleanup());
+  fx.write(
+    'index.html',
+    [
+      '<script>globalThis.marker = "<!--";</script>',
+      '<style>/* <!-- */</style>',
+      '<div data-example="<!--"></div>',
+      '<script src="/runtime.js"></script>',
+    ].join(''),
+  );
+  fx.write('runtime.js', 'runtime');
+
+  assert.deepEqual(collectRootEntrypoints(fx.root).map(({ path: publicPath }) => publicPath), [
+    '/runtime.js',
+  ]);
+});
+
+test('ignores external script markup inside inert template content', (t) => {
+  const fx = fixture();
+  t.after(() => fx.cleanup());
+  fx.write(
+    'index.html',
+    '<template><script src="/phantom.js"></script></template><script src="/runtime.js"></script>',
+  );
+  fx.write('runtime.js', 'runtime');
+
+  assert.deepEqual(collectRootEntrypoints(fx.root).map(({ path: publicPath }) => publicPath), [
+    '/runtime.js',
+  ]);
+});
+
+test('matches browser semantics for noscript, SVG and duplicate src attributes', (t) => {
+  const fx = fixture();
+  t.after(() => fx.cleanup());
+  fx.write(
+    'index.html',
+    [
+      '<noscript><script src="/noscript-phantom.js"></script></noscript>',
+      '<svg><script src="/svg-phantom.js"></script></svg>',
+      '<script src="/runtime.js" src="/duplicate-phantom.js"></script>',
+    ].join(''),
+  );
+  fx.write('runtime.js', 'runtime');
+
+  assert.deepEqual(collectRootEntrypoints(fx.root).map(({ path: publicPath }) => publicPath), [
+    '/runtime.js',
+  ]);
+});
+
 for (const invalidSource of [
   'https://cdn.example.test/app.js',
   '//cdn.example.test/app.js',
