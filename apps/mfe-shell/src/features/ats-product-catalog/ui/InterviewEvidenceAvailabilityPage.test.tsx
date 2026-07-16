@@ -27,6 +27,11 @@ describe('InterviewEvidenceAvailabilityPage', () => {
     expect(screen.getByTestId('ats-capability-grid').querySelectorAll('article')).toHaveLength(9);
     expect(screen.getByTestId('ats-live-module-gated')).toBeInTheDocument();
     expect(screen.queryByTestId('ats-live-interview-evidence-link')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ats-candidate-portal-link')).toHaveAttribute('href', '/candidate');
+    expect(screen.getByTestId('ats-recruiter-workspace-link')).toHaveAttribute(
+      'href',
+      '/admin/ats/recruiter',
+    );
     expect(screen.getByText('Bu merkezin açmadığı kapılar')).toBeInTheDocument();
   });
 

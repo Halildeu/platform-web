@@ -40,6 +40,7 @@ describe('CandidateApplicationPage', () => {
       'href',
       '/jobs',
     );
+    expect(screen.getByRole('link', { name: 'Aday Alanım' })).toHaveAttribute('href', '/candidate');
     expect(screen.queryByText(/giriş yap/i)).not.toBeInTheDocument();
   });
 
@@ -74,10 +75,15 @@ describe('CandidateApplicationPage', () => {
     renderPage('/jobs/senior-frontend-developer/apply');
     const pdf = new File(['synthetic-pdf'], 'ornek-cv.pdf', { type: 'application/pdf' });
 
-    fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+    const input = screen.getByTestId<HTMLInputElement>('candidate-resume');
+    fireEvent.change(input, { target: { files: [pdf] } });
 
-    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('ornek-cv.pdf');
+    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('PDF seçildi');
+    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('dosya adı tutulmaz');
+    expect(screen.getByTestId('candidate-resume-meta')).not.toHaveTextContent('ornek-cv.pdf');
     expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('yalnız bu cihazda');
+    // JSDOM injects a synthetic read-only FileList for fireEvent. The real
+    // browser FileList release is asserted in Playwright acceptance.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

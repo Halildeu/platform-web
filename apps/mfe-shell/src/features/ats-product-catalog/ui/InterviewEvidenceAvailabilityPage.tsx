@@ -11,6 +11,10 @@ import {
 } from '../model/ats-capability-registry';
 import SafeScenarioRunner from './SafeScenarioRunner';
 import SyntheticResumeDraftDemo from './SyntheticResumeDraftDemo';
+import {
+  CANDIDATE_PORTAL_ENTRY,
+  RECRUITER_WORKSPACE_ENTRY,
+} from '../../ats-portals/model/ats-portal-registry';
 
 type RoleFilter = 'ALL' | AtsProductRole;
 
@@ -72,6 +76,62 @@ const InterviewEvidenceAvailabilityPage: React.FC<AtsProductHubPageProps> = ({ r
         title="ATS Ürün Merkezi"
         subtitle="Yetkinizin izin verdiği ürün yollarını, güvenli denemeleri ve açılmayı bekleyen kapıları tek yerde inceleyin. Rol filtreleri hedef deneyimi anlatır; kullanıcı yetkisi vermez."
       />
+
+      <section
+        className="grid gap-4 lg:grid-cols-2"
+        aria-labelledby="ats-workspaces-heading"
+        data-testid="ats-portal-entries"
+      >
+        <h2 id="ats-workspaces-heading" className="sr-only">
+          Full ATS kullanıcı alanları
+        </h2>
+        <article className="rounded-2xl border border-border-subtle bg-linear-to-br from-action-primary/10 via-surface-default to-surface-default p-5 shadow-xs sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-action-primary">
+              Aday deneyimi
+            </p>
+            <Badge variant="info" size="sm">
+              Sentetik önizleme
+            </Badge>
+          </div>
+          <h3 className="mt-3 text-xl font-semibold text-text-primary">Aday Alanım</h3>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Açık pozisyonları, başvuru taslağını, örnek profil hazırlığını ve adayın kontrolündeki
+            adımları tek public alanda görün.
+          </p>
+          <Link
+            to={CANDIDATE_PORTAL_ENTRY.route}
+            reloadDocument
+            className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-border-subtle bg-surface-default px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+            data-testid="ats-candidate-portal-link"
+          >
+            Aday alanını aç
+          </Link>
+        </article>
+
+        <article className="rounded-2xl border border-border-subtle bg-linear-to-br from-state-info-bg via-surface-default to-surface-default p-5 shadow-xs sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-action-primary">
+              İK deneyimi
+            </p>
+            <Badge variant="warning" size="sm">
+              Yalnız öneri
+            </Badge>
+          </div>
+          <h3 className="mt-3 text-xl font-semibold text-text-primary">İK Çalışma Alanı</h3>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Pozisyonları, sentetik aday pipeline’ını, kanıt kapsamını ve insan değerlendirme
+            taslaklarını görün; kritik eylemler kapalı kalsın.
+          </p>
+          <Link
+            to={RECRUITER_WORKSPACE_ENTRY.route}
+            className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text shadow-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+            data-testid="ats-recruiter-workspace-link"
+          >
+            İK çalışma alanını aç
+          </Link>
+        </article>
+      </section>
 
       <section
         className={`rounded-2xl border p-4 text-sm text-text-primary ${

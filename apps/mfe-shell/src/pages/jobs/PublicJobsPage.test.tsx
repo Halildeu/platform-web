@@ -45,6 +45,7 @@ describe('PublicJobsPage', () => {
   it('links every job card to its public application route', () => {
     renderPage();
 
+    expect(screen.getByRole('link', { name: 'Aday Alanım' })).toHaveAttribute('href', '/candidate');
     expect(screen.getByRole('link', { name: 'Ürün Yöneticisi rolüne başvur' })).toHaveAttribute(
       'href',
       '/jobs/urun-yoneticisi/apply',
@@ -61,6 +62,10 @@ describe('PublicJobsPage', () => {
   it('keeps job links under the configured application base path', () => {
     renderPage('/platform');
 
+    expect(screen.getByRole('link', { name: 'Aday Alanım' })).toHaveAttribute(
+      'href',
+      '/platform/candidate',
+    );
     expect(screen.getByRole('link', { name: 'Ürün Yöneticisi rolüne başvur' })).toHaveAttribute(
       'href',
       '/platform/jobs/urun-yoneticisi/apply',

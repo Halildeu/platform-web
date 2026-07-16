@@ -5,6 +5,7 @@ import {
   INTERVIEW_EVIDENCE_ENTRY,
 } from '../../features/ats-product-catalog/model/ats-capability-registry';
 import InterviewEvidenceAvailabilityPage from '../../features/ats-product-catalog/ui/InterviewEvidenceAvailabilityPage';
+import { RECRUITER_WORKSPACE_ENTRY } from '../../features/ats-portals/model/ats-portal-registry';
 
 export interface InterviewEvidenceRouteProps {
   remoteEnabled: boolean;
@@ -15,10 +16,21 @@ export interface AtsProductHubRouteProps {
   remoteEnabled: boolean;
 }
 
+export interface RecruiterWorkspaceRouteProps {
+  content: React.ReactNode;
+}
+
 /** Permanent catalog route; remote readiness changes status, never visibility. */
 export const AtsProductHubRoute: React.FC<AtsProductHubRouteProps> = ({ remoteEnabled }) => (
   <ProtectedRoute requiredModule={ATS_PRODUCT_HUB_ENTRY.requiredModule}>
     <InterviewEvidenceAvailabilityPage remoteEnabled={remoteEnabled} />
+  </ProtectedRoute>
+);
+
+/** The recruiter surface reuses the ATS module grant and never widens authorization. */
+export const RecruiterWorkspaceRoute: React.FC<RecruiterWorkspaceRouteProps> = ({ content }) => (
+  <ProtectedRoute requiredModule={RECRUITER_WORKSPACE_ENTRY.requiredModule}>
+    {content}
   </ProtectedRoute>
 );
 

@@ -17,7 +17,6 @@ type ApplicationValues = {
 };
 
 type LocalFileMeta = {
-  name: string;
   size: number;
 };
 
@@ -162,9 +161,12 @@ const CandidateApplicationPage = () => {
       return;
     }
 
-    // Privacy boundary: this slice intentionally keeps only display metadata.
+    // Privacy boundary: the filename is used transiently for client-side type
+    // validation, but is never retained or rendered. Clearing the native input
+    // also releases its FileList so the browser cannot keep showing the name.
     // File bytes are never read, persisted or sent over the network.
-    setFileMeta({ name: file.name, size: file.size });
+    setFileMeta({ size: file.size });
+    event.target.value = '';
   };
 
   const removeFile = () => {
@@ -309,9 +311,17 @@ const CandidateApplicationPage = () => {
               <span className="block text-xs text-text-secondary">Aday başvuru merkezi</span>
             </span>
           </Link>
-          <span className="rounded-full border border-border-subtle bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary">
-            Güvenli form önizlemesi
-          </span>
+          <nav className="flex items-center gap-2" aria-label="Aday başvuru alanı">
+            <Link
+              to="/candidate"
+              className="inline-flex min-h-10 items-center rounded-xl border border-border-subtle bg-surface-default px-3 py-2 text-xs font-bold text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 sm:text-sm"
+            >
+              Aday Alanım
+            </Link>
+            <span className="hidden rounded-full border border-border-subtle bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary sm:inline-flex">
+              Güvenli form önizlemesi
+            </span>
+          </nav>
         </div>
       </div>
 
@@ -371,8 +381,8 @@ const CandidateApplicationPage = () => {
                       CV’nizle başlayın
                     </h2>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-text-secondary">
-                      PDF seçtiğinizde bu önizleme yalnız dosya adı ve boyutunu yerel olarak
-                      gösterir. Dosya okunmaz, kaydedilmez veya ağa gönderilmez.
+                      PDF seçtiğinizde yalnız tür ve boyut bu tarayıcıda kontrol edilir. Dosya adı
+                      tutulmaz; içerik okunmaz, kaydedilmez veya ağa gönderilmez.
                     </p>
                   </div>
                   <button
@@ -415,7 +425,8 @@ const CandidateApplicationPage = () => {
                         data-testid="candidate-resume-meta"
                         className="font-medium text-state-success-text"
                       >
-                        {fileMeta.name} · {formatBytes(fileMeta.size)} · yalnız bu cihazda
+                        PDF seçildi · {formatBytes(fileMeta.size)} · dosya adı tutulmaz · yalnız bu
+                        cihazda
                       </span>
                       <button
                         type="button"
@@ -576,7 +587,9 @@ const CandidateApplicationPage = () => {
                     PDF
                   </dt>
                   <dd className="text-sm text-text-primary">
-                    {fileMeta ? `${fileMeta.name} · ${formatBytes(fileMeta.size)}` : 'Eklenmedi'}
+                    {fileMeta
+                      ? `PDF seçildi · ${formatBytes(fileMeta.size)} · dosya adı tutulmaz`
+                      : 'Eklenmedi'}
                   </dd>
                 </div>
               </dl>

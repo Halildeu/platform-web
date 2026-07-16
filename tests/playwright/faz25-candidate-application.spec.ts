@@ -55,6 +55,13 @@ test.describe('Faz 25 public candidate journey', () => {
       buffer: Buffer.from('synthetic-pdf'),
     });
     await expect(page.getByTestId('candidate-resume-meta')).toContainText('yalnız bu cihazda');
+    await expect(page.getByTestId('candidate-resume-meta')).toContainText('dosya adı tutulmaz');
+    await expect(page.getByTestId('candidate-resume-meta')).not.toContainText('ornek-cv.pdf');
+    expect(
+      await page
+        .getByTestId('candidate-resume')
+        .evaluate((input: HTMLInputElement) => input.files?.length ?? -1),
+    ).toBe(0);
     await page.getByTestId('fill-synthetic-resume').click();
     await page.getByTestId('candidate-fullName').fill('Düzenlenmiş Demo Adayı');
     await page.getByRole('button', { name: 'Başvuruyu önizle' }).click();

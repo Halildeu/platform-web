@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isCandidateApplicationPath,
+  isCandidatePortalPath,
   isPublicCandidatePath,
   isPublicJobsPath,
   normalizePublicBasePath,
@@ -22,6 +23,16 @@ describe('public entry routes', () => {
     expect(isCandidateApplicationPath(pathname)).toBe(false);
   });
 
+  it.each(['/candidate', '/candidate/'])(
+    'recognizes public candidate portal path %s',
+    (pathname) => {
+      expect(isCandidatePortalPath(pathname)).toBe(true);
+      expect(isPublicCandidatePath(pathname)).toBe(true);
+      expect(isCandidateApplicationPath(pathname)).toBe(false);
+      expect(isPublicJobsPath(pathname)).toBe(false);
+    },
+  );
+
   it.each(['/', '/jobs/urun-yoneticisi', '/jobs/urun-yoneticisi/apply/preview', '/admin/ats'])(
     'keeps non-candidate path %s on the authenticated shell',
     (pathname) => {
@@ -40,6 +51,9 @@ describe('public entry routes', () => {
     expect(isPublicJobsPath('/platform/jobs', '/platform/')).toBe(true);
     expect(isPublicJobsPath('/platform/jobs/', '/platform/')).toBe(true);
     expect(isPublicJobsPath('/jobs', '/platform/')).toBe(false);
+    expect(isCandidatePortalPath('/platform/candidate', '/platform/')).toBe(true);
+    expect(isCandidatePortalPath('/platform/candidate/', '/platform/')).toBe(true);
+    expect(isCandidatePortalPath('/candidate', '/platform/')).toBe(false);
   });
 
   it.each([

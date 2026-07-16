@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { AtsProductHubRoute, InterviewEvidenceRoute } from './InterviewEvidenceRoute';
+import {
+  AtsProductHubRoute,
+  InterviewEvidenceRoute,
+  RecruiterWorkspaceRoute,
+} from './InterviewEvidenceRoute';
 
 const authState = {
   auth: {
@@ -68,6 +72,20 @@ const renderHubRoute = (remoteEnabled: boolean) =>
     <MemoryRouter initialEntries={['/admin/ats']}>
       <Routes>
         <Route path="/admin/ats/*" element={<AtsProductHubRoute remoteEnabled={remoteEnabled} />} />
+        <Route path="/unauthorized" element={<LocationProbe />} />
+        <Route path="/login" element={<div>Login destination</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+const renderRecruiterRoute = () =>
+  render(
+    <MemoryRouter initialEntries={['/admin/ats/recruiter']}>
+      <Routes>
+        <Route
+          path="/admin/ats/recruiter/*"
+          element={<RecruiterWorkspaceRoute content={<div>Recruiter workspace content</div>} />}
+        />
         <Route path="/unauthorized" element={<LocationProbe />} />
         <Route path="/login" element={<div>Login destination</div>} />
       </Routes>
@@ -149,5 +167,31 @@ describe('InterviewEvidenceRoute', () => {
 
     expect(screen.getByText('Login destination')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'ATS Ürün Merkezi' })).not.toBeInTheDocument();
+  });
+
+  it('renders the recruiter workspace only with the ATS module grant', () => {
+    renderRecruiterRoute();
+
+    expect(screen.getByText('Recruiter workspace content')).toBeInTheDocument();
+  });
+
+  it('rejects a direct recruiter-workspace URL when the module grant is missing', () => {
+    permissionsMock.hasModule.mockReturnValue(false);
+
+    renderRecruiterRoute();
+
+    expect(screen.getByText('Unauthorized destination')).toBeInTheDocument();
+    expect(screen.getByTestId('route-location')).toHaveTextContent('/unauthorized');
+    expect(screen.getByTestId('route-reason')).toHaveTextContent('module_denied');
+    expect(screen.queryByText('Recruiter workspace content')).not.toBeInTheDocument();
+  });
+
+  it('keeps anonymous recruiter-workspace URLs behind the login boundary', () => {
+    authState.auth.token = null;
+
+    renderRecruiterRoute();
+
+    expect(screen.getByText('Login destination')).toBeInTheDocument();
+    expect(screen.queryByText('Recruiter workspace content')).not.toBeInTheDocument();
   });
 });
