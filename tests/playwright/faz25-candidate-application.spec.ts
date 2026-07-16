@@ -1,8 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-test.describe('Faz 25 public candidate application', () => {
-  test('runs the editable local-only flow at 390px without auth, data requests or a11y violations', async ({
+test.describe('Faz 25 public candidate journey', () => {
+  test('discovers a job and runs the editable local-only flow at 390px without auth, data requests or a11y violations', async ({
     page,
     baseURL,
   }) => {
@@ -20,12 +20,23 @@ test.describe('Faz 25 public candidate application', () => {
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/jobs/veri-bilimi-lideri/apply`, {
+    await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/jobs`, {
       waitUntil: 'networkidle',
     });
 
+    await expect(page.getByTestId('public-jobs-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Açık pozisyonları keşfedin' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ürün Yöneticisi' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Senior Frontend Developer' })).toBeVisible();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    const jobsOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(jobsOverflow).toBeLessThanOrEqual(1);
+
+    await page.getByRole('link', { name: 'Ürün Yöneticisi rolüne başvur' }).click();
     await expect(page.getByTestId('candidate-application-page')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Veri Bilimi Lideri' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ürün Yöneticisi' })).toBeVisible();
     await expect(page.getByText(/oturum açmanız gerekmez/i)).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
@@ -33,10 +44,10 @@ test.describe('Faz 25 public candidate application', () => {
       /\/$/,
       '',
     );
-    await page.getByRole('link', { name: 'Açık Kariyer' }).click();
-    await expect(page).toHaveURL(
-      new RegExp(`${configuredBasePath}/jobs/veri-bilimi-lideri/apply/?$`),
-    );
+    await expect(page).toHaveURL(new RegExp(`${configuredBasePath}/jobs/urun-yoneticisi/apply/?$`));
+    await page.getByRole('link', { name: 'Açık Kariyer ilan listesi' }).click();
+    await expect(page).toHaveURL(new RegExp(`${configuredBasePath}/jobs/?$`));
+    await page.getByRole('link', { name: 'Ürün Yöneticisi rolüne başvur' }).click();
 
     await page.getByTestId('candidate-resume').setInputFiles({
       name: 'ornek-cv.pdf',

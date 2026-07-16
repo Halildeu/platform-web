@@ -36,6 +36,10 @@ describe('CandidateApplicationPage', () => {
       'accept',
       'application/pdf,.pdf',
     );
+    expect(screen.getByRole('link', { name: 'Açık Kariyer ilan listesi' })).toHaveAttribute(
+      'href',
+      '/jobs',
+    );
     expect(screen.queryByText(/giriş yap/i)).not.toBeInTheDocument();
   });
 

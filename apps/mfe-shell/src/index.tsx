@@ -13,7 +13,7 @@ import './index.css';
 // attached before any chunk-loading code can fire its first
 // dynamic import.
 import { installStaleBundleRecovery } from './app/runtime/stale-bundle-recovery';
-import { isCandidateApplicationPath } from './app/public-entry-routes';
+import { isPublicCandidatePath } from './app/public-entry-routes';
 installStaleBundleRecovery();
 // AG Grid + other CSS loaded via Vite native CSS handling
 // Public candidate applications must not wait for the authenticated shell,
@@ -31,7 +31,7 @@ const showBootstrapFailure = () => {
   container.replaceChildren(alert);
 };
 
-const applicationBootstrap = isCandidateApplicationPath(
+const applicationBootstrap = isPublicCandidatePath(
   window.location.pathname,
   import.meta.env.BASE_URL,
 )
