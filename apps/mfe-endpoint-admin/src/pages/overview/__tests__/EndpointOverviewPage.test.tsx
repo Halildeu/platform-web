@@ -239,7 +239,10 @@ describe('EndpointOverviewPage', () => {
     renderPage();
     const gapsError = screen.getByTestId('overview-gaps-error');
     expect(gapsError.getAttribute('role')).toBe('alert');
-    expect(gapsError.textContent).toContain(t('endpointAdmin.overview.state.forbidden'));
+    // Kind comes from the shared classifier (403 → forbidden) — no local status map.
+    expect(gapsError.textContent).toContain(t('endpointAdmin.capabilityState.forbidden.title'));
+    // A forbidden card offers NO retry (retrying can't change authorization).
+    expect(gapsError.querySelector('button')).toBeNull();
   });
 
   /* ---------------- MUST-FIX 3: exact query args ---------------- */
@@ -318,7 +321,10 @@ describe('EndpointOverviewPage', () => {
     useGetComplianceGapQueryMock.mockReturnValue(errorState(404));
     renderPage();
     const gapsError = screen.getByTestId('overview-gaps-error');
-    expect(gapsError.textContent).toContain(t('endpointAdmin.overview.state.notEnabled'));
+    // 404 under the fleet-capability policy → notEnabled (not a generic error).
+    expect(gapsError.textContent).toContain(t('endpointAdmin.capabilityState.notEnabled.title'));
+    // notEnabled is not retryable either.
+    expect(gapsError.querySelector('button')).toBeNull();
     expect(screen.queryByTestId('overview-gaps-total')).toBeNull();
   });
 

@@ -8,6 +8,11 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import { useManageGate } from '../compliance-policies/useManageGate';
 import { SoftwareBundleCreateModal } from '../../widgets/software-bundle/SoftwareBundleCreateModal';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 import type {
   SoftwareBundleStatus,
   SoftwareBundleSummary,
@@ -55,7 +60,7 @@ export const SoftwareBundlesPage: React.FC = () => {
     size: DEFAULT_PAGE_SIZE,
     ...(statusFilter !== 'ALL' ? { status: statusFilter } : {}),
   };
-  const { data, error, isLoading, isFetching } = useListSoftwareBundlesQuery(queryArgs);
+  const { data, error, isLoading, isFetching, refetch } = useListSoftwareBundlesQuery(queryArgs);
   const [approve, { isLoading: approving }] = useApproveSoftwareBundleMutation();
   const [revoke, { isLoading: revoking }] = useRevokeSoftwareBundleMutation();
 
@@ -133,9 +138,11 @@ export const SoftwareBundlesPage: React.FC = () => {
         </p>
       )}
       {error && (
-        <p role="alert" data-testid="bundles-error" className="text-sm text-danger">
-          {t('endpointAdmin.bundles.page.error')}
-        </p>
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="bundles-state"
+        />
       )}
       {!error && !stale && items.length === 0 && (
         <p className="text-sm text-text-secondary" data-testid="bundles-empty">

@@ -121,7 +121,7 @@ describe('EndpointAuditPage', () => {
     });
   });
 
-  it('shows the forbidden state on 403', async () => {
+  it('shows the forbidden capability state on 403', async () => {
     globalThis.fetch = vi.fn(
       async () =>
         new Response(JSON.stringify({ error: 'forbidden' }), {
@@ -132,9 +132,7 @@ describe('EndpointAuditPage', () => {
 
     renderPage();
 
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
-    });
-    expect(screen.getByRole('alert').textContent).toContain('403');
+    const state = await screen.findByTestId('audit-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('forbidden');
   });
 });

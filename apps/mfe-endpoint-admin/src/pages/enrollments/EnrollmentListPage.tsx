@@ -6,6 +6,11 @@ import type {
   EndpointEnrollment,
 } from '../../entities/endpoint-enrollment/types';
 import { useEndpointAdminI18n } from '../../i18n';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 import { useManageGate } from '../compliance-policies/useManageGate';
 import { CreateEnrollmentDialog } from '../../widgets/enrollment-dialog/CreateEnrollmentDialog';
 import { EnrollmentTokenModal } from '../../widgets/enrollment-dialog/EnrollmentTokenModal';
@@ -88,18 +93,8 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
     null,
   );
 
-  const { data, error, isLoading, isFetching } = endpointAdminApi.useListEndpointEnrollmentsQuery();
-
-  const status404 =
-    error &&
-    typeof error === 'object' &&
-    'status' in error &&
-    (error as { status: unknown }).status === 404;
-  const status403 =
-    error &&
-    typeof error === 'object' &&
-    'status' in error &&
-    (error as { status: unknown }).status === 403;
+  const { data, error, isLoading, isFetching, refetch } =
+    endpointAdminApi.useListEndpointEnrollmentsQuery();
 
   return (
     <div data-testid="enrollment-list-page" style={{ padding: 24 }}>
@@ -121,20 +116,12 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
         <p data-testid="enrollment-list-loading">{t('endpointAdmin.enrollments.page.loading')}</p>
       )}
 
-      {status403 && (
-        <p data-testid="enrollment-list-forbidden">
-          {t('endpointAdmin.enrollments.page.forbidden')}
-        </p>
-      )}
-
-      {status404 && (
-        <p data-testid="enrollment-list-not-deployed">
-          {t('endpointAdmin.enrollments.page.notDeployed')}
-        </p>
-      )}
-
-      {error && !status403 && !status404 && (
-        <p data-testid="enrollment-list-error">{t('endpointAdmin.enrollments.page.error')}</p>
+      {error && (
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="enrollment-list-state"
+        />
       )}
 
       {data && data.length === 0 && (

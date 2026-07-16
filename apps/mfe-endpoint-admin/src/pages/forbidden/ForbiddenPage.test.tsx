@@ -4,10 +4,17 @@ import { describe, it, expect } from 'vitest';
 import ForbiddenPage from './ForbiddenPage';
 
 describe('ForbiddenPage', () => {
-  it('renders the forbidden alert with i18n copy', () => {
+  it('renders the shared forbidden CapabilityState (single source, informational, no retry)', () => {
     render(<ForbiddenPage />);
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    // Locale-agnostic — both `tr` and `en` dicts produce a non-empty heading.
-    expect(screen.getByRole('heading', { level: 2 }).textContent).toBeTruthy();
+    const root = screen.getByTestId('endpoint-admin-forbidden');
+    expect(root.getAttribute('data-capability-kind')).toBe('forbidden');
+    // forbidden is informational (role=status, polite) — not an assertive alert.
+    expect(root.getAttribute('role')).toBe('status');
+    // Locale-agnostic non-empty heading, no literal-key leakage.
+    const title = screen.getByTestId('endpoint-admin-forbidden-title');
+    expect(title.textContent).toBeTruthy();
+    expect(title.textContent).not.toContain('endpointAdmin.capabilityState');
+    // No retry for a forbidden surface (retrying can't change authorization).
+    expect(screen.queryByTestId('endpoint-admin-forbidden-retry')).toBeNull();
   });
 });

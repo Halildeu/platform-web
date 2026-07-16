@@ -130,7 +130,7 @@ describe('EndpointStatusPage', () => {
     expect(capturedAuthHeader).toBeNull();
   });
 
-  it('shows the error state when the backend rejects the request', async () => {
+  it('shows the generic error capability-state when the backend rejects with 401', async () => {
     globalThis.fetch = vi.fn(
       async () =>
         new Response(JSON.stringify({ error: 'unauthorized' }), {
@@ -149,8 +149,39 @@ describe('EndpointStatusPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByTestId('endpoint-status-state')).toBeInTheDocument();
     });
-    expect(screen.getByRole('alert').textContent).toContain('401');
+    // 401 is a SESSION concern (token expiry → re-auth at the shell), not an
+    // authorization verdict → generic `error` kind, and no raw status in the UI.
+    expect(screen.getByTestId('endpoint-status-state').getAttribute('data-capability-kind')).toBe(
+      'error',
+    );
+    expect(screen.getByTestId('endpoint-status-state').textContent).not.toContain('401');
+  });
+
+  it('classifies a 404 as the notEnabled capability-state (fleet policy)', async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: 'not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as typeof fetch;
+
+    const store = buildStore();
+    render(
+      <ReduxProvider store={store} context={endpointAdminReduxContext}>
+        <MemoryRouter>
+          <EndpointStatusPage />
+        </MemoryRouter>
+      </ReduxProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('endpoint-status-state')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('endpoint-status-state').getAttribute('data-capability-kind')).toBe(
+      'notEnabled',
+    );
   });
 });

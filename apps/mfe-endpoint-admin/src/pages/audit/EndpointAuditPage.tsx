@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { useListEndpointAuditEventsQuery } from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 
 /**
  * Read-only audit-event surface — backed by
@@ -41,7 +46,7 @@ export const EndpointAuditPage: React.FC = () => {
   const deviceFilterSubmitted =
     trimmedDevice !== '' && deviceFilterValid ? trimmedDevice : undefined;
 
-  const { data, isLoading, isError, error, isFetching } = useListEndpointAuditEventsQuery({
+  const { data, isLoading, isError, error, isFetching, refetch } = useListEndpointAuditEventsQuery({
     deviceId: deviceFilterSubmitted,
     eventType: eventTypeFilter.trim() || undefined,
     limit: 50,
@@ -56,14 +61,12 @@ export const EndpointAuditPage: React.FC = () => {
       );
     }
     if (isError) {
-      const status =
-        error && 'status' in error ? String((error as { status: unknown }).status) : '';
-      const isForbidden = status === '403';
       return (
-        <p role="alert" aria-live="polite" style={{ marginTop: 12, color: 'var(--danger-color)' }}>
-          {isForbidden ? t('endpointAdmin.audit.forbidden') : t('endpointAdmin.audit.error')}
-          {status ? ` (HTTP ${status})` : null}
-        </p>
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="audit-state"
+        />
       );
     }
 

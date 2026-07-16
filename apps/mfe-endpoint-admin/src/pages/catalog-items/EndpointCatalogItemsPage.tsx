@@ -10,6 +10,11 @@ import type {
 import { CatalogItemDrawer } from '../../widgets/catalog-item-drawer/CatalogItemDrawer';
 import type { CatalogItemDrawerMode } from '../../widgets/catalog-item-drawer/CatalogItemDrawer';
 import { useManageGate } from '../compliance-policies/useManageGate';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 
 /**
  * Path C3 — Endpoint Software Catalog list + authoring entry point
@@ -63,7 +68,7 @@ export const EndpointCatalogItemsPage: React.FC = () => {
     size: DEFAULT_PAGE_SIZE,
     ...(statusFilter !== 'ALL' ? { status: statusFilter } : {}),
   };
-  const { data, error, isLoading, isFetching } = useListCatalogItemsQuery(queryArgs);
+  const { data, error, isLoading, isFetching, refetch } = useListCatalogItemsQuery(queryArgs);
 
   const stale = isLoading || isFetching;
   const items: AdminCatalogItemSummary[] = data?.content ?? [];
@@ -101,9 +106,11 @@ export const EndpointCatalogItemsPage: React.FC = () => {
         </label>
       </div>
       {error && (
-        <p role="alert" className="catalog-items__error" data-testid="catalog-items-error">
-          {t('endpointAdmin.catalog.page.error')}
-        </p>
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="catalog-items-state"
+        />
       )}
       {!error && !stale && items.length === 0 && (
         <p className="catalog-items__empty">{t('endpointAdmin.catalog.page.empty')}</p>

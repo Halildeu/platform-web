@@ -8,6 +8,11 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import { useManageGate } from '../compliance-policies/useManageGate';
 import { AgentUpdateReleaseCreateModal } from '../../widgets/agent-update-release/AgentUpdateReleaseCreateModal';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 import type {
   AgentUpdateRelease,
   AgentUpdateReleaseStatus,
@@ -61,7 +66,8 @@ export const AgentUpdateReleasesPage: React.FC = () => {
     size: DEFAULT_PAGE_SIZE,
     ...(statusFilter !== 'ALL' ? { status: statusFilter } : {}),
   };
-  const { data, error, isLoading, isFetching } = useListAgentUpdateReleasesQuery(queryArgs);
+  const { data, error, isLoading, isFetching, refetch } =
+    useListAgentUpdateReleasesQuery(queryArgs);
   const [approve, { isLoading: approving }] = useApproveAgentUpdateReleaseMutation();
   const [revoke, { isLoading: revoking }] = useRevokeAgentUpdateReleaseMutation();
 
@@ -139,9 +145,11 @@ export const AgentUpdateReleasesPage: React.FC = () => {
         </p>
       )}
       {error && (
-        <p role="alert" data-testid="releases-error" className="text-sm text-danger">
-          {t('endpointAdmin.releases.page.error')}
-        </p>
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="releases-state"
+        />
       )}
       {!error && !stale && items.length === 0 && (
         <p className="text-sm text-text-secondary" data-testid="releases-empty">

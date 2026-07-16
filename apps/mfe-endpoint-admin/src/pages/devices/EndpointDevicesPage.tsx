@@ -28,6 +28,11 @@ import { useEndpointAdminI18n } from '../../i18n';
 import type { DeviceStatus, OsType } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
 import DeviceBulkActionsMenu, { type BulkSelectableDevice } from './DeviceBulkActionsMenu';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 
 /**
  * Devices surface — #1154 PR-3: SERVER-MODE grid.
@@ -237,7 +242,12 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     skip: selectedDeviceId == null,
   });
 
-  const forbidden = loadError?.code === '403';
+  // Adapt the grid's DeviceGridExportError (string `.code`, e.g. '403') to the
+  // numeric HTTP `status` the shared classifier reads, so the capability kind
+  // (403→forbidden, 404→notEnabled, 503→temporarilyUnavailable, else→error) is
+  // decided by the ONE classifier — no local `code === '403'` interpretation.
+  const loadErrorStatus =
+    loadError && /^\d+$/.test(loadError.code) ? Number(loadError.code) : undefined;
 
   const statusLabel = React.useCallback(
     (status: string) => t(`endpointAdmin.devices.status.${status}`),
@@ -807,17 +817,6 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     gridApiRef.current?.refreshServerSide({ purge: true });
   }, []);
 
-  if (forbidden) {
-    return (
-      <section role="alert" aria-live="polite" style={{ padding: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t(preset.headingKey)}</h2>
-        <p style={{ marginTop: 12, color: 'var(--danger-color)' }}>
-          {t('endpointAdmin.devices.forbidden')} (HTTP 403)
-        </p>
-      </section>
-    );
-  }
-
   return (
     <section style={{ padding: 24 }} data-testid={preset.dataTestId}>
       <div
@@ -870,14 +869,12 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
           {bulkNotice.message}
         </p>
       ) : null}
-      {loadError && !forbidden ? (
-        <p
-          role="alert"
-          data-testid="grid-load-error"
-          style={{ marginTop: 12, color: 'var(--danger-color)', fontSize: 13 }}
-        >
-          {t('endpointAdmin.devices.error')}
-        </p>
+      {loadError ? (
+        <CapabilityState
+          kind={classifyCapabilityError({ status: loadErrorStatus }, FLEET_CAPABILITY_POLICY)}
+          onRetry={refreshGrid}
+          testId="devices-load-state"
+        />
       ) : null}
       <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
         <React.Suspense fallback={<div style={{ height: 400 }} />}>

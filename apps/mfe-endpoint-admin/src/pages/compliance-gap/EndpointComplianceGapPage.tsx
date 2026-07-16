@@ -12,6 +12,11 @@ import type {
 } from '../../entities/endpoint-compliance-gap/types';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
+import {
+  CapabilityState,
+  classifyCapabilityError,
+  FLEET_CAPABILITY_POLICY,
+} from '../../widgets/capability-state';
 
 /**
  * Faz 22.7 D3 — Compliance Gap Mart explorer (Codex 019e88b0 D2 backend
@@ -121,7 +126,7 @@ export const EndpointComplianceGapPage: React.FC = () => {
     [selectedGapTypes],
   );
 
-  const { data, error, isLoading, isFetching } = useGetComplianceGapQuery({
+  const { data, error, isLoading, isFetching, refetch } = useGetComplianceGapQuery({
     gapTypes: gapTypesArray.length > 0 ? gapTypesArray : undefined,
     freshnessWindow,
     page,
@@ -185,7 +190,6 @@ export const EndpointComplianceGapPage: React.FC = () => {
   // truth on the server.
   const effectivePageSize = data?.filterEcho?.pageSize ?? DEFAULT_PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
-  const forbidden = error && (error as { status?: number }).status === 403;
 
   return (
     <div data-testid="endpoint-admin-compliance-gap-page" style={{ padding: 16 }}>
@@ -263,24 +267,12 @@ export const EndpointComplianceGapPage: React.FC = () => {
         </div>
       )}
 
-      {forbidden && (
-        <div
-          data-testid="compliance-gap-forbidden"
-          role="alert"
-          style={{ color: 'var(--danger-color)' }}
-        >
-          {t('endpointAdmin.complianceGap.forbidden')}
-        </div>
-      )}
-
-      {!stale && error && !forbidden && (
-        <div
-          data-testid="compliance-gap-error"
-          role="alert"
-          style={{ color: 'var(--danger-color)' }}
-        >
-          {t('endpointAdmin.complianceGap.error')}
-        </div>
+      {!stale && error && (
+        <CapabilityState
+          kind={classifyCapabilityError(error, FLEET_CAPABILITY_POLICY)}
+          onRetry={refetch}
+          testId="compliance-gap-state"
+        />
       )}
 
       {!stale && !error && items.length === 0 && (

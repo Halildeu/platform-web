@@ -35,9 +35,8 @@ const DICT_TR = {
   'endpointAdmin.status.field.apiVersion': 'API Sürümü',
   'endpointAdmin.status.field.deviceCredentialProvider': 'Cihaz Kimlik Sağlayıcı',
   'endpointAdmin.status.field.timestamp': 'Ölçüm Zamanı',
-  'endpointAdmin.forbidden.title': 'Erişim Yok',
-  'endpointAdmin.forbidden.description':
-    'Bu modülü görüntüleme yetkiniz yok. Erişim için sistem yöneticinize başvurun.',
+  // (endpointAdmin.forbidden.* kaldırıldı — ForbiddenPage artık paylaşılan
+  //  CapabilityState kind="forbidden" kullanıyor; tek forbidden kaynağı.)
   'endpointAdmin.devices.heading': 'Uç Birimler',
   'endpointAdmin.devices.loading': 'Cihazlar yükleniyor…',
   'endpointAdmin.devices.error': 'Cihaz listesi alınamadı.',
@@ -1608,11 +1607,9 @@ const DICT_TR = {
   'endpointAdmin.overview.title': 'Genel Bakış',
   'endpointAdmin.overview.subtitle':
     'Filo, uyum, cihaz kaydı ve yayın taslaklarının tek ekranda özeti.',
-  // Kartlar arası paylaşılan durum metinleri.
-  'endpointAdmin.overview.state.error': 'Veri alınamadı',
+  // Kartlar arası paylaşılan durum metinleri. Hata/yetki/etkin-değil sınıflandırması
+  // artık paylaşılan CapabilityState'ten gelir (endpointAdmin.capabilityState.*).
   'endpointAdmin.overview.state.retry': 'Yeniden dene',
-  'endpointAdmin.overview.state.forbidden': 'Bu veriyi görüntüleme yetkiniz yok',
-  'endpointAdmin.overview.state.notEnabled': 'Bu özellik bu ortamda etkin değil',
   'endpointAdmin.overview.state.updating': 'Güncelleniyor…',
   'endpointAdmin.overview.state.loading': 'Yükleniyor…',
   'endpointAdmin.overview.state.empty': 'Bulunmadı',
@@ -1705,9 +1702,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.status.field.apiVersion': 'API Version',
   'endpointAdmin.status.field.deviceCredentialProvider': 'Device Credential Provider',
   'endpointAdmin.status.field.timestamp': 'Measured At',
-  'endpointAdmin.forbidden.title': 'Access Denied',
-  'endpointAdmin.forbidden.description':
-    'You do not have permission to view this module. Contact your administrator.',
+  // (endpointAdmin.forbidden.* removed — ForbiddenPage now uses the shared
+  //  CapabilityState kind="forbidden"; single forbidden source.)
   'endpointAdmin.devices.heading': 'Endpoint Devices',
   'endpointAdmin.devices.loading': 'Loading devices…',
   'endpointAdmin.devices.error': 'Failed to load device list.',
@@ -3244,11 +3240,9 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.overview.title': 'Overview',
   'endpointAdmin.overview.subtitle':
     'Fleet, compliance, enrollment and release drafts at a glance.',
-  // Shared card state strings.
-  'endpointAdmin.overview.state.error': 'Could not load data',
+  // Shared card state strings. Error/forbidden/not-enabled classification now
+  // comes from the shared CapabilityState (endpointAdmin.capabilityState.*).
   'endpointAdmin.overview.state.retry': 'Retry',
-  'endpointAdmin.overview.state.forbidden': "You don't have permission to view this data",
-  'endpointAdmin.overview.state.notEnabled': 'This feature is not enabled in this environment',
   'endpointAdmin.overview.state.updating': 'Updating…',
   'endpointAdmin.overview.state.loading': 'Loading…',
   'endpointAdmin.overview.state.empty': 'None found',

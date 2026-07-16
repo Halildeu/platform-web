@@ -109,16 +109,18 @@ describe('EndpointCompliancePoliciesPage', () => {
     expect(args.size).toBe(20);
   });
 
-  it('renders forbidden state on 403', () => {
+  it('renders forbidden capability state on 403', () => {
     mockList({ error: { status: 403 } });
     render(<EndpointCompliancePoliciesPage />);
-    expect(screen.getByTestId('compliance-policies-forbidden')).toBeTruthy();
+    const state = screen.getByTestId('compliance-policies-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('forbidden');
   });
 
-  it('renders error state on non-403', () => {
+  it('renders generic error capability state on non-403', () => {
     mockList({ error: { status: 500 } });
     render(<EndpointCompliancePoliciesPage />);
-    expect(screen.getByTestId('compliance-policies-error')).toBeTruthy();
+    const state = screen.getByTestId('compliance-policies-state');
+    expect(state.getAttribute('data-capability-kind')).toBe('error');
   });
 
   it('renders loading state', () => {
