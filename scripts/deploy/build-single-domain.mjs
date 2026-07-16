@@ -16,8 +16,8 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUILD_INFO_SCHEMA_VERSION,
   collectRootEntrypoints,
+  createBuildInfoDocument,
 } from './build-info-contract.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -169,7 +169,6 @@ function listAssetsIn(dir) {
 }
 
 function writeBuildInfo(origin, remotes, sha) {
-  const shortSha = sha === 'unknown' ? 'unknown' : sha.slice(0, 7);
   const rootEntrypoints = collectRootEntrypoints(outputDir);
   // Legacy basename retained for older diagnostics. v2 consumers MUST use
   // rootEntrypoints[].path + bodySha256 for the content-addressed contract.
@@ -182,10 +181,8 @@ function writeBuildInfo(origin, remotes, sha) {
     assets: listAssetsIn(path.join(outputDir, 'remotes', slug, 'assets')),
   }));
 
-  const buildInfo = {
-    schemaVersion: BUILD_INFO_SCHEMA_VERSION,
+  const buildInfo = createBuildInfoDocument({
     sha,
-    shortSha,
     ref: resolveBuildRef(),
     image: process.env.BUILD_IMAGE || '',
     imageDigest: process.env.BUILD_IMAGE_DIGEST || '',
@@ -195,7 +192,8 @@ function writeBuildInfo(origin, remotes, sha) {
     rootEntrypoints,
     assets: rootAssets,
     remotes: remoteEntries,
-  };
+  });
+  const shortSha = buildInfo.shortSha;
 
   writeFileSync(
     path.join(outputDir, 'build-info.json'),

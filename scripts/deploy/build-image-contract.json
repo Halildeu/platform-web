@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "acik.platform.web-build-image/v1",
+  "registry": "ghcr.io",
+  "owner": "halildeu",
+  "repositories": {
+    "prod": "platform-web-frontend",
+    "testai": "platform-web-frontend-testai"
+  },
+  "tagPrefix": "sha-",
+  "shortShaLength": 7
+}

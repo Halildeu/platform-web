@@ -7,6 +7,34 @@ export const BUILD_INFO_SCHEMA_VERSION = 'acik.platform.web-build-info/v2';
 
 const ROOT_SCRIPT_PATH = /^\/[A-Za-z0-9._/-]+\.(?:js|mjs)$/;
 
+export function createBuildInfoDocument({
+  sha,
+  ref,
+  image = '',
+  imageDigest = '',
+  buildTime,
+  origin,
+  rootEntry,
+  rootEntrypoints,
+  assets,
+  remotes,
+}) {
+  return {
+    schemaVersion: BUILD_INFO_SCHEMA_VERSION,
+    sha,
+    shortSha: sha === 'unknown' ? 'unknown' : sha.slice(0, 7),
+    ref,
+    image,
+    imageDigest,
+    buildTime,
+    origin,
+    rootEntry,
+    rootEntrypoints,
+    assets,
+    remotes,
+  };
+}
+
 function normalizeRootScriptPath(rawPath) {
   if (
     typeof rawPath !== 'string' ||

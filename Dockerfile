@@ -34,6 +34,9 @@ ARG VITE_AG_GRID_LICENSE_KEY=""
 # zaman .dockerignore git'i hariç tutar; CI'da git context yok).
 ARG BUILD_SHA=""
 ARG BUILD_REF=""
+# build-info v2 producer identity. The digest is resolved only after push, but
+# the immutable commit tag is deterministic before the image build starts.
+ARG BUILD_IMAGE=""
 
 # PERF-INIT-V2 PR-B5b1 (canary) — MFE on-demand bootstrap build-time flag.
 # When set to `1`/`true`/`yes`/`on`, the shell `vite.config.ts` reader
@@ -89,7 +92,8 @@ ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE=${VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE} \
     VITE_SHELL_ENABLE_MEETING_REMOTE=${VITE_SHELL_ENABLE_MEETING_REMOTE} \
     BUILD_SHA=${BUILD_SHA} \
-    BUILD_REF=${BUILD_REF}
+    BUILD_REF=${BUILD_REF} \
+    BUILD_IMAGE=${BUILD_IMAGE}
 
 WORKDIR /app
 
