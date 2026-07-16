@@ -17,6 +17,7 @@ import {
   classifyCapabilityError,
   FLEET_CAPABILITY_POLICY,
 } from '../../widgets/capability-state';
+import { ManageHint } from '../../widgets/manage-hint';
 import { useManageGate } from './useManageGate';
 
 /**
@@ -91,6 +92,7 @@ function enforcementLabel(mode: ComplianceEnforcementMode, t: (k: string) => str
 export const EndpointCompliancePoliciesPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
+  const manageHintId = React.useId();
 
   const [page, setPage] = React.useState(0);
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -126,15 +128,16 @@ export const EndpointCompliancePoliciesPage: React.FC = () => {
             type="button"
             onClick={() => setCreateOpen(true)}
             disabled={!canManage}
-            title={
-              !canManage ? t('endpointAdmin.compliance.policies.manageDeniedTooltip') : undefined
-            }
+            aria-describedby={!canManage ? manageHintId : undefined}
+            title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
             data-testid="compliance-policies-create-button"
           >
             {t('endpointAdmin.compliance.policies.createButton')}
           </button>
         </div>
       </header>
+
+      {!canManage && <ManageHint id={manageHintId} testId="compliance-policies-manage-hint" />}
 
       {error ? (
         <CapabilityState
@@ -197,11 +200,8 @@ export const EndpointCompliancePoliciesPage: React.FC = () => {
                       type="button"
                       onClick={() => setEditTarget(item)}
                       disabled={!canManage}
-                      title={
-                        !canManage
-                          ? t('endpointAdmin.compliance.policies.manageDeniedTooltip')
-                          : undefined
-                      }
+                      aria-describedby={!canManage ? manageHintId : undefined}
+                      title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
                       data-testid={`compliance-policies-edit-${item.id}`}
                     >
                       {t('endpointAdmin.compliance.policies.editButton')}
@@ -210,11 +210,8 @@ export const EndpointCompliancePoliciesPage: React.FC = () => {
                       type="button"
                       onClick={() => setDeleteTarget(item)}
                       disabled={!canManage}
-                      title={
-                        !canManage
-                          ? t('endpointAdmin.compliance.policies.manageDeniedTooltip')
-                          : undefined
-                      }
+                      aria-describedby={!canManage ? manageHintId : undefined}
+                      title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
                       data-testid={`compliance-policies-delete-${item.id}`}
                     >
                       {t('endpointAdmin.compliance.policies.deleteButton')}

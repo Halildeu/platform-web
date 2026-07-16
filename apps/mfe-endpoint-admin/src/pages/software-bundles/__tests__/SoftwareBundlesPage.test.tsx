@@ -40,6 +40,9 @@ const h = vi.hoisted(() => {
     revokeMock: vi.fn((_a: { bundleId: string; body: { revocationReason: string } }) => ({
       unwrap: () => Promise.resolve({}),
     })),
+    // Mutable MANAGE gate the mock reads on every render; the S4b hint specs
+    // flip it false, and afterEach resets it back to true.
+    canManage: true,
   };
 });
 
@@ -49,7 +52,7 @@ vi.mock('../../../app/services/endpointAdminApi', () => ({
   useRevokeSoftwareBundleMutation: () => [h.revokeMock, { isLoading: false }],
   useCreateSoftwareBundleMutation: () => [vi.fn(), { isLoading: false }],
 }));
-vi.mock('../../compliance-policies/useManageGate', () => ({ useManageGate: () => true }));
+vi.mock('../../compliance-policies/useManageGate', () => ({ useManageGate: () => h.canManage }));
 
 import { SoftwareBundlesPage } from '../SoftwareBundlesPage';
 
@@ -58,6 +61,7 @@ afterEach(() => {
   h.approveMock.mockClear();
   h.revokeMock.mockClear();
   h.listResult = h.okResult;
+  h.canManage = true;
 });
 
 describe('SoftwareBundlesPage', () => {
@@ -133,5 +137,22 @@ describe('SoftwareBundlesPage', () => {
     expect(screen.getByTestId('bundles-state').getAttribute('data-capability-kind')).toBe(
       'forbidden',
     );
+  });
+
+  // S4b — shared accessible manage-hint wiring (Codex 019f67ba a11y spec).
+  it('renders the manage-hint + wires create button aria-describedby/title when canManage=false', () => {
+    h.canManage = false;
+    render(<SoftwareBundlesPage />);
+    const hint = screen.getByTestId('bundles-manage-hint');
+    expect(hint.id).toBeTruthy();
+    const createBtn = screen.getByTestId('bundles-new-button');
+    expect(createBtn.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(createBtn.getAttribute('title')).toBeTruthy();
+  });
+
+  it('omits the manage-hint and create button aria-describedby when canManage=true', () => {
+    render(<SoftwareBundlesPage />);
+    expect(screen.queryByTestId('bundles-manage-hint')).toBeNull();
+    expect(screen.getByTestId('bundles-new-button').getAttribute('aria-describedby')).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import {
   classifyCapabilityError,
   FLEET_CAPABILITY_POLICY,
 } from '../../widgets/capability-state';
+import { ManageHint } from '../../widgets/manage-hint';
 import { useManageGate } from '../compliance-policies/useManageGate';
 import { CreateEnrollmentDialog } from '../../widgets/enrollment-dialog/CreateEnrollmentDialog';
 import { EnrollmentTokenModal } from '../../widgets/enrollment-dialog/EnrollmentTokenModal';
@@ -85,6 +86,7 @@ function resolveArtifactBaseUrl(): string {
 const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride }) => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
+  const manageHintId = React.useId();
   const apiUrl = apiUrlOverride ?? resolveApiUrl();
   const artifactBaseUrl = resolveArtifactBaseUrl();
 
@@ -105,10 +107,14 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
           data-testid="enrollment-list-page-create"
           onClick={() => setDialogOpen(true)}
           disabled={!canManage}
+          aria-describedby={!canManage ? manageHintId : undefined}
+          title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
         >
           {t('endpointAdmin.enrollments.page.createButton')}
         </button>
       </header>
+
+      {!canManage && <ManageHint id={manageHintId} testId="enrollment-list-manage-hint" />}
 
       <p>{t('endpointAdmin.enrollments.page.description')}</p>
 

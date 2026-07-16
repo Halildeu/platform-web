@@ -38,18 +38,21 @@ const h = vi.hoisted(() => ({
     isFetching: false,
     refetch: vi.fn(),
   } as Record<string, unknown>,
+  // Mutable MANAGE gate; the S4b hint specs flip it false, afterEach resets true.
+  canManage: true,
 }));
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
   useListCatalogItemsQuery: () => h.listResult,
 }));
-vi.mock('../../compliance-policies/useManageGate', () => ({ useManageGate: () => true }));
+vi.mock('../../compliance-policies/useManageGate', () => ({ useManageGate: () => h.canManage }));
 
 import { EndpointCatalogItemsPage } from '../EndpointCatalogItemsPage';
 
 afterEach(() => {
   cleanup();
   h.listResult = { ...okResult, refetch: vi.fn() };
+  h.canManage = true;
 });
 
 describe('EndpointCatalogItemsPage capability-state error branch', () => {
@@ -95,5 +98,28 @@ describe('EndpointCatalogItemsPage capability-state error branch', () => {
     expect(screen.getByTestId('catalog-items-state').getAttribute('data-capability-kind')).toBe(
       'error',
     );
+  });
+});
+
+// S4b — shared accessible manage-hint wiring (Codex 019f67ba a11y spec).
+describe('EndpointCatalogItemsPage manage-gate hint', () => {
+  it('renders the manage-hint + wires create button aria-describedby/title when canManage=false', () => {
+    h.canManage = false;
+    h.listResult = { ...okResult, refetch: vi.fn() };
+    render(<EndpointCatalogItemsPage />);
+    const hint = screen.getByTestId('catalog-items-manage-hint');
+    expect(hint.id).toBeTruthy();
+    const createBtn = screen.getByTestId('catalog-items-new-button');
+    expect(createBtn.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(createBtn.getAttribute('title')).toBeTruthy();
+  });
+
+  it('omits the manage-hint and create button aria-describedby when canManage=true', () => {
+    h.listResult = { ...okResult, refetch: vi.fn() };
+    render(<EndpointCatalogItemsPage />);
+    expect(screen.queryByTestId('catalog-items-manage-hint')).toBeNull();
+    expect(
+      screen.getByTestId('catalog-items-new-button').getAttribute('aria-describedby'),
+    ).toBeNull();
   });
 });

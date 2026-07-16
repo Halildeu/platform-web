@@ -157,6 +157,27 @@ describe('EnrollmentListPage', () => {
     expect(btn).toBeDisabled();
   });
 
+  // S4b — shared accessible manage-hint wiring (Codex 019f67ba a11y spec).
+  it('renders the manage-hint + wires create button aria-describedby/title when canManage=false', () => {
+    canManageMock = false;
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
+    const hint = screen.getByTestId('enrollment-list-manage-hint');
+    expect(hint.id).toBeTruthy();
+    const createBtn = screen.getByTestId('enrollment-list-page-create');
+    expect(createBtn.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(createBtn.getAttribute('title')).toBeTruthy();
+  });
+
+  it('omits the manage-hint and create button aria-describedby when canManage=true', () => {
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
+    expect(screen.queryByTestId('enrollment-list-manage-hint')).toBeNull();
+    expect(
+      screen.getByTestId('enrollment-list-page-create').getAttribute('aria-describedby'),
+    ).toBeNull();
+  });
+
   it('opens create dialog and shows token modal on submit success', async () => {
     const response: CreateEndpointEnrollmentResponse = {
       enrollmentId: '44444444-4444-4444-4444-444444444444',
