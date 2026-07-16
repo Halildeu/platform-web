@@ -25,11 +25,16 @@ import {
   EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
-import { AtsProductHubRoute, InterviewEvidenceRoute } from './InterviewEvidenceRoute';
+import {
+  AtsProductHubRoute,
+  InterviewEvidenceRoute,
+  RecruiterWorkspaceRoute,
+} from './InterviewEvidenceRoute';
 import {
   ATS_PRODUCT_HUB_ENTRY,
   INTERVIEW_EVIDENCE_ENTRY,
 } from '../../features/ats-product-catalog/model/ats-capability-registry';
+import { RECRUITER_WORKSPACE_ENTRY } from '../../features/ats-portals/model/ats-portal-registry';
 const ReportBuilderWizard = React.lazy(() =>
   import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
     default: m.ReportBuilderWizard,
@@ -91,6 +96,10 @@ const CandidateApplicationPage = React.lazy(
   () => import('../../pages/jobs/CandidateApplicationPage'),
 );
 const PublicJobsPage = React.lazy(() => import('../../pages/jobs/PublicJobsPage'));
+const CandidatePortalPage = React.lazy(() => import('../../pages/candidate/CandidatePortalPage'));
+const RecruiterWorkspacePage = React.lazy(
+  () => import('../../features/ats-portals/ui/RecruiterWorkspacePage'),
+);
 
 /* ------------------------------------------------------------------ */
 /*  AppRouter — All application routes                                 */
@@ -305,6 +314,10 @@ export const AppRouter: React.FC = () => {
         />
         <Route path="/meetings/*" element={<Navigate to="/admin/meetings" replace />} />
         <Route path="/meetings" element={<Navigate to="/admin/meetings" replace />} />
+        <Route
+          path={RECRUITER_WORKSPACE_ENTRY.routePattern}
+          element={<RecruiterWorkspaceRoute content={<RecruiterWorkspacePage />} />}
+        />
         {/* FULLATS-WEB-ACCESS-04: the protected product hub is permanent. Remote readiness
             controls only the real module launch and never hides the catalog. */}
         <Route
@@ -394,6 +407,8 @@ export const AppRouter: React.FC = () => {
             remain usable on logged-out devices, so this route deliberately
             sits outside ProtectedRoute. The first slice is local-only and
             never uploads the selected PDF or submits candidate data. */}
+        <Route path="/candidate" element={<CandidatePortalPage />} />
+        <Route path="/candidate/" element={<CandidatePortalPage />} />
         <Route path="/jobs" element={<PublicJobsPage />} />
         <Route path="/jobs/" element={<PublicJobsPage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />

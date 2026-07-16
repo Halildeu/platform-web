@@ -31,9 +31,17 @@ const PublicJobsPage = () => {
               <span className="block text-xs text-text-secondary">Aday başvuru merkezi</span>
             </span>
           </Link>
-          <span className="rounded-full border border-border-subtle bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary">
-            Test kataloğu
-          </span>
+          <nav className="flex items-center gap-2" aria-label="Aday kariyer alanı">
+            <Link
+              to="/candidate"
+              className="inline-flex min-h-10 items-center rounded-xl border border-border-subtle bg-surface-default px-3 py-2 text-xs font-bold text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 sm:text-sm"
+            >
+              Aday Alanım
+            </Link>
+            <span className="hidden rounded-full border border-border-subtle bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary sm:inline-flex">
+              Test kataloğu
+            </span>
+          </nav>
         </div>
       </header>
 

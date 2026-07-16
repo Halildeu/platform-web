@@ -1,5 +1,6 @@
 const CANDIDATE_APPLICATION_PATH = /^\/jobs\/[^/]+\/apply\/?$/;
 const PUBLIC_JOBS_PATH = /^\/jobs\/?$/;
+const CANDIDATE_PORTAL_PATH = /^\/candidate\/?$/;
 
 export const normalizePublicBasePath = (basePath: string): string => {
   const trimmed = basePath.trim();
@@ -24,5 +25,12 @@ export const isPublicJobsPath = (pathname: string, basePath = '/'): boolean => {
   return publicPath !== null && PUBLIC_JOBS_PATH.test(publicPath);
 };
 
+export const isCandidatePortalPath = (pathname: string, basePath = '/'): boolean => {
+  const publicPath = pathUnderBase(pathname, basePath);
+  return publicPath !== null && CANDIDATE_PORTAL_PATH.test(publicPath);
+};
+
 export const isPublicCandidatePath = (pathname: string, basePath = '/'): boolean =>
-  isPublicJobsPath(pathname, basePath) || isCandidateApplicationPath(pathname, basePath);
+  isCandidatePortalPath(pathname, basePath) ||
+  isPublicJobsPath(pathname, basePath) ||
+  isCandidateApplicationPath(pathname, basePath);
