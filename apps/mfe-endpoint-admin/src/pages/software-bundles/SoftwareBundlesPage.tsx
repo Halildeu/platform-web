@@ -8,6 +8,7 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import { useManageGate } from '../compliance-policies/useManageGate';
 import { SoftwareBundleCreateModal } from '../../widgets/software-bundle/SoftwareBundleCreateModal';
+import { ManageHint } from '../../widgets/manage-hint';
 import {
   CapabilityState,
   classifyCapabilityError,
@@ -47,6 +48,7 @@ const statusBadge = (s: SoftwareBundleStatus): string => {
 export const SoftwareBundlesPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
+  const manageHintId = React.useId();
 
   const [page, setPage] = React.useState(0);
   const [statusFilter, setStatusFilter] = React.useState<SoftwareBundleStatus | 'ALL'>('ALL');
@@ -106,12 +108,16 @@ export const SoftwareBundlesPage: React.FC = () => {
           type="button"
           onClick={() => setCreateOpen(true)}
           disabled={!canManage}
+          aria-describedby={!canManage ? manageHintId : undefined}
+          title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
           data-testid="bundles-new-button"
           className="px-4 py-2 rounded-md bg-brand-primary text-white text-sm font-medium disabled:opacity-50"
         >
           {t('endpointAdmin.bundles.page.newButton')}
         </button>
       </header>
+
+      {!canManage && <ManageHint id={manageHintId} testId="bundles-manage-hint" />}
 
       <label className="text-sm text-text-secondary">
         {t('endpointAdmin.bundles.page.statusFilter')}{' '}
@@ -183,6 +189,8 @@ export const SoftwareBundlesPage: React.FC = () => {
                         type="button"
                         onClick={() => handleApprove(b.bundleId)}
                         disabled={!canManage || approving}
+                        aria-describedby={!canManage ? manageHintId : undefined}
+                        title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
                         data-testid={`bundles-approve-${b.bundleId}`}
                         className="text-xs px-2 py-1 rounded border border-border-default text-text-primary disabled:opacity-50"
                       >
@@ -198,6 +206,8 @@ export const SoftwareBundlesPage: React.FC = () => {
                           setActionError(null);
                         }}
                         disabled={!canManage || revoking}
+                        aria-describedby={!canManage ? manageHintId : undefined}
+                        title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
                         data-testid={`bundles-revoke-${b.bundleId}`}
                         className="text-xs px-2 py-1 rounded border border-danger text-danger disabled:opacity-50"
                       >

@@ -15,6 +15,7 @@ import {
   classifyCapabilityError,
   FLEET_CAPABILITY_POLICY,
 } from '../../widgets/capability-state';
+import { ManageHint } from '../../widgets/manage-hint';
 
 /**
  * Path C3 — Endpoint Software Catalog list + authoring entry point
@@ -58,6 +59,7 @@ function riskBadgeClass(tier: CatalogRiskTier): string {
 export const EndpointCatalogItemsPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
+  const manageHintId = React.useId();
 
   const [page, setPage] = React.useState(0);
   const [statusFilter, setStatusFilter] = React.useState<CatalogItemStatus | 'ALL'>('ALL');
@@ -81,11 +83,15 @@ export const EndpointCatalogItemsPage: React.FC = () => {
           type="button"
           onClick={() => setDrawerMode({ kind: 'new' })}
           disabled={!canManage}
+          aria-describedby={!canManage ? manageHintId : undefined}
+          title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
           data-testid="catalog-items-new-button"
         >
           {t('endpointAdmin.catalog.page.newButton')}
         </button>
       </header>
+
+      {!canManage && <ManageHint id={manageHintId} testId="catalog-items-manage-hint" />}
       <div className="catalog-items__filters">
         <label>
           {t('endpointAdmin.catalog.page.statusFilter')}

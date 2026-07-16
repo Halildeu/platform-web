@@ -18,6 +18,9 @@ import type { ShellNotificationEntry, ShellTelemetryEvent } from 'mfe_shell/serv
  * noop fallback döner ve dev-warn loglar.
  */
 
+/** Module access level the shell derives from its `/v1/authz/me` authzSnapshot. */
+export type ShellModuleLevel = 'NONE' | 'VIEW' | 'MANAGE';
+
 export type RemoteShellServices = {
   notify: { push: (entry: ShellNotificationEntry) => void };
   telemetry: { emit: (event: ShellTelemetryEvent) => void };
@@ -25,6 +28,15 @@ export type RemoteShellServices = {
   auth: {
     getToken: () => string | null;
     getUser: () => unknown;
+    /**
+     * Module authorization signals. OPTIONAL by type because the standalone
+     * noop fallback has neither — but under shell-mount they ARE present at
+     * runtime: the shell injects its whole auth object BY REFERENCE
+     * (`configureShellServices`), so these methods survive this narrow type and
+     * read the shell's live authzSnapshot. See `useManageGate`.
+     */
+    getModuleLevel?: (module: string) => ShellModuleLevel;
+    isSuperAdmin?: () => boolean;
   };
 };
 

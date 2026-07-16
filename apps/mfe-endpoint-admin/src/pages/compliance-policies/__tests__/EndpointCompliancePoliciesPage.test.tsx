@@ -176,6 +176,49 @@ describe('EndpointCompliancePoliciesPage', () => {
     expect(deleteBtn.disabled).toBe(true);
   });
 
+  // S4b — shared accessible manage-hint wiring (Codex 019f67ba a11y spec).
+  it('renders the manage-hint + wires aria-describedby/title on all manage buttons when canManage=false', () => {
+    useManageGateMock.mockReturnValue(false);
+    mockList({
+      data: {
+        items: [buildPolicyItem({ id: 'p1' })],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      },
+    });
+    render(<EndpointCompliancePoliciesPage />);
+    const hint = screen.getByTestId('compliance-policies-manage-hint');
+    expect(hint.id).toBeTruthy();
+    const createBtn = screen.getByTestId('compliance-policies-create-button');
+    const editBtn = screen.getByTestId('compliance-policies-edit-p1');
+    const deleteBtn = screen.getByTestId('compliance-policies-delete-p1');
+    // Every manage-only control references the SAME single hint element.
+    expect(createBtn.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(editBtn.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(deleteBtn.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(createBtn.getAttribute('title')).toBeTruthy();
+  });
+
+  it('omits the manage-hint and aria-describedby when canManage=true', () => {
+    useManageGateMock.mockReturnValue(true);
+    mockList({
+      data: {
+        items: [buildPolicyItem({ id: 'p1' })],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      },
+    });
+    render(<EndpointCompliancePoliciesPage />);
+    expect(screen.queryByTestId('compliance-policies-manage-hint')).toBeNull();
+    expect(
+      screen.getByTestId('compliance-policies-create-button').getAttribute('aria-describedby'),
+    ).toBeNull();
+  });
+
   it('opens create dialog on create button click', () => {
     mockList({ data: { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } });
     render(<EndpointCompliancePoliciesPage />);

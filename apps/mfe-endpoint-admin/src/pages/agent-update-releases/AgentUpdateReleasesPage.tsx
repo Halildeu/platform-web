@@ -8,6 +8,7 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import { useManageGate } from '../compliance-policies/useManageGate';
 import { AgentUpdateReleaseCreateModal } from '../../widgets/agent-update-release/AgentUpdateReleaseCreateModal';
+import { ManageHint } from '../../widgets/manage-hint';
 import {
   CapabilityState,
   classifyCapabilityError,
@@ -53,6 +54,7 @@ const statusBadge = (s: AgentUpdateReleaseStatus): string => {
 export const AgentUpdateReleasesPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
+  const manageHintId = React.useId();
 
   const [page, setPage] = React.useState(0);
   const [statusFilter, setStatusFilter] = React.useState<AgentUpdateReleaseStatus | 'ALL'>('ALL');
@@ -113,12 +115,16 @@ export const AgentUpdateReleasesPage: React.FC = () => {
           type="button"
           onClick={() => setCreateOpen(true)}
           disabled={!canManage}
+          aria-describedby={!canManage ? manageHintId : undefined}
+          title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
           data-testid="releases-new-button"
           className="px-4 py-2 rounded-md bg-brand-primary text-white text-sm font-medium disabled:opacity-50"
         >
           {t('endpointAdmin.releases.page.newButton')}
         </button>
       </header>
+
+      {!canManage && <ManageHint id={manageHintId} testId="releases-manage-hint" />}
 
       <label className="text-sm text-text-secondary">
         {t('endpointAdmin.releases.page.statusFilter')}{' '}
@@ -204,6 +210,8 @@ export const AgentUpdateReleasesPage: React.FC = () => {
                         type="button"
                         onClick={() => handleApprove(r.releaseId)}
                         disabled={!canManage || approving}
+                        aria-describedby={!canManage ? manageHintId : undefined}
+                        title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
                         data-testid={`releases-approve-${r.releaseId}`}
                         className="text-xs px-2 py-1 rounded border border-border-default text-text-primary disabled:opacity-50"
                       >
@@ -219,6 +227,8 @@ export const AgentUpdateReleasesPage: React.FC = () => {
                           setActionError(null);
                         }}
                         disabled={!canManage || revoking}
+                        aria-describedby={!canManage ? manageHintId : undefined}
+                        title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
                         data-testid={`releases-revoke-${r.releaseId}`}
                         className="text-xs px-2 py-1 rounded border border-danger text-danger disabled:opacity-50"
                       >
