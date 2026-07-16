@@ -6,6 +6,36 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RecruiterWorkspacePage from './RecruiterWorkspacePage';
 
+const apiMocks = vi.hoisted(() => ({
+  listRecruiterApplications: vi.fn(),
+  updateRecruiterApplicationStatus: vi.fn(),
+}));
+vi.mock('../api/application-api', () => ({
+  listRecruiterApplications: apiMocks.listRecruiterApplications,
+  updateRecruiterApplicationStatus: apiMocks.updateRecruiterApplicationStatus,
+}));
+
+const APPLICATION = {
+  publicRef: 'app_abcdefghijklmnopqrstuvwx',
+  jobSlug: 'urun-yoneticisi',
+  jobTitle: 'Ürün Yöneticisi',
+  fullName: 'Deniz Sentetik',
+  email: 'deniz@example.test',
+  phone: '+905550000000',
+  city: 'İstanbul',
+  linkedIn: null,
+  portfolio: null,
+  summary: 'Sentetik profesyonel özet',
+  experience: 'Sentetik deneyim',
+  education: 'Sentetik eğitim',
+  skills: ['Ürün keşfi', 'Araştırma'],
+  note: 'Sentetik not',
+  status: 'SUBMITTED',
+  version: 0,
+  createdAt: '2026-07-16T10:00:00Z',
+  updatedAt: '2026-07-16T10:00:00Z',
+};
+
 const renderPage = () =>
   render(
     <MemoryRouter>
@@ -15,57 +45,49 @@ const renderPage = () =>
 
 describe('RecruiterWorkspacePage', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [APPLICATION],
+      page: 0,
+      size: 50,
+      total: 1,
+    });
+    apiMocks.updateRecruiterApplicationStatus.mockResolvedValue({
+      ...APPLICATION,
+      status: 'UNDER_REVIEW',
+      version: 1,
+    });
   });
-
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
-  it('renders a synthetic human-controlled pipeline and keeps critical actions disabled', () => {
+  it('renders the authenticated persistent inbox instead of synthetic cards', async () => {
     renderPage();
-
-    expect(screen.getByRole('heading', { name: 'İK Çalışma Alanı' })).toBeVisible();
-    expect(screen.getByTestId('recruiter-pipeline')).toBeVisible();
-    expect(screen.getByText('Aday DEMO-104')).toBeVisible();
-    expect(screen.getByRole('button', { name: /Adaya mesaj gönder/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Adayı reddet/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Teklif gönder/i })).toBeDisabled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
+    expect(screen.getByText('deniz@example.test')).toBeVisible();
+    expect(apiMocks.listRecruiterApplications).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Ret, teklif, otomatik puanlama/i)).toBeVisible();
   });
 
-  it('filters candidates by position and skill without a remote request', () => {
+  it('opens the application and performs a versioned human status transition', async () => {
     renderPage();
-
-    fireEvent.change(screen.getByLabelText('Pozisyon'), {
-      target: { value: 'frontend-developer' },
-    });
-    expect(screen.getByText('Aday DEMO-207')).toBeVisible();
-    expect(screen.queryByText('Aday DEMO-104')).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Aday veya beceri ara'), {
-      target: { value: 'erişilebilirlik' },
-    });
-    expect(screen.getByText('Aday DEMO-207')).toBeVisible();
-    expect(screen.queryByText('Aday DEMO-215')).not.toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it('creates only a local human-note preview for the selected synthetic candidate', () => {
-    renderPage();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Kanıt durumunu incele: Aday DEMO-104' }));
-    expect(screen.getByRole('heading', { name: 'Değerlendirme taslağı' })).toHaveFocus();
-    fireEvent.change(screen.getByLabelText('İnsan değerlendirme notu'), {
-      target: { value: 'Ürün keşfi örneği için insan doğrulaması bekleniyor.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Yerel taslağı önizle' }));
-
-    expect(screen.getByTestId('recruiter-local-note-preview')).toHaveTextContent(
-      'Ürün keşfi örneği için insan doğrulaması bekleniyor.',
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    fireEvent.click(screen.getByRole('button', { name: 'İnsan incelemesini başlat' }));
+    expect(apiMocks.updateRecruiterApplicationStatus).toHaveBeenCalledWith(
+      APPLICATION.publicRef,
+      0,
+      'UNDER_REVIEW',
     );
-    expect(screen.getByText('Kaydedilmedi veya gönderilmedi.')).toBeVisible();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'Mülakat planlamasına al' })).toBeVisible();
+  });
+
+  it('filters the real inbox by candidate or skill', async () => {
+    renderPage();
+    await screen.findByText('Deniz Sentetik');
+    fireEvent.change(screen.getByLabelText('Aday, e-posta veya beceri ara'), {
+      target: { value: 'bulunmayan' },
+    });
+    expect(screen.queryByText('Deniz Sentetik')).not.toBeInTheDocument();
   });
 });

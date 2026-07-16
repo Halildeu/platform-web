@@ -1,6 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { PUBLIC_JOB_BY_SLUG } from './publicJobCatalog';
+import {
+  createApplicationIdempotencyKey,
+  createCandidateAccessToken,
+  getPublicJob,
+  saveCandidateSession,
+  submitApplication,
+  type ApplicationReceiptDto,
+  type PublicJobDto,
+} from '../../features/ats-portals/api/application-api';
 
 type ApplicationValues = {
   fullName: string;
@@ -97,25 +105,23 @@ const isValidOptionalHttpUrl = (value: string) => {
 
 const CandidateApplicationPage = () => {
   const { jobSlug = 'urun-yoneticisi' } = useParams();
-  const job = useMemo(
-    () =>
-      PUBLIC_JOB_BY_SLUG[jobSlug] ?? {
-        title: humanizeSlug(jobSlug) || 'Açık Pozisyon',
-        team: 'Açık Pozisyon',
-        location: 'Türkiye',
-        mode: 'Esnek',
-        employmentType: 'Tam zamanlı',
-      },
-    [jobSlug],
-  );
+  const [job, setJob] = useState<PublicJobDto | null>(null);
+  const [jobError, setJobError] = useState('');
   const [values, setValues] = useState<ApplicationValues>(EMPTY_VALUES);
   const [view, setView] = useState<View>('form');
   const [fileMeta, setFileMeta] = useState<LocalFileMeta | null>(null);
   const [fileError, setFileError] = useState('');
   const [formError, setFormError] = useState('');
   const [noticeAccepted, setNoticeAccepted] = useState(false);
+  const [noticeAcceptedAt, setNoticeAcceptedAt] = useState('');
   const [accuracyConfirmed, setAccuracyConfirmed] = useState(false);
-  const [receiptId, setReceiptId] = useState('');
+  const [accuracyConfirmedAt, setAccuracyConfirmedAt] = useState('');
+  const [receipt, setReceipt] = useState<ApplicationReceiptDto | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [candidateSessionSaved, setCandidateSessionSaved] = useState(false);
+  const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
+  const candidateAccessTokenRef = useRef(createCandidateAccessToken());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const receiptHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -127,6 +133,24 @@ const CandidateApplicationPage = () => {
     return () => window.clearTimeout(timer);
   }, [view]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setJob(null);
+    setJobError('');
+    void getPublicJob(jobSlug)
+      .then((loaded) => {
+        if (!cancelled) setJob(loaded);
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) {
+          setJobError(loadError instanceof Error ? loadError.message : 'İlan yüklenemedi.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobSlug]);
+
   const updateValue =
     (
       field: keyof ApplicationValues,
@@ -134,6 +158,7 @@ const CandidateApplicationPage = () => {
     (event) => {
       setValues((current) => ({ ...current, [field]: event.target.value }));
       setFormError('');
+      setSubmitError('');
     };
 
   const applySyntheticResume = () => {
@@ -186,6 +211,12 @@ const CandidateApplicationPage = () => {
       setFormError('Geçerli bir e-posta adresi girin.');
       return;
     }
+    if (!values.email.trim().toLocaleLowerCase('tr-TR').endsWith('.test')) {
+      setFormError(
+        'Bu test sürümü gerçek aday verisine kapalıdır. Yalnız .test uzantılı sentetik e-posta kullanın.',
+      );
+      return;
+    }
     if (!isValidPhone(values.phone)) {
       setFormError('Geçerli bir telefon numarası girin.');
       return;
@@ -199,17 +230,64 @@ const CandidateApplicationPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const createLocalReceipt = () => {
-    if (!noticeAccepted || !accuracyConfirmed) return;
-    const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
-    setReceiptId(`DEMO-${suffix}`);
-    setView('receipt');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const createPersistentReceipt = async () => {
+    if (
+      !job ||
+      !noticeAccepted ||
+      !noticeAcceptedAt ||
+      !accuracyConfirmed ||
+      !accuracyConfirmedAt ||
+      submitting
+    )
+      return;
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const saved = await submitApplication(
+        jobSlug,
+        idempotencyKeyRef.current,
+        candidateAccessTokenRef.current,
+        {
+          fullName: values.fullName,
+          email: values.email,
+          phone: values.phone,
+          city: values.city,
+          linkedIn: values.linkedIn || undefined,
+          portfolio: values.portfolio || undefined,
+          summary: values.summary,
+          experience: values.experience,
+          education: values.education,
+          skills: values.skills
+            .split(',')
+            .map((skill) => skill.trim())
+            .filter(Boolean),
+          note: values.note || undefined,
+          noticeVersion: 'kvkk-application-v1',
+          noticeAcceptedAt,
+          accuracyConfirmedAt,
+        },
+      );
+      setReceipt(saved);
+      setCandidateSessionSaved(saveCandidateSession(saved));
+      setView('receipt');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (submissionError) {
+      setSubmitError(
+        submissionError instanceof Error ? submissionError.message : 'Başvuru gönderilemedi.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const editApplication = () => {
     setNoticeAccepted(false);
+    setNoticeAcceptedAt('');
     setAccuracyConfirmed(false);
+    setAccuracyConfirmedAt('');
+    setSubmitError('');
+    idempotencyKeyRef.current = createApplicationIdempotencyKey();
+    candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
   };
 
@@ -220,7 +298,13 @@ const CandidateApplicationPage = () => {
     setFormError('');
     setNoticeAccepted(false);
     setAccuracyConfirmed(false);
-    setReceiptId('');
+    setAccuracyConfirmedAt('');
+    setNoticeAcceptedAt('');
+    setReceipt(null);
+    setSubmitError('');
+    setCandidateSessionSaved(false);
+    idempotencyKeyRef.current = createApplicationIdempotencyKey();
+    candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -329,21 +413,32 @@ const CandidateApplicationPage = () => {
         <div className="min-w-0">
           <section className="mb-6 overflow-hidden rounded-3xl bg-text-primary px-5 py-7 text-white shadow-lg sm:px-8 sm:py-9">
             <div className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-              {job.team}
+              {job?.team ?? 'Açık Pozisyon'}
             </div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">{job.title}</h1>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
+              {(job?.title ?? humanizeSlug(jobSlug)) || 'İlan yükleniyor'}
+            </h1>
             <div className="mt-4 flex flex-wrap gap-2 text-sm text-white/80">
-              <span>{job.location}</span>
+              <span>{job?.location ?? 'Yükleniyor'}</span>
               <span aria-hidden="true">•</span>
-              <span>{job.mode}</span>
+              <span>{job?.mode ?? '—'}</span>
               <span aria-hidden="true">•</span>
-              <span>{job.employmentType}</span>
+              <span>{job?.employmentType ?? '—'}</span>
             </div>
             <p className="mt-5 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
-              Başvurunuzu kendi hızınızda hazırlayın. CV’nizden gelen önerileri kontrol edin,
-              istediğiniz alanı değiştirin ve göndermeden önce tamamını önizleyin.
+              Başvurunuzu kendi hızınızda hazırlayın. Örnek alanları kontrol edin, istediğiniz
+              bilgiyi değiştirin ve göndermeden önce tamamını önizleyin.
             </p>
           </section>
+
+          {jobError ? (
+            <p
+              role="alert"
+              className="mb-6 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+            >
+              İlan servisine ulaşılamadı: {jobError}
+            </p>
+          ) : null}
 
           <nav aria-label="Başvuru adımları" className="mb-6 grid grid-cols-3 gap-2">
             {[
@@ -550,7 +645,7 @@ const CandidateApplicationPage = () => {
                   <h2
                     ref={previewHeadingRef}
                     id="preview-heading"
-                    className="mt-1 text-2xl font-bold outline-hidden"
+                    className="mt-1 text-2xl font-bold outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                     tabIndex={-1}
                   >
                     Başvuru önizlemesi
@@ -603,12 +698,21 @@ const CandidateApplicationPage = () => {
                     id="candidate-notice-accepted"
                     type="checkbox"
                     checked={noticeAccepted}
-                    onChange={(event) => setNoticeAccepted(event.target.checked)}
+                    onChange={(event) => {
+                      setNoticeAccepted(event.target.checked);
+                      setNoticeAcceptedAt(event.target.checked ? new Date().toISOString() : '');
+                      if (!event.target.checked) {
+                        setAccuracyConfirmed(false);
+                        setAccuracyConfirmedAt('');
+                      }
+                      setSubmitError('');
+                    }}
                     className="mt-1 h-4 w-4"
                   />
                   <span>
-                    Bu ekranın yalnız yerel ürün önizlemesi olduğunu ve gerçek başvuru
-                    göndermediğini anladım.
+                    KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
+                    kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla kaydedileceğini
+                    anladım.
                   </span>
                 </label>
                 <label
@@ -619,27 +723,46 @@ const CandidateApplicationPage = () => {
                     id="candidate-accuracy-confirmed"
                     type="checkbox"
                     checked={accuracyConfirmed}
-                    onChange={(event) => setAccuracyConfirmed(event.target.checked)}
+                    onChange={(event) => {
+                      setAccuracyConfirmed(event.target.checked);
+                      setAccuracyConfirmedAt(event.target.checked ? new Date().toISOString() : '');
+                    }}
                     className="mt-1 h-4 w-4"
                   />
                   <span>
-                    Önizlemedeki bilgileri kontrol ettim ve deneme gönderimi için onaylıyorum.
+                    Önizlemedeki bilgileri kontrol ettim ve bu ilana başvuru olarak gönderilmesini
+                    onaylıyorum.
                   </span>
                 </label>
               </div>
 
               <button
                 type="button"
-                data-testid="create-local-application-receipt"
-                onClick={createLocalReceipt}
-                disabled={!noticeAccepted || !accuracyConfirmed}
+                data-testid="create-application-receipt"
+                onClick={() => void createPersistentReceipt()}
+                disabled={
+                  !job ||
+                  !noticeAccepted ||
+                  !noticeAcceptedAt ||
+                  !accuracyConfirmed ||
+                  !accuracyConfirmedAt ||
+                  submitting
+                }
                 className="mt-5 min-h-12 w-full rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
               >
-                Deneme başvuru makbuzu oluştur
+                {submitting ? 'Başvuru kaydediliyor…' : 'Başvuruyu gönder'}
               </button>
+              {submitError ? (
+                <p
+                  role="alert"
+                  className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+                >
+                  Başvuru gönderilemedi: {submitError}
+                </p>
+              ) : null}
               <p className="mt-3 text-center text-xs text-text-secondary">
-                Bu işlem gerçek bir başvuru göndermez; veri ve dosya yalnız tarayıcı belleğinde
-                kalır.
+                Form alanları kalıcı test başvurusu olarak kaydedilir. PDF dosyası bu dilimde
+                sunucuya gönderilmez.
               </p>
             </section>
           ) : null}
@@ -651,44 +774,57 @@ const CandidateApplicationPage = () => {
               aria-labelledby="receipt-heading"
             >
               <div
-                className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-border-subtle bg-surface-subtle text-lg font-bold text-text-primary"
+                className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-state-success-border bg-state-success-bg text-lg font-bold text-state-success-text"
                 aria-hidden="true"
               >
-                DEMO
+                ✓
               </div>
               <p className="mt-5 text-xs font-bold uppercase tracking-wider text-text-primary">
-                Yerel deneme makbuzu
+                Kalıcı test başvurusu
               </p>
               <h2
                 ref={receiptHeadingRef}
                 id="receipt-heading"
-                className="mt-2 text-2xl font-bold outline-hidden"
+                className="mt-2 text-2xl font-bold outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 tabIndex={-1}
               >
-                Form akışı başarıyla denendi
+                Başvurunuz kaydedildi
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-text-secondary">
-                {values.fullName} için hazırlanan önizleme tamamlandı. Hiçbir kişisel bilgi, PDF
-                veya başvuru sunucuya gönderilmedi.
+                {values.fullName} için başvuru güvenli servise kaydedildi. İK çalışma alanında
+                görünür ve durum değişikliklerini Aday Alanım’dan takip edebilirsiniz.
               </p>
               <div className="mx-auto mt-5 max-w-md rounded-xl border border-border-subtle bg-surface-subtle p-4">
                 <span className="block text-xs font-semibold text-text-secondary">
-                  Deneme referansı
+                  Başvuru referansı
                 </span>
                 <strong className="mt-1 block font-mono text-lg" data-testid="candidate-receipt-id">
-                  {receiptId}
+                  {receipt?.publicRef}
                 </strong>
               </div>
-              <div className="mt-6 rounded-xl border border-state-warning-border bg-state-warning-bg p-4 text-left text-sm leading-6 text-text-primary">
-                Bu makbuz gerçek işe başvuru kanıtı değildir. Kalıcı gönderim ve recruiter inbox
-                bağlantısı sonraki güvenli ürün diliminde açılacaktır.
+              <div
+                className={`mt-6 rounded-xl border p-4 text-left text-sm leading-6 text-text-primary ${
+                  candidateSessionSaved
+                    ? 'border-state-success-border bg-state-success-bg'
+                    : 'border-state-warning-border bg-state-warning-bg'
+                }`}
+              >
+                {candidateSessionSaved
+                  ? 'Takip anahtarı yalnız bu tarayıcı sekmesinin güvenli oturumunda tutuldu. Aday Alanım ekranından durumu izleyebilirsiniz.'
+                  : 'Başvuru kaydedildi ancak tarayıcı takip anahtarını oturumda saklayamadı. Referansınızı not edin.'}
               </div>
+              <Link
+                to="/candidate"
+                className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text"
+              >
+                Aday Alanım’da durumu gör
+              </Link>
               <button
                 type="button"
                 onClick={resetDemo}
-                className="mt-6 rounded-xl border border-action-primary px-5 py-3 text-sm font-bold text-action-primary hover:bg-action-primary/5"
+                className="ml-0 mt-3 rounded-xl border border-action-primary px-5 py-3 text-sm font-bold text-action-primary hover:bg-action-primary/5 sm:ml-3 sm:mt-6"
               >
-                Yeni form denemesi
+                Yeni başvuru formu
               </button>
             </section>
           ) : null}
@@ -702,7 +838,7 @@ const CandidateApplicationPage = () => {
             <h2 className="text-base font-bold">Başvurunuz sizde</h2>
             <ul className="mt-4 flex flex-col gap-3 text-sm leading-5 text-text-secondary">
               <li>• CV önerilerini değiştirebilirsiniz.</li>
-              <li>• Önizlemeden önce hiçbir şey gönderilmez.</li>
+              <li>• Gönder düğmesinden önce hiçbir şey kaydedilmez.</li>
               <li>• Testte gerçek kişisel veri kullanmayın.</li>
               <li>• Oturum açmanız gerekmez.</li>
             </ul>
