@@ -1672,6 +1672,10 @@ const DICT_TR = {
   'endpointAdmin.capabilityState.error.description':
     'Beklenmeyen bir hata oluştu. Yeniden deneyebilirsiniz.',
   'endpointAdmin.capabilityState.retry': 'Yeniden dene',
+  // Faz 22 S4b — paylaşılan MANAGE-yetkisi ipucu (VIEW-only kullanıcı disabled
+  // aksiyonun NEDENİNİ görsün). Domain-bağımsız tek key; per-sayfa ödünç alınmaz.
+  'endpointAdmin.authz.manageRequired':
+    'Bu sayfayı görüntüleyebilirsiniz. Değişiklik yapmak için yönetme yetkisi gerekir.',
 } as const;
 
 const DICT_EN: Record<keyof typeof DICT_TR, string> = {
@@ -3305,6 +3309,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.capabilityState.error.title': 'Could not load data',
   'endpointAdmin.capabilityState.error.description': 'Something went wrong. You can try again.',
   'endpointAdmin.capabilityState.retry': 'Retry',
+  // Faz 22 S4b — shared MANAGE-permission hint (so a VIEW-only user sees WHY a
+  // disabled action is disabled). One domain-agnostic key; not borrowed per-page.
+  'endpointAdmin.authz.manageRequired':
+    'You can view this page. Manage access is required to make changes.',
 };
 
 function resolveLocale(): 'tr' | 'en' {
