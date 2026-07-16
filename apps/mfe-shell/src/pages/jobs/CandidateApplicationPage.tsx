@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { PUBLIC_JOB_BY_SLUG } from './publicJobCatalog';
 
 type ApplicationValues = {
   fullName: string;
@@ -51,27 +52,6 @@ const SYNTHETIC_VALUES: ApplicationValues = {
   note: 'İlanın kullanıcı odaklı ürün geliştirme yaklaşımıyla özellikle ilgileniyorum.',
 };
 
-const JOBS: Record<string, { title: string; team: string; location: string; mode: string }> = {
-  'urun-yoneticisi': {
-    title: 'Ürün Yöneticisi',
-    team: 'Ürün ve Deneyim',
-    location: 'İstanbul',
-    mode: 'Hibrit',
-  },
-  'senior-frontend-developer': {
-    title: 'Senior Frontend Developer',
-    team: 'Platform Engineering',
-    location: 'İstanbul',
-    mode: 'Hibrit',
-  },
-  'product-designer': {
-    title: 'Product Designer',
-    team: 'Ürün ve Deneyim',
-    location: 'Uzaktan',
-    mode: 'Remote',
-  },
-};
-
 const REQUIRED_FIELDS: Array<keyof ApplicationValues> = [
   'fullName',
   'email',
@@ -120,11 +100,12 @@ const CandidateApplicationPage = () => {
   const { jobSlug = 'urun-yoneticisi' } = useParams();
   const job = useMemo(
     () =>
-      JOBS[jobSlug] ?? {
+      PUBLIC_JOB_BY_SLUG[jobSlug] ?? {
         title: humanizeSlug(jobSlug) || 'Açık Pozisyon',
         team: 'Açık Pozisyon',
         location: 'Türkiye',
         mode: 'Esnek',
+        employmentType: 'Tam zamanlı',
       },
     [jobSlug],
   );
@@ -316,9 +297,9 @@ const CandidateApplicationPage = () => {
       <div className="border-b border-border-subtle bg-surface-default">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link
-            to={`/jobs/${jobSlug}/apply`}
+            to="/jobs"
             className="flex items-center gap-3"
-            aria-label="Açık Kariyer"
+            aria-label="Açık Kariyer ilan listesi"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-action-primary text-sm font-bold text-action-primary-text">
               A
@@ -346,7 +327,7 @@ const CandidateApplicationPage = () => {
               <span aria-hidden="true">•</span>
               <span>{job.mode}</span>
               <span aria-hidden="true">•</span>
-              <span>Tam zamanlı</span>
+              <span>{job.employmentType}</span>
             </div>
             <p className="mt-5 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
               Başvurunuzu kendi hızınızda hazırlayın. CV’nizden gelen önerileri kontrol edin,

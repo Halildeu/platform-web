@@ -90,6 +90,7 @@ const UnsubscribeLandingPage = React.lazy(
 const CandidateApplicationPage = React.lazy(
   () => import('../../pages/jobs/CandidateApplicationPage'),
 );
+const PublicJobsPage = React.lazy(() => import('../../pages/jobs/PublicJobsPage'));
 
 /* ------------------------------------------------------------------ */
 /*  AppRouter — All application routes                                 */
@@ -393,6 +394,8 @@ export const AppRouter: React.FC = () => {
             remain usable on logged-out devices, so this route deliberately
             sits outside ProtectedRoute. The first slice is local-only and
             never uploads the selected PDF or submits candidate data. */}
+        <Route path="/jobs" element={<PublicJobsPage />} />
+        <Route path="/jobs/" element={<PublicJobsPage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
         <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
         <Route path="/login" element={<LoginPage />} />
