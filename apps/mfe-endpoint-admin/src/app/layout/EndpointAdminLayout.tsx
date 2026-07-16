@@ -4,6 +4,7 @@ import { AppSidebar } from '@mfe/design-system/components';
 import { useEndpointAdminI18n } from '../../i18n';
 import {
   ENDPOINT_ADMIN_NAV,
+  isRemoteViewPath,
   resolveActiveNavPath,
   resolveEndpointAdminTo,
 } from './endpoint-admin-nav.config';
@@ -40,6 +41,7 @@ export const EndpointAdminLayout: React.FC<{ children: React.ReactNode }> = ({ c
   const { t } = useEndpointAdminI18n();
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const restrictedRemoteView = isRemoteViewPath(pathname);
 
   const navPaths = ENDPOINT_ADMIN_NAV.flatMap((section) => section.items.map((item) => item.path));
   const activePath = resolveActiveNavPath(pathname, navPaths);
@@ -58,29 +60,31 @@ export const EndpointAdminLayout: React.FC<{ children: React.ReactNode }> = ({ c
       {/* Click delegation: the interactive controls are the keyboard-navigable
           <a> nav items below; this only upgrades their plain-click to SPA nav
           (keyboard Enter also fires a click, so it is handled too). */}
-      <div onClick={handleNavClick}>
-        <AppSidebar>
-          <AppSidebar.Header title={t('endpointAdmin.title')} action={<AppSidebar.Trigger />} />
-          <AppSidebar.Nav>
-            {ENDPOINT_ADMIN_NAV.map((section) => (
-              <AppSidebar.Section key={section.key} title={t(section.titleKey)}>
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <AppSidebar.NavItem
-                      key={item.key}
-                      icon={<Icon size={18} />}
-                      label={t(item.labelKey)}
-                      href={resolveEndpointAdminTo(pathname, item.path)}
-                      active={item.path === activePath}
-                    />
-                  );
-                })}
-              </AppSidebar.Section>
-            ))}
-          </AppSidebar.Nav>
-        </AppSidebar>
-      </div>
+      {!restrictedRemoteView && (
+        <div onClick={handleNavClick}>
+          <AppSidebar>
+            <AppSidebar.Header title={t('endpointAdmin.title')} action={<AppSidebar.Trigger />} />
+            <AppSidebar.Nav>
+              {ENDPOINT_ADMIN_NAV.map((section) => (
+                <AppSidebar.Section key={section.key} title={t(section.titleKey)}>
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <AppSidebar.NavItem
+                        key={item.key}
+                        icon={<Icon size={18} />}
+                        label={t(item.labelKey)}
+                        href={resolveEndpointAdminTo(pathname, item.path)}
+                        active={item.path === activePath}
+                      />
+                    );
+                  })}
+                </AppSidebar.Section>
+              ))}
+            </AppSidebar.Nav>
+          </AppSidebar>
+        </div>
+      )}
       <section
         aria-label={t('endpointAdmin.title')}
         style={{ flex: 1, minWidth: 0, overflow: 'auto' }}

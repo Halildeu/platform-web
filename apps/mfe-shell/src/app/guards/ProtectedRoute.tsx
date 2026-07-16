@@ -3,7 +3,18 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { usePermissions } from '@mfe/auth';
 import { isPermitAllMode } from '../auth/auth-config';
-import { selectAuthPhase } from '../../features/auth/model/auth.slice';
+import { decodeJwtPayload, selectAuthPhase } from '../../features/auth/model/auth.slice';
+
+export function hasRealmRole(token: string | null, requiredRole: string): boolean {
+  if (!token || !requiredRole.trim()) return false;
+  const payload = decodeJwtPayload(token);
+  const realmAccess = payload?.['realm_access'];
+  if (!realmAccess || typeof realmAccess !== 'object' || Array.isArray(realmAccess)) return false;
+  const roles = (realmAccess as Record<string, unknown>)['roles'];
+  if (!Array.isArray(roles)) return false;
+  const expected = requiredRole.trim().toLowerCase();
+  return roles.some((role) => typeof role === 'string' && role.trim().toLowerCase() === expected);
+}
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,6 +24,11 @@ interface ProtectedRouteProps {
   requiredModule?: string;
   /** OpenFGA module alternatives — route is allowed when any one is granted. */
   requiredAnyModule?: string[];
+  /**
+   * Exact IdP realm role required by a transport-specific product surface.
+   * Keep this narrow: ordinary product authorization belongs to OpenFGA modules.
+   */
+  requiredRole?: string;
   fallbackPath?: string;
 }
 
@@ -21,6 +37,7 @@ export const ProtectedRoute = ({
   requiredPermissions,
   requiredModule,
   requiredAnyModule,
+  requiredRole,
   fallbackPath = '/unauthorized',
 }: ProtectedRouteProps) => {
   const { token, initialized } = useAppSelector((state) => state.auth);
@@ -73,7 +90,12 @@ export const ProtectedRoute = ({
   // Module-based check (preferred)
   let canAccess: boolean;
   const requiredModuleAlternatives = requiredAnyModule?.filter(Boolean) ?? [];
-  if (requiredModuleAlternatives.length > 0) {
+  if (requiredRole) {
+    // Realm-role gates deliberately do not inherit the OpenFGA super-admin
+    // bypass. The downstream remote-support transport requires the same role,
+    // so the shell and API fail closed on one identity contract.
+    canAccess = hasRealmRole(token, requiredRole);
+  } else if (requiredModuleAlternatives.length > 0) {
     canAccess = isSuperAdmin() || requiredModuleAlternatives.some((module) => hasModule(module));
   } else if (requiredModule) {
     canAccess = isSuperAdmin() || hasModule(requiredModule);
@@ -91,10 +113,14 @@ export const ProtectedRoute = ({
         replace
         state={{
           from: location.pathname,
-          reason:
-            requiredModule || requiredModuleAlternatives.length > 0 ? 'module_denied' : 'forbidden',
+          reason: requiredRole
+            ? 'role_denied'
+            : requiredModule || requiredModuleAlternatives.length > 0
+              ? 'module_denied'
+              : 'forbidden',
           requiredModule,
           requiredAnyModule: requiredModuleAlternatives,
+          requiredRole,
         }}
       />
     );
