@@ -15,6 +15,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import {
+  BUILD_INFO_SCHEMA_VERSION,
+  collectRootEntrypoints,
+} from './build-info-contract.mjs';
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDir, '..', '..');
 const outputDir = path.resolve(webRoot, 'dist/ubuntu-single-domain');
@@ -163,18 +168,12 @@ function listAssetsIn(dir) {
   return readdirSync(dir).filter((f) => /\.(js|css|map|json)$/i.test(f)).sort();
 }
 
-function findRootEntry(distDir) {
-  const indexHtml = path.join(distDir, 'index.html');
-  if (!existsSync(indexHtml)) return null;
-  const html = readFileSync(indexHtml, 'utf8');
-  // Vite: <script type="module" crossorigin src="/assets/index-XXXXXX.js"></script>
-  const match = html.match(/\/assets\/(index-[A-Za-z0-9_-]+\.js)/);
-  return match ? match[1] : null;
-}
-
 function writeBuildInfo(origin, remotes, sha) {
   const shortSha = sha === 'unknown' ? 'unknown' : sha.slice(0, 7);
-  const rootEntry = findRootEntry(outputDir);
+  const rootEntrypoints = collectRootEntrypoints(outputDir);
+  // Legacy basename retained for older diagnostics. v2 consumers MUST use
+  // rootEntrypoints[].path + bodySha256 for the content-addressed contract.
+  const rootEntry = path.posix.basename(rootEntrypoints[0].path);
   const rootAssets = listAssetsIn(path.join(outputDir, 'assets'));
   const remoteEntries = remotes.map(({ app, slug }) => ({
     app,
@@ -184,6 +183,7 @@ function writeBuildInfo(origin, remotes, sha) {
   }));
 
   const buildInfo = {
+    schemaVersion: BUILD_INFO_SCHEMA_VERSION,
     sha,
     shortSha,
     ref: resolveBuildRef(),
@@ -192,6 +192,7 @@ function writeBuildInfo(origin, remotes, sha) {
     buildTime: new Date().toISOString(),
     origin,
     rootEntry,
+    rootEntrypoints,
     assets: rootAssets,
     remotes: remoteEntries,
   };
