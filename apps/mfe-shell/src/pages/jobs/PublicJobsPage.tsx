@@ -1,8 +1,25 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PUBLIC_JOBS } from './publicJobCatalog';
+import { listPublicJobs, type PublicJobDto } from '../../features/ats-portals/api/application-api';
 
 const PublicJobsPage = () => {
+  const [jobs, setJobs] = useState<PublicJobDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadJobs = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setJobs(await listPublicJobs());
+    } catch (loadError) {
+      setJobs([]);
+      setError(loadError instanceof Error ? loadError.message : 'İlanlar yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const previousTitle = document.title;
     document.title = 'Açık Pozisyonlar | Açık Kariyer';
@@ -10,6 +27,10 @@ const PublicJobsPage = () => {
       document.title = previousTitle;
     };
   }, []);
+
+  useEffect(() => {
+    void loadJobs();
+  }, [loadJobs]);
 
   return (
     <main
@@ -39,7 +60,7 @@ const PublicJobsPage = () => {
               Aday Alanım
             </Link>
             <span className="hidden rounded-full border border-border-subtle bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary sm:inline-flex">
-              Test kataloğu
+              Canlı başvuru akışı
             </span>
           </nav>
         </div>
@@ -56,8 +77,8 @@ const PublicJobsPage = () => {
             hazırlamaya başlayın.
           </p>
           <div className="mt-6 inline-flex rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm leading-6 text-white/90">
-            Bu test ortamındaki ilanlar sentetiktir. Gerçek kişisel veri kullanmayın; bu aşamada
-            kalıcı başvuru gönderilmez.
+            Bu test ortamındaki ilanlar sentetiktir. Form gönderimi kalıcı olarak test veritabanına
+            kaydedilir; gerçek kişisel veri kullanmayın.
           </div>
         </section>
 
@@ -71,11 +92,39 @@ const PublicJobsPage = () => {
                 Açık pozisyonlar
               </h2>
             </div>
-            <p className="text-sm text-text-secondary">{PUBLIC_JOBS.length} sentetik ilan</p>
+            <p className="text-sm text-text-secondary">
+              {loading ? 'İlanlar yükleniyor' : `${jobs.length} açık ilan`}
+            </p>
           </div>
 
+          {error ? (
+            <div
+              className="mt-6 rounded-2xl border border-state-danger-border bg-state-danger-bg p-5"
+              role="alert"
+            >
+              <p className="font-semibold text-state-danger-text">İlan servisine ulaşılamadı.</p>
+              <p className="mt-1 text-sm text-text-secondary">{error}</p>
+              <button
+                type="button"
+                onClick={() => void loadJobs()}
+                className="mt-4 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold"
+              >
+                Yeniden dene
+              </button>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div
+              className="mt-6 rounded-2xl border border-border-subtle bg-surface-default p-6 text-sm text-text-secondary"
+              role="status"
+            >
+              Açık pozisyonlar güvenli servisten yükleniyor…
+            </div>
+          ) : null}
+
           <ul className="mt-6 grid gap-4 lg:grid-cols-3" aria-label="Açık pozisyon listesi">
-            {PUBLIC_JOBS.map((job) => (
+            {jobs.map((job) => (
               <li key={job.slug}>
                 <article
                   className="flex h-full flex-col rounded-2xl border border-border-subtle bg-surface-default p-5 shadow-xs transition hover:border-border-strong hover:shadow-sm sm:p-6"
@@ -130,8 +179,8 @@ const PublicJobsPage = () => {
           <h2 className="font-bold">Başvuru kontrolü sizde</h2>
           <p className="mt-2 max-w-3xl">
             Sonraki ekranda örnek CV verileriyle formu deneyebilir, bütün alanları değiştirebilir ve
-            göndermeden önce önizleyebilirsiniz. Test yüzeyi dosyanızı veya form verinizi sunucuya
-            göndermez.
+            göndermeden önce önizleyebilirsiniz. PDF içeriği bu dilimde gönderilmez; doğruladığınız
+            form alanları onayınızdan sonra kalıcı test başvurusu olarak kaydedilir.
           </p>
         </aside>
       </div>

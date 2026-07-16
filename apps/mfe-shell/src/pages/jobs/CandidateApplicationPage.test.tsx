@@ -2,180 +2,150 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CandidateApplicationPage from './CandidateApplicationPage';
 
-const renderPage = (path = '/jobs/urun-yoneticisi/apply') =>
+const apiMocks = vi.hoisted(() => ({
+  getPublicJob: vi.fn(),
+  submitApplication: vi.fn(),
+  saveCandidateSession: vi.fn(),
+  createApplicationIdempotencyKey: vi.fn(),
+  createCandidateAccessToken: vi.fn(),
+}));
+vi.mock('../../features/ats-portals/api/application-api', () => ({
+  getPublicJob: apiMocks.getPublicJob,
+  submitApplication: apiMocks.submitApplication,
+  saveCandidateSession: apiMocks.saveCandidateSession,
+  createApplicationIdempotencyKey: apiMocks.createApplicationIdempotencyKey,
+  createCandidateAccessToken: apiMocks.createCandidateAccessToken,
+}));
+
+const JOB = {
+  slug: 'urun-yoneticisi',
+  title: 'Ürün Yöneticisi',
+  team: 'Ürün',
+  location: 'İstanbul',
+  mode: 'Hibrit',
+  employmentType: 'Tam zamanlı',
+  summary: 'Sentetik ilan',
+  highlights: ['Ürün keşfi'],
+};
+
+const RECEIPT = {
+  publicRef: 'app_abcdefghijklmnopqrstuvwx',
+  candidateAccessToken: 'A'.repeat(43),
+  status: 'SUBMITTED',
+  version: 0,
+  submittedAt: '2026-07-16T10:00:00Z',
+  replayed: false,
+};
+
+const renderPage = () =>
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={['/jobs/urun-yoneticisi/apply']}>
       <Routes>
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
       </Routes>
     </MemoryRouter>,
   );
 
+const reachPreview = async () => {
+  await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+  fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+  fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
+  expect(screen.getByTestId('candidate-application-preview')).toBeVisible();
+};
+
 describe('CandidateApplicationPage', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
+    apiMocks.getPublicJob.mockResolvedValue(JOB);
+    apiMocks.submitApplication.mockResolvedValue(RECEIPT);
+    apiMocks.saveCandidateSession.mockReturnValue(true);
+    apiMocks.createApplicationIdempotencyKey.mockReturnValue('web-idempotency-123456');
+    apiMocks.createCandidateAccessToken.mockReturnValue('A'.repeat(43));
     vi.stubGlobal('scrollTo', vi.fn());
   });
-
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
-  it('renders a logged-out public job application form with candidate fields', () => {
+  it('submits the editable form to the persistent API and stores tracking only after success', async () => {
     renderPage();
-
-    expect(screen.getByRole('heading', { name: 'Ürün Yöneticisi' })).toBeInTheDocument();
-    expect(screen.getByTestId('candidate-fullName')).toBeInTheDocument();
-    expect(screen.getByTestId('candidate-email')).toBeInTheDocument();
-    expect(screen.getByTestId('candidate-resume')).toHaveAttribute(
-      'accept',
-      'application/pdf,.pdf',
-    );
-    expect(screen.getByRole('link', { name: 'Açık Kariyer ilan listesi' })).toHaveAttribute(
-      'href',
-      '/jobs',
-    );
-    expect(screen.getByRole('link', { name: 'Aday Alanım' })).toHaveAttribute('href', '/candidate');
-    expect(screen.queryByText(/giriş yap/i)).not.toBeInTheDocument();
-  });
-
-  it('fills an editable synthetic resume, previews it and creates only a local receipt', () => {
-    const fetchMock = vi.mocked(fetch);
-    renderPage();
-
-    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    expect(screen.getByTestId('candidate-email')).toHaveValue('deniz.yilmaz@example.test');
-    fireEvent.change(screen.getByTestId('candidate-fullName'), {
-      target: { value: 'Düzenlenmiş Demo Adayı' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
-
-    expect(screen.getByTestId('candidate-application-preview')).toHaveTextContent(
-      'Düzenlenmiş Demo Adayı',
-    );
+    await reachPreview();
     const confirmations = screen.getAllByRole('checkbox');
     fireEvent.click(confirmations[0]);
     fireEvent.click(confirmations[1]);
-    fireEvent.click(screen.getByTestId('create-local-application-receipt'));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
 
-    expect(screen.getByTestId('candidate-application-receipt')).toHaveTextContent(
-      'Form akışı başarıyla denendi',
+    expect(await screen.findByRole('heading', { name: 'Başvurunuz kaydedildi' })).toBeVisible();
+    expect(screen.getByTestId('candidate-receipt-id')).toHaveTextContent(RECEIPT.publicRef);
+    expect(apiMocks.submitApplication).toHaveBeenCalledWith(
+      'urun-yoneticisi',
+      'web-idempotency-123456',
+      'A'.repeat(43),
+      expect.objectContaining({
+        email: 'deniz.yilmaz@example.test',
+        skills: expect.arrayContaining(['Ürün keşfi', 'erişilebilirlik']),
+        noticeVersion: 'kvkk-application-v1',
+        accuracyConfirmedAt: expect.any(String),
+      }),
     );
-    expect(screen.getByTestId('candidate-receipt-id')).toHaveTextContent(/^DEMO-[A-Z0-9]+$/);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(apiMocks.saveCandidateSession).toHaveBeenCalledWith(RECEIPT);
   });
 
-  it('keeps selected PDF bytes local and displays only file metadata', () => {
-    const fetchMock = vi.mocked(fetch);
-    renderPage('/jobs/senior-frontend-developer/apply');
+  it('does not show a receipt when the backend rejects submission', async () => {
+    apiMocks.submitApplication.mockRejectedValueOnce(new Error('rate limited'));
+    renderPage();
+    await reachPreview();
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('rate limited');
+    expect(screen.queryByTestId('candidate-application-receipt')).not.toBeInTheDocument();
+    expect(apiMocks.saveCandidateSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps selected PDF bytes local while form fields can still be submitted', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
     const pdf = new File(['synthetic-pdf'], 'ornek-cv.pdf', { type: 'application/pdf' });
-
-    const input = screen.getByTestId<HTMLInputElement>('candidate-resume');
-    fireEvent.change(input, { target: { files: [pdf] } });
-
-    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('PDF seçildi');
+    fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
     expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('dosya adı tutulmaz');
     expect(screen.getByTestId('candidate-resume-meta')).not.toHaveTextContent('ornek-cv.pdf');
-    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('yalnız bu cihazda');
-    // JSDOM injects a synthetic read-only FileList for fireEvent. The real
-    // browser FileList release is asserted in Playwright acceptance.
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(apiMocks.submitApplication).not.toHaveBeenCalled();
   });
 
-  it('rejects a non-PDF attachment before it reaches form state', () => {
+  it('blocks preview when required fields are missing', async () => {
     renderPage();
-    const textFile = new File(['not-a-pdf'], 'cv.txt', { type: 'text/plain' });
-
-    fireEvent.change(screen.getByTestId('candidate-resume'), {
-      target: { files: [textFile] },
-    });
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Yalnız PDF dosyası seçebilirsiniz.');
-    expect(screen.queryByTestId('candidate-resume-meta')).not.toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('yıldızlı alanları doldurun');
   });
 
-  it('rejects a renamed non-PDF even when its file name ends with .pdf', () => {
+  it('blocks real candidate PII while the test environment G0 gate is active', async () => {
     renderPage();
-    const renamedTextFile = new File(['not-a-pdf'], 'yaniltici-cv.pdf', {
-      type: 'text/plain',
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+    fireEvent.change(screen.getByLabelText(/E-posta/i), {
+      target: { value: 'gercek.aday@example.com' },
     });
-
-    fireEvent.change(screen.getByTestId('candidate-resume'), {
-      target: { files: [renamedTextFile] },
-    });
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Yalnız PDF dosyası seçebilirsiniz.');
-    expect(screen.queryByTestId('candidate-resume-meta')).not.toBeInTheDocument();
-  });
-
-  it('rejects a PDF larger than 10 MB before it reaches form state', () => {
-    renderPage();
-    const oversizedPdf = new File(['synthetic'], 'buyuk-cv.pdf', {
-      type: 'application/pdf',
-    });
-    Object.defineProperty(oversizedPdf, 'size', { value: 10 * 1024 * 1024 + 1 });
-
-    fireEvent.change(screen.getByTestId('candidate-resume'), {
-      target: { files: [oversizedPdf] },
-    });
-
-    expect(screen.getByRole('alert')).toHaveTextContent('PDF dosyası en fazla 10 MB olabilir.');
-    expect(screen.queryByTestId('candidate-resume-meta')).not.toBeInTheDocument();
-  });
-
-  it('renders a readable title for a job slug that is not in the local catalog', () => {
-    renderPage('/jobs/veri-bilimi-lideri/apply');
-
-    expect(screen.getByRole('heading', { name: 'Veri Bilimi Lideri' })).toBeInTheDocument();
-    expect(screen.getByText('Açık Pozisyon')).toBeInTheDocument();
-  });
-
-  it('does not open preview while required fields are missing', () => {
-    renderPage();
-
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Önizlemeye geçmek için yıldızlı alanları doldurun.',
+    expect(screen.getByRole('alert')).toHaveTextContent('Yalnız .test uzantılı sentetik e-posta');
+    expect(apiMocks.submitApplication).not.toHaveBeenCalled();
+  });
+
+  it('shows a service error and keeps persistent submission disabled if the job cannot load', async () => {
+    apiMocks.getPublicJob.mockRejectedValueOnce(new Error('ilan yok'));
+    renderPage();
+    expect(await screen.findByRole('alert')).toHaveTextContent('ilan yok');
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Başvuruyu gönder' })).toBeDisabled(),
     );
-    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
-  });
-
-  it('validates candidate contact fields before opening preview', () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    fireEvent.change(screen.getByTestId('candidate-email'), {
-      target: { value: 'gecersiz-adres' },
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Geçerli bir e-posta adresi girin.');
-    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
-  });
-
-  it('requires fresh confirmations after returning to edit candidate information', () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
-    const confirmations = screen.getAllByRole('checkbox');
-    fireEvent.click(confirmations[0]);
-    fireEvent.click(confirmations[1]);
-    expect(screen.getByTestId('create-local-application-receipt')).toBeEnabled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Bilgileri düzenle' }));
-    fireEvent.change(screen.getByTestId('candidate-fullName'), {
-      target: { value: 'Yeniden Düzenlenmiş Aday' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
-
-    expect(screen.getByTestId('create-local-application-receipt')).toBeDisabled();
-    expect(screen.getAllByRole('checkbox')[0]).not.toBeChecked();
-    expect(screen.getAllByRole('checkbox')[1]).not.toBeChecked();
   });
 });

@@ -2,16 +2,30 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CandidatePortalPage from './CandidatePortalPage';
 
-const renderPage = (basename?: string) =>
+const apiMocks = vi.hoisted(() => ({ readCandidateSession: vi.fn(), getCandidateStatus: vi.fn() }));
+vi.mock('../../features/ats-portals/api/application-api', () => ({
+  readCandidateSession: apiMocks.readCandidateSession,
+  getCandidateStatus: apiMocks.getCandidateStatus,
+}));
+
+const SESSION = { publicRef: 'app_abcdefghijklmnopqrstuvwx', candidateAccessToken: 'A'.repeat(43) };
+const STATUS = {
+  publicRef: SESSION.publicRef,
+  jobSlug: 'urun-yoneticisi',
+  jobTitle: 'Ürün Yöneticisi',
+  status: 'UNDER_REVIEW',
+  version: 1,
+  createdAt: '2026-07-16T10:00:00Z',
+  updatedAt: '2026-07-16T11:00:00Z',
+};
+
+const renderPage = () =>
   render(
-    <MemoryRouter
-      basename={basename}
-      initialEntries={[basename ? `${basename}/candidate` : '/candidate']}
-    >
+    <MemoryRouter initialEntries={['/candidate']}>
       <Routes>
         <Route path="/candidate" element={<CandidatePortalPage />} />
       </Routes>
@@ -20,53 +34,37 @@ const renderPage = (basename?: string) =>
 
 describe('CandidatePortalPage', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
+    apiMocks.readCandidateSession.mockReturnValue(SESSION);
+    apiMocks.getCandidateStatus.mockResolvedValue(STATUS);
   });
-
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
-  it('shows a public candidate journey without fetching account or PII data', () => {
-    const previousTitle = document.title;
-    const view = renderPage();
-
-    expect(screen.getByRole('heading', { name: 'Kariyer yolculuğunuz tek yerde' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Yolculuğum' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Profilim' })).toBeVisible();
-    expect(screen.getByText('Kalıcı başvuru')).toBeVisible();
-    expect(screen.getByText(/gerçek veri kapalı/i)).toBeVisible();
-    expect(document.title).toBe('Aday Alanım | Açık Kariyer');
-    expect(fetch).not.toHaveBeenCalled();
-
-    view.unmount();
-    expect(document.title).toBe(previousTitle);
-  });
-
-  it('connects the candidate area to jobs and the editable application draft', () => {
+  it('loads minimal persistent status with the session-only tracking credential', async () => {
     renderPage();
-
-    expect(screen.getByRole('link', { name: 'Açık pozisyonlara göz at' })).toHaveAttribute(
-      'href',
-      '/jobs',
-    );
-    expect(screen.getByRole('link', { name: 'Örnek başvuruyu düzenle' })).toHaveAttribute(
-      'href',
-      '/jobs/urun-yoneticisi/apply',
-    );
+    expect((await screen.findAllByText('İnsan incelemesinde')).length).toBeGreaterThan(0);
+    expect(screen.getByText(SESSION.publicRef)).toBeVisible();
+    expect(
+      screen.getByText(/ad, e-posta, telefon veya CV içeriğini geri döndürmez/i),
+    ).toBeVisible();
+    expect(apiMocks.getCandidateStatus).toHaveBeenCalledWith(SESSION);
   });
 
-  it('keeps candidate links under the configured application base path', () => {
-    renderPage('/platform');
+  it('refreshes status from the backend', async () => {
+    renderPage();
+    await screen.findAllByText('İnsan incelemesinde');
+    fireEvent.click(screen.getByRole('button', { name: 'Durumu yenile' }));
+    await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenCalledTimes(2));
+  });
 
-    expect(screen.getByRole('link', { name: 'Açık pozisyonlara göz at' })).toHaveAttribute(
-      'href',
-      '/platform/jobs',
-    );
-    expect(screen.getByRole('link', { name: 'Örnek başvuruyu düzenle' })).toHaveAttribute(
-      'href',
-      '/platform/jobs/urun-yoneticisi/apply',
-    );
+  it('shows no fake journey when this browser session has no tracking token', () => {
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    renderPage();
+    expect(
+      screen.getByRole('heading', { name: 'Bu sekmede takip edilen başvuru yok' }),
+    ).toBeVisible();
+    expect(apiMocks.getCandidateStatus).not.toHaveBeenCalled();
   });
 });

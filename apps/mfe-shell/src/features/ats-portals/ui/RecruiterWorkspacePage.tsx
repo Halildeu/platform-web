@@ -1,67 +1,117 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ATS_PORTAL_SAFETY_BOUNDARIES,
-  RECRUITER_CANDIDATES,
-  RECRUITER_DISABLED_ACTIONS,
-  RECRUITER_PIPELINE_STAGES,
-  RECRUITER_POSITIONS,
-  type RecruiterCandidate,
-} from '../model/ats-portal-registry';
+  listRecruiterApplications,
+  updateRecruiterApplicationStatus,
+  type ApplicationStatus,
+  type RecruiterApplicationDto,
+} from '../api/application-api';
 import {
   ATS_PRODUCT_HUB_ENTRY,
   INTERVIEW_EVIDENCE_ENTRY,
 } from '../../ats-product-catalog/model/ats-capability-registry';
 
+const STAGES: ReadonlyArray<{
+  id: ApplicationStatus;
+  label: string;
+  description: string;
+}> = [
+  { id: 'SUBMITTED', label: 'Yeni', description: 'İnsan incelemesi henüz başlamadı.' },
+  { id: 'UNDER_REVIEW', label: 'İncelemede', description: 'İK ekibi başvuruyu inceliyor.' },
+  {
+    id: 'INTERVIEW_PENDING',
+    label: 'Mülakat planlaması',
+    description: 'İnsan kontrollü planlama adımı bekleniyor.',
+  },
+];
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(value),
+  );
+
 const RecruiterWorkspacePage = () => {
-  const [activePositionId, setActivePositionId] = useState(RECRUITER_POSITIONS[0].id);
+  const [applications, setApplications] = useState<RecruiterApplicationDto[]>([]);
   const [query, setQuery] = useState('');
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [draftNote, setDraftNote] = useState('');
-  const [previewNote, setPreviewNote] = useState('');
+  const [activeJobSlug, setActiveJobSlug] = useState('');
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [updating, setUpdating] = useState(false);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
 
+  const loadInbox = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const page = await listRecruiterApplications();
+      setApplications(page.items);
+    } catch (loadError) {
+      setApplications([]);
+      setError(loadError instanceof Error ? loadError.message : 'Başvuru kutusu yüklenemedi.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!selectedCandidateId) return;
-    reviewHeadingRef.current?.focus();
-  }, [selectedCandidateId]);
+    void loadInbox();
+  }, [loadInbox]);
 
-  const activePosition =
-    RECRUITER_POSITIONS.find((position) => position.id === activePositionId) ??
-    RECRUITER_POSITIONS[0];
+  useEffect(() => {
+    if (selectedRef) reviewHeadingRef.current?.focus();
+  }, [selectedRef]);
 
-  const visibleCandidates = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('tr-TR');
-    return RECRUITER_CANDIDATES.filter((candidate) => {
-      if (candidate.positionId !== activePositionId) return false;
-      if (!normalizedQuery) return true;
-      const searchable = [candidate.alias, candidate.humanReview, ...candidate.skills]
+  const jobs = useMemo(() => {
+    const unique = new Map<string, string>();
+    applications.forEach((application) => unique.set(application.jobSlug, application.jobTitle));
+    return [...unique.entries()].map(([slug, title]) => ({ slug, title }));
+  }, [applications]);
+
+  const visibleApplications = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('tr-TR');
+    return applications.filter((application) => {
+      if (activeJobSlug && application.jobSlug !== activeJobSlug) return false;
+      if (!normalized) return true;
+      return [
+        application.fullName,
+        application.email,
+        application.city,
+        application.jobTitle,
+        ...application.skills,
+      ]
         .join(' ')
-        .toLocaleLowerCase('tr-TR');
-      return searchable.includes(normalizedQuery);
+        .toLocaleLowerCase('tr-TR')
+        .includes(normalized);
     });
-  }, [activePositionId, query]);
+  }, [activeJobSlug, applications, query]);
 
-  const selectedCandidate =
-    RECRUITER_CANDIDATES.find((candidate) => candidate.id === selectedCandidateId) ?? null;
+  const selected =
+    applications.find((application) => application.publicRef === selectedRef) ?? null;
 
-  const selectPosition = (positionId: string) => {
-    setActivePositionId(positionId);
-    setSelectedCandidateId(null);
-    setDraftNote('');
-    setPreviewNote('');
-  };
-
-  const selectCandidate = (candidate: RecruiterCandidate) => {
-    setSelectedCandidateId(candidate.id);
-    setDraftNote('');
-    setPreviewNote('');
-  };
-
-  const createLocalPreview = () => {
-    const normalized = draftNote.trim();
-    if (!selectedCandidate || !normalized) return;
-    setPreviewNote(normalized);
+  const advanceSelected = async () => {
+    if (!selected || selected.status === 'INTERVIEW_PENDING' || updating) return;
+    const toStatus = selected.status === 'SUBMITTED' ? 'UNDER_REVIEW' : 'INTERVIEW_PENDING';
+    setUpdating(true);
+    setActionError('');
+    try {
+      const updated = await updateRecruiterApplicationStatus(
+        selected.publicRef,
+        selected.version,
+        toStatus,
+      );
+      setApplications((current) =>
+        current.map((application) =>
+          application.publicRef === updated.publicRef ? updated : application,
+        ),
+      );
+    } catch (updateError) {
+      setActionError(updateError instanceof Error ? updateError.message : 'Durum güncellenemedi.');
+      await loadInbox();
+    } finally {
+      setUpdating(false);
+    }
   };
 
   return (
@@ -72,7 +122,7 @@ const RecruiterWorkspacePage = () => {
       <nav aria-label="ATS konumu" className="flex flex-wrap items-center gap-2 text-sm">
         <Link
           to={ATS_PRODUCT_HUB_ENTRY.route}
-          className="font-semibold text-text-primary underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+          className="font-semibold text-text-primary underline underline-offset-4 hover:no-underline"
         >
           ATS Ürün Merkezi
         </Link>
@@ -85,18 +135,14 @@ const RecruiterWorkspacePage = () => {
       </nav>
 
       <header className="relative overflow-hidden rounded-3xl border border-border-subtle bg-linear-to-br from-action-primary/10 via-surface-default to-state-info-bg px-5 py-7 shadow-xs sm:px-8 sm:py-9">
-        <div
-          className="absolute -right-14 -top-16 h-48 w-48 rounded-full bg-action-primary/10"
-          aria-hidden="true"
-        />
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-state-warning-border bg-state-warning-bg px-3 py-1 text-xs font-bold text-text-primary">
-                Yalnız öneri
+              <span className="rounded-full border border-state-success-border bg-state-success-bg px-3 py-1 text-xs font-bold text-state-success-text">
+                Kalıcı başvuru kutusu
               </span>
               <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-semibold text-text-secondary">
-                Sentetik adaylar
+                İnsan kontrollü
               </span>
             </div>
             <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-text-primary">
@@ -106,22 +152,24 @@ const RecruiterWorkspacePage = () => {
               İK Çalışma Alanı
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
-              Pozisyonları, insan incelemesi bekleyen aday akışını ve kanıt eksiklerini tek yerde
-              görün. Bu yüzey karar yürütmez; bütün kritik eylemler kapalıdır.
+              Adayın gönderdiği kalıcı başvuruyu inceleyin ve yalnız izin verilen insan kontrollü
+              adımlarda ilerletin. Otomatik puanlama, ret veya teklif yürütülmez.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => void loadInbox()}
+              disabled={loading}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text disabled:opacity-50"
+            >
+              Başvuru kutusunu yenile
+            </button>
             <Link
               to={INTERVIEW_EVIDENCE_ENTRY.route}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text shadow-sm hover:bg-action-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-surface-muted"
             >
               Interview Evidence’ı aç
-            </Link>
-            <Link
-              to={ATS_PRODUCT_HUB_ENTRY.route}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-4 py-2.5 text-sm font-bold text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
-            >
-              Ürün merkezine dön
             </Link>
           </div>
         </div>
@@ -129,14 +177,23 @@ const RecruiterWorkspacePage = () => {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="İK çalışma özeti">
         {[
-          [String(RECRUITER_POSITIONS.length), 'Açık pozisyon', 'Sentetik pozisyon kataloğu'],
-          [String(RECRUITER_CANDIDATES.length), 'Aday kartı', 'Gerçek kişi veya PII içermez'],
+          [String(jobs.length), 'Pozisyon', 'Başvurusu bulunan ilan'],
+          [String(applications.length), 'Kalıcı başvuru', 'Tenant-korumalı kayıt'],
           [
-            String(RECRUITER_CANDIDATES.filter((candidate) => candidate.stage === 'REVIEW').length),
+            String(
+              applications.filter((application) => application.status === 'UNDER_REVIEW').length,
+            ),
             'İnsan incelemesi',
             'Otomatik puanlama yok',
           ],
-          ['0', 'Yürütülen kritik eylem', 'Mesaj, ret ve teklif kapalı'],
+          [
+            String(
+              applications.filter((application) => application.status === 'INTERVIEW_PENDING')
+                .length,
+            ),
+            'Mülakat planlaması',
+            'İnsan kontrollü adım',
+          ],
         ].map(([value, label, detail]) => (
           <article
             key={label}
@@ -149,31 +206,52 @@ const RecruiterWorkspacePage = () => {
         ))}
       </section>
 
+      {error ? (
+        <div
+          className="rounded-2xl border border-state-danger-border bg-state-danger-bg p-5"
+          role="alert"
+        >
+          <p className="font-semibold text-state-danger-text">Başvuru kutusu yüklenemedi.</p>
+          <p className="mt-1 text-sm text-text-secondary">{error}</p>
+          <button
+            type="button"
+            onClick={() => void loadInbox()}
+            className="mt-4 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold"
+          >
+            Yeniden dene
+          </button>
+        </div>
+      ) : null}
+
       <section
         className="rounded-3xl border border-border-subtle bg-surface-default p-4 shadow-xs sm:p-6"
         aria-label="Aday filtreleri"
       >
-        <div className="grid gap-4 lg:grid-cols-[minmax(240px,0.65fr)_minmax(260px,0.75fr)_minmax(0,1fr)] lg:items-end">
+        <div className="grid gap-4 lg:grid-cols-2">
           <div>
             <label htmlFor="recruiter-position" className="text-sm font-semibold text-text-primary">
               Pozisyon
             </label>
             <select
               id="recruiter-position"
-              value={activePositionId}
-              onChange={(event) => selectPosition(event.target.value)}
-              className="mt-2 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3.5 py-2.5 text-sm font-semibold text-text-primary outline-hidden focus:border-action-primary focus:ring-2 focus:ring-selection-outline"
+              value={activeJobSlug}
+              onChange={(event) => {
+                setActiveJobSlug(event.target.value);
+                setSelectedRef(null);
+              }}
+              className="mt-2 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3.5 py-2.5 text-sm font-semibold"
             >
-              {RECRUITER_POSITIONS.map((position) => (
-                <option key={position.id} value={position.id}>
-                  {position.title}
+              <option value="">Tüm pozisyonlar</option>
+              {jobs.map((job) => (
+                <option key={job.slug} value={job.slug}>
+                  {job.title}
                 </option>
               ))}
             </select>
           </div>
           <div>
             <label htmlFor="recruiter-search" className="text-sm font-semibold text-text-primary">
-              Aday veya beceri ara
+              Aday, e-posta veya beceri ara
             </label>
             <input
               id="recruiter-search"
@@ -181,31 +259,13 @@ const RecruiterWorkspacePage = () => {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Örn. erişilebilirlik"
-              className="mt-2 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3.5 py-2.5 text-sm text-text-primary outline-hidden placeholder:text-text-subtle focus:border-action-primary focus:ring-2 focus:ring-selection-outline"
+              className="mt-2 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3.5 py-2.5 text-sm"
             />
           </div>
-          <dl className="grid grid-cols-2 gap-3 rounded-2xl bg-surface-muted p-4 text-sm sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <dt className="text-xs text-text-secondary">Ekip</dt>
-              <dd className="mt-1 font-semibold text-text-primary">{activePosition.team}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-secondary">Konum</dt>
-              <dd className="mt-1 font-semibold text-text-primary">{activePosition.location}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-secondary">Sahip</dt>
-              <dd className="mt-1 font-semibold text-text-primary">{activePosition.owner}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-text-secondary">Açık gün</dt>
-              <dd className="mt-1 font-semibold text-text-primary">{activePosition.openDays}</dd>
-            </div>
-          </dl>
         </div>
       </section>
 
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_400px]">
         <section aria-labelledby="pipeline-heading" className="min-w-0">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -217,60 +277,49 @@ const RecruiterWorkspacePage = () => {
               </h2>
             </div>
             <p className="text-sm font-medium text-text-secondary" aria-live="polite">
-              {visibleCandidates.length} sentetik aday gösteriliyor
+              {loading ? 'Yükleniyor…' : `${visibleApplications.length} başvuru gösteriliyor`}
             </p>
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-4" data-testid="recruiter-pipeline">
-            {RECRUITER_PIPELINE_STAGES.map((stage) => {
-              const stageCandidates = visibleCandidates.filter(
-                (candidate) => candidate.stage === stage.id,
+          <div className="mt-4 grid gap-4 xl:grid-cols-3" data-testid="recruiter-pipeline">
+            {STAGES.map((stage) => {
+              const stageApplications = visibleApplications.filter(
+                (application) => application.status === stage.id,
               );
               return (
                 <section
                   key={stage.id}
                   className="min-w-0 rounded-2xl border border-border-subtle bg-surface-muted p-3"
-                  aria-labelledby={`pipeline-${stage.id.toLowerCase()}`}
                 >
                   <div className="flex items-start justify-between gap-2 px-1 py-1">
                     <div>
-                      <h3
-                        id={`pipeline-${stage.id.toLowerCase()}`}
-                        className="text-sm font-bold text-text-primary"
-                      >
-                        {stage.label}
-                      </h3>
+                      <h3 className="text-sm font-bold text-text-primary">{stage.label}</h3>
                       <p className="mt-1 text-xs leading-5 text-text-secondary">
                         {stage.description}
                       </p>
                     </div>
-                    <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-surface-default px-2 text-xs font-bold text-text-primary">
-                      {stageCandidates.length}
+                    <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-surface-default px-2 text-xs font-bold">
+                      {stageApplications.length}
                     </span>
                   </div>
-
                   <ul className="mt-3 space-y-3">
-                    {stageCandidates.map((candidate) => (
-                      <li key={candidate.id}>
+                    {stageApplications.map((application) => (
+                      <li key={application.publicRef}>
                         <article className="rounded-2xl border border-border-subtle bg-surface-default p-4 shadow-xs">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <h4 className="truncate text-sm font-bold text-text-primary">
-                                {candidate.alias}
-                              </h4>
-                              <p className="mt-1 text-xs text-text-secondary">
-                                {candidate.waitingLabel}
-                              </p>
-                            </div>
-                            <span className="rounded-full border border-state-info-border bg-state-info-bg px-2 py-0.5 text-[11px] font-bold text-text-primary">
-                              {candidate.evidenceReady}/{candidate.evidenceTotal} kanıt
-                            </span>
-                          </div>
+                          <h4 className="truncate text-sm font-bold text-text-primary">
+                            {application.fullName}
+                          </h4>
+                          <p className="mt-1 truncate text-xs text-text-secondary">
+                            {application.email}
+                          </p>
+                          <p className="mt-2 text-xs text-text-secondary">
+                            {application.jobTitle} · {formatDate(application.createdAt)}
+                          </p>
                           <ul
                             className="mt-3 flex flex-wrap gap-1.5"
                             aria-label="Beceri etiketleri"
                           >
-                            {candidate.skills.map((skill) => (
+                            {application.skills.slice(0, 4).map((skill) => (
                               <li
                                 key={skill}
                                 className="rounded-lg bg-surface-muted px-2 py-1 text-[11px] font-medium text-text-secondary"
@@ -279,25 +328,23 @@ const RecruiterWorkspacePage = () => {
                               </li>
                             ))}
                           </ul>
-                          <p className="mt-3 text-xs leading-5 text-text-secondary">
-                            {candidate.humanReview}
-                          </p>
                           <button
                             type="button"
-                            onClick={() => selectCandidate(candidate)}
+                            onClick={() => {
+                              setSelectedRef(application.publicRef);
+                              setActionError('');
+                            }}
                             aria-controls="recruiter-review-panel"
-                            aria-expanded={selectedCandidateId === candidate.id}
-                            className="mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-3 py-2 text-xs font-bold text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
-                            aria-label={`Kanıt durumunu incele: ${candidate.alias}`}
+                            className="mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-border-subtle px-3 py-2 text-xs font-bold hover:bg-surface-muted"
                           >
-                            Kanıt durumunu incele
+                            Başvuruyu incele
                           </button>
                         </article>
                       </li>
                     ))}
-                    {stageCandidates.length === 0 ? (
+                    {stageApplications.length === 0 ? (
                       <li className="rounded-xl border border-dashed border-border-subtle p-3 text-center text-xs leading-5 text-text-secondary">
-                        Bu aşamada eşleşen sentetik aday yok.
+                        Bu aşamada başvuru yok.
                       </li>
                     ) : null}
                   </ul>
@@ -310,136 +357,97 @@ const RecruiterWorkspacePage = () => {
         <aside
           id="recruiter-review-panel"
           className="rounded-3xl border border-border-subtle bg-surface-default p-5 shadow-xs 2xl:sticky 2xl:top-6 2xl:self-start"
-          aria-labelledby="candidate-review-heading"
           data-testid="recruiter-review-panel"
         >
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-text-primary">
-            Kanıta bağlı inceleme
+            Başvuru incelemesi
           </p>
           <h2
             ref={reviewHeadingRef}
-            id="candidate-review-heading"
-            className="mt-1 text-xl font-bold text-text-primary outline-hidden"
+            className="mt-1 text-xl font-bold outline-hidden"
             tabIndex={-1}
           >
-            Değerlendirme taslağı
+            Aday bilgileri
           </h2>
 
-          {selectedCandidate ? (
-            <div className="mt-5">
+          {selected ? (
+            <div className="mt-5 space-y-4">
               <div className="rounded-2xl border border-border-subtle bg-surface-muted p-4">
-                <p className="font-bold text-text-primary">{selectedCandidate.alias}</p>
-                <p className="mt-1 text-sm text-text-secondary">{activePosition.title}</p>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <dt className="text-xs text-text-secondary">Kanıt kapsamı</dt>
-                    <dd className="mt-1 font-semibold text-text-primary">
-                      {selectedCandidate.evidenceReady}/{selectedCandidate.evidenceTotal}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-text-secondary">Durum</dt>
-                    <dd className="mt-1 font-semibold text-text-primary">İnsan kontrolünde</dd>
-                  </div>
-                </dl>
+                <p className="font-bold">{selected.fullName}</p>
+                <p className="mt-1 text-sm text-text-secondary">{selected.jobTitle}</p>
+                <p className="mt-3 break-all font-mono text-xs text-text-secondary">
+                  {selected.publicRef}
+                </p>
               </div>
-
-              <div className="mt-4">
-                <label
-                  htmlFor="recruiter-draft-note"
-                  className="text-sm font-semibold text-text-primary"
-                >
-                  İnsan değerlendirme notu
-                </label>
-                <textarea
-                  id="recruiter-draft-note"
-                  value={draftNote}
-                  onChange={(event) => {
-                    setDraftNote(event.target.value);
-                    setPreviewNote('');
-                  }}
-                  rows={5}
-                  placeholder="Yalnız gözlenebilir kanıta bağlı bir not yazın..."
-                  className="mt-2 w-full rounded-xl border border-border-subtle bg-surface-default px-3.5 py-3 text-sm leading-6 text-text-primary outline-hidden placeholder:text-text-subtle focus:border-action-primary focus:ring-2 focus:ring-selection-outline"
-                />
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs font-semibold text-text-secondary">İletişim</dt>
+                  <dd className="mt-1 break-words">
+                    {selected.email}
+                    <br />
+                    {selected.phone} · {selected.city}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-text-secondary">Profesyonel özet</dt>
+                  <dd className="mt-1 whitespace-pre-wrap leading-6">{selected.summary}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-text-secondary">Deneyim</dt>
+                  <dd className="mt-1 whitespace-pre-wrap leading-6">{selected.experience}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-text-secondary">Eğitim</dt>
+                  <dd className="mt-1 whitespace-pre-wrap leading-6">{selected.education}</dd>
+                </div>
+                {selected.note ? (
+                  <div>
+                    <dt className="text-xs font-semibold text-text-secondary">Aday notu</dt>
+                    <dd className="mt-1 whitespace-pre-wrap leading-6">{selected.note}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {selected.status !== 'INTERVIEW_PENDING' ? (
                 <button
                   type="button"
-                  onClick={createLocalPreview}
-                  disabled={!draftNote.trim()}
-                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text enabled:hover:bg-action-primary-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+                  onClick={() => void advanceSelected()}
+                  disabled={updating}
+                  className="min-h-11 w-full rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text disabled:opacity-50"
                 >
-                  Yerel taslağı önizle
+                  {updating
+                    ? 'Güncelleniyor…'
+                    : selected.status === 'SUBMITTED'
+                      ? 'İnsan incelemesini başlat'
+                      : 'Mülakat planlamasına al'}
                 </button>
-              </div>
-
-              {previewNote ? (
-                <div
-                  className="mt-4 rounded-2xl border border-state-success-border bg-state-success-bg p-4"
-                  role="status"
-                  data-testid="recruiter-local-note-preview"
-                >
-                  <p className="text-xs font-bold uppercase tracking-wide text-text-primary">
-                    Yerel önizleme
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-text-primary">
-                    {previewNote}
-                  </p>
-                  <p className="mt-2 text-xs text-text-secondary">
-                    Kaydedilmedi veya gönderilmedi.
-                  </p>
+              ) : (
+                <div className="rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-state-success-text">
+                  Mülakat planlaması bekleniyor.
                 </div>
+              )}
+              {actionError ? (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-state-danger-text"
+                >
+                  {actionError}
+                </p>
               ) : null}
             </div>
           ) : (
             <p className="mt-5 rounded-2xl border border-dashed border-border-subtle bg-surface-muted p-4 text-sm leading-6 text-text-secondary">
-              Bir aday kartındaki “Kanıt durumunu incele” düğmesini seçin. Bu panel gerçek aday
-              verisi veya otomatik öneri üretmez.
+              Kalıcı bir başvuru kartındaki “Başvuruyu incele” düğmesini seçin.
             </p>
           )}
 
-          <div
-            className="mt-5 border-t border-border-subtle pt-5"
-            aria-describedby="critical-actions-note"
-          >
-            <h3 className="text-sm font-semibold text-text-primary">Kritik eylemler</h3>
-            <p id="critical-actions-note" className="mt-1 text-xs leading-5 text-text-secondary">
-              Yetkili insan, canlı veri ve ayrı işlem onayı olmadan kullanılamaz.
+          <div className="mt-5 border-t border-border-subtle pt-5">
+            <h3 className="text-sm font-semibold">Bu dilimde kapalı eylemler</h3>
+            <p className="mt-1 text-xs leading-5 text-text-secondary">
+              Ret, teklif, otomatik puanlama ve toplu işlem endpoint’i yoktur.
             </p>
-            <div className="mt-3 grid gap-2">
-              {RECRUITER_DISABLED_ACTIONS.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  disabled
-                  className="min-h-10 cursor-not-allowed rounded-xl border border-border-subtle bg-surface-muted px-3 py-2 text-left text-xs font-semibold text-text-subtle"
-                >
-                  {action} · Kapalı
-                </button>
-              ))}
-            </div>
           </div>
         </aside>
       </div>
-
-      <aside
-        className="rounded-3xl border border-state-warning-border bg-state-warning-bg p-5 sm:p-7"
-        aria-labelledby="recruiter-boundary-heading"
-        data-testid="recruiter-workspace-boundary"
-      >
-        <h2 id="recruiter-boundary-heading" className="text-lg font-bold text-text-primary">
-          Çalışma alanının işlem tavanı
-        </h2>
-        <ul className="mt-4 grid gap-3 text-sm text-text-secondary md:grid-cols-3">
-          {ATS_PORTAL_SAFETY_BOUNDARIES.map((boundary) => (
-            <li
-              key={boundary}
-              className="rounded-xl border border-state-warning-border bg-surface-default/70 p-3"
-            >
-              {boundary}
-            </li>
-          ))}
-        </ul>
-      </aside>
     </div>
   );
 };
