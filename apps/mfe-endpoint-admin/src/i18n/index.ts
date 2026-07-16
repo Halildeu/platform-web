@@ -1606,7 +1606,8 @@ const DICT_TR = {
   'endpointAdmin.nav.section.overview': 'Genel Bakış',
   'endpointAdmin.nav.overview': 'Panel',
   'endpointAdmin.overview.title': 'Genel Bakış',
-  'endpointAdmin.overview.subtitle': 'Filo, uyum, cihaz kaydı ve onay durumunun tek ekranda özeti.',
+  'endpointAdmin.overview.subtitle':
+    'Filo, uyum, cihaz kaydı ve yayın taslaklarının tek ekranda özeti.',
   // Kartlar arası paylaşılan durum metinleri.
   'endpointAdmin.overview.state.error': 'Veri alınamadı',
   'endpointAdmin.overview.state.retry': 'Yeniden dene',
@@ -1615,6 +1616,8 @@ const DICT_TR = {
   'endpointAdmin.overview.state.updating': 'Güncelleniyor…',
   'endpointAdmin.overview.state.loading': 'Yükleniyor…',
   'endpointAdmin.overview.state.empty': 'Bulunmadı',
+  // Önbellekteki veri gösterilirken arka plan yenileme başarısız oldu (must-fix 2).
+  'endpointAdmin.overview.state.staleError': 'Son veri gösteriliyor; yenilenemedi',
   // Kart 1 — Filo durumu. STALE = "son bağlantısı gecikmiş" (asla "stale envanter").
   'endpointAdmin.overview.fleet.title': 'Filo durumu',
   'endpointAdmin.overview.fleet.managedTotal': 'Yönetilen cihaz',
@@ -1631,8 +1634,12 @@ const DICT_TR = {
   // Kart 3 — Kritik uyum boşlukları (yalnızca GÖZLEMLENEN cihazlar, tüm filo değil).
   'endpointAdmin.overview.gaps.title': 'Kritik uyum boşlukları',
   'endpointAdmin.overview.gaps.metric': 'Boşluk barındıran cihaz',
+  // {window} = yanıttaki filterEcho.freshnessWindow'dan türetilen insan-okunur pencere
+  // (istek sabitinden DEĞİL). Boşluk türleri gapType.* anahtarlarından çevrilir.
   'endpointAdmin.overview.gaps.freshness':
-    'Son 7 günde gözlemlenen cihazlar · {computedAt} itibarıyla',
+    '{window} içinde gözlemlenen cihazlar · {computedAt} itibarıyla',
+  'endpointAdmin.overview.gaps.window.days': '{n} gün',
+  'endpointAdmin.overview.gaps.window.hours': '{n} saat',
   'endpointAdmin.overview.gaps.observedNote': 'Yalnızca gözlemlenen cihazlar (tüm filo değil)',
   // Kart 4 — Kayıt sağlığı.
   'endpointAdmin.overview.enrollment.title': 'Kayıt sağlığı',
@@ -3217,7 +3224,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.nav.overview': 'Dashboard',
   'endpointAdmin.overview.title': 'Overview',
   'endpointAdmin.overview.subtitle':
-    'Fleet, compliance, enrollment and approval status at a glance.',
+    'Fleet, compliance, enrollment and release drafts at a glance.',
   // Shared card state strings.
   'endpointAdmin.overview.state.error': 'Could not load data',
   'endpointAdmin.overview.state.retry': 'Retry',
@@ -3226,6 +3233,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.overview.state.updating': 'Updating…',
   'endpointAdmin.overview.state.loading': 'Loading…',
   'endpointAdmin.overview.state.empty': 'None found',
+  // Showing cached data while a background refresh failed (must-fix 2).
+  'endpointAdmin.overview.state.staleError': 'Showing last data; refresh failed',
   // Card 1 — Fleet status. STALE = "delayed contact" (never "stale inventory").
   'endpointAdmin.overview.fleet.title': 'Fleet status',
   'endpointAdmin.overview.fleet.managedTotal': 'Managed devices',
@@ -3242,8 +3251,12 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   // Card 3 — Critical compliance gaps (OBSERVED devices only, not fleet-wide).
   'endpointAdmin.overview.gaps.title': 'Critical compliance gaps',
   'endpointAdmin.overview.gaps.metric': 'Devices with gaps',
-  'endpointAdmin.overview.gaps.freshness':
-    'Devices observed in the last 7 days · as of {computedAt}',
+  // {window} = human-readable window derived from the response's
+  // filterEcho.freshnessWindow (NOT the request constant). Gap types are
+  // translated from the gapType.* keys.
+  'endpointAdmin.overview.gaps.freshness': 'Devices observed within {window} · as of {computedAt}',
+  'endpointAdmin.overview.gaps.window.days': '{n} days',
+  'endpointAdmin.overview.gaps.window.hours': '{n} hours',
   'endpointAdmin.overview.gaps.observedNote': 'Observed devices only (not fleet-wide)',
   // Card 4 — Enrollment health.
   'endpointAdmin.overview.enrollment.title': 'Enrollment health',

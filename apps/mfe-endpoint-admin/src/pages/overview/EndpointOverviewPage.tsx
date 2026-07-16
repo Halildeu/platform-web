@@ -81,11 +81,27 @@ function formatCount(value: number): string {
 
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) return '—';
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
+  // `new Date(bad)` never throws — it yields an Invalid Date (getTime() NaN).
+  // Guard it so a malformed wire value renders verbatim instead of the
+  // locale string "Invalid Date".
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+}
+
+/**
+ * Human-readable freshness window derived from the SERVER's echoed
+ * ISO-8601 duration (`filterEcho.freshnessWindow`), NOT the request
+ * constant. Honest granularity: a whole-day window renders as "N gün/days",
+ * an hour window as "N saat/hours" (no silent 24h→day rounding, so the
+ * displayed value always reflects exactly what the backend echoed). Any
+ * other shape falls through to the raw token rather than guessing.
+ */
+function formatFreshnessWindow(iso: string, t: TranslateFn): string {
+  const dayMatch = /^P(\d+)D$/.exec(iso);
+  if (dayMatch) return t('endpointAdmin.overview.gaps.window.days').replace('{n}', dayMatch[1]);
+  const hourMatch = /^PT(\d+)H$/.exec(iso);
+  if (hourMatch) return t('endpointAdmin.overview.gaps.window.hours').replace('{n}', hourMatch[1]);
+  return iso;
 }
 
 /** A background refresh over already-rendered data (stale-while-revalidate). */
@@ -194,6 +210,28 @@ const retryLinkStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+/**
+ * The "showing cached data, background refresh failed" warning — a polite,
+ * non-blocking note (distinct from the danger-red `ErrorBlock`/inline error
+ * that replaces a missing value). Warning tone, not error tone.
+ */
+const staleErrorStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  color: 'var(--warning-color, #b45309)',
+  fontSize: 11,
+};
+
+/** Wraps a NumberStat value with its (optional) stale-error note on the right. */
+const statValueWrapStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  flexWrap: 'wrap',
+  gap: 8,
+};
+
 const activityListStyle: React.CSSProperties = {
   listStyle: 'none',
   margin: 0,
@@ -251,6 +289,25 @@ const ErrorBlock: React.FC<{
       {t('endpointAdmin.overview.state.retry')}
     </button>
   </div>
+);
+
+/**
+ * The 4th card state: a cached value is on screen but its latest refetch
+ * errored. Polite (aria-live="polite", role="status" — NOT an assertive
+ * alert) so a screen reader announces "stale, could not refresh" without
+ * yanking focus, and the value stays visible. Retry re-runs the query.
+ */
+const StaleErrorNote: React.FC<{
+  t: TranslateFn;
+  onRetry: () => void;
+  testId: string;
+}> = ({ t, onRetry, testId }) => (
+  <span role="status" aria-live="polite" data-testid={testId} style={staleErrorStyle}>
+    <span>{t('endpointAdmin.overview.state.staleError')}</span>
+    <button type="button" onClick={onRetry} style={retryLinkStyle}>
+      {t('endpointAdmin.overview.state.retry')}
+    </button>
+  </span>
 );
 
 interface CardShellProps {
@@ -313,7 +370,21 @@ function renderQueryBody<T>(
   renderReady: (data: T) => React.ReactNode,
 ): React.ReactNode {
   const { t, testIdBase, skeletonHeight } = opts;
-  if (state.data !== undefined) return renderReady(state.data);
+  if (state.data !== undefined) {
+    // 4th state — a cached value whose latest refetch errored and is no
+    // longer in flight: keep the value, but add a polite "not refreshed"
+    // warning + retry so a stale number is never shown as if it were fresh.
+    // (`isFetching` ⇒ a refresh is in progress → the "updating" note owns it.)
+    const staleError = Boolean(state.error) && !state.isFetching;
+    return (
+      <>
+        {renderReady(state.data)}
+        {staleError && (
+          <StaleErrorNote t={t} onRetry={state.refetch} testId={`${testIdBase}-stale-error`} />
+        )}
+      </>
+    );
+  }
   if (state.error && !state.isLoading) {
     return (
       <ErrorBlock
@@ -346,10 +417,19 @@ const NumberStat: React.FC<{
 }> = ({ label, state, t, testId }) => {
   let valueNode: React.ReactNode;
   if (state.data !== undefined) {
+    // 4th state — cached value + errored, no-longer-in-flight refetch: keep the
+    // value, add a polite stale-error note + retry beside it (mirrors
+    // renderQueryBody). The retry only refetches THIS sub-query.
+    const staleError = Boolean(state.error) && !state.isFetching;
     valueNode = (
-      <strong data-testid={`${testId}-value`} style={statNumberStyle}>
-        {formatCount(state.data.totalElements)}
-      </strong>
+      <span style={statValueWrapStyle}>
+        <strong data-testid={`${testId}-value`} style={statNumberStyle}>
+          {formatCount(state.data.totalElements)}
+        </strong>
+        {staleError && (
+          <StaleErrorNote t={t} onRetry={state.refetch} testId={`${testId}-stale-error`} />
+        )}
+      </span>
     );
   } else if (state.error && !state.isLoading) {
     valueNode = (
@@ -514,7 +594,9 @@ const CriticalGapsCard: React.FC = () => {
     gapTypes: ['pending_security_updates', 'rdp_enabled'],
     freshnessWindow: 'PT168H',
     page: 1,
-    pageSize: 5,
+    // The card shows ONLY the server `total`, never `data.items`, so ask for
+    // the cheapest possible page — the count is page-size-independent.
+    pageSize: 1,
   });
   const state: QueryState<ComplianceGapResponse> = {
     data: q.data,
@@ -531,21 +613,33 @@ const CriticalGapsCard: React.FC = () => {
       updating={isUpdating(state)}
       t={t}
     >
-      {renderQueryBody<ComplianceGapResponse>(state, { t, testIdBase: 'overview-gaps' }, (data) => (
-        <div>
-          <div style={bigNumberStyle} data-testid="overview-gaps-total">
-            {formatCount(data.total)}
+      {renderQueryBody<ComplianceGapResponse>(state, { t, testIdBase: 'overview-gaps' }, (data) => {
+        // Everything below is read from the RESPONSE's `filterEcho` (the
+        // validated/sanitized request the server actually applied) + its
+        // `computedAt` — never the request constants — so what the card
+        // states can't silently drift from what was computed.
+        const gapTypeLabels = data.filterEcho.gapTypes
+          .map((gapType) => t(`endpointAdmin.complianceGap.filter.gapType.${gapType}`))
+          .join(', ');
+        const windowLabel = formatFreshnessWindow(data.filterEcho.freshnessWindow, t);
+        return (
+          <div>
+            <div style={bigNumberStyle} data-testid="overview-gaps-total">
+              {formatCount(data.total)}
+            </div>
+            <div style={metricLabelStyle}>{t('endpointAdmin.overview.gaps.metric')}</div>
+            <div style={subLineStyle} data-testid="overview-gaps-types">
+              {t('endpointAdmin.complianceGap.filter.gapTypes')} {gapTypeLabels}
+            </div>
+            <div style={subLineStyle} data-testid="overview-gaps-freshness">
+              {t('endpointAdmin.overview.gaps.freshness')
+                .replace('{window}', windowLabel)
+                .replace('{computedAt}', formatTimestamp(data.computedAt))}
+            </div>
+            <div style={subLineStyle}>{t('endpointAdmin.overview.gaps.observedNote')}</div>
           </div>
-          <div style={metricLabelStyle}>{t('endpointAdmin.overview.gaps.metric')}</div>
-          <div style={subLineStyle} data-testid="overview-gaps-freshness">
-            {t('endpointAdmin.overview.gaps.freshness').replace(
-              '{computedAt}',
-              formatTimestamp(data.computedAt),
-            )}
-          </div>
-          <div style={subLineStyle}>{t('endpointAdmin.overview.gaps.observedNote')}</div>
-        </div>
-      ))}
+        );
+      })}
     </CardShell>
   );
 };
@@ -620,10 +714,18 @@ const DraftReleasesCard: React.FC = () => {
   };
   const updating = isUpdating(agentDrafts) || isUpdating(bundleDrafts);
 
-  // Combined total only when BOTH succeed — if one errored we must not imply a
-  // fleet-complete number from a half-known pair.
+  // Combined total ONLY when BOTH sub-sources are cleanly successful (a value
+  // AND no error). If EITHER is in the stale-error state (data + error +
+  // !isFetching) — or errored at all — hide the combined figure so a half-known
+  // pair never implies a fleet-complete number. Each metric's own value + retry
+  // still render below.
   let combined: number | undefined;
-  if (agentDrafts.data !== undefined && bundleDrafts.data !== undefined) {
+  if (
+    agentDrafts.data !== undefined &&
+    !agentDrafts.error &&
+    bundleDrafts.data !== undefined &&
+    !bundleDrafts.error
+  ) {
     combined = agentDrafts.data.totalElements + bundleDrafts.data.totalElements;
   }
 

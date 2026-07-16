@@ -124,3 +124,36 @@ describe('resolveEndpointAdminTo (mount-aware absolute target)', () => {
     expect(resolveEndpointAdminTo('/compliance/policies', 'audit')).toBe('/audit');
   });
 });
+
+/**
+ * Faz 22 slice S5 — pin the mount's index-landing + wildcard fallback (platform-web
+ * #922). The overview dashboard is the index; mounting the full lazy router in a
+ * unit test is too heavy (every page pulls the store + AG-Grid setup), so we assert
+ * the source contract here (the behavioral index-landing lives in the overview page
+ * test, where the api module is mocked). The manifest ⇄ router drift guard above
+ * still covers the `<Route path>` set.
+ */
+describe('EndpointAdminRouter index + wildcard contract (source)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const routerSrc = readFileSync(resolve(here, '../../router/EndpointAdminRouter.tsx'), 'utf8');
+
+  it('lands the index route on the overview page', () => {
+    expect(routerSrc).toMatch(
+      /<Route\s+index\s+element=\{<Navigate\s+to="overview"\s+replace\s*\/>\}/,
+    );
+  });
+
+  it('declares an explicit overview route', () => {
+    expect(routerSrc).toMatch(/<Route\s+path="overview"\s+element=\{<EndpointOverviewPage\s*\/>\}/);
+  });
+
+  it('keeps devices on its own route (a known child stays put)', () => {
+    expect(routerSrc).toMatch(/<Route\s+path="devices"\s+element=\{<EndpointDevicesPage\s*\/>\}/);
+  });
+
+  it('redirects an unknown child to devices', () => {
+    expect(routerSrc).toMatch(
+      /<Route\s+path="\*"\s+element=\{<Navigate\s+to="devices"\s+replace\s*\/>\}/,
+    );
+  });
+});

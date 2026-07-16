@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import EndpointOverviewPage from '../EndpointOverviewPage';
+import { EndpointAdminRouter } from '../../../app/router/EndpointAdminRouter';
 import { createEndpointAdminT } from '../../../i18n';
 
 /* ------------------------------------------------------------------ */
@@ -63,6 +64,33 @@ function errorState(status: number) {
   return { data: undefined, error: { status }, isLoading: false, isFetching: false, refetch };
 }
 
+/**
+ * A successful ComplianceGapResponse okState with a valid `filterEcho` +
+ * `computedAt` (the card reads both). Defaults echo P7D + both gap types so
+ * fixtures that don't care about the echo still render without crashing.
+ */
+function gapOk(
+  overrides: {
+    total?: number;
+    computedAt?: string;
+    filterEcho?: { freshnessWindow: string; gapTypes: string[]; page: number; pageSize: number };
+  } = {},
+) {
+  return okState({
+    items: [],
+    total: overrides.total ?? 0,
+    page: 1,
+    pageSize: 1,
+    computedAt: overrides.computedAt ?? '2026-07-10T10:00:00Z',
+    filterEcho: overrides.filterEcho ?? {
+      freshnessWindow: 'P7D',
+      gapTypes: ['rdp_enabled', 'pending_security_updates'],
+      page: 1,
+      pageSize: 1,
+    },
+  });
+}
+
 const allMocks = [
   useListEndpointDevicesQueryMock,
   useGetComplianceDeviceListQueryMock,
@@ -84,9 +112,7 @@ function setAllReady(): void {
     ]),
   );
   useGetComplianceDeviceListQueryMock.mockReturnValue(okState({ totalElements: 3 }));
-  useGetComplianceGapQueryMock.mockReturnValue(
-    okState({ total: 4, computedAt: '2026-07-10T10:00:00Z' }),
-  );
+  useGetComplianceGapQueryMock.mockReturnValue(gapOk({ total: 4 }));
   useListEndpointEnrollmentsQueryMock.mockReturnValue(
     okState([{ status: 'PENDING' }, { status: 'CONSUMED' }]),
   );
@@ -122,6 +148,25 @@ const CARD_TEST_IDS = [
   'overview-card-drafts',
   'overview-card-activity',
 ];
+
+beforeAll(() => {
+  // jsdom implements neither; keep them stubbed so any child that reaches for
+  // them (e.g. when the full router mounts a page) doesn't throw.
+  Element.prototype.scrollIntoView = vi.fn();
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+});
 
 describe('EndpointOverviewPage', () => {
   beforeEach(() => {
@@ -195,5 +240,249 @@ describe('EndpointOverviewPage', () => {
     const gapsError = screen.getByTestId('overview-gaps-error');
     expect(gapsError.getAttribute('role')).toBe('alert');
     expect(gapsError.textContent).toContain(t('endpointAdmin.overview.state.forbidden'));
+  });
+
+  /* ---------------- MUST-FIX 3: exact query args ---------------- */
+
+  it('calls each card query with its exact contract args', () => {
+    setAllReady();
+    renderPage();
+    // Card 2 — three independent server-total counts (size:1 = cheap count).
+    expect(useGetComplianceDeviceListQueryMock).toHaveBeenCalledWith({
+      decision: 'NON_COMPLIANT',
+      page: 0,
+      size: 1,
+    });
+    expect(useGetComplianceDeviceListQueryMock).toHaveBeenCalledWith({
+      decision: 'UNAUTHORIZED',
+      page: 0,
+      size: 1,
+    });
+    expect(useGetComplianceDeviceListQueryMock).toHaveBeenCalledWith({
+      decision: 'UNKNOWN',
+      page: 0,
+      size: 1,
+    });
+    // Card 5 — the two draft counts.
+    expect(useListAgentUpdateReleasesQueryMock).toHaveBeenCalledWith({
+      status: 'DRAFT',
+      page: 0,
+      size: 1,
+    });
+    expect(useListSoftwareBundlesQueryMock).toHaveBeenCalledWith({
+      status: 'DRAFT',
+      page: 0,
+      size: 1,
+    });
+    // Card 6 — recent activity (limit 5).
+    expect(useListEndpointAuditEventsQueryMock).toHaveBeenCalledWith({ limit: 5 });
+    // Card 3 — gap count over observed devices. pageSize:1 (total only, never items).
+    expect(useGetComplianceGapQueryMock).toHaveBeenCalledWith({
+      gapTypes: ['pending_security_updates', 'rdp_enabled'],
+      freshnessWindow: 'PT168H',
+      page: 1,
+      pageSize: 1,
+    });
+  });
+
+  /* ---------------- MUST-FIX 3: real zero vs undefined ---------------- */
+
+  it('renders a real 0 for a successful zero/empty, never coercing undefined', () => {
+    useListEndpointDevicesQueryMock.mockReturnValue(okState([])); // plain [] → real 0
+    useListEndpointEnrollmentsQueryMock.mockReturnValue(okState([])); // plain [] → real 0
+    useGetComplianceDeviceListQueryMock.mockReturnValue(okState({ totalElements: 0 }));
+    useGetComplianceGapQueryMock.mockReturnValue(gapOk({ total: 0 }));
+    useListAgentUpdateReleasesQueryMock.mockReturnValue(okState({ totalElements: 0 }));
+    useListSoftwareBundlesQueryMock.mockReturnValue(okState({ totalElements: 0 }));
+    useListEndpointAuditEventsQueryMock.mockReturnValue(okState([]));
+    renderPage();
+    expect(screen.getByTestId('overview-fleet-managed-total').textContent).toBe('0');
+    expect(screen.getByTestId('overview-enrollment-pending').textContent).toBe('0');
+    expect(screen.getByTestId('overview-compliance-non-compliant-value').textContent).toBe('0');
+    expect(screen.getByTestId('overview-gaps-total').textContent).toBe('0');
+    expect(screen.getByTestId('overview-drafts-total').textContent).toBe('0'); // 0 + 0
+    // A successful empty audit list → the "no activity" empty state (not a skeleton/error).
+    expect(screen.getByTestId('overview-activity-empty')).toBeTruthy();
+  });
+
+  it('undefined data shows a skeleton and never a 0', () => {
+    // Default beforeEach = loading (data undefined) on every card.
+    renderPage();
+    expect(screen.getByTestId('overview-fleet-skeleton')).toBeTruthy();
+    expect(screen.queryByTestId('overview-fleet-managed-total')).toBeNull();
+    expect(screen.queryByTestId('overview-drafts-total')).toBeNull();
+  });
+
+  it('a 404 shows the not-enabled message (no data), never a 0', () => {
+    setAllReady();
+    useGetComplianceGapQueryMock.mockReturnValue(errorState(404));
+    renderPage();
+    const gapsError = screen.getByTestId('overview-gaps-error');
+    expect(gapsError.textContent).toContain(t('endpointAdmin.overview.state.notEnabled'));
+    expect(screen.queryByTestId('overview-gaps-total')).toBeNull();
+  });
+
+  /* ---------------- MUST-FIX 3: draft partial failure ---------------- */
+
+  it('draft card: agent ok + bundles error → agent count, bundle —, no combined, isolated retry', () => {
+    setAllReady();
+    useListAgentUpdateReleasesQueryMock.mockReturnValue(okState({ totalElements: 5 }));
+    const bundleRefetch = vi.fn();
+    useListSoftwareBundlesQueryMock.mockReturnValue({
+      data: undefined,
+      error: { status: 500 },
+      isLoading: false,
+      isFetching: false,
+      refetch: bundleRefetch,
+    });
+    renderPage();
+    expect(screen.getByTestId('overview-drafts-agent-updates-value').textContent).toBe('5');
+    const bundleError = screen.getByTestId('overview-drafts-software-bundles-error');
+    expect(bundleError.textContent).toContain('—');
+    // Combined total hidden while a sub-source has no value.
+    expect(screen.queryByTestId('overview-drafts-total')).toBeNull();
+    // Retry refetches ONLY the bundle sub-query (the shared `refetch` is untouched).
+    fireEvent.click(within(bundleError).getByRole('button'));
+    expect(bundleRefetch).toHaveBeenCalledTimes(1);
+    expect(refetch).not.toHaveBeenCalled();
+  });
+
+  /* ---------------- MUST-FIX 1 / 3: filterEcho response-echo ---------------- */
+
+  it('gaps card renders the RESPONSE filterEcho window + gap types, not the request constant', () => {
+    setAllReady();
+    // Response echoes P7D even though the request sent PT168H.
+    useGetComplianceGapQueryMock.mockReturnValue(
+      gapOk({
+        total: 4,
+        filterEcho: {
+          freshnessWindow: 'P7D',
+          gapTypes: ['rdp_enabled', 'pending_security_updates'],
+          page: 1,
+          pageSize: 1,
+        },
+      }),
+    );
+    renderPage();
+    const freshness = screen.getByTestId('overview-gaps-freshness');
+    // The P7D-derived window is shown...
+    expect(freshness.textContent).toContain(
+      t('endpointAdmin.overview.gaps.window.days').replace('{n}', '7'),
+    );
+    // ...and the request constant (PT168H → "168 hours/saat") is NOT — proving the
+    // card reads the echo, not the 'PT168H' request literal.
+    expect(freshness.textContent).not.toContain(
+      t('endpointAdmin.overview.gaps.window.hours').replace('{n}', '168'),
+    );
+    expect(freshness.textContent).not.toContain('168');
+    // Gap-type labels come from filterEcho.gapTypes (translated via the shared keys).
+    const types = screen.getByTestId('overview-gaps-types');
+    expect(types.textContent).toContain(
+      t('endpointAdmin.complianceGap.filter.gapType.rdp_enabled'),
+    );
+    expect(types.textContent).toContain(
+      t('endpointAdmin.complianceGap.filter.gapType.pending_security_updates'),
+    );
+  });
+
+  /* ---------------- MUST-FIX 2: cached refetch error (stale-error) ---------------- */
+
+  it('renderQueryBody card: cached value + errored refetch keeps value + polite stale warning + retry', () => {
+    setAllReady();
+    const fleetRefetch = vi.fn();
+    useListEndpointDevicesQueryMock.mockReturnValue({
+      data: [{ status: 'ONLINE' }, { status: 'STALE' }, { status: 'OFFLINE' }],
+      error: { status: 500 },
+      isLoading: false,
+      isFetching: false,
+      refetch: fleetRefetch,
+    });
+    renderPage();
+    // The value stays on screen (managed = 3)...
+    expect(screen.getByTestId('overview-fleet-managed-total').textContent).toBe('3');
+    // ...alongside a polite (not assertive) stale-error warning.
+    const stale = screen.getByTestId('overview-fleet-stale-error');
+    expect(stale.getAttribute('aria-live')).toBe('polite');
+    expect(stale.textContent).toContain(t('endpointAdmin.overview.state.staleError'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(within(stale).getByRole('button'));
+    expect(fleetRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('NumberStat: cached value + errored refetch keeps value + stale warning + isolated retry', () => {
+    setAllReady();
+    const ncRefetch = vi.fn();
+    useGetComplianceDeviceListQueryMock.mockImplementation((args?: { decision?: string }) =>
+      args?.decision === 'NON_COMPLIANT'
+        ? {
+            data: { totalElements: 7 },
+            error: { status: 500 },
+            isLoading: false,
+            isFetching: false,
+            refetch: ncRefetch,
+          }
+        : okState({ totalElements: 3 }),
+    );
+    renderPage();
+    expect(screen.getByTestId('overview-compliance-non-compliant-value').textContent).toBe('7');
+    const stale = screen.getByTestId('overview-compliance-non-compliant-stale-error');
+    expect(stale.textContent).toContain(t('endpointAdmin.overview.state.staleError'));
+    fireEvent.click(within(stale).getByRole('button'));
+    expect(ncRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('draft card hides the combined total when a sub-source is in the stale-error state', () => {
+    setAllReady();
+    useListAgentUpdateReleasesQueryMock.mockReturnValue(okState({ totalElements: 2 }));
+    useListSoftwareBundlesQueryMock.mockReturnValue({
+      data: { totalElements: 3 },
+      error: { status: 500 },
+      isLoading: false,
+      isFetching: false,
+      refetch,
+    });
+    renderPage();
+    // Combined hidden (bundle stale-errored) but BOTH per-metric values remain.
+    expect(screen.queryByTestId('overview-drafts-total')).toBeNull();
+    expect(screen.getByTestId('overview-drafts-agent-updates-value').textContent).toBe('2');
+    expect(screen.getByTestId('overview-drafts-software-bundles-value').textContent).toBe('3');
+    expect(screen.getByTestId('overview-drafts-software-bundles-stale-error')).toBeTruthy();
+  });
+
+  /* ---------------- MUST-FIX 3: audit view-all href is mount-aware ---------------- */
+
+  it('audit view-all href respects the shell mount vs standalone', () => {
+    setAllReady();
+    render(
+      <MemoryRouter initialEntries={['/endpoint-admin/overview']}>
+        <Routes>
+          <Route path="/endpoint-admin/*" element={<EndpointOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('overview-activity-viewall').getAttribute('href')).toBe(
+      '/endpoint-admin/audit',
+    );
+    cleanup();
+    render(
+      <MemoryRouter initialEntries={['/overview']}>
+        <EndpointOverviewPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('overview-activity-viewall').getAttribute('href')).toBe('/audit');
+  });
+
+  /* ---------------- MUST-FIX 3: index landing (behavioral) ---------------- */
+
+  it('mounting the router at /endpoint-admin lands on the overview page', async () => {
+    setAllReady();
+    render(
+      <MemoryRouter initialEntries={['/endpoint-admin']}>
+        <Routes>
+          <Route path="/endpoint-admin/*" element={<EndpointAdminRouter />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('endpoint-admin-overview-page')).toBeTruthy();
   });
 });
