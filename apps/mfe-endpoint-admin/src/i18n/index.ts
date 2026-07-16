@@ -1674,8 +1674,10 @@ const DICT_TR = {
   'endpointAdmin.capabilityState.retry': 'Yeniden dene',
   // Faz 22 S4b — paylaşılan MANAGE-yetkisi ipucu (VIEW-only kullanıcı disabled
   // aksiyonun NEDENİNİ görsün). Domain-bağımsız tek key; per-sayfa ödünç alınmaz.
-  'endpointAdmin.authz.manageRequired':
-    'Bu sayfayı görüntüleyebilirsiniz. Değişiklik yapmak için yönetme yetkisi gerekir.',
+  // Yalnız AKSİYON yetkisinden bahseder — "görüntüleyebilirsiniz" DEMEZ, çünkü aynı
+  // sayfa kendi endpoint'inden 403/forbidden (CapabilityState) gösteriyor olabilir
+  // (Codex S4b P1: coarse VIEW sinyali ≠ sayfa-özel can_view). Çelişki üretmez.
+  'endpointAdmin.authz.manageRequired': 'Değişiklik yapmak için yönetme yetkisi gerekir.',
 } as const;
 
 const DICT_EN: Record<keyof typeof DICT_TR, string> = {
@@ -3311,8 +3313,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.capabilityState.retry': 'Retry',
   // Faz 22 S4b — shared MANAGE-permission hint (so a VIEW-only user sees WHY a
   // disabled action is disabled). One domain-agnostic key; not borrowed per-page.
-  'endpointAdmin.authz.manageRequired':
-    'You can view this page. Manage access is required to make changes.',
+  // Talks ONLY about ACTION permission — does NOT claim "you can view", since the
+  // same page may be showing a 403/forbidden CapabilityState from its own endpoint
+  // (Codex S4b P1: a coarse VIEW signal ≠ page-specific can_view). No contradiction.
+  'endpointAdmin.authz.manageRequired': 'Manage access is required to make changes.',
 };
 
 function resolveLocale(): 'tr' | 'en' {
