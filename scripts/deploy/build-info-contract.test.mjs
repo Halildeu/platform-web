@@ -15,7 +15,12 @@ import test from 'node:test';
 import {
   BUILD_INFO_SCHEMA_VERSION,
   collectRootEntrypoints,
+  createBuildInfoDocument,
 } from './build-info-contract.mjs';
+import {
+  BUILD_IMAGE_CONTRACT,
+  deriveBuildImageRef,
+} from './derive-build-image-ref.mjs';
 
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'web-build-info-contract-'));
@@ -212,6 +217,59 @@ test('rejects a root script symlink even when its target exists', (t) => {
     () => collectRootEntrypoints(fx.root),
     /regular non-symlink file|resolves outside dist directory/,
   );
+});
+
+test('derives exact prod and testai image references from the versioned contract', () => {
+  const sha = '125d2d85f139cb2b8fcfee27eb6a0affbb4bcc2b';
+  assert.equal(BUILD_IMAGE_CONTRACT.shortShaLength, 7);
+  assert.equal(
+    deriveBuildImageRef('testai', sha),
+    'ghcr.io/halildeu/platform-web-frontend-testai:sha-125d2d8',
+  );
+  assert.equal(
+    deriveBuildImageRef('prod', sha),
+    'ghcr.io/halildeu/platform-web-frontend:sha-125d2d8',
+  );
+  assert.throws(() => deriveBuildImageRef('staging', sha), /unsupported build image variant/);
+  assert.throws(() => deriveBuildImageRef('testai', '125d2d8'), /source SHA must be 40/);
+});
+
+test('emits the derived immutable image in the build-info v2 document', () => {
+  const sha = '125d2d85f139cb2b8fcfee27eb6a0affbb4bcc2b';
+  const image = deriveBuildImageRef('testai', sha);
+  const document = createBuildInfoDocument({
+    sha,
+    ref: 'main',
+    image,
+    buildTime: '2026-07-16T00:00:00.000Z',
+    origin: 'https://testai.acik.com',
+    rootEntry: 'mf-entry-bootstrap-0.js',
+    rootEntrypoints: [{ path: '/mf-entry-bootstrap-0.js', bodySha256: 'a'.repeat(64) }],
+    assets: ['shell.js'],
+    remotes: [],
+  });
+
+  assert.equal(document.schemaVersion, 'acik.platform.web-build-info/v2');
+  assert.equal(document.sha, sha);
+  assert.equal(document.shortSha, '125d2d8');
+  assert.equal(document.image, image);
+  assert.equal(document.imageDigest, '');
+});
+
+test('wires the versioned image contract through workflow and Docker producer', () => {
+  const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+  const workflow = readFileSync(
+    new URL('../../.github/workflows/ci-web-image-push.yml', import.meta.url),
+    'utf8',
+  );
+  const producer = readFileSync(new URL('./build-single-domain.mjs', import.meta.url), 'utf8');
+
+  assert.match(dockerfile, /^ARG BUILD_IMAGE=""$/m);
+  assert.match(dockerfile, /^\s+BUILD_IMAGE=\$\{BUILD_IMAGE\}$/m);
+  assert.match(workflow, /node scripts\/deploy\/derive-build-image-ref\.mjs/);
+  assert.match(workflow, /^\s+BUILD_IMAGE=\$\{\{ steps\.image\.outputs\.ref \}\}$/m);
+  assert.match(workflow, /^\s+\$\{\{ steps\.image\.outputs\.ref \}\}$/m);
+  assert.match(producer, /createBuildInfoDocument\(\{/);
 });
 
 const realShellDist = process.env.BUILD_INFO_REAL_SHELL_DIST;

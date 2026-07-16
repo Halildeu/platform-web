@@ -101,9 +101,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      - name: Derive immutable image identity from the versioned contract
+        id: image
+        env:
+          BUILD_VARIANT: ${{ matrix.variant }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image_ref="$(node scripts/deploy/derive-build-image-ref.mjs \
+            "$BUILD_VARIANT" "$BUILD_SHA")"
+          [[ "$image_ref" == "${REGISTRY}/${IMAGE_OWNER}/"* ]]
+          {
+            echo "ref=$image_ref"
+            echo "short=${BUILD_SHA:0:7}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build + Push image (${{ matrix.variant }})
         id: build
@@ -125,8 +136,9 @@ jobs:
             VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE=${{ matrix.enable_endpoint_admin }}
             BUILD_SHA=${{ github.sha }}
             BUILD_REF=${{ github.ref_name }}
+            BUILD_IMAGE=${{ steps.image.outputs.ref }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:sha-${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.ref }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:latest
           # Cache scope-v2: 2026-05-03 prod variant cache-bust — eski scope
           # Vite build output'unu çakıyor, secret değişimleri yansımıyordu.
@@ -148,14 +160,16 @@ jobs:
             echo "::warning::GITOPS_DISPATCH_PAT not set; skipping dispatch"
             exit 0
           fi
-          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}"
+          FULL_IMAGE_REF="${{ steps.image.outputs.ref }}"
+          IMAGE_REF="${FULL_IMAGE_REF%:*}"
           DIGEST="${{ steps.build.outputs.digest }}"
-          TAG="sha-${{ steps.sha.outputs.short }}"
+          TAG="${FULL_IMAGE_REF##*:}"
+          [[ "$TAG" == "sha-${{ steps.image.outputs.short }}" ]]
           gh api repos/Halildeu/platform-k8s-gitops/dispatches \
             -X POST \
             -f event_type=testai-deploy \
             -F "client_payload[sha]=${{ github.sha }}" \
-            -F "client_payload[short_sha]=${{ steps.sha.outputs.short }}" \
+            -F "client_payload[short_sha]=${{ steps.image.outputs.short }}" \
             -F "client_payload[ref]=${{ github.ref_name }}" \
             -F "client_payload[image]=${IMAGE_REF}" \
             -F "client_payload[image_tag]=${TAG}" \
@@ -168,9 +182,9 @@ jobs:
       - name: Summary — digest (19.9 pin için kanıt)
         run: |
           echo "### ${{ matrix.image_name }} image push (${{ matrix.variant }})" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag**: \`sha-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: \`sha-${{ steps.image.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:sha-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${{ steps.image.outputs.ref }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Pinnable**: \`${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Build args**:" >> $GITHUB_STEP_SUMMARY
           echo "  - VITE_KEYCLOAK_URL: \`${{ matrix.kc_url }}\`" >> $GITHUB_STEP_SUMMARY
