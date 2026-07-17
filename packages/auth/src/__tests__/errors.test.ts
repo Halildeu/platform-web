@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { getHttpStatus, isUnauthorizedError, isForbiddenError, isServerError } from '../errors';
+import {
+  getHttpStatus,
+  isAuthCriticalUnauthorizedUrl,
+  isUnauthorizedError,
+  isForbiddenError,
+  isServerError,
+} from '../errors';
 
 describe('errors helpers — Codex 019dd818 iter-4 (B-prime)', () => {
   describe('getHttpStatus', () => {
@@ -74,6 +80,27 @@ describe('errors helpers — Codex 019dd818 iter-4 (B-prime)', () => {
     it('false for unknown status', () => {
       expect(isServerError(null)).toBe(false);
       expect(isServerError(new Error('network'))).toBe(false);
+    });
+  });
+
+  describe('isAuthCriticalUnauthorizedUrl', () => {
+    it('accepts only identity snapshot endpoints as auth-critical', () => {
+      expect(isAuthCriticalUnauthorizedUrl('/v1/authz/me')).toBe(true);
+      expect(isAuthCriticalUnauthorizedUrl('/v1/authz/version')).toBe(true);
+      expect(isAuthCriticalUnauthorizedUrl('https://testai.acik.com/v1/authz/me')).toBe(true);
+    });
+
+    it('keeps downstream and object-level 401 responses feature-local', () => {
+      expect(isAuthCriticalUnauthorizedUrl('/v1/admin/meetings')).toBe(false);
+      expect(isAuthCriticalUnauthorizedUrl('/v1/authz/check')).toBe(false);
+      expect(isAuthCriticalUnauthorizedUrl('/v1/variants?gridId=foo')).toBe(false);
+      expect(isAuthCriticalUnauthorizedUrl('/v1/authz/metrics')).toBe(false);
+      expect(isAuthCriticalUnauthorizedUrl('/v1/authz/version/history')).toBe(false);
+    });
+
+    it('keeps a URL-less 401 feature-local because it cannot prove identity loss', () => {
+      expect(isAuthCriticalUnauthorizedUrl(undefined)).toBe(false);
+      expect(isAuthCriticalUnauthorizedUrl(null)).toBe(false);
     });
   });
 });

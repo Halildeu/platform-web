@@ -24,7 +24,13 @@ export { useBatchZanzibarAccess } from './useBatchZanzibarAccess';
 export type { BatchAccessEntry, BatchZanzibarAccessResult } from './useBatchZanzibarAccess';
 export { ZanzibarGate } from './ZanzibarGate';
 export { fetchAuthzMe, fetchAuthzVersion, checkPermission, checkPermissionBatch } from './api';
-export { getHttpStatus, isUnauthorizedError, isForbiddenError, isServerError } from './errors';
+export {
+  getHttpStatus,
+  isUnauthorizedError,
+  isForbiddenError,
+  isServerError,
+  isAuthCriticalUnauthorizedUrl,
+} from './errors';
 export { MODULES } from './types';
 export { REPORT_AUTHZ_TARGETS, getReportAuthzTarget } from './authzTargetRegistry';
 export type { AuthzTarget, ReportGroupKey } from './authzTargetRegistry';

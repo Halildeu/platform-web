@@ -38,3 +38,20 @@ export function isServerError(error: unknown): boolean {
   const status = getHttpStatus(error);
   return typeof status === 'number' && status >= 500;
 }
+
+/**
+ * Only identity-snapshot endpoints can prove that the global session is gone.
+ * Resource and downstream-service 401 responses stay local to their feature.
+ */
+export function isAuthCriticalUnauthorizedUrl(url: unknown): boolean {
+  if (typeof url !== 'string') {
+    return false;
+  }
+
+  try {
+    const pathname = new URL(url, 'http://auth-url.local').pathname;
+    return pathname.endsWith('/v1/authz/me') || pathname.endsWith('/v1/authz/version');
+  } catch {
+    return false;
+  }
+}
