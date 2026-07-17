@@ -9,10 +9,40 @@ import RecruiterWorkspacePage from './RecruiterWorkspacePage';
 const apiMocks = vi.hoisted(() => ({
   listRecruiterApplications: vi.fn(),
   updateRecruiterApplicationStatus: vi.fn(),
+  listRecruiterJobs: vi.fn(),
+  createRecruiterJob: vi.fn(),
+  updateRecruiterJob: vi.fn(),
+  transitionRecruiterJob: vi.fn(),
+  createApplicationIdempotencyKey: vi.fn(() => 'web-job-command-1234'),
+}));
+const permissionMocks = vi.hoisted(() => ({
+  getModuleLevel: vi.fn(() => 'MANAGE'),
+  isActionAllowed: vi.fn(() => false),
+}));
+vi.mock('@mfe/auth', () => ({
+  usePermissions: () => permissionMocks,
 }));
 vi.mock('../api/application-api', () => ({
+  DEFAULT_APPLICATION_FIELDS: [
+    'fullName',
+    'email',
+    'phone',
+    'city',
+    'linkedIn',
+    'portfolio',
+    'summary',
+    'experience',
+    'education',
+    'skills',
+    'note',
+  ],
   listRecruiterApplications: apiMocks.listRecruiterApplications,
   updateRecruiterApplicationStatus: apiMocks.updateRecruiterApplicationStatus,
+  listRecruiterJobs: apiMocks.listRecruiterJobs,
+  createRecruiterJob: apiMocks.createRecruiterJob,
+  updateRecruiterJob: apiMocks.updateRecruiterJob,
+  transitionRecruiterJob: apiMocks.transitionRecruiterJob,
+  createApplicationIdempotencyKey: apiMocks.createApplicationIdempotencyKey,
 }));
 
 const APPLICATION = {
@@ -45,6 +75,8 @@ const renderPage = () =>
 
 describe('RecruiterWorkspacePage', () => {
   beforeEach(() => {
+    permissionMocks.getModuleLevel.mockReturnValue('MANAGE');
+    permissionMocks.isActionAllowed.mockReturnValue(false);
     apiMocks.listRecruiterApplications.mockResolvedValue({
       items: [APPLICATION],
       page: 0,
@@ -56,6 +88,7 @@ describe('RecruiterWorkspacePage', () => {
       status: 'UNDER_REVIEW',
       version: 1,
     });
+    apiMocks.listRecruiterJobs.mockResolvedValue([]);
   });
   afterEach(() => {
     cleanup();
@@ -106,5 +139,18 @@ describe('RecruiterWorkspacePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
     expect(screen.getByRole('status')).toHaveTextContent('Mülakat planlaması bekleniyor.');
     expect(screen.getByRole('status')).toHaveClass('text-text-primary');
+  });
+
+  it('keeps ATS VIEW users read-only for both jobs and application transitions', async () => {
+    permissionMocks.getModuleLevel.mockReturnValue('VIEW');
+    renderPage();
+
+    expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu incele' }));
+    expect(screen.getByText(/aşama değiştirme yetkiniz yok/i)).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'İnsan incelemesini başlat' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yeni ilan oluştur' })).not.toBeInTheDocument();
   });
 });

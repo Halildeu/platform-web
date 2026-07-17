@@ -14,7 +14,7 @@ export const RECRUITER_WORKSPACE_ENTRY = {
   route: '/admin/ats/recruiter',
   routePattern: '/admin/ats/recruiter/*',
   requiredModule: ATS_PRODUCT_HUB_ENTRY.requiredModule,
-  mode: 'PROPOSAL_ONLY',
+  mode: 'LIVE_WRITE',
 } as const;
 
 export const ATS_PORTAL_SAFETY_BOUNDARIES = [

@@ -97,6 +97,7 @@ const CandidateApplicationPage = React.lazy(
   () => import('../../pages/jobs/CandidateApplicationPage'),
 );
 const PublicJobsPage = React.lazy(() => import('../../pages/jobs/PublicJobsPage'));
+const PublicJobDetailPage = React.lazy(() => import('../../pages/jobs/PublicJobDetailPage'));
 const CandidatePortalPage = React.lazy(() => import('../../pages/candidate/CandidatePortalPage'));
 const RecruiterWorkspacePage = React.lazy(
   () => import('../../features/ats-portals/ui/RecruiterWorkspacePage'),
@@ -400,16 +401,28 @@ export const AppRouter: React.FC = () => {
             an email read on a logged-out device must reach the success
             state without a login prompt. */}
         <Route path="/notifications/unsubscribe" element={<UnsubscribeLandingPage />} />
-        {/* Faz 25 FULLATS-WEB-APPLY-01: public candidate entry. Job links must
-            remain usable on logged-out devices, so this route deliberately
-            sits outside ProtectedRoute. The first slice is local-only and
-            never uploads the selected PDF or submits candidate data. */}
+        {/* Faz 25 FULLATS-WEB-APPLY-01: public candidate entry. Job links remain
+            usable on logged-out devices, so these routes deliberately sit
+            outside ProtectedRoute. Canonical multi-tenant URLs use a public
+            career handle; /jobs remains the configured default-tenant alias. */}
         <Route path="/candidate" element={<CandidatePortalPage />} />
         <Route path="/candidate/" element={<CandidatePortalPage />} />
         <Route path="/jobs" element={<PublicJobsPage />} />
         <Route path="/jobs/" element={<PublicJobsPage />} />
+        <Route path="/jobs/:jobSlug" element={<PublicJobDetailPage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
         <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
+        <Route path="/careers/:publicHandle/jobs" element={<PublicJobsPage />} />
+        <Route path="/careers/:publicHandle/jobs/" element={<PublicJobsPage />} />
+        <Route path="/careers/:publicHandle/jobs/:jobSlug" element={<PublicJobDetailPage />} />
+        <Route
+          path="/careers/:publicHandle/jobs/:jobSlug/apply"
+          element={<CandidateApplicationPage />}
+        />
+        <Route
+          path="/careers/:publicHandle/jobs/:jobSlug/apply/"
+          element={<CandidateApplicationPage />}
+        />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />

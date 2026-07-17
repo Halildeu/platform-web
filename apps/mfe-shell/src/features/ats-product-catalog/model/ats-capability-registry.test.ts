@@ -19,11 +19,20 @@ describe('ATS capability registry', () => {
       expect([ATS_PRODUCT_HUB_ENTRY.route, INTERVIEW_EVIDENCE_ENTRY.route]).toContain(
         capability.route,
       );
-      expect(capability.requiredModule).toBe(ATS_PRODUCT_HUB_ENTRY.requiredModule);
+      expect(capability.requiredModule).toBe(
+        capability.route === INTERVIEW_EVIDENCE_ENTRY.route
+          ? INTERVIEW_EVIDENCE_ENTRY.requiredModule
+          : ATS_PRODUCT_HUB_ENTRY.requiredModule,
+      );
       expect(capability.targetRoles.length).toBeGreaterThan(0);
       expect(capability.liveDependency.trim()).not.toBe('');
       expect(capability.actionCeiling.trim()).not.toBe('');
     }
+  });
+
+  it('separates the ATS product grant from sensitive interview evidence', () => {
+    expect(ATS_PRODUCT_HUB_ENTRY.requiredModule).toBe('ATS');
+    expect(INTERVIEW_EVIDENCE_ENTRY.requiredModule).toBe('INTERVIEW_EVIDENCE');
   });
 
   it('includes the gated editable CV-PDF draft without enabling upload or PII processing', () => {

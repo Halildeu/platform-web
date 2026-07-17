@@ -1,18 +1,23 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const httpMocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
+const httpMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() }));
 vi.mock('@mfe/shared-http', () => ({ api: httpMocks }));
 
 import {
   createApplicationIdempotencyKey,
   getCandidateStatus,
   createCandidateAccessToken,
+  createRecruiterJob,
+  getPublicJob,
   listPublicJobs,
   listRecruiterApplications,
+  listRecruiterJobs,
   readCandidateSession,
   saveCandidateSession,
   submitApplication,
+  transitionRecruiterJob,
+  updateRecruiterJob,
   updateRecruiterApplicationStatus,
 } from './application-api';
 
@@ -46,6 +51,27 @@ describe('application-api', () => {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
+  });
+
+  it('uses a validated public career handle for tenant-bound candidate routes', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ slug: 'urun-yoneticisi' }));
+
+    await listPublicJobs('acik');
+    await getPublicJob('urun-yoneticisi', 'acik');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/ats/v1/careers/acik/jobs',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/ats/v1/careers/acik/jobs/urun-yoneticisi',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    await expect(listPublicJobs('../tenant')).rejects.toThrow('Kariyer adresi geçersiz');
   });
 
   it('submits strict JSON with an idempotency key and no caller tenant or status', async () => {
@@ -192,6 +218,60 @@ describe('application-api', () => {
     expect(httpMocks.put).toHaveBeenCalledWith(
       '/ats/v1/recruiter/applications/app_abcdefghijklmnopqrstuvwx/status',
       { expectedVersion: 0, toStatus: 'UNDER_REVIEW' },
+    );
+  });
+
+  it('uses versioned idempotent mutations for recruiter job lifecycle', async () => {
+    const job = {
+      jobId: `job_${'A'.repeat(24)}`,
+      publicHandle: 'acik',
+      slug: 'urun-yoneticisi',
+      title: 'Ürün Yöneticisi',
+      team: 'Ürün',
+      location: 'İstanbul',
+      mode: 'Hibrit',
+      employmentType: 'Tam zamanlı',
+      summary: 'Kullanıcı ihtiyaçlarını ölçülebilir sonuçlara dönüştürün.',
+      highlights: ['Ürün keşfi'],
+      status: 'DRAFT' as const,
+      applyEnabled: false,
+      version: 0,
+      createdAt: '2026-07-17T10:00:00Z',
+      updatedAt: '2026-07-17T10:00:00Z',
+    };
+    const draft = {
+      slug: job.slug,
+      title: job.title,
+      team: job.team,
+      location: job.location,
+      mode: job.mode,
+      employmentType: job.employmentType,
+      summary: job.summary,
+      highlights: job.highlights,
+    };
+    httpMocks.get.mockResolvedValueOnce({ data: [job] });
+    httpMocks.post.mockResolvedValue({ data: job });
+    httpMocks.put.mockResolvedValueOnce({ data: { ...job, version: 1 } });
+
+    await listRecruiterJobs();
+    await createRecruiterJob(draft, 'web-job-create-1234');
+    await updateRecruiterJob(job, draft, 'web-job-update-1234');
+    await transitionRecruiterJob(job, 'PUBLISHED', 'web-job-publish-123');
+
+    expect(httpMocks.get).toHaveBeenCalledWith('/ats/v1/recruiter/jobs');
+    expect(httpMocks.post).toHaveBeenNthCalledWith(1, '/ats/v1/recruiter/jobs', draft, {
+      headers: { 'X-ATS-Idempotency-Key': 'web-job-create-1234' },
+    });
+    expect(httpMocks.put).toHaveBeenCalledWith(
+      `/ats/v1/recruiter/jobs/${job.jobId}`,
+      { expectedVersion: 0, ...draft },
+      { headers: { 'X-ATS-Idempotency-Key': 'web-job-update-1234' } },
+    );
+    expect(httpMocks.post).toHaveBeenNthCalledWith(
+      2,
+      `/ats/v1/recruiter/jobs/${job.jobId}/transitions`,
+      { expectedVersion: 0, targetStatus: 'PUBLISHED' },
+      { headers: { 'X-ATS-Idempotency-Key': 'web-job-publish-123' } },
     );
   });
 

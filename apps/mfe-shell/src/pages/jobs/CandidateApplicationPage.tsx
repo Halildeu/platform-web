@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   createApplicationIdempotencyKey,
   createCandidateAccessToken,
+  DEFAULT_APPLICATION_FIELDS,
   getPublicJob,
   saveCandidateSession,
   submitApplication,
@@ -104,7 +105,8 @@ const isValidOptionalHttpUrl = (value: string) => {
 };
 
 const CandidateApplicationPage = () => {
-  const { jobSlug = 'urun-yoneticisi' } = useParams();
+  const { publicHandle, jobSlug = 'urun-yoneticisi' } = useParams();
+  const jobsBase = publicHandle ? `/careers/${encodeURIComponent(publicHandle)}/jobs` : '/jobs';
   const [job, setJob] = useState<PublicJobDto | null>(null);
   const [jobError, setJobError] = useState('');
   const [values, setValues] = useState<ApplicationValues>(EMPTY_VALUES);
@@ -125,6 +127,8 @@ const CandidateApplicationPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const receiptHeadingRef = useRef<HTMLHeadingElement>(null);
+  const enabledFields = job?.applicationFields ?? DEFAULT_APPLICATION_FIELDS;
+  const isFieldEnabled = (field: keyof ApplicationValues) => enabledFields.includes(field);
 
   useEffect(() => {
     const heading = view === 'preview' ? previewHeadingRef.current : receiptHeadingRef.current;
@@ -137,7 +141,7 @@ const CandidateApplicationPage = () => {
     let cancelled = false;
     setJob(null);
     setJobError('');
-    void getPublicJob(jobSlug)
+    void getPublicJob(jobSlug, publicHandle)
       .then((loaded) => {
         if (!cancelled) setJob(loaded);
       })
@@ -149,7 +153,7 @@ const CandidateApplicationPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [jobSlug]);
+  }, [jobSlug, publicHandle]);
 
   const updateValue =
     (
@@ -252,8 +256,8 @@ const CandidateApplicationPage = () => {
           email: values.email,
           phone: values.phone,
           city: values.city,
-          linkedIn: values.linkedIn || undefined,
-          portfolio: values.portfolio || undefined,
+          linkedIn: isFieldEnabled('linkedIn') ? values.linkedIn || undefined : undefined,
+          portfolio: isFieldEnabled('portfolio') ? values.portfolio || undefined : undefined,
           summary: values.summary,
           experience: values.experience,
           education: values.education,
@@ -261,11 +265,12 @@ const CandidateApplicationPage = () => {
             .split(',')
             .map((skill) => skill.trim())
             .filter(Boolean),
-          note: values.note || undefined,
-          noticeVersion: 'kvkk-application-v1',
+          note: isFieldEnabled('note') ? values.note || undefined : undefined,
+          noticeVersion: job.noticeVersion,
           noticeAcceptedAt,
           accuracyConfirmedAt,
         },
+        publicHandle,
       );
       setReceipt(saved);
       setCandidateSessionSaved(saveCandidateSession(saved));
@@ -361,19 +366,19 @@ const CandidateApplicationPage = () => {
     </div>
   );
 
-  const previewRows: Array<[string, string]> = [
-    ['Ad soyad', values.fullName],
-    ['E-posta', values.email],
-    ['Telefon', values.phone],
-    ['Şehir', values.city],
-    ['LinkedIn', values.linkedIn || 'Eklenmedi'],
-    ['Portföy', values.portfolio || 'Eklenmedi'],
-    ['Profesyonel özet', values.summary],
-    ['Deneyim', values.experience],
-    ['Eğitim', values.education],
-    ['Beceriler', values.skills],
-    ['Ek not', values.note || 'Eklenmedi'],
-  ];
+  const previewRows: Array<[keyof ApplicationValues, string, string]> = [
+    ['fullName', 'Ad soyad', values.fullName],
+    ['email', 'E-posta', values.email],
+    ['phone', 'Telefon', values.phone],
+    ['city', 'Şehir', values.city],
+    ['linkedIn', 'LinkedIn', values.linkedIn || 'Eklenmedi'],
+    ['portfolio', 'Portföy', values.portfolio || 'Eklenmedi'],
+    ['summary', 'Profesyonel özet', values.summary],
+    ['experience', 'Deneyim', values.experience],
+    ['education', 'Eğitim', values.education],
+    ['skills', 'Beceriler', values.skills],
+    ['note', 'Ek not', values.note || 'Eklenmedi'],
+  ].filter(([field]) => isFieldEnabled(field));
 
   return (
     <main
@@ -383,7 +388,7 @@ const CandidateApplicationPage = () => {
       <div className="border-b border-border-subtle bg-surface-default">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link
-            to="/jobs"
+            to={jobsBase}
             className="flex items-center gap-3"
             aria-label="Açık Kariyer ilan listesi"
           >
@@ -566,14 +571,18 @@ const CandidateApplicationPage = () => {
                     autoComplete: 'tel',
                   })}
                   {renderField('city', 'Şehir', { required: true, autoComplete: 'address-level2' })}
-                  {renderField('linkedIn', 'LinkedIn', {
-                    type: 'url',
-                    placeholder: 'https://linkedin.com/in/...',
-                  })}
-                  {renderField('portfolio', 'Portföy / kişisel site', {
-                    type: 'url',
-                    placeholder: 'https://...',
-                  })}
+                  {isFieldEnabled('linkedIn')
+                    ? renderField('linkedIn', 'LinkedIn', {
+                        type: 'url',
+                        placeholder: 'https://linkedin.com/in/...',
+                      })
+                    : null}
+                  {isFieldEnabled('portfolio')
+                    ? renderField('portfolio', 'Portföy / kişisel site', {
+                        type: 'url',
+                        placeholder: 'https://...',
+                      })
+                    : null}
                 </div>
               </section>
 
@@ -603,13 +612,15 @@ const CandidateApplicationPage = () => {
                   )}
                   {renderTextArea('education', 'Eğitim', 'Okul · Bölüm · Mezuniyet yılı', true, 3)}
                   {renderTextArea('skills', 'Beceriler', 'Virgülle ayırabilirsiniz', true, 3)}
-                  {renderTextArea(
-                    'note',
-                    'Bu role neden başvuruyorsunuz?',
-                    'İsteğe bağlı kısa not',
-                    false,
-                    4,
-                  )}
+                  {isFieldEnabled('note')
+                    ? renderTextArea(
+                        'note',
+                        'Bu role neden başvuruyorsunuz?',
+                        'İsteğe bağlı kısa not',
+                        false,
+                        4,
+                      )
+                    : null}
                 </div>
               </section>
 
@@ -664,9 +675,9 @@ const CandidateApplicationPage = () => {
               </div>
 
               <dl className="mt-6 divide-y divide-border-subtle rounded-2xl border border-border-subtle">
-                {previewRows.map(([label, value]) => (
+                {previewRows.map(([field, label, value]) => (
                   <div
-                    key={label}
+                    key={field}
                     className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
                   >
                     <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
@@ -712,7 +723,7 @@ const CandidateApplicationPage = () => {
                   <span>
                     KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
                     kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla kaydedileceğini
-                    anladım.
+                    anladım. <span className="sr-only">Sürüm: {job?.noticeVersion}</span>
                   </span>
                 </label>
                 <label

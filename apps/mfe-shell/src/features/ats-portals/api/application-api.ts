@@ -5,6 +5,45 @@ const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
 const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/u;
+const PUBLIC_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,7}$/u;
+
+export type ApplicationFieldKey =
+  | 'fullName'
+  | 'email'
+  | 'phone'
+  | 'city'
+  | 'linkedIn'
+  | 'portfolio'
+  | 'summary'
+  | 'experience'
+  | 'education'
+  | 'skills'
+  | 'note';
+
+export const REQUIRED_APPLICATION_FIELDS: ApplicationFieldKey[] = [
+  'fullName',
+  'email',
+  'phone',
+  'city',
+  'summary',
+  'experience',
+  'education',
+  'skills',
+];
+
+export const DEFAULT_APPLICATION_FIELDS: ApplicationFieldKey[] = [
+  'fullName',
+  'email',
+  'phone',
+  'city',
+  'linkedIn',
+  'portfolio',
+  'summary',
+  'experience',
+  'education',
+  'skills',
+  'note',
+];
 
 export type PublicJobDto = {
   slug: string;
@@ -15,6 +54,8 @@ export type PublicJobDto = {
   employmentType: string;
   summary: string;
   highlights: string[];
+  applicationFields: ApplicationFieldKey[];
+  noticeVersion: 'kvkk-application-v1';
 };
 
 export type ApplicationSubmissionDto = {
@@ -83,6 +124,31 @@ export type RecruiterApplicationPageDto = {
   total: number;
 };
 
+export type RecruiterJobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'ARCHIVED';
+
+export type RecruiterJobDto = PublicJobDto & {
+  jobId: string;
+  publicHandle: string | null;
+  status: RecruiterJobStatus;
+  applyEnabled: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecruiterJobDraftDto = {
+  slug?: string;
+  title: string;
+  team: string;
+  location: string;
+  mode: string;
+  employmentType: string;
+  summary: string;
+  highlights: string[];
+  applicationFields: ApplicationFieldKey[];
+  noticeVersion: 'kvkk-application-v1';
+};
+
 export type CandidateSession = {
   publicRef: string;
   candidateAccessToken: string;
@@ -104,8 +170,14 @@ const safeJson = async <T>(response: Response): Promise<T> => {
   return payload;
 };
 
-export const listPublicJobs = async (): Promise<PublicJobDto[]> => {
-  const response = await fetch(`${ATS_API_BASE}/jobs`, {
+const publicJobsPath = (publicHandle?: string): string => {
+  if (!publicHandle) return `${ATS_API_BASE}/jobs`;
+  if (!PUBLIC_HANDLE_PATTERN.test(publicHandle)) throw new Error('Kariyer adresi geçersiz.');
+  return `${ATS_API_BASE}/careers/${encodeURIComponent(publicHandle)}/jobs`;
+};
+
+export const listPublicJobs = async (publicHandle?: string): Promise<PublicJobDto[]> => {
+  const response = await fetch(publicJobsPath(publicHandle), {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
@@ -113,8 +185,11 @@ export const listPublicJobs = async (): Promise<PublicJobDto[]> => {
   return safeJson<PublicJobDto[]>(response);
 };
 
-export const getPublicJob = async (jobSlug: string): Promise<PublicJobDto> => {
-  const response = await fetch(`${ATS_API_BASE}/jobs/${encodeURIComponent(jobSlug)}`, {
+export const getPublicJob = async (
+  jobSlug: string,
+  publicHandle?: string,
+): Promise<PublicJobDto> => {
+  const response = await fetch(`${publicJobsPath(publicHandle)}/${encodeURIComponent(jobSlug)}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
@@ -127,6 +202,7 @@ export const submitApplication = async (
   idempotencyKey: string,
   candidateAccessToken: string,
   submission: ApplicationSubmissionDto,
+  publicHandle?: string,
 ): Promise<ApplicationReceiptDto> => {
   if (
     !IDEMPOTENCY_PATTERN.test(idempotencyKey) ||
@@ -134,17 +210,20 @@ export const submitApplication = async (
   ) {
     throw new Error('Güvenli başvuru oturumu geçersiz; sayfayı yenileyip yeniden deneyin.');
   }
-  const response = await fetch(`${ATS_API_BASE}/jobs/${encodeURIComponent(jobSlug)}/applications`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'X-ATS-Idempotency-Key': idempotencyKey,
-      'X-ATS-Candidate-Access': candidateAccessToken,
+  const response = await fetch(
+    `${publicJobsPath(publicHandle)}/${encodeURIComponent(jobSlug)}/applications`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-ATS-Idempotency-Key': idempotencyKey,
+        'X-ATS-Candidate-Access': candidateAccessToken,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(submission),
     },
-    credentials: 'same-origin',
-    body: JSON.stringify(submission),
-  });
+  );
   return safeJson<ApplicationReceiptDto>(response);
 };
 
@@ -230,6 +309,53 @@ export const updateRecruiterApplicationStatus = async (
   const response = await api.put<RecruiterApplicationDto>(
     `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/status`,
     { expectedVersion, toStatus },
+  );
+  return response.data;
+};
+
+export const listRecruiterJobs = async (): Promise<RecruiterJobDto[]> => {
+  const response = await api.get<RecruiterJobDto[]>('/ats/v1/recruiter/jobs');
+  return response.data;
+};
+
+export const createRecruiterJob = async (
+  draft: RecruiterJobDraftDto,
+  idempotencyKey: string,
+): Promise<RecruiterJobDto> => {
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey))
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  const response = await api.post<RecruiterJobDto>('/ats/v1/recruiter/jobs', draft, {
+    headers: { 'X-ATS-Idempotency-Key': idempotencyKey },
+  });
+  return response.data;
+};
+
+export const updateRecruiterJob = async (
+  job: RecruiterJobDto,
+  draft: RecruiterJobDraftDto & { slug: string },
+  idempotencyKey: string,
+): Promise<RecruiterJobDto> => {
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey))
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  const response = await api.put<RecruiterJobDto>(
+    `/ats/v1/recruiter/jobs/${encodeURIComponent(job.jobId)}`,
+    { expectedVersion: job.version, ...draft },
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const transitionRecruiterJob = async (
+  job: RecruiterJobDto,
+  targetStatus: RecruiterJobStatus,
+  idempotencyKey: string,
+): Promise<RecruiterJobDto> => {
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey))
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  const response = await api.post<RecruiterJobDto>(
+    `/ats/v1/recruiter/jobs/${encodeURIComponent(job.jobId)}/transitions`,
+    { expectedVersion: job.version, targetStatus },
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
   );
   return response.data;
 };

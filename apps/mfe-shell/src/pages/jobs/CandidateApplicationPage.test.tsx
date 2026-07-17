@@ -14,6 +14,19 @@ const apiMocks = vi.hoisted(() => ({
   createCandidateAccessToken: vi.fn(),
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
+  DEFAULT_APPLICATION_FIELDS: [
+    'fullName',
+    'email',
+    'phone',
+    'city',
+    'linkedIn',
+    'portfolio',
+    'summary',
+    'experience',
+    'education',
+    'skills',
+    'note',
+  ],
   getPublicJob: apiMocks.getPublicJob,
   submitApplication: apiMocks.submitApplication,
   saveCandidateSession: apiMocks.saveCandidateSession,
@@ -30,6 +43,20 @@ const JOB = {
   employmentType: 'Tam zamanlı',
   summary: 'Sentetik ilan',
   highlights: ['Ürün keşfi'],
+  applicationFields: [
+    'fullName',
+    'email',
+    'phone',
+    'city',
+    'linkedIn',
+    'portfolio',
+    'summary',
+    'experience',
+    'education',
+    'skills',
+    'note',
+  ],
+  noticeVersion: 'kvkk-application-v1' as const,
 };
 
 const RECEIPT = {
@@ -92,6 +119,7 @@ describe('CandidateApplicationPage', () => {
         noticeVersion: 'kvkk-application-v1',
         accuracyConfirmedAt: expect.any(String),
       }),
+      undefined,
     );
     expect(apiMocks.saveCandidateSession).toHaveBeenCalledWith(RECEIPT);
   });

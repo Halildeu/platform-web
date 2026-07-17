@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@mfe/design-system/primitives';
+import { usePermissions } from '@mfe/auth';
 import {
   listRecruiterApplications,
   updateRecruiterApplicationStatus,
@@ -11,6 +12,7 @@ import {
   ATS_PRODUCT_HUB_ENTRY,
   INTERVIEW_EVIDENCE_ENTRY,
 } from '../../ats-product-catalog/model/ats-capability-registry';
+import RecruiterJobsPanel from './RecruiterJobsPanel';
 
 const STAGES: ReadonlyArray<{
   id: ApplicationStatus;
@@ -32,6 +34,11 @@ const formatDate = (value: string) =>
   );
 
 const RecruiterWorkspacePage = () => {
+  const permissions = usePermissions();
+  const atsModuleManage = permissions.getModuleLevel('ATS') === 'MANAGE';
+  const canManageJobs = atsModuleManage || permissions.isActionAllowed('ATS_JOB_MANAGE');
+  const canManageApplications =
+    atsModuleManage || permissions.isActionAllowed('ATS_APPLICATION_MANAGE');
   const [applications, setApplications] = useState<RecruiterApplicationDto[]>([]);
   const [query, setQuery] = useState('');
   const [activeJobSlug, setActiveJobSlug] = useState('');
@@ -92,7 +99,8 @@ const RecruiterWorkspacePage = () => {
     applications.find((application) => application.publicRef === selectedRef) ?? null;
 
   const advanceSelected = async () => {
-    if (!selected || selected.status === 'INTERVIEW_PENDING' || updating) return;
+    if (!canManageApplications || !selected || selected.status === 'INTERVIEW_PENDING' || updating)
+      return;
     const toStatus = selected.status === 'SUBMITTED' ? 'UNDER_REVIEW' : 'INTERVIEW_PENDING';
     setUpdating(true);
     setActionError('');
@@ -157,16 +165,23 @@ const RecruiterWorkspacePage = () => {
               İK Çalışma Alanı
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
-              Adayın gönderdiği kalıcı başvuruyu inceleyin ve yalnız izin verilen insan kontrollü
-              adımlarda ilerletin. Otomatik puanlama, ret veya teklif yürütülmez.
+              İlanlarınızı oluşturup yayınlayın; adayın gönderdiği kalıcı başvuruyu inceleyin ve
+              yalnız izin verilen insan kontrollü adımlarda ilerletin. Otomatik puanlama, ret veya
+              teklif yürütülmez.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <a
+              href="#recruiter-jobs"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text"
+            >
+              İlanları yönet
+            </a>
             <button
               type="button"
               onClick={() => void loadInbox()}
               disabled={loading}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-50"
             >
               Başvuru kutusunu yenile
             </button>
@@ -179,6 +194,8 @@ const RecruiterWorkspacePage = () => {
           </div>
         </div>
       </header>
+
+      <RecruiterJobsPanel canManage={canManageJobs} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="İK çalışma özeti">
         {[
@@ -412,7 +429,7 @@ const RecruiterWorkspacePage = () => {
                   </div>
                 ) : null}
               </dl>
-              {selected.status !== 'INTERVIEW_PENDING' ? (
+              {selected.status !== 'INTERVIEW_PENDING' && canManageApplications ? (
                 <button
                   type="button"
                   onClick={() => void advanceSelected()}
@@ -425,13 +442,17 @@ const RecruiterWorkspacePage = () => {
                       ? 'İnsan incelemesini başlat'
                       : 'Mülakat planlamasına al'}
                 </button>
-              ) : (
+              ) : selected.status === 'INTERVIEW_PENDING' ? (
                 <div
                   role="status"
                   className="rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-text-primary"
                 >
                   Mülakat planlaması bekleniyor.
                 </div>
+              ) : (
+                <p className="rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm font-semibold text-text-secondary">
+                  Bu başvuruyu görüntüleyebilirsiniz; aşama değiştirme yetkiniz yok.
+                </p>
               )}
               {actionError ? (
                 <p

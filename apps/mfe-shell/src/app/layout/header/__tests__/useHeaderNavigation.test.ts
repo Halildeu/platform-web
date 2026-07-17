@@ -95,14 +95,16 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
   });
 
   it('shows the ATS Product Hub with only its module grant and no remote-readiness gate', () => {
-    permissionsMock.hasModule.mockImplementation((module) => module === 'INTERVIEW_EVIDENCE');
+    permissionsMock.hasModule.mockImplementation((module) => module === 'ATS');
     expect(groupKeys()).toContain('hr');
     expect(hrItems()).toEqual(['ats-product-hub']);
   });
 
   it('keeps the product-hub item active while the separate live module is open', () => {
     currentPath = '/admin/interview-evidence/readiness';
-    permissionsMock.hasModule.mockImplementation((module) => module === 'INTERVIEW_EVIDENCE');
+    permissionsMock.hasModule.mockImplementation(
+      (module) => module === 'ATS' || module === 'INTERVIEW_EVIDENCE',
+    );
 
     const result = renderHook(() => useHeaderNavigation()).result.current;
     expect(result.activeGroupKey).toBe('hr');

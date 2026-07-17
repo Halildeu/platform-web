@@ -44,9 +44,9 @@ describe('PublicJobsPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Ürün Yöneticisi' })).toBeVisible();
     expect(apiMocks.listPublicJobs).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('link', { name: 'Ürün Yöneticisi rolüne başvur' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Ürün Yöneticisi ilanını incele' })).toHaveAttribute(
       'href',
-      '/jobs/urun-yoneticisi/apply',
+      '/jobs/urun-yoneticisi',
     );
     expect(screen.getByText(/kalıcı olarak test veritabanına/i)).toBeVisible();
   });
@@ -61,7 +61,22 @@ describe('PublicJobsPage', () => {
   it('keeps backend-sourced job links under the configured base path', async () => {
     renderPage('/platform');
     expect(
-      await screen.findByRole('link', { name: 'Ürün Yöneticisi rolüne başvur' }),
-    ).toHaveAttribute('href', '/platform/jobs/urun-yoneticisi/apply');
+      await screen.findByRole('link', { name: 'Ürün Yöneticisi ilanını incele' }),
+    ).toHaveAttribute('href', '/platform/jobs/urun-yoneticisi');
+  });
+
+  it('keeps tenant context in canonical career links', async () => {
+    render(
+      <MemoryRouter initialEntries={['/careers/acik/jobs']}>
+        <Routes>
+          <Route path="/careers/:publicHandle/jobs" element={<PublicJobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('link', { name: 'Ürün Yöneticisi ilanını incele' }),
+    ).toHaveAttribute('href', '/careers/acik/jobs/urun-yoneticisi');
+    expect(apiMocks.listPublicJobs).toHaveBeenCalledWith('acik');
   });
 });
