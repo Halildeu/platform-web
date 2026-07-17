@@ -2,16 +2,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSafeLoginRedirect } from './buildSafeLoginRedirect';
 
-/**
- * Codex 019dd818 iter-10 PARTIAL feedback (B-prime PR-2b):
- * "PR-2b'de test edilmemiş davranışlar kritik kullanıcı algısını
- * belirliyor. Test paketini P2'ye atma."
- *
- * Kritik 2 test alanı: safe redirect helper + dedupe semantik.
- * Bu dosya: safe redirect contract (open-redirect saldırısına karşı koruma).
- * Kalan 3 test (event listener bootstrap guard, drawer reason wiring,
- * full event flow) P2 follow-up cycle'da.
- */
 describe('buildSafeLoginRedirect — same-origin path guard', () => {
   it('encodes safe absolute paths', () => {
     expect(

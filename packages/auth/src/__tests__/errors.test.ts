@@ -98,9 +98,9 @@ describe('errors helpers — Codex 019dd818 iter-4 (B-prime)', () => {
       expect(isAuthCriticalUnauthorizedUrl('/v1/authz/version/history')).toBe(false);
     });
 
-    it('preserves the previous fail-safe behavior when the URL is absent', () => {
-      expect(isAuthCriticalUnauthorizedUrl(undefined)).toBe(true);
-      expect(isAuthCriticalUnauthorizedUrl(null)).toBe(true);
+    it('keeps a URL-less 401 feature-local because it cannot prove identity loss', () => {
+      expect(isAuthCriticalUnauthorizedUrl(undefined)).toBe(false);
+      expect(isAuthCriticalUnauthorizedUrl(null)).toBe(false);
     });
   });
 });

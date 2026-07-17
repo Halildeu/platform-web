@@ -45,7 +45,7 @@ export function isServerError(error: unknown): boolean {
  */
 export function isAuthCriticalUnauthorizedUrl(url: unknown): boolean {
   if (typeof url !== 'string') {
-    return true;
+    return false;
   }
 
   try {

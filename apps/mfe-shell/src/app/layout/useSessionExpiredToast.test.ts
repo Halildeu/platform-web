@@ -31,6 +31,7 @@ describe('useSessionExpiredToast', () => {
     );
 
     act(() => dispatchUnauthorized('/v1/admin/meetings'));
+    act(() => dispatchUnauthorized());
     expect(showToast).not.toHaveBeenCalled();
     expect(onSessionExpired).not.toHaveBeenCalled();
 
