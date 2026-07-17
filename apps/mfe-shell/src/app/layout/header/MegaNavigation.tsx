@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Menu, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Menu } from 'lucide-react';
 import { Drawer } from '@mfe/design-system';
 import { Transition } from '@mfe/design-system/motion';
 import { useShellCommonI18n } from '../../i18n';
@@ -31,15 +31,24 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const clearTimers = useCallback(() => {
-    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
-    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    if (openTimer.current) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
   }, []);
 
-  const handleMouseEnterGroup = useCallback((groupKey: string, hasItems: boolean) => {
-    if (!hasItems) return;
-    clearTimers();
-    openTimer.current = setTimeout(() => setOpenGroupKey(groupKey), HOVER_OPEN_DELAY);
-  }, [clearTimers]);
+  const handleMouseEnterGroup = useCallback(
+    (groupKey: string, hasItems: boolean) => {
+      if (!hasItems) return;
+      clearTimers();
+      openTimer.current = setTimeout(() => setOpenGroupKey(groupKey), HOVER_OPEN_DELAY);
+    },
+    [clearTimers],
+  );
 
   const handleMouseLeaveGroup = useCallback(() => {
     clearTimers();
@@ -55,14 +64,17 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
     closeTimer.current = setTimeout(() => setOpenGroupKey(null), HOVER_CLOSE_DELAY);
   }, [clearTimers]);
 
-  const handleClickGroup = useCallback((group: ResolvedNavGroup) => {
-    if (group.directPath) {
-      navigate(group.directPath);
-      setOpenGroupKey(null);
-      return;
-    }
-    setOpenGroupKey((prev) => (prev === group.key ? null : group.key));
-  }, [navigate]);
+  const handleClickGroup = useCallback(
+    (group: ResolvedNavGroup) => {
+      if (group.directPath) {
+        navigate(group.directPath);
+        setOpenGroupKey(null);
+        return;
+      }
+      setOpenGroupKey((prev) => (prev === group.key ? null : group.key));
+    },
+    [navigate],
+  );
 
   const handleClosePanel = useCallback(() => {
     setOpenGroupKey(null);
@@ -111,7 +123,10 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
 
         <Drawer
           open={drawerOpen}
-          onClose={() => { setDrawerOpen(false); setExpandedDrawerGroup(null); }}
+          onClose={() => {
+            setDrawerOpen(false);
+            setExpandedDrawerGroup(null);
+          }}
           placement="left"
           size="sm"
           title={t('shell.header.navigation')}
@@ -136,7 +151,7 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
                     }}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] font-medium transition-colors duration-100 ${
                       isActive
-                        ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
+                        ? 'bg-[var(--accent-primary)]/10 text-text-primary'
                         : 'text-text-primary hover:bg-surface-muted'
                     }`}
                   >
@@ -163,7 +178,7 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
                             onClick={() => handleDrawerNav(item.path)}
                             className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors duration-100 ${
                               isItemActive
-                                ? 'bg-[var(--accent-primary)]/8 font-medium text-[var(--accent-primary)]'
+                                ? 'bg-[var(--accent-primary)]/8 font-medium text-text-primary'
                                 : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
                             }`}
                           >
@@ -171,7 +186,9 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
                             <div className="min-w-0">
                               <div className="leading-tight">{item.label}</div>
                               {item.description && (
-                                <div className="mt-0.5 text-[11px] leading-tight text-text-subtle">{item.description}</div>
+                                <div className="mt-0.5 text-[11px] leading-tight text-text-subtle">
+                                  {item.description}
+                                </div>
                               )}
                             </div>
                           </button>
@@ -208,7 +225,7 @@ export const MegaNavigation: React.FC<MegaNavigationProps> = ({ mobile }) => {
               aria-expanded={hasItems ? isOpen : undefined}
               className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
+                  ? 'bg-[var(--accent-primary)]/10 text-text-primary'
                   : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
               }`}
             >

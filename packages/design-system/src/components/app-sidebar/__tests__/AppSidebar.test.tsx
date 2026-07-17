@@ -47,7 +47,6 @@ function ToggleButton() {
 
 const HomeIcon = () => <span data-testid="home-icon">H</span>;
 const SettingsIcon = () => <span data-testid="settings-icon">S</span>;
-const UsersIcon = () => <span data-testid="users-icon">U</span>;
 
 /* ================================================================== */
 /*  1. Render (4 tests)                                                */
@@ -290,6 +289,8 @@ describe('AppSidebar.NavItem', () => {
 
     const link = screen.getByRole('link', { name: /Home/ });
     expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveClass('text-[var(--text-primary)]');
+    expect(link).not.toHaveClass('text-[var(--action-primary)]');
   });
 
   it('disabled NavItem has aria-disabled', () => {

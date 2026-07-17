@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MegaNavigation } from '../MegaNavigation';
@@ -18,14 +18,25 @@ vi.mock('@mfe/design-system', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@mfe/design-system');
   return {
     ...actual,
-    Drawer: ({ open, onClose, title, children }: {
-      open: boolean; onClose: () => void; title?: string; children: React.ReactNode;
-    }) => open ? (
-      <div data-testid="drawer" role="dialog" aria-label={title}>
-        <button data-testid="drawer-close" onClick={onClose}>close</button>
-        {children}
-      </div>
-    ) : null,
+    Drawer: ({
+      open,
+      onClose,
+      title,
+      children,
+    }: {
+      open: boolean;
+      onClose: () => void;
+      title?: string;
+      children: React.ReactNode;
+    }) =>
+      open ? (
+        <div data-testid="drawer" role="dialog" aria-label={title}>
+          <button data-testid="drawer-close" onClick={onClose}>
+            close
+          </button>
+          {children}
+        </div>
+      ) : null,
   };
 });
 
@@ -83,6 +94,13 @@ describe('MegaNavigation — desktop', () => {
     expect(screen.getByText('HR')).toBeInTheDocument();
   });
 
+  it('keeps the active group readable on its accent-tinted background', () => {
+    render(<MegaNavigation />);
+    const hrButton = screen.getByText('HR').closest('button')!;
+    expect(hrButton).toHaveClass('text-text-primary');
+    expect(hrButton).not.toHaveClass('text-[var(--accent-primary)]');
+  });
+
   it('opens mega menu on click', () => {
     render(<MegaNavigation />);
     const hrButton = screen.getByText('HR').closest('button')!;
@@ -123,6 +141,18 @@ describe('MegaNavigation — mobile', () => {
     fireEvent.click(screen.getByText('HR'));
     expect(screen.getByText('Users')).toBeInTheDocument();
     expect(screen.getByText('Roles')).toBeInTheDocument();
+  });
+
+  it('keeps active drawer groups and items readable on accent-tinted backgrounds', () => {
+    render(<MegaNavigation mobile />);
+    fireEvent.click(screen.getByLabelText('shell.header.menuOpen'));
+    const hrButton = screen.getByText('HR').closest('button')!;
+    expect(hrButton).toHaveClass('text-text-primary');
+    expect(hrButton).not.toHaveClass('text-[var(--accent-primary)]');
+    fireEvent.click(hrButton);
+    const usersButton = screen.getByText('Users').closest('button')!;
+    expect(usersButton).toHaveClass('text-text-primary');
+    expect(usersButton).not.toHaveClass('text-[var(--accent-primary)]');
   });
 
   it('navigates and closes drawer on item click', () => {

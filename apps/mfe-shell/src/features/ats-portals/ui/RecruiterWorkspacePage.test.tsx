@@ -66,6 +66,10 @@ describe('RecruiterWorkspacePage', () => {
     renderPage();
     expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
     expect(screen.getByText('deniz@example.test')).toBeVisible();
+    expect(screen.getByText('Kalıcı başvuru kutusu')).toHaveAttribute('data-component', 'badge');
+    expect(screen.getByText('Kalıcı başvuru kutusu')).toHaveClass(
+      'text-component-badge-foreground-default',
+    );
     expect(apiMocks.listRecruiterApplications).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Ret, teklif, otomatik puanlama/i)).toBeVisible();
   });
@@ -89,5 +93,18 @@ describe('RecruiterWorkspacePage', () => {
       target: { value: 'bulunmayan' },
     });
     expect(screen.queryByText('Deniz Sentetik')).not.toBeInTheDocument();
+  });
+
+  it('keeps the terminal success surface on an AA-readable text token', async () => {
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [{ ...APPLICATION, status: 'INTERVIEW_PENDING' }],
+      page: 0,
+      size: 50,
+      total: 1,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Mülakat planlaması bekleniyor.');
+    expect(screen.getByRole('status')).toHaveClass('text-text-primary');
   });
 });
