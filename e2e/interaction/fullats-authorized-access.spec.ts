@@ -3,6 +3,27 @@ import AxeBuilder from '@axe-core/playwright';
 
 const ATS_ROUTE = '/admin/ats';
 
+const SYNTHETIC_RECRUITER_APPLICATION = {
+  publicRef: 'app_abcdefghijklmnopqrstuvwx',
+  jobSlug: 'frontend-developer',
+  jobTitle: 'Senior Frontend Developer',
+  fullName: 'Aday DEMO-207',
+  email: 'demo-207@example.test',
+  phone: '+905550000000',
+  city: 'İstanbul',
+  linkedIn: null,
+  portfolio: null,
+  summary: 'Yalnız tarayıcı kabul testinde kullanılan sentetik profesyonel özet.',
+  experience: 'Sentetik erişilebilirlik deneyimi.',
+  education: 'Sentetik eğitim kaydı.',
+  skills: ['React', 'Erişilebilirlik'],
+  note: null,
+  status: 'SUBMITTED',
+  version: 0,
+  createdAt: '2026-07-16T10:00:00Z',
+  updatedAt: '2026-07-16T10:00:00Z',
+} as const;
+
 function seriousOrCriticalViolations(
   violations: Awaited<ReturnType<AxeBuilder['analyze']>>['violations'],
 ) {
@@ -126,9 +147,9 @@ test.describe('Full ATS authorized product access', () => {
       await expect(productSurface.getByRole('button', { name: forbiddenAction })).toHaveCount(0);
     }
 
-    const accessibility = await new AxeBuilder({ page })
-      .include('[data-testid="ats-product-hub"]')
-      .analyze();
+    // The active ATS navigation is part of the customer journey, so scan the
+    // complete rendered shell rather than only the product content region.
+    const accessibility = await new AxeBuilder({ page }).analyze();
     expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
 
     await testInfo.attach('fullats-access-desktop', {
@@ -214,15 +235,21 @@ test.describe('Full ATS authorized product access', () => {
     const candidatePortal = page.getByTestId('candidate-portal-page');
     await expect(candidatePortal).toBeVisible();
     await expect(
-      candidatePortal.getByRole('heading', { name: 'Kariyer yolculuğunuz tek yerde' }),
+      candidatePortal.getByRole('heading', { name: 'Başvurunuzun durumunu izleyin' }),
     ).toBeVisible();
-    await expect(candidatePortal.getByRole('heading', { name: 'Yolculuğum' })).toBeVisible();
-    await expect(candidatePortal.getByRole('heading', { name: 'Profilim' })).toBeVisible();
-    await expect(candidatePortal.getByTestId('candidate-portal-boundary')).toContainText(
-      'gerçek veri kapalı',
-    );
     await expect(
-      candidatePortal.getByRole('link', { name: 'Açık pozisyonlara göz at' }),
+      candidatePortal.getByRole('heading', { name: 'Bu sekmede takip edilen başvuru yok' }),
+    ).toBeVisible();
+    await expect(
+      candidatePortal.getByText(
+        'takip anahtarı yalnız başvuruyu gönderdiğiniz tarayıcı sekmesinde',
+        {
+          exact: false,
+        },
+      ),
+    ).toBeVisible();
+    await expect(
+      candidatePortal.getByRole('link', { name: 'Açık pozisyonlara git' }),
     ).toHaveAttribute('href', '/jobs');
     expect(dataRequests).toEqual([]);
 
@@ -241,20 +268,6 @@ test.describe('Full ATS authorized product access', () => {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
-
-    await candidatePortal.getByRole('link', { name: 'Örnek başvuruyu düzenle' }).click();
-    const resumeInput = page.getByTestId('candidate-resume');
-    await resumeInput.setInputFiles({
-      name: 'ornek-cv.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('synthetic-pdf'),
-    });
-    await expect(page.getByTestId('candidate-resume-meta')).toContainText('dosya adı tutulmaz');
-    await expect(page.getByTestId('candidate-resume-meta')).not.toContainText('ornek-cv.pdf');
-    expect(await resumeInput.evaluate((input: HTMLInputElement) => input.files?.length ?? -1)).toBe(
-      0,
-    );
-    expect(dataRequests).toEqual([]);
   });
 
   test('ATS hub candidate link leaves the protected shell and re-enters the public bootstrap', async ({
@@ -282,7 +295,7 @@ test.describe('Full ATS authorized product access', () => {
     expect(dataRequests).toEqual([]);
   });
 
-  test('authorized recruiter workspace supports local review while critical actions stay closed', async ({
+  test('authorized recruiter workspace exposes a tenant inbox while irreversible actions stay closed', async ({
     page,
   }, testInfo) => {
     const dataRequests: string[] = [];
@@ -292,6 +305,18 @@ test.describe('Full ATS authorized product access', () => {
         dataRequests.push(`${request.method()} ${url.pathname}`);
       }
     });
+    await page.route('**/api/ats/v1/recruiter/applications?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [SYNTHETIC_RECRUITER_APPLICATION],
+          page: 0,
+          size: 50,
+          total: 1,
+        }),
+      });
+    });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/admin/ats/recruiter', { waitUntil: 'networkidle' });
@@ -299,24 +324,17 @@ test.describe('Full ATS authorized product access', () => {
     const workspace = page.getByTestId('recruiter-workspace-page');
     await expect(workspace).toBeVisible();
     await expect(workspace.getByRole('heading', { name: 'İK Çalışma Alanı' })).toBeVisible();
-    // The authenticated shell may perform its existing theme bootstrap request.
-    // Recruiter interactions from this point onward must remain local-only.
+    // Initial API access is fulfilled with the bounded synthetic tenant fixture.
+    // Filtering and inspection from this point onward must stay browser-local.
     dataRequests.length = 0;
     await workspace.getByRole('combobox', { name: 'Pozisyon' }).selectOption('frontend-developer');
-    await workspace.getByLabel('Aday veya beceri ara').fill('erişilebilirlik');
+    await workspace.getByLabel('Aday, e-posta veya beceri ara').fill('erişilebilirlik');
     await expect(workspace.getByText('Aday DEMO-207')).toBeVisible();
-    await expect(workspace.getByText('Aday DEMO-215')).toHaveCount(0);
-    await workspace.getByRole('button', { name: 'Kanıt durumunu incele: Aday DEMO-207' }).click();
-    await expect(workspace.getByRole('heading', { name: 'Değerlendirme taslağı' })).toBeFocused();
-    await workspace
-      .getByLabel('İnsan değerlendirme notu')
-      .fill('Erişilebilirlik kanıtı için insan doğrulaması bekleniyor.');
-    await workspace.getByRole('button', { name: 'Yerel taslağı önizle' }).click();
-    await expect(workspace.getByTestId('recruiter-local-note-preview')).toContainText(
-      'insan doğrulaması bekleniyor',
-    );
+    await workspace.getByRole('button', { name: 'Başvuruyu incele' }).click();
+    await expect(workspace.getByRole('heading', { name: 'Aday bilgileri' })).toBeFocused();
+    await expect(workspace.getByText('Sentetik erişilebilirlik deneyimi.')).toBeVisible();
     for (const action of ['Adaya mesaj gönder', 'Adayı reddet', 'Teklif gönder']) {
-      await expect(workspace.getByRole('button', { name: new RegExp(action) })).toBeDisabled();
+      await expect(workspace.getByRole('button', { name: new RegExp(action) })).toHaveCount(0);
     }
     expect(dataRequests).toEqual([]);
 

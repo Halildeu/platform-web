@@ -82,7 +82,7 @@ export const AppSidebarNavItem = React.forwardRef<
       'focus-visible:ring-2 focus-visible:ring-[var(--action-primary)]',
       depthPadding,
       active
-        ? 'bg-[color-mix(in_oklab,var(--action-primary)_10%,transparent)] text-[var(--action-primary)] font-medium'
+        ? 'bg-[color-mix(in_oklab,var(--action-primary)_10%,transparent)] text-[var(--text-primary)] font-medium'
         : 'text-[var(--text-secondary)] hover:bg-[var(--surface-canvas)] hover:text-[var(--text-primary)]',
       disabled && 'pointer-events-none opacity-40',
       isCollapsed && 'justify-center',
