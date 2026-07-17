@@ -24,12 +24,16 @@ const SYNTHETIC_RECRUITER_APPLICATION = {
   updatedAt: '2026-07-16T10:00:00Z',
 } as const;
 
-function seriousOrCriticalViolations(
+function seriousOrCriticalViolationSummary(
   violations: Awaited<ReturnType<AxeBuilder['analyze']>>['violations'],
 ) {
-  return violations.filter(
-    (violation) => violation.impact === 'critical' || violation.impact === 'serious',
-  );
+  return violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map((violation) => ({
+      rule: violation.id,
+      impact: violation.impact,
+      nodeCount: violation.nodes.length,
+    }));
 }
 
 test.describe('Full ATS authorized product access', () => {
@@ -150,7 +154,7 @@ test.describe('Full ATS authorized product access', () => {
     // The active ATS navigation is part of the customer journey, so scan the
     // complete rendered shell rather than only the product content region.
     const accessibility = await new AxeBuilder({ page }).analyze();
-    expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
+    expect(seriousOrCriticalViolationSummary(accessibility.violations)).toEqual([]);
 
     await testInfo.attach('fullats-access-desktop', {
       body: await page.screenshot({ fullPage: true }),
@@ -210,7 +214,7 @@ test.describe('Full ATS authorized product access', () => {
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="ats-product-hub"]')
       .analyze();
-    expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
+    expect(seriousOrCriticalViolationSummary(accessibility.violations)).toEqual([]);
 
     await testInfo.attach('fullats-access-390px', {
       body: await page.screenshot({ fullPage: true }),
@@ -262,7 +266,7 @@ test.describe('Full ATS authorized product access', () => {
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="candidate-portal-page"]')
       .analyze();
-    expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
+    expect(seriousOrCriticalViolationSummary(accessibility.violations)).toEqual([]);
 
     await testInfo.attach('fullats-candidate-portal-390px', {
       body: await page.screenshot({ fullPage: true }),
@@ -305,7 +309,7 @@ test.describe('Full ATS authorized product access', () => {
         dataRequests.push(`${request.method()} ${url.pathname}`);
       }
     });
-    await page.route('**/api/ats/v1/recruiter/applications?*', async (route) => {
+    await page.route('**/api/ats/v1/recruiter/applications?page=0&size=50', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -347,7 +351,7 @@ test.describe('Full ATS authorized product access', () => {
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="recruiter-workspace-page"]')
       .analyze();
-    expect(seriousOrCriticalViolations(accessibility.violations)).toEqual([]);
+    expect(seriousOrCriticalViolationSummary(accessibility.violations)).toEqual([]);
 
     await testInfo.attach('fullats-recruiter-workspace-390px', {
       body: await page.screenshot({ fullPage: true }),
