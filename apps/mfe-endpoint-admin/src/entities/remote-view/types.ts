@@ -12,6 +12,7 @@
 
 /** Lifecycle of the viewer's SSE connection (drives the status banner). */
 export type RemoteViewStatus =
+  | 'awaitingAuth' // shell mounted, awaiting PKCE token readiness/refresh
   | 'connecting' // request issued, awaiting the response head
   | 'live' // streaming frames
   | 'closed' // session ended / stopped / disconnected cleanly

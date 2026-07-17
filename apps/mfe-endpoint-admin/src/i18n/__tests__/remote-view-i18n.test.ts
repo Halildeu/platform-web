@@ -12,6 +12,7 @@ const KEYS = [
   'endpointAdmin.remoteView.badge.viewOnly',
   'endpointAdmin.remoteView.badge.recordingOff',
   'endpointAdmin.remoteView.badge.attended',
+  'endpointAdmin.remoteView.status.awaitingAuth',
   'endpointAdmin.remoteView.status.connecting',
   'endpointAdmin.remoteView.status.live',
   'endpointAdmin.remoteView.status.closed',
@@ -40,7 +41,15 @@ describe('remote-view i18n', () => {
   });
 
   it('every status enum value has a label key', () => {
-    for (const s of ['connecting', 'live', 'closed', 'error', 'forbidden', 'busy']) {
+    for (const s of [
+      'awaitingAuth',
+      'connecting',
+      'live',
+      'closed',
+      'error',
+      'forbidden',
+      'busy',
+    ]) {
       const key = `endpointAdmin.remoteView.status.${s}`;
       expect(tr(key)).not.toBe(key);
       expect(en(key)).not.toBe(key);
