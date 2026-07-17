@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Badge } from '@mfe/design-system/primitives';
 import {
   listRecruiterApplications,
   updateRecruiterApplicationStatus,
@@ -138,9 +139,13 @@ const RecruiterWorkspacePage = () => {
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-state-success-border bg-state-success-bg px-3 py-1 text-xs font-bold text-text-primary">
+              <Badge
+                variant="success"
+                size="lg"
+                className="border border-state-success-border font-bold"
+              >
                 Kalıcı başvuru kutusu
-              </span>
+              </Badge>
               <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-semibold text-text-secondary">
                 İnsan kontrollü
               </span>
@@ -421,7 +426,10 @@ const RecruiterWorkspacePage = () => {
                       : 'Mülakat planlamasına al'}
                 </button>
               ) : (
-                <div className="rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-text-primary">
+                <div
+                  role="status"
+                  className="rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-text-primary"
+                >
                   Mülakat planlaması bekleniyor.
                 </div>
               )}
