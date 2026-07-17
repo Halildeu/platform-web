@@ -28,6 +28,8 @@ export type RemoteShellServices = {
   auth: {
     getToken: () => string | null;
     getUser: () => unknown;
+    /** Subscribe to the live shell token. The callback is invoked immediately. */
+    onTokenChange?: (listener: (token: string | null) => void) => () => void;
     /**
      * Module authorization signals. OPTIONAL by type because the standalone
      * noop fallback has neither — but under shell-mount they ARE present at
@@ -90,3 +92,7 @@ export const getShellServices = (): RemoteShellServices => {
   }
   return currentServices;
 };
+
+export const subscribeToShellAuthToken = (
+  listener: (token: string | null) => void,
+): (() => void) | undefined => currentServices?.auth.onTokenChange?.(listener);

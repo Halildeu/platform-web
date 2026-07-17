@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useEndpointAdminI18n } from '../../i18n';
 import { readBearerToken, resolveBaseUrl } from '../../app/services/endpointAdminApi';
+import { subscribeToShellAuthToken } from '../../app/services/shell-services';
 import {
   acknowledgeRemoteViewRender,
   openRemoteViewStream,
@@ -108,6 +109,39 @@ function statusKey(status: RemoteViewStatus): string {
   return `endpointAdmin.remoteView.status.${status}`;
 }
 
+function normalizeBearerToken(token: string | null | undefined): string | null {
+  const normalized = token?.trim();
+  return normalized && normalized !== 'undefined' && normalized !== 'null' ? normalized : null;
+}
+
+function useRemoteViewBearerToken(tokenResolver?: () => string | null): string | null {
+  const [shellToken, setShellToken] = React.useState<string | null>(() =>
+    normalizeBearerToken(readBearerToken()),
+  );
+
+  React.useEffect(() => {
+    if (tokenResolver) return undefined;
+
+    let active = true;
+    const updateToken = (nextToken: string | null) => {
+      if (active) setShellToken(normalizeBearerToken(nextToken));
+    };
+
+    updateToken(readBearerToken());
+    const unsubscribe = subscribeToShellAuthToken(updateToken);
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [tokenResolver]);
+
+  // tokenResolver is a synchronous test seam. Re-read it on every render so a
+  // rerender cannot retain a stale test bearer; production uses the live shell
+  // subscription above.
+  return tokenResolver ? normalizeBearerToken(tokenResolver()) : shellToken;
+}
+
 export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   fetchImpl,
   tokenResolver,
@@ -122,6 +156,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   const sessionId = (params.sessionId ?? '').trim();
   const streamId = (searchParams.get('streamId') ?? '').trim();
   const missing = sessionId === '' || streamId === '';
+  const bearerToken = useRemoteViewBearerToken(tokenResolver);
 
   const [status, setStatus] = React.useState<RemoteViewStatus>('connecting');
   const [meta, setMeta] = React.useState<RemoteViewMeta | null>(null);
@@ -176,13 +211,17 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       setStatus('error');
       return undefined;
     }
+    if (!bearerToken) {
+      setStatus('awaitingAuth');
+      return undefined;
+    }
     setStatus('connecting');
 
     // Generation guard: only the CURRENT stream may write state. Cleanup flips
     // `active` so an aborted/superseded stream's late callbacks (an abort race
     // on target change or unmount) become no-ops and cannot touch the new target.
     let active = true;
-    const token = (tokenResolver ?? readBearerToken)();
+    const token = bearerToken;
     const url = `${resolveBaseUrl()}${VIEWER_PATH}/${encodeURIComponent(
       sessionId,
     )}/view?streamId=${encodeURIComponent(streamId)}`;
@@ -231,9 +270,9 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       handle.close();
       handleRef.current = null;
     };
-    // Reconnect only when the stream target changes — the test-seam props
-    // (fetchImpl/tokenResolver/now) are stable for a given mount.
-  }, [sessionId, streamId, missing, terminateAcknowledgements]);
+    // Reconnect when the stream target or live shell token changes. This keeps
+    // the fetch-SSE authorization synchronized with PKCE completion/refresh.
+  }, [sessionId, streamId, missing, bearerToken, fetchImpl, terminateAcknowledgements]);
 
   const acknowledgeRendered = React.useCallback(
     (renderedFrame: RemoteViewFrame) => {

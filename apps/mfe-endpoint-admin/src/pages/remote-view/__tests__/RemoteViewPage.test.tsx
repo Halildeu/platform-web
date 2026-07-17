@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import RemoteViewPage, { type RemoteViewPageProps } from '../RemoteViewPage';
+import { configureShellServices } from '../../../app/services/shell-services';
 
 /** A push-controlled SSE Response so a test can keep the stream live or end it. */
 function controllableSse(): { response: Response; push: (chunk: string) => void; end: () => void } {
@@ -138,6 +139,104 @@ describe('RemoteViewPage', () => {
       'http://localhost/api/v1/endpoint-admin/remote-access/sessions/sess-9/view?streamId=op-42',
     );
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jwt-123');
+    sse.end();
+  });
+
+  it('waits for auth, reconnects on refresh, and closes the stream when auth is cleared', async () => {
+    window.localStorage.removeItem('token');
+    const initialSse = controllableSse();
+    const refreshedSse = controllableSse();
+    const fetchSignals: AbortSignal[] = [];
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      fetchSignals.push(init?.signal as AbortSignal);
+      return Promise.resolve(
+        fetchSignals.length === 1 ? initialSse.response : refreshedSse.response,
+      );
+    });
+    const unsubscribe = vi.fn();
+    let currentToken: string | null = null;
+    let emitToken: ((token: string | null) => void) | undefined;
+
+    configureShellServices({
+      auth: {
+        getToken: () => currentToken,
+        getUser: () => ({ id: 'operator' }),
+        onTokenChange: (listener) => {
+          emitToken = listener;
+          listener(currentToken);
+          return unsubscribe;
+        },
+      },
+    });
+
+    const rendered = renderAt(
+      '/endpoint-admin/remote-access/sessions/sess-live/view?streamId=op-live',
+      { fetchImpl: fetchImpl as unknown as typeof fetch },
+    );
+    await flush();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(screen.getByTestId('remote-view-status')).toHaveTextContent(
+      /Güvenli oturum hazırlanıyor|Preparing secure session/,
+    );
+
+    currentToken = 'fresh-pkce-token';
+    await act(async () => {
+      emitToken?.(currentToken);
+    });
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer fresh-pkce-token');
+
+    currentToken = 'refreshed-pkce-token';
+    await act(async () => {
+      emitToken?.(currentToken);
+    });
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+    expect(fetchSignals[0].aborted).toBe(true);
+    const [, refreshedInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect((refreshedInit.headers as Record<string, string>).Authorization).toBe(
+      'Bearer refreshed-pkce-token',
+    );
+
+    currentToken = null;
+    await act(async () => {
+      emitToken?.(currentToken);
+    });
+    await waitFor(() => expect(fetchSignals[1].aborted).toBe(true));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('remote-view-status')).toHaveTextContent(
+      /Güvenli oturum hazırlanıyor|Preparing secure session/,
+    );
+    expect(screen.queryByTestId('remote-view-frame')).toBeNull();
+
+    rendered.unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    initialSse.end();
+    refreshedSse.end();
+  });
+
+  it('uses the current shell token when live subscription is unavailable', async () => {
+    window.localStorage.removeItem('token');
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockResolvedValue(sse.response);
+    configureShellServices({
+      auth: {
+        getToken: () => 'current-shell-token',
+        getUser: () => ({ id: 'operator' }),
+      },
+    });
+
+    renderAt('/endpoint-admin/remote-access/sessions/sess-current/view?streamId=op-current', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      'Bearer current-shell-token',
+    );
     sse.end();
   });
 
