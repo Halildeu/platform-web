@@ -1,0 +1,55 @@
+name: CI - Etik Speak Public Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/etik-speak-public/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci-etik-speak-public-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - run: pnpm install --frozen-lockfile
+      - name: Public artifact unit and production build
+        run: pnpm --filter etik-speak-public test && pnpm --filter etik-speak-public build
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/etik-speak-public/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/halildeu/platform-web-etik-speak-public:sha-${{ github.sha }}
+            ghcr.io/halildeu/platform-web-etik-speak-public:latest
+          cache-from: type=gha,scope=etik-speak-public
+          cache-to: type=gha,scope=etik-speak-public,mode=max
+          provenance: false
+      - name: Immutable image evidence
+        run: |
+          {
+            echo "### Etik Speak public artifact"
+            echo "- Digest: \`${{ steps.image.outputs.digest }}\`"
+            echo "- Both public hosts must pin this exact digest."
+          } >> "$GITHUB_STEP_SUMMARY"

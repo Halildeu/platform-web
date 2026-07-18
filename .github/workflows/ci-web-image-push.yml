@@ -49,6 +49,7 @@ jobs:
             # the endpoint-admin MFE in the prod eager build (buildRemotes +
             # define + env-config). Backplane (gitops#1436) + modal (#1438) live.
             enable_endpoint_admin: 'true'
+            enable_ethic: 'false'
           - variant: testai
             image_name: platform-web-frontend-testai
             kc_url: https://testai.acik.com
@@ -64,6 +65,8 @@ jobs:
             # MF instance.  Auto-applied to every commit reaching testai;
             # prod variant stays unaffected (above row).
             mfe_on_demand_bootstrap: 'true'
+            # Faz 35 ES-204: manager MFE is test-first on testai.acik.com.
+            enable_ethic: 'true'
 
     steps:
       - name: Checkout
@@ -134,6 +137,7 @@ jobs:
             VITE_MFE_ON_DEMAND_BOOTSTRAP=${{ matrix.mfe_on_demand_bootstrap }}
             VITE_NOTIFY_VAPID_PUBLIC_KEY=${{ vars.NOTIFY_VAPID_PUBLIC_KEY }}
             VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE=${{ matrix.enable_endpoint_admin }}
+            VITE_SHELL_ENABLE_ETHIC_REMOTE=${{ matrix.enable_ethic }}
             BUILD_SHA=${{ github.sha }}
             BUILD_REF=${{ github.ref_name }}
             BUILD_IMAGE=${{ steps.image.outputs.ref }}
