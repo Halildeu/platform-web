@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { listPublicJobs, type PublicJobDto } from '../../features/ats-portals/api/application-api';
 
 const PublicJobsPage = () => {
+  const { publicHandle } = useParams();
   const [jobs, setJobs] = useState<PublicJobDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -11,14 +12,16 @@ const PublicJobsPage = () => {
     setLoading(true);
     setError('');
     try {
-      setJobs(await listPublicJobs());
+      setJobs(await listPublicJobs(publicHandle));
     } catch (loadError) {
       setJobs([]);
       setError(loadError instanceof Error ? loadError.message : 'İlanlar yüklenemedi.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [publicHandle]);
+
+  const jobsBase = publicHandle ? `/careers/${encodeURIComponent(publicHandle)}/jobs` : '/jobs';
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -40,7 +43,7 @@ const PublicJobsPage = () => {
       <header className="border-b border-border-subtle bg-surface-default">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link
-            to="/jobs"
+            to={jobsBase}
             className="flex items-center gap-3"
             aria-label="Açık Kariyer ana sayfası"
           >
@@ -163,11 +166,11 @@ const PublicJobsPage = () => {
                     ))}
                   </ul>
                   <Link
-                    to={`/jobs/${job.slug}/apply`}
+                    to={`${jobsBase}/${encodeURIComponent(job.slug)}`}
                     className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text shadow-sm hover:opacity-90 focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-2"
-                    aria-label={`${job.title} rolüne başvur`}
+                    aria-label={`${job.title} ilanını incele`}
                   >
-                    Başvur
+                    İlanı incele
                   </Link>
                 </article>
               </li>

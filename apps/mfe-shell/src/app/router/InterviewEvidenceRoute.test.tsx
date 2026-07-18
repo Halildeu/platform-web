@@ -120,6 +120,7 @@ describe('InterviewEvidenceRoute', () => {
   });
 
   it('keeps the permanent product hub visible in both remote modes', () => {
+    permissionsMock.hasModule.mockImplementation((module: string) => module === 'ATS');
     renderHubRoute(false);
     expect(screen.getByRole('heading', { name: 'ATS Ürün Merkezi' })).toBeInTheDocument();
     expect(screen.queryByTestId('ats-live-interview-evidence-link')).not.toBeInTheDocument();
@@ -170,6 +171,7 @@ describe('InterviewEvidenceRoute', () => {
   });
 
   it('renders the recruiter workspace only with the ATS module grant', () => {
+    permissionsMock.hasModule.mockImplementation((module: string) => module === 'ATS');
     renderRecruiterRoute();
 
     expect(screen.getByText('Recruiter workspace content')).toBeInTheDocument();

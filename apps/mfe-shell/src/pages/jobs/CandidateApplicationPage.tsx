@@ -3,12 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import {
   createApplicationIdempotencyKey,
   createCandidateAccessToken,
+  DEFAULT_APPLICATION_FIELDS,
   getPublicJob,
   saveCandidateSession,
   submitApplication,
   type ApplicationReceiptDto,
   type PublicJobDto,
 } from '../../features/ats-portals/api/application-api';
+import { parseResumePdf, type ParsedResume } from './resume-pdf';
 
 type ApplicationValues = {
   fullName: string;
@@ -26,7 +28,10 @@ type ApplicationValues = {
 
 type LocalFileMeta = {
   size: number;
+  importedFieldCount: number;
 };
+
+type ResumeStatus = 'idle' | 'parsing' | 'success';
 
 type View = 'form' | 'preview' | 'receipt';
 
@@ -103,14 +108,28 @@ const isValidOptionalHttpUrl = (value: string) => {
   }
 };
 
+const mergeResumeIntoEmptyFields = (
+  current: ApplicationValues,
+  parsed: ParsedResume,
+): ApplicationValues =>
+  (Object.keys(current) as Array<keyof ApplicationValues>).reduce(
+    (merged, field) => ({
+      ...merged,
+      [field]: current[field].trim() ? current[field] : (parsed[field] ?? current[field]),
+    }),
+    current,
+  );
+
 const CandidateApplicationPage = () => {
-  const { jobSlug = 'urun-yoneticisi' } = useParams();
+  const { publicHandle, jobSlug = 'urun-yoneticisi' } = useParams();
+  const jobsBase = publicHandle ? `/careers/${encodeURIComponent(publicHandle)}/jobs` : '/jobs';
   const [job, setJob] = useState<PublicJobDto | null>(null);
   const [jobError, setJobError] = useState('');
   const [values, setValues] = useState<ApplicationValues>(EMPTY_VALUES);
   const [view, setView] = useState<View>('form');
   const [fileMeta, setFileMeta] = useState<LocalFileMeta | null>(null);
   const [fileError, setFileError] = useState('');
+  const [resumeStatus, setResumeStatus] = useState<ResumeStatus>('idle');
   const [formError, setFormError] = useState('');
   const [noticeAccepted, setNoticeAccepted] = useState(false);
   const [noticeAcceptedAt, setNoticeAcceptedAt] = useState('');
@@ -122,9 +141,12 @@ const CandidateApplicationPage = () => {
   const [candidateSessionSaved, setCandidateSessionSaved] = useState(false);
   const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
+  const resumeRequestIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const receiptHeadingRef = useRef<HTMLHeadingElement>(null);
+  const enabledFields = job?.applicationFields ?? DEFAULT_APPLICATION_FIELDS;
+  const isFieldEnabled = (field: keyof ApplicationValues) => enabledFields.includes(field);
 
   useEffect(() => {
     const heading = view === 'preview' ? previewHeadingRef.current : receiptHeadingRef.current;
@@ -137,7 +159,7 @@ const CandidateApplicationPage = () => {
     let cancelled = false;
     setJob(null);
     setJobError('');
-    void getPublicJob(jobSlug)
+    void getPublicJob(jobSlug, publicHandle)
       .then((loaded) => {
         if (!cancelled) setJob(loaded);
       })
@@ -149,7 +171,7 @@ const CandidateApplicationPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [jobSlug]);
+  }, [jobSlug, publicHandle]);
 
   const updateValue =
     (
@@ -162,14 +184,17 @@ const CandidateApplicationPage = () => {
     };
 
   const applySyntheticResume = () => {
+    if (resumeStatus === 'parsing') return;
     setValues(SYNTHETIC_VALUES);
     setFormError('');
   };
 
-  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const requestId = ++resumeRequestIdRef.current;
     const file = event.target.files?.[0];
     setFileError('');
     setFileMeta(null);
+    setResumeStatus('idle');
     if (!file) return;
 
     const hasPdfExtension = file.name.toLowerCase().endsWith('.pdf');
@@ -187,21 +212,61 @@ const CandidateApplicationPage = () => {
     }
 
     // Privacy boundary: the filename is used transiently for client-side type
-    // validation, but is never retained or rendered. Clearing the native input
-    // also releases its FileList so the browser cannot keep showing the name.
-    // File bytes are never read, persisted or sent over the network.
-    setFileMeta({ size: file.size });
+    // validation, but is never retained or rendered. The bytes are read only in
+    // this browser tab to extract text; neither the file nor its raw text is
+    // persisted or sent over the network. Only candidate-reviewed form fields
+    // can later be submitted.
     event.target.value = '';
+    setResumeStatus('parsing');
+    try {
+      const parsed = await parseResumePdf(file);
+      if (requestId !== resumeRequestIdRef.current) return;
+      const recognized = Object.entries(parsed).filter(([, value]) => value?.trim()).length;
+      if (recognized === 0) {
+        setFileError(
+          'Bu PDF’den form alanı bulunamadı. Taranmış görüntü yerine metin içeren bir PDF seçin veya alanları elle doldurun.',
+        );
+        setResumeStatus('idle');
+        return;
+      }
+      if (!parsed.email?.trim().toLocaleLowerCase('tr-TR').endsWith('.test')) {
+        setFileError(
+          'Bu test sürümünde PDF’den dolum yalnız .test uzantılı sentetik e-posta içeren özgeçmişlerle kullanılabilir.',
+        );
+        setResumeStatus('idle');
+        return;
+      }
+      const imported = (Object.keys(parsed) as Array<keyof ApplicationValues>).filter(
+        (field) => parsed[field]?.trim() && !values[field].trim(),
+      ).length;
+      setValues((current) => mergeResumeIntoEmptyFields(current, parsed));
+      setFileMeta({ size: file.size, importedFieldCount: imported });
+      setResumeStatus('success');
+      setFormError('');
+      setSubmitError('');
+    } catch {
+      if (requestId !== resumeRequestIdRef.current) return;
+      setFileError(
+        'PDF güvenli biçimde okunamadı. Farklı bir metin tabanlı PDF seçin veya alanları elle doldurun.',
+      );
+      setResumeStatus('idle');
+    }
   };
 
   const removeFile = () => {
+    resumeRequestIdRef.current += 1;
     setFileMeta(null);
     setFileError('');
+    setResumeStatus('idle');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const openPreview: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (resumeStatus === 'parsing') {
+      setFormError('PDF okunurken önizlemeye geçemezsiniz. İşlem tamamlanınca tekrar deneyin.');
+      return;
+    }
     const missing = REQUIRED_FIELDS.some((field) => values[field].trim().length === 0);
     if (missing) {
       setFormError('Önizlemeye geçmek için yıldızlı alanları doldurun.');
@@ -252,8 +317,8 @@ const CandidateApplicationPage = () => {
           email: values.email,
           phone: values.phone,
           city: values.city,
-          linkedIn: values.linkedIn || undefined,
-          portfolio: values.portfolio || undefined,
+          linkedIn: isFieldEnabled('linkedIn') ? values.linkedIn || undefined : undefined,
+          portfolio: isFieldEnabled('portfolio') ? values.portfolio || undefined : undefined,
           summary: values.summary,
           experience: values.experience,
           education: values.education,
@@ -261,11 +326,12 @@ const CandidateApplicationPage = () => {
             .split(',')
             .map((skill) => skill.trim())
             .filter(Boolean),
-          note: values.note || undefined,
-          noticeVersion: 'kvkk-application-v1',
+          note: isFieldEnabled('note') ? values.note || undefined : undefined,
+          noticeVersion: job.noticeVersion,
           noticeAcceptedAt,
           accuracyConfirmedAt,
         },
+        publicHandle,
       );
       setReceipt(saved);
       setCandidateSessionSaved(saveCandidateSession(saved));
@@ -292,9 +358,11 @@ const CandidateApplicationPage = () => {
   };
 
   const resetDemo = () => {
+    resumeRequestIdRef.current += 1;
     setValues(EMPTY_VALUES);
     setFileMeta(null);
     setFileError('');
+    setResumeStatus('idle');
     setFormError('');
     setNoticeAccepted(false);
     setAccuracyConfirmed(false);
@@ -333,6 +401,7 @@ const CandidateApplicationPage = () => {
         placeholder={options?.placeholder}
         required={options?.required}
         autoComplete={options?.autoComplete}
+        disabled={resumeStatus === 'parsing'}
       />
     </div>
   );
@@ -357,23 +426,24 @@ const CandidateApplicationPage = () => {
         placeholder={placeholder}
         required={required}
         rows={rows}
+        disabled={resumeStatus === 'parsing'}
       />
     </div>
   );
 
-  const previewRows: Array<[string, string]> = [
-    ['Ad soyad', values.fullName],
-    ['E-posta', values.email],
-    ['Telefon', values.phone],
-    ['Şehir', values.city],
-    ['LinkedIn', values.linkedIn || 'Eklenmedi'],
-    ['Portföy', values.portfolio || 'Eklenmedi'],
-    ['Profesyonel özet', values.summary],
-    ['Deneyim', values.experience],
-    ['Eğitim', values.education],
-    ['Beceriler', values.skills],
-    ['Ek not', values.note || 'Eklenmedi'],
-  ];
+  const previewRows: Array<[keyof ApplicationValues, string, string]> = [
+    ['fullName', 'Ad soyad', values.fullName],
+    ['email', 'E-posta', values.email],
+    ['phone', 'Telefon', values.phone],
+    ['city', 'Şehir', values.city],
+    ['linkedIn', 'LinkedIn', values.linkedIn || 'Eklenmedi'],
+    ['portfolio', 'Portföy', values.portfolio || 'Eklenmedi'],
+    ['summary', 'Profesyonel özet', values.summary],
+    ['experience', 'Deneyim', values.experience],
+    ['education', 'Eğitim', values.education],
+    ['skills', 'Beceriler', values.skills],
+    ['note', 'Ek not', values.note || 'Eklenmedi'],
+  ].filter(([field]) => isFieldEnabled(field));
 
   return (
     <main
@@ -383,7 +453,7 @@ const CandidateApplicationPage = () => {
       <div className="border-b border-border-subtle bg-surface-default">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link
-            to="/jobs"
+            to={jobsBase}
             className="flex items-center gap-3"
             aria-label="Açık Kariyer ilan listesi"
           >
@@ -476,13 +546,15 @@ const CandidateApplicationPage = () => {
                       CV’nizle başlayın
                     </h2>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-text-secondary">
-                      PDF seçtiğinizde yalnız tür ve boyut bu tarayıcıda kontrol edilir. Dosya adı
-                      tutulmaz; içerik okunmaz, kaydedilmez veya ağa gönderilmez.
+                      PDF metni yalnız bu tarayıcıda okunur ve uygun alanlar otomatik doldurulur.
+                      Dosya adı ve ham içerik tutulmaz, kaydedilmez veya ağa gönderilmez;
+                      göndermeden önce tüm alanları kontrol edip değiştirebilirsiniz.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={applySyntheticResume}
+                    disabled={resumeStatus === 'parsing'}
                     data-testid="fill-synthetic-resume"
                     className="shrink-0 rounded-xl border border-action-primary px-4 py-2.5 text-sm font-semibold text-action-primary hover:bg-action-primary/5"
                   >
@@ -505,6 +577,7 @@ const CandidateApplicationPage = () => {
                     type="file"
                     accept="application/pdf,.pdf"
                     onChange={handleFileChange}
+                    disabled={resumeStatus === 'parsing'}
                     className="mx-auto mt-3 block max-w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-action-primary file:px-4 file:py-2 file:font-semibold file:text-action-primary-text"
                     aria-describedby="candidate-resume-boundary candidate-resume-error"
                   />
@@ -512,16 +585,30 @@ const CandidateApplicationPage = () => {
                     id="candidate-resume-boundary"
                     className="mt-3 text-center text-xs text-text-secondary"
                   >
-                    Test ortamında gerçek kişisel veri içeren bir dosya kullanmayın.
+                    Test ortamında gerçek kişisel veri içeren bir dosya kullanmayın. Sunucuya yalnız
+                    önizleyip onayladığınız form alanları gönderilir.
                   </p>
+                  {resumeStatus === 'parsing' ? (
+                    <p
+                      role="status"
+                      data-testid="candidate-resume-parsing"
+                      className="mt-4 text-center text-sm font-semibold text-action-primary"
+                    >
+                      PDF bu cihazda okunuyor ve form hazırlanıyor…
+                    </p>
+                  ) : null}
                   {fileMeta ? (
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-state-success-border bg-state-success-bg px-3 py-2 text-sm">
                       <span
+                        role="status"
                         data-testid="candidate-resume-meta"
                         className="font-medium text-state-success-text"
                       >
-                        PDF seçildi · {formatBytes(fileMeta.size)} · dosya adı tutulmaz · yalnız bu
-                        cihazda
+                        {fileMeta.importedFieldCount > 0
+                          ? `${fileMeta.importedFieldCount} boş alan PDF’den dolduruldu`
+                          : 'PDF okundu; dolu alanlarınız değiştirilmedi'}{' '}
+                        · {formatBytes(fileMeta.size)} · dosya adı ve ham içerik tutulmaz veya
+                        başvuruyla gönderilmez
                       </span>
                       <button
                         type="button"
@@ -566,14 +653,18 @@ const CandidateApplicationPage = () => {
                     autoComplete: 'tel',
                   })}
                   {renderField('city', 'Şehir', { required: true, autoComplete: 'address-level2' })}
-                  {renderField('linkedIn', 'LinkedIn', {
-                    type: 'url',
-                    placeholder: 'https://linkedin.com/in/...',
-                  })}
-                  {renderField('portfolio', 'Portföy / kişisel site', {
-                    type: 'url',
-                    placeholder: 'https://...',
-                  })}
+                  {isFieldEnabled('linkedIn')
+                    ? renderField('linkedIn', 'LinkedIn', {
+                        type: 'url',
+                        placeholder: 'https://linkedin.com/in/...',
+                      })
+                    : null}
+                  {isFieldEnabled('portfolio')
+                    ? renderField('portfolio', 'Portföy / kişisel site', {
+                        type: 'url',
+                        placeholder: 'https://...',
+                      })
+                    : null}
                 </div>
               </section>
 
@@ -603,13 +694,15 @@ const CandidateApplicationPage = () => {
                   )}
                   {renderTextArea('education', 'Eğitim', 'Okul · Bölüm · Mezuniyet yılı', true, 3)}
                   {renderTextArea('skills', 'Beceriler', 'Virgülle ayırabilirsiniz', true, 3)}
-                  {renderTextArea(
-                    'note',
-                    'Bu role neden başvuruyorsunuz?',
-                    'İsteğe bağlı kısa not',
-                    false,
-                    4,
-                  )}
+                  {isFieldEnabled('note')
+                    ? renderTextArea(
+                        'note',
+                        'Bu role neden başvuruyorsunuz?',
+                        'İsteğe bağlı kısa not',
+                        false,
+                        4,
+                      )
+                    : null}
                 </div>
               </section>
 
@@ -624,6 +717,7 @@ const CandidateApplicationPage = () => {
 
               <button
                 type="submit"
+                disabled={resumeStatus === 'parsing'}
                 className="min-h-12 rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text shadow-sm hover:opacity-90 focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-2"
               >
                 Başvuruyu önizle
@@ -664,9 +758,9 @@ const CandidateApplicationPage = () => {
               </div>
 
               <dl className="mt-6 divide-y divide-border-subtle rounded-2xl border border-border-subtle">
-                {previewRows.map(([label, value]) => (
+                {previewRows.map(([field, label, value]) => (
                   <div
-                    key={label}
+                    key={field}
                     className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
                   >
                     <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
@@ -683,7 +777,7 @@ const CandidateApplicationPage = () => {
                   </dt>
                   <dd className="text-sm text-text-primary">
                     {fileMeta
-                      ? `PDF seçildi · ${formatBytes(fileMeta.size)} · dosya adı tutulmaz`
+                      ? `PDF bu cihazda okundu · ${formatBytes(fileMeta.size)} · dosya ve ham içerik başvuruyla gönderilmez`
                       : 'Eklenmedi'}
                   </dd>
                 </div>
@@ -712,7 +806,7 @@ const CandidateApplicationPage = () => {
                   <span>
                     KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
                     kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla kaydedileceğini
-                    anladım.
+                    anladım. <span className="sr-only">Sürüm: {job?.noticeVersion}</span>
                   </span>
                 </label>
                 <label
@@ -794,6 +888,12 @@ const CandidateApplicationPage = () => {
                 {values.fullName} için başvuru güvenli servise kaydedildi. İK çalışma alanında
                 görünür ve durum değişikliklerini Aday Alanım’dan takip edebilirsiniz.
               </p>
+              {fileMeta ? (
+                <p className="mx-auto mt-3 max-w-xl rounded-xl border border-state-info-border bg-state-info-bg px-4 py-3 text-sm leading-6 text-text-primary">
+                  Seçtiğiniz PDF’nin içeriği bu başvuruya eklenmedi; yalnız kontrol edip
+                  onayladığınız form alanları kaydedildi.
+                </p>
+              ) : null}
               <div className="mx-auto mt-5 max-w-md rounded-xl border border-border-subtle bg-surface-subtle p-4">
                 <span className="block text-xs font-semibold text-text-secondary">
                   Başvuru referansı
@@ -837,7 +937,7 @@ const CandidateApplicationPage = () => {
           <section className={sectionClassName}>
             <h2 className="text-base font-bold">Başvurunuz sizde</h2>
             <ul className="mt-4 flex flex-col gap-3 text-sm leading-5 text-text-secondary">
-              <li>• CV önerilerini değiştirebilirsiniz.</li>
+              <li>• Formdaki bütün özgeçmiş alanlarını değiştirebilirsiniz.</li>
               <li>• Gönder düğmesinden önce hiçbir şey kaydedilmez.</li>
               <li>• Testte gerçek kişisel veri kullanmayın.</li>
               <li>• Oturum açmanız gerekmez.</li>

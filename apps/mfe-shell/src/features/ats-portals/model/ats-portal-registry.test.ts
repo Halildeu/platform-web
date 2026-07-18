@@ -12,8 +12,8 @@ describe('ATS portal registry', () => {
     expect(CANDIDATE_PORTAL_ENTRY.route).toBe('/candidate');
     expect(CANDIDATE_PORTAL_ENTRY.mode).toBe('SYNTHETIC_SANDBOX');
     expect(RECRUITER_WORKSPACE_ENTRY.route).toBe('/admin/ats/recruiter');
-    expect(RECRUITER_WORKSPACE_ENTRY.requiredModule).toBe('INTERVIEW_EVIDENCE');
-    expect(RECRUITER_WORKSPACE_ENTRY.mode).toBe('PROPOSAL_ONLY');
+    expect(RECRUITER_WORKSPACE_ENTRY.requiredModule).toBe('ATS');
+    expect(RECRUITER_WORKSPACE_ENTRY.mode).toBe('LIVE_WRITE');
   });
 
   it('uses only synthetic candidate aliases tied to declared positions', () => {

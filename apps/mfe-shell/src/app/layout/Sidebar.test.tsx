@@ -178,10 +178,7 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(denied?.href).toBeUndefined();
 
     // Module granted + remote OFF → guarded safe product surface remains reachable.
-    const remoteDisabled = pick(
-      buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE')),
-      'ats-product-hub',
-    );
+    const remoteDisabled = pick(buildSidebarNavItems(false, allow('ATS')), 'ats-product-hub');
     expect(remoteDisabled?.disabled).toBe(false);
     expect(remoteDisabled?.href).toBe('/admin/ats');
     expect(remoteDisabled?.badge).toBeDefined();
@@ -193,10 +190,7 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(moduleMissing?.badge).toBeUndefined();
 
     // Remote ON + module granted → active link.
-    const granted = pick(
-      buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE'), true, true),
-      'ats-product-hub',
-    );
+    const granted = pick(buildSidebarNavItems(false, allow('ATS'), true, true), 'ats-product-hub');
     expect(granted?.disabled).toBe(false);
     expect(granted?.href).toBe('/admin/ats');
     expect(granted?.badge).toBeUndefined();

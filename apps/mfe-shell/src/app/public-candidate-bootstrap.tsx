@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import CandidateApplicationPage from '../pages/jobs/CandidateApplicationPage';
+import PublicJobDetailPage from '../pages/jobs/PublicJobDetailPage';
 import PublicJobsPage from '../pages/jobs/PublicJobsPage';
 import CandidatePortalPage from '../pages/candidate/CandidatePortalPage';
 import { normalizePublicBasePath } from './public-entry-routes';
@@ -24,8 +25,21 @@ createRoot(container).render(
         <Route path="/candidate/" element={<CandidatePortalPage />} />
         <Route path="/jobs" element={<PublicJobsPage />} />
         <Route path="/jobs/" element={<PublicJobsPage />} />
+        <Route path="/jobs/:jobSlug" element={<PublicJobDetailPage />} />
+        <Route path="/jobs/:jobSlug/" element={<PublicJobDetailPage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
         <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
+        <Route path="/careers/:publicHandle/jobs" element={<PublicJobsPage />} />
+        <Route path="/careers/:publicHandle/jobs/" element={<PublicJobsPage />} />
+        <Route path="/careers/:publicHandle/jobs/:jobSlug" element={<PublicJobDetailPage />} />
+        <Route
+          path="/careers/:publicHandle/jobs/:jobSlug/apply"
+          element={<CandidateApplicationPage />}
+        />
+        <Route
+          path="/careers/:publicHandle/jobs/:jobSlug/apply/"
+          element={<CandidateApplicationPage />}
+        />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,

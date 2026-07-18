@@ -86,6 +86,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Immutable build-info root entry contract
         run: pnpm run test:build-info-contract
+      - name: Runtime ES-module MIME contract
+        run: pnpm run test:runtime-mime-contract
       - name: Vitest workspace (jsdom)
         run: pnpm run test:workspace
       - name: mfe-meeting ws-stream consumer contract
