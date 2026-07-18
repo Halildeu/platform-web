@@ -152,6 +152,19 @@ server {
         add_header Cache-Control "no-store, must-revalidate" always;
     }
 
+    # PDF.js publishes its browser worker as an ES module with a `.mjs`
+    # extension. nginx:1.27-alpine's bundled mime.types does not map that
+    # extension, so the worker was served as application/octet-stream. Modern
+    # browsers reject that response for a module worker and the stale-bundle
+    # recovery reloads the candidate application page. Keep the module MIME
+    # contract explicit for both shell and remote hashed assets.
+    location ~* \.mjs$ {
+        try_files $uri =404;
+        default_type application/javascript;
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
     # PERF-INIT-V2 PR-B3c (Codex thread `019e240d` AGREE) — hashed Vite
     # chunks under `/assets/` get long-cache.  Content-hash filenames
     # (e.g. `bootstrap-CDWbzp5o.js`) auto-invalidate on every new build,
