@@ -1,6 +1,7 @@
 import { api } from '@mfe/shared-http';
 
 export const ATS_API_BASE = '/api/ats/v1';
+export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
 const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
 const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
@@ -55,7 +56,7 @@ export type PublicJobDto = {
   summary: string;
   highlights: string[];
   applicationFields: ApplicationFieldKey[];
-  noticeVersion: 'kvkk-application-v1';
+  noticeVersion: typeof APPLICATION_NOTICE_VERSION;
 };
 
 export type ApplicationSubmissionDto = {
@@ -70,7 +71,7 @@ export type ApplicationSubmissionDto = {
   education: string;
   skills: string[];
   note?: string;
-  noticeVersion: 'kvkk-application-v1';
+  noticeVersion: typeof APPLICATION_NOTICE_VERSION;
   noticeAcceptedAt: string;
   accuracyConfirmedAt: string;
 };
@@ -146,7 +147,7 @@ export type RecruiterJobDraftDto = {
   summary: string;
   highlights: string[];
   applicationFields: ApplicationFieldKey[];
-  noticeVersion: 'kvkk-application-v1';
+  noticeVersion: typeof APPLICATION_NOTICE_VERSION;
 };
 
 export type CandidateSession = {
@@ -194,7 +195,13 @@ export const getPublicJob = async (
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
   });
-  return safeJson<PublicJobDto>(response);
+  const job = await safeJson<PublicJobDto>(response);
+  if (job.noticeVersion !== APPLICATION_NOTICE_VERSION) {
+    throw new Error(
+      'Başvuru aydınlatma metni sürümü doğrulanamadı; bu ilan için başvuru geçici olarak kapalıdır.',
+    );
+  }
+  return job;
 };
 
 export const submitApplication = async (

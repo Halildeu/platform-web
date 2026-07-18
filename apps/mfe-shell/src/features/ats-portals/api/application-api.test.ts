@@ -56,7 +56,9 @@ describe('application-api', () => {
   it('uses a validated public career handle for tenant-bound candidate routes', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(jsonResponse({ slug: 'urun-yoneticisi' }));
+      .mockResolvedValueOnce(
+        jsonResponse({ slug: 'urun-yoneticisi', noticeVersion: 'kvkk-application-v1' }),
+      );
 
     await listPublicJobs('acik');
     await getPublicJob('urun-yoneticisi', 'acik');
@@ -72,6 +74,14 @@ describe('application-api', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     await expect(listPublicJobs('../tenant')).rejects.toThrow('Kariyer adresi geçersiz');
+  });
+
+  it('fails closed when the public job cannot prove the KVKK notice version', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ slug: 'urun-yoneticisi' }));
+
+    await expect(getPublicJob('urun-yoneticisi')).rejects.toThrow(
+      'Başvuru aydınlatma metni sürümü doğrulanamadı',
+    );
   });
 
   it('submits strict JSON with an idempotency key and no caller tenant or status', async () => {
