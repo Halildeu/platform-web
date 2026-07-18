@@ -233,7 +233,7 @@ const RecruiterWorkspacePage = () => {
           className="rounded-2xl border border-state-danger-border bg-state-danger-bg p-5"
           role="alert"
         >
-          <p className="font-semibold text-state-danger-text">Başvuru kutusu yüklenemedi.</p>
+          <p className="font-semibold text-text-primary">Başvuru kutusu yüklenemedi.</p>
           <p className="mt-1 text-sm text-text-secondary">{error}</p>
           <button
             type="button"
@@ -457,7 +457,7 @@ const RecruiterWorkspacePage = () => {
               {actionError ? (
                 <p
                   role="alert"
-                  className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-state-danger-text"
+                  className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
                 >
                   {actionError}
                 </p>

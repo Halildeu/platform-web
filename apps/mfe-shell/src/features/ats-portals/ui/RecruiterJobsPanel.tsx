@@ -333,7 +333,7 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
           className="mt-5 rounded-2xl border border-state-danger-border bg-state-danger-bg p-4"
           role="alert"
         >
-          <p className="font-semibold text-state-danger-text">İlanlar yüklenemedi.</p>
+          <p className="font-semibold text-text-primary">İlanlar yüklenemedi.</p>
           <p className="mt-1 text-sm text-text-secondary">{error}</p>
           <button
             type="button"
@@ -346,7 +346,7 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
       ) : null}
       {actionError ? (
         <p
-          className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+          className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
           role="alert"
         >
           {actionError}
