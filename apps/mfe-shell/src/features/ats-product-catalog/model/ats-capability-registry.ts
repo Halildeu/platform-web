@@ -53,7 +53,7 @@ export const ATS_PRODUCT_HUB_ENTRY = {
   label: 'ATS Ürün Merkezi',
   route: '/admin/ats',
   routePattern: '/admin/ats/*',
-  requiredModule: MODULE_KEYS.INTERVIEW_EVIDENCE,
+  requiredModule: MODULE_KEYS.ATS,
 } as const;
 
 export const INTERVIEW_EVIDENCE_ENTRY = {
@@ -82,7 +82,7 @@ export const ATS_CAPABILITY_REGISTRY = [
     description:
       'Kayıt izni, transkript, kanıt alıntıları ve insan onaylı değerlendirme akışını tek yerde toplar.',
     route: INTERVIEW_EVIDENCE_ENTRY.route,
-    requiredModule: ATS_PRODUCT_HUB_ENTRY.requiredModule,
+    requiredModule: INTERVIEW_EVIDENCE_ENTRY.requiredModule,
     targetRoles: ['RECRUITER', 'HIRING_MANAGER', 'INTERVIEWER', 'AUDITOR', 'ADMIN'],
     mode: 'UNAVAILABLE',
     liveDependency: 'Canlı Interview Evidence modülü ve yetkili ATS API bağlantısı',
