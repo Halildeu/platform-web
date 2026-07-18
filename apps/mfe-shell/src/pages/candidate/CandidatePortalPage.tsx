@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  getCandidateInterviews,
   getCandidateStatus,
   readCandidateSession,
   withdrawCandidateApplication,
   type ApplicationStatus,
+  type CandidateInterviewDto,
   type CandidateSession,
   type CandidateStatusDto,
 } from '../../features/ats-portals/api/application-api';
@@ -41,17 +43,41 @@ const NEXT_ACTION_COPY: Record<CandidateStatusDto['nextAction'], string> = {
   NONE: 'Bu başvuru için açık bir sonraki adım yok.',
 };
 
-const formatDate = (value: string) =>
+const INTERVIEW_TYPE_COPY: Record<CandidateInterviewDto['type'], string> = {
+  SCREENING: 'Ön görüşme',
+  TECHNICAL: 'Teknik görüşme',
+  BEHAVIORAL: 'Yetkinlik görüşmesi',
+  PANEL: 'Panel görüşmesi',
+  FINAL: 'Final görüşmesi',
+};
+
+const INTERVIEW_MODE_COPY: Record<CandidateInterviewDto['mode'], string> = {
+  VIDEO: 'Görüntülü',
+  PHONE: 'Telefon',
+  ONSITE: 'Yerinde',
+};
+
+const INTERVIEW_STATUS_COPY: Record<CandidateInterviewDto['status'], string> = {
+  SCHEDULED: 'Planlandı',
+  COMPLETED: 'Tamamlandı',
+  CANCELLED: 'İptal edildi',
+};
+
+const formatDate = (value: string, timeZone?: string) =>
   new Intl.DateTimeFormat('tr-TR', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    ...(timeZone ? { timeZone } : {}),
   }).format(new Date(value));
 
 const CandidatePortalPage = () => {
   const [session] = useState<CandidateSession | null>(() => readCandidateSession());
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
+  const [interviews, setInterviews] = useState<CandidateInterviewDto[]>([]);
   const [loading, setLoading] = useState(Boolean(session));
+  const [interviewsLoading, setInterviewsLoading] = useState(Boolean(session));
   const [error, setError] = useState('');
+  const [interviewError, setInterviewError] = useState('');
   const [actionError, setActionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
@@ -61,15 +87,35 @@ const CandidatePortalPage = () => {
   const refresh = useCallback(async () => {
     if (!session) return;
     setLoading(true);
+    setInterviewsLoading(true);
     setError('');
-    try {
-      setStatus(await getCandidateStatus(session));
-    } catch (loadError) {
+    setInterviewError('');
+    const [statusResult, interviewResult] = await Promise.allSettled([
+      getCandidateStatus(session),
+      getCandidateInterviews(session),
+    ]);
+    if (statusResult.status === 'fulfilled') {
+      setStatus(statusResult.value);
+    } else {
       setStatus(null);
-      setError(loadError instanceof Error ? loadError.message : 'Başvuru durumu alınamadı.');
-    } finally {
-      setLoading(false);
+      setError(
+        statusResult.reason instanceof Error
+          ? statusResult.reason.message
+          : 'Başvuru durumu alınamadı.',
+      );
     }
+    if (interviewResult.status === 'fulfilled') {
+      setInterviews(interviewResult.value);
+    } else {
+      setInterviews([]);
+      setInterviewError(
+        interviewResult.reason instanceof Error
+          ? interviewResult.reason.message
+          : 'Görüşme takvimi alınamadı.',
+      );
+    }
+    setLoading(false);
+    setInterviewsLoading(false);
   }, [session]);
 
   useEffect(() => {
@@ -88,6 +134,11 @@ const CandidatePortalPage = () => {
     setSuccessMessage('');
     try {
       setStatus(await withdrawCandidateApplication(session));
+      try {
+        setInterviews(await getCandidateInterviews(session));
+      } catch {
+        setInterviewError('Başvuru geri çekildi; güncel görüşme takvimini yenileyin.');
+      }
       setSuccessMessage('Başvurunuz geri çekildi. Güncel terminal durum aşağıda görünür.');
       setWithdrawalOpen(false);
       setWithdrawalConfirmed(false);
@@ -230,6 +281,81 @@ const CandidatePortalPage = () => {
                 <p className="mt-2 rounded-xl border border-state-info-border bg-state-info-bg p-4 text-sm leading-6 text-text-secondary">
                   {NEXT_ACTION_COPY[status.nextAction]}
                 </p>
+              </section>
+
+              <section className="mt-6" aria-labelledby="candidate-interviews-heading">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 id="candidate-interviews-heading" className="text-base font-bold">
+                    Görüşme takvimim
+                  </h3>
+                  {interviewsLoading ? (
+                    <span className="text-xs text-text-secondary" role="status">
+                      Takvim yükleniyor…
+                    </span>
+                  ) : null}
+                </div>
+                {interviewError ? (
+                  <p
+                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+                    role="alert"
+                  >
+                    {interviewError}
+                  </p>
+                ) : null}
+                {!interviewsLoading && !interviewError && !interviews.length ? (
+                  <p className="mt-3 rounded-xl border border-dashed border-border-subtle p-4 text-sm leading-6 text-text-secondary">
+                    Henüz planlanmış bir görüşme yok. Planlandığında tarih, saat dilimi, yöntem ve
+                    katılım bilgisi burada görünür.
+                  </p>
+                ) : null}
+                {interviews.length ? (
+                  <ol className="mt-3 space-y-3">
+                    {[...interviews]
+                      .sort((left, right) => right.startsAt.localeCompare(left.startsAt))
+                      .map((interview) => (
+                        <li
+                          key={interview.interviewId}
+                          className="rounded-2xl border border-border-subtle bg-surface-muted p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-bold">{INTERVIEW_TYPE_COPY[interview.type]}</h4>
+                              <p className="mt-1 text-sm text-text-secondary">
+                                {formatDate(interview.startsAt, interview.timeZone)} –{' '}
+                                {formatDate(interview.endsAt, interview.timeZone)}
+                              </p>
+                              <p className="mt-1 text-xs text-text-secondary">
+                                Saat dilimi: {interview.timeZone}
+                              </p>
+                            </div>
+                            <span className="rounded-lg bg-surface-default px-2 py-1 text-xs font-bold">
+                              {INTERVIEW_STATUS_COPY[interview.status]}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-sm">
+                            <strong>{INTERVIEW_MODE_COPY[interview.mode]}:</strong>{' '}
+                            {interview.mode === 'VIDEO' &&
+                            interview.location.startsWith('https://') ? (
+                              <a
+                                href={interview.location}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="break-all font-semibold text-action-primary underline"
+                              >
+                                Güvenli görüşme bağlantısını aç
+                              </a>
+                            ) : (
+                              interview.location
+                            )}
+                          </p>
+                          <p className="mt-3 text-xs leading-5 text-text-secondary">
+                            Bu görünüm yalnız katılım için gereken program bilgisini içerir; iç
+                            rubric, görüşmeci kimliği, scorecard ve karar gerekçesi paylaşılmaz.
+                          </p>
+                        </li>
+                      ))}
+                  </ol>
+                ) : null}
               </section>
 
               <section className="mt-6" aria-labelledby="candidate-history-heading">

@@ -9,11 +9,13 @@ import CandidatePortalPage from './CandidatePortalPage';
 const apiMocks = vi.hoisted(() => ({
   readCandidateSession: vi.fn(),
   getCandidateStatus: vi.fn(),
+  getCandidateInterviews: vi.fn(),
   withdrawCandidateApplication: vi.fn(),
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
   readCandidateSession: apiMocks.readCandidateSession,
   getCandidateStatus: apiMocks.getCandidateStatus,
+  getCandidateInterviews: apiMocks.getCandidateInterviews,
   withdrawCandidateApplication: apiMocks.withdrawCandidateApplication,
 }));
 
@@ -47,6 +49,7 @@ describe('CandidatePortalPage', () => {
   beforeEach(() => {
     apiMocks.readCandidateSession.mockReturnValue(SESSION);
     apiMocks.getCandidateStatus.mockResolvedValue(STATUS);
+    apiMocks.getCandidateInterviews.mockResolvedValue([]);
     apiMocks.withdrawCandidateApplication.mockResolvedValue({
       ...STATUS,
       status: 'WITHDRAWN',
@@ -106,5 +109,35 @@ describe('CandidatePortalPage', () => {
     expect((await screen.findAllByText('Başvuru geri çekildi')).length).toBeGreaterThan(0);
     expect(screen.getByRole('status')).toHaveTextContent('Başvurunuz geri çekildi');
     expect(screen.queryByRole('button', { name: 'Geri çekme onayını aç' })).not.toBeInTheDocument();
+  });
+
+  it('shows only the candidate-safe interview schedule and no internal evaluation data', async () => {
+    apiMocks.getCandidateInterviews.mockResolvedValue([
+      {
+        interviewId: 'int_abcdefghijklmnopqrstuvwx',
+        type: 'SCREENING',
+        startsAt: '2026-07-20T07:00:00Z',
+        endsAt: '2026-07-20T08:00:00Z',
+        timeZone: 'Europe/Istanbul',
+        mode: 'VIDEO',
+        location: 'https://meet.example.test/sentetik',
+        status: 'SCHEDULED',
+        updatedAt: '2026-07-18T10:00:00Z',
+        actorRef: 'must-not-render',
+        scorecards: [{ summary: 'must-not-render' }],
+        internalReason: 'must-not-render',
+      },
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Ön görüşme' })).toBeVisible();
+    expect(screen.getByText('Saat dilimi: Europe/Istanbul')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Güvenli görüşme bağlantısını aç' })).toHaveAttribute(
+      'href',
+      'https://meet.example.test/sentetik',
+    );
+    expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
+    expect(apiMocks.getCandidateInterviews).toHaveBeenCalledWith(SESSION);
   });
 });

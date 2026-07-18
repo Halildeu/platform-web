@@ -4,6 +4,7 @@ export const ATS_API_BASE = '/api/ats/v1';
 export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
 const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
 const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
+const INTERVIEW_ID_PATTERN = /^int_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/u;
 const PUBLIC_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,7}$/u;
@@ -194,6 +195,108 @@ export type RecruiterApplicationPageDto = {
   page: number;
   size: number;
   total: number;
+};
+
+export type InterviewType = 'SCREENING' | 'TECHNICAL' | 'BEHAVIORAL' | 'PANEL' | 'FINAL';
+export type InterviewMode = 'VIDEO' | 'PHONE' | 'ONSITE';
+export type InterviewStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+export type InterviewParticipantRole = 'LEAD' | 'INTERVIEWER' | 'OBSERVER';
+export type InterviewRecommendation = 'ADVANCE' | 'HOLD' | 'NO_HIRE';
+
+export type InterviewParticipantDto = {
+  actorRef: string;
+  displayLabel: string;
+  role: InterviewParticipantRole;
+};
+
+export type InterviewCriterionDto = {
+  key: string;
+  label: string;
+  question: string;
+  evidencePrompt: string;
+};
+
+export type InterviewScorecardDto = {
+  scorecardId: string;
+  interviewId: string;
+  actorRef: string;
+  participantLabel: string;
+  policyVersion: 'structured-interview-v1';
+  jobRelatednessConfirmed: boolean;
+  recommendation: InterviewRecommendation;
+  ratings: Array<{ criterionKey: string; rating: number; evidence: string }>;
+  summary: string;
+  predecessorScorecardId: string | null;
+  revision: number;
+  createdAt: string;
+};
+
+export type InterviewScheduleRevisionDto = {
+  version: number;
+  startsAt: string;
+  endsAt: string;
+  timeZone: string;
+  mode: InterviewMode;
+  location: string;
+  status: InterviewStatus;
+  reason: string;
+  actorRef: string;
+  occurredAt: string;
+};
+
+export type RecruiterInterviewWorkspaceDto = {
+  interviewId: string;
+  applicationPublicRef: string;
+  jobSlug: string;
+  jobTitle: string;
+  candidateName: string;
+  type: InterviewType;
+  startsAt: string;
+  endsAt: string;
+  timeZone: string;
+  mode: InterviewMode;
+  location: string;
+  status: InterviewStatus;
+  version: number;
+  participants: InterviewParticipantDto[];
+  criteria: InterviewCriterionDto[];
+  scorecards: InterviewScorecardDto[];
+  scheduleHistory: InterviewScheduleRevisionDto[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CandidateInterviewDto = Pick<
+  RecruiterInterviewWorkspaceDto,
+  | 'interviewId'
+  | 'type'
+  | 'startsAt'
+  | 'endsAt'
+  | 'timeZone'
+  | 'mode'
+  | 'location'
+  | 'status'
+  | 'updatedAt'
+>;
+
+export type CreateInterviewRequest = {
+  type: InterviewType;
+  startsAt: string;
+  endsAt: string;
+  timeZone: string;
+  mode: InterviewMode;
+  location: string;
+  participants: InterviewParticipantDto[];
+  criteria: InterviewCriterionDto[];
+};
+
+export type InterviewScorecardRequest = {
+  policyVersion: 'structured-interview-v1';
+  jobRelatednessConfirmed: true;
+  recommendation: InterviewRecommendation;
+  ratings: Array<{ criterionKey: string; rating: number; evidence: string }>;
+  summary: string;
+  predecessorScorecardId?: string;
 };
 
 export type RecruiterJobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'ARCHIVED';
@@ -443,6 +546,117 @@ export const submitRecruiterApplicationEvaluation = async (
     { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
   );
   return response.data;
+};
+
+export const listRecruiterInterviews = async (
+  publicRef: string,
+): Promise<RecruiterInterviewWorkspaceDto[]> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef)) throw new Error('Başvuru referansı geçersiz.');
+  const response = await api.get<RecruiterInterviewWorkspaceDto[]>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/interviews`,
+  );
+  return response.data;
+};
+
+export const createRecruiterInterview = async (
+  publicRef: string,
+  request: CreateInterviewRequest,
+  idempotencyKey: string,
+): Promise<RecruiterInterviewWorkspaceDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef)) throw new Error('Başvuru referansı geçersiz.');
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.post<RecruiterInterviewWorkspaceDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/interviews`,
+    request,
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const rescheduleRecruiterInterview = async (
+  publicRef: string,
+  interview: RecruiterInterviewWorkspaceDto,
+  request: Pick<
+    CreateInterviewRequest,
+    'startsAt' | 'endsAt' | 'timeZone' | 'mode' | 'location'
+  > & {
+    reason: string;
+  },
+  idempotencyKey: string,
+): Promise<RecruiterInterviewWorkspaceDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !INTERVIEW_ID_PATTERN.test(interview.interviewId)) {
+    throw new Error('Görüşme referansı geçersiz.');
+  }
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.put<RecruiterInterviewWorkspaceDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/interviews/${encodeURIComponent(interview.interviewId)}`,
+    { expectedVersion: interview.version, ...request },
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const transitionRecruiterInterview = async (
+  publicRef: string,
+  interview: RecruiterInterviewWorkspaceDto,
+  target: 'COMPLETED' | 'CANCELLED',
+  reason: string,
+  idempotencyKey: string,
+): Promise<RecruiterInterviewWorkspaceDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !INTERVIEW_ID_PATTERN.test(interview.interviewId)) {
+    throw new Error('Görüşme referansı geçersiz.');
+  }
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.post<RecruiterInterviewWorkspaceDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/interviews/${encodeURIComponent(interview.interviewId)}/transitions`,
+    { expectedVersion: interview.version, target, reason },
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const submitInterviewScorecard = async (
+  interviewId: string,
+  request: InterviewScorecardRequest,
+  idempotencyKey: string,
+): Promise<InterviewScorecardDto> => {
+  if (!INTERVIEW_ID_PATTERN.test(interviewId)) throw new Error('Görüşme referansı geçersiz.');
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.post<InterviewScorecardDto>(
+    `/ats/v1/interviews/${encodeURIComponent(interviewId)}/scorecards`,
+    request,
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const getCandidateInterviews = async ({
+  publicRef,
+  candidateAccessToken,
+}: CandidateSession): Promise<CandidateInterviewDto[]> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !CANDIDATE_ACCESS_PATTERN.test(candidateAccessToken)) {
+    throw new Error('Başvuru takip oturumu geçersiz.');
+  }
+  const response = await fetch(
+    `${ATS_API_BASE}/candidate/applications/${encodeURIComponent(publicRef)}/interviews`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'X-ATS-Candidate-Access': candidateAccessToken,
+      },
+      credentials: 'same-origin',
+    },
+  );
+  return safeJson<CandidateInterviewDto[]>(response);
 };
 
 export const listRecruiterJobs = async (): Promise<RecruiterJobDto[]> => {

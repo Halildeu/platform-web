@@ -11,6 +11,11 @@ const apiMocks = vi.hoisted(() => ({
   getRecruiterApplication: vi.fn(),
   updateRecruiterApplicationStatus: vi.fn(),
   submitRecruiterApplicationEvaluation: vi.fn(),
+  listRecruiterInterviews: vi.fn(),
+  createRecruiterInterview: vi.fn(),
+  rescheduleRecruiterInterview: vi.fn(),
+  transitionRecruiterInterview: vi.fn(),
+  submitInterviewScorecard: vi.fn(),
   listRecruiterJobs: vi.fn(),
   createRecruiterJob: vi.fn(),
   updateRecruiterJob: vi.fn(),
@@ -42,6 +47,11 @@ vi.mock('../api/application-api', () => ({
   getRecruiterApplication: apiMocks.getRecruiterApplication,
   updateRecruiterApplicationStatus: apiMocks.updateRecruiterApplicationStatus,
   submitRecruiterApplicationEvaluation: apiMocks.submitRecruiterApplicationEvaluation,
+  listRecruiterInterviews: apiMocks.listRecruiterInterviews,
+  createRecruiterInterview: apiMocks.createRecruiterInterview,
+  rescheduleRecruiterInterview: apiMocks.rescheduleRecruiterInterview,
+  transitionRecruiterInterview: apiMocks.transitionRecruiterInterview,
+  submitInterviewScorecard: apiMocks.submitInterviewScorecard,
   listRecruiterJobs: apiMocks.listRecruiterJobs,
   createRecruiterJob: apiMocks.createRecruiterJob,
   updateRecruiterJob: apiMocks.updateRecruiterJob,
@@ -68,6 +78,62 @@ const APPLICATION = {
   version: 0,
   createdAt: '2026-07-16T10:00:00Z',
   updatedAt: '2026-07-16T10:00:00Z',
+};
+
+const INTERVIEW = {
+  interviewId: 'int_abcdefghijklmnopqrstuvwx',
+  applicationPublicRef: APPLICATION.publicRef,
+  jobSlug: APPLICATION.jobSlug,
+  jobTitle: APPLICATION.jobTitle,
+  candidateName: APPLICATION.fullName,
+  type: 'SCREENING',
+  startsAt: '2026-07-20T07:00:00Z',
+  endsAt: '2026-07-20T08:00:00Z',
+  timeZone: 'Europe/Istanbul',
+  mode: 'VIDEO',
+  location: 'https://meet.example.test/sentetik',
+  status: 'SCHEDULED',
+  version: 0,
+  participants: [
+    { actorRef: 'user:test-recruiter', displayLabel: 'Atanmış İK görüşmecisi', role: 'LEAD' },
+  ],
+  criteria: [
+    {
+      key: 'role_problem_solving',
+      label: 'İşle ilgili problem çözme',
+      question: 'İşle ilgili zor bir problemi nasıl çözdünüz?',
+      evidencePrompt: 'Somut iş kanıtını kaydedin.',
+    },
+    {
+      key: 'relevant_delivery',
+      label: 'İşle ilgili teslimat kanıtı',
+      question: 'Benzer bir işi uçtan uca nasıl teslim ettiniz?',
+      evidencePrompt: 'Doğrulanabilir sonucu kaydedin.',
+    },
+    {
+      key: 'collaboration_evidence',
+      label: 'İş birliği kanıtı',
+      question: 'Paydaş anlaşmazlığını nasıl çözdünüz?',
+      evidencePrompt: 'Gözlemlenebilir davranışı kaydedin.',
+    },
+  ],
+  scorecards: [],
+  scheduleHistory: [],
+  createdAt: '2026-07-18T10:00:00Z',
+  updatedAt: '2026-07-18T10:00:00Z',
+};
+
+const EVALUATION = {
+  evaluationId: 'eval_abcdefghijklmnopqrstuvwx',
+  actorRef: 'user:test-recruiter',
+  policyVersion: 'structured-evaluation-v1',
+  jobRelatednessConfirmed: true,
+  recommendation: 'ADVANCE',
+  criteria: [],
+  summary: 'Sentetik insan değerlendirmesi gerekçesi.',
+  predecessorEvaluationId: null,
+  revision: 1,
+  createdAt: '2026-07-16T11:00:00Z',
 };
 
 const renderPage = () =>
@@ -118,6 +184,24 @@ describe('RecruiterWorkspacePage', () => {
       createdAt: '2026-07-16T11:00:00Z',
     });
     apiMocks.listRecruiterJobs.mockResolvedValue([]);
+    apiMocks.listRecruiterInterviews.mockResolvedValue([]);
+    apiMocks.createRecruiterInterview.mockResolvedValue(INTERVIEW);
+    apiMocks.rescheduleRecruiterInterview.mockResolvedValue(INTERVIEW);
+    apiMocks.transitionRecruiterInterview.mockResolvedValue(INTERVIEW);
+    apiMocks.submitInterviewScorecard.mockResolvedValue({
+      scorecardId: 'isc_abcdefghijklmnopqrstuvwx',
+      interviewId: INTERVIEW.interviewId,
+      actorRef: 'user:test-recruiter',
+      participantLabel: 'Atanmış İK görüşmecisi',
+      policyVersion: 'structured-interview-v1',
+      jobRelatednessConfirmed: true,
+      recommendation: 'HOLD',
+      ratings: [],
+      summary: 'Sentetik görüşme özeti.',
+      predecessorScorecardId: null,
+      revision: 1,
+      createdAt: '2026-07-20T09:00:00Z',
+    });
   });
   afterEach(() => {
     cleanup();
@@ -311,5 +395,79 @@ describe('RecruiterWorkspacePage', () => {
       'REJECTED',
     );
     expect(await screen.findByText(/Durum güncellendi: İnsan kararıyla reddedildi/i)).toBeVisible();
+  });
+
+  it('plans a persisted interview from the reviewed application with a legal structured rubric', async () => {
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: { ...APPLICATION, status: 'UNDER_REVIEW', version: 1 },
+      history: [],
+      evaluations: [EVALUATION],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni görüşme planla' }));
+
+    expect(screen.getByRole('form', { name: 'Yeni görüşme planı' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Görüşmeyi kalıcı olarak planla' }));
+
+    expect(apiMocks.createRecruiterInterview).toHaveBeenCalledWith(
+      APPLICATION.publicRef,
+      expect.objectContaining({
+        type: 'SCREENING',
+        timeZone: expect.any(String),
+        mode: 'VIDEO',
+        participants: [expect.objectContaining({ actorRef: EVALUATION.actorRef, role: 'LEAD' })],
+        criteria: expect.arrayContaining([
+          expect.objectContaining({ key: 'role_problem_solving' }),
+        ]),
+      }),
+      'web-job-command-1234',
+    );
+    expect(
+      await screen.findByText(/Görüşme planlandı; adayın güvenli takvimine yansıdı/i),
+    ).toBeVisible();
+    expect(JSON.stringify(apiMocks.createRecruiterInterview.mock.calls[0][1])).not.toMatch(
+      /culture fit|yaş|medeni durum/i,
+    );
+  });
+
+  it('records evidence per interview criterion without producing an automatic decision', async () => {
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: { ...APPLICATION, status: 'INTERVIEW_PENDING', version: 2 },
+      history: [],
+      evaluations: [EVALUATION],
+    });
+    apiMocks.listRecruiterInterviews.mockResolvedValue([INTERVIEW]);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'İnsan scorecard’ı doldur' }));
+
+    screen
+      .getAllByLabelText('Kanıt düzeyi (1–4)')
+      .forEach((field) => fireEvent.change(field, { target: { value: '3' } }));
+    screen.getAllByLabelText('Somut iş kanıtı').forEach((field, index) =>
+      fireEvent.change(field, {
+        target: { value: `Sentetik ve işle ilgili görüşme kanıtı ${index + 1}.` },
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Genel gerekçe'), {
+      target: { value: 'Sentetik insan görüşme değerlendirmesi gerekçesi.' },
+    });
+    fireEvent.click(screen.getByLabelText(/Değerlendirme yalnız işle ilgili rubric/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Immutable scorecard’ı kaydet' }));
+
+    expect(apiMocks.submitInterviewScorecard).toHaveBeenCalledWith(
+      INTERVIEW.interviewId,
+      expect.objectContaining({
+        policyVersion: 'structured-interview-v1',
+        jobRelatednessConfirmed: true,
+        recommendation: 'HOLD',
+        ratings: expect.arrayContaining([
+          expect.objectContaining({ criterionKey: 'role_problem_solving', rating: 3 }),
+        ]),
+      }),
+      'web-job-command-1234',
+    );
+    expect(screen.queryByText(/otomatik karar sonucu/i)).not.toBeInTheDocument();
   });
 });
