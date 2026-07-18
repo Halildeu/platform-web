@@ -35,7 +35,7 @@ const SECOND_JOB = {
 };
 
 const installAtsApi = async (page: Page, submissions: Array<Record<string, unknown>> = []) => {
-  await page.route('**/api/ats/v1/jobs**', async (route) => {
+  await page.route('**/api/ats/v1/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === 'GET' && path.endsWith('/jobs')) {
@@ -121,6 +121,34 @@ const buildSyntheticResumePdf = () => {
 };
 
 test.describe('Faz 25 public candidate journey', () => {
+  test('boots a canonical career-handle application directly without the authenticated shell and imports PDF fields', async ({
+    page,
+    baseURL,
+  }) => {
+    const authBootstrapLogs: string[] = [];
+    await installAtsApi(page);
+    page.on('console', (message) => {
+      if (message.text().includes('[AuthBootstrapper]')) authBootstrapLogs.push(message.text());
+    });
+
+    await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/careers/acik/jobs/${JOB.slug}/apply`, {
+      waitUntil: 'networkidle',
+    });
+    await expect(page.getByTestId('candidate-application-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: JOB.title })).toBeVisible();
+    await page.getByTestId('candidate-resume').setInputFiles({
+      name: 'ornek-cv.pdf',
+      mimeType: 'application/pdf',
+      buffer: buildSyntheticResumePdf(),
+    });
+
+    await expect(page.getByTestId('candidate-resume-meta')).toContainText(
+      '11 boş alan PDF’den dolduruldu',
+    );
+    await expect(page.getByTestId('candidate-email')).toHaveValue('deniz.yilmaz@example.test');
+    expect(authBootstrapLogs).toEqual([]);
+  });
+
   test('discovers a job, imports a real PDF, preserves edits and submits only confirmed fields at 390px without auth or a11y violations', async ({
     page,
     baseURL,
