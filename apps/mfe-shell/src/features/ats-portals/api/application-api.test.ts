@@ -5,25 +5,33 @@ const httpMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() 
 vi.mock('@mfe/shared-http', () => ({ api: httpMocks }));
 
 import {
+  confirmResumeImport,
   createApplicationIdempotencyKey,
+  createResumeImport,
   getCandidateStatus,
   createCandidateAccessToken,
   createRecruiterJob,
   getRecruiterApplication,
   getPublicJob,
+  getResumeImport,
   listPublicJobs,
   listRecruiterApplications,
   listRecruiterJobs,
   readCandidateSession,
   saveCandidateSession,
+  replaceResumePdf,
   submitApplication,
   submitRecruiterApplicationEvaluation,
+  terminateResumeImport,
   transitionRecruiterJob,
   updateRecruiterJob,
   updateRecruiterApplicationStatus,
+  updateResumeProposal,
+  uploadResumePdf,
   withdrawCandidateApplication,
   type RecruiterJobDraftDto,
   type RecruiterJobDto,
+  type ResumeImportDto,
 } from './application-api';
 
 const fetchMock = vi.fn();
@@ -250,6 +258,110 @@ describe('application-api', () => {
     );
     expect(fetchMock.mock.calls[0][0]).not.toContain('A'.repeat(43));
     expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('body');
+  });
+
+  it('uses a versioned candidate-only PDF lifecycle without putting credentials or filenames in URLs', async () => {
+    const token = 'R'.repeat(43);
+    const resumeImport: ResumeImportDto = {
+      importId: 'ri_abcdefghijklmnopqrstuvwx',
+      jobSlug: 'urun-yoneticisi',
+      state: 'ACTIVE',
+      version: 0,
+      documentVersion: 0,
+      noticeVersion: 'candidate-resume-import-v1',
+      noticeAcceptedAt: '2026-07-18T10:00:00Z',
+      uploadExpiresAt: '2026-07-18T10:15:00Z',
+      firstUploadAt: null,
+      expiresAt: null,
+      parserVersion: null,
+      protectedSuppressed: 0,
+      unsupportedOutput: 0,
+      createdAt: '2026-07-18T10:00:00Z',
+      updatedAt: '2026-07-18T10:00:00Z',
+      purgedAt: null,
+      proposals: [],
+    };
+    const uploaded = { ...resumeImport, version: 1, documentVersion: 1 };
+    const updated = { ...uploaded, version: 2 };
+    const confirmed = {
+      resumeImport: { ...updated, state: 'CONFIRMED', proposals: [] },
+      draft: {
+        draftId: '11111111-1111-1111-1111-111111111111',
+        importId: resumeImport.importId,
+        version: 0,
+        fields: { email: 'deniz@example.test' },
+        createdAt: '2026-07-18T10:02:00Z',
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(resumeImport, 201))
+      .mockResolvedValueOnce(jsonResponse(resumeImport))
+      .mockResolvedValueOnce(jsonResponse(uploaded, 202))
+      .mockResolvedValueOnce(jsonResponse(updated))
+      .mockResolvedValueOnce(jsonResponse(updated))
+      .mockResolvedValueOnce(jsonResponse(confirmed))
+      .mockResolvedValueOnce(jsonResponse({ ...updated, state: 'REJECT_ALL' }));
+
+    const created = await createResumeImport(
+      'urun-yoneticisi',
+      'web-resume-create-1234',
+      token,
+      resumeImport.noticeAcceptedAt,
+      'acik',
+    );
+    await getResumeImport(created.importId, token);
+    const pdf = new File(['%PDF synthetic'], 'must-not-leak.pdf', { type: 'application/pdf' });
+    const upload = await uploadResumePdf(created, pdf, 'web-resume-upload-1234', token);
+    await replaceResumePdf(uploaded, token);
+    await updateResumeProposal(uploaded, 'email', 'EDITED', token, 'deniz@example.test');
+    await confirmResumeImport(updated, token);
+    await terminateResumeImport(updated, token, 'REJECT_ALL');
+
+    expect(upload.inFlight).toBe(true);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/ats/v1/careers/acik/jobs/urun-yoneticisi/resume-imports',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'X-ATS-Candidate-Access': token,
+          'X-ATS-Idempotency-Key': 'web-resume-create-1234',
+        }),
+        body: JSON.stringify({
+          noticeVersion: 'candidate-resume-import-v1',
+          noticeAcceptedAt: resumeImport.noticeAcceptedAt,
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `/api/ats/v1/candidate/resume-imports/${resumeImport.importId}/document`,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/pdf',
+          'X-ATS-Expected-Version': '0',
+          'X-ATS-Idempotency-Key': 'web-resume-upload-1234',
+        }),
+        body: pdf,
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      `/api/ats/v1/candidate/resume-imports/${resumeImport.importId}/fields/email`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          state: 'EDITED',
+          editedValue: 'deniz@example.test',
+        }),
+      }),
+    );
+    for (const [url] of fetchMock.mock.calls) {
+      expect(String(url)).not.toContain(token);
+      expect(String(url)).not.toContain('must-not-leak.pdf');
+    }
   });
 
   it('rejects malformed candidate tracking input before making a network request', async () => {
