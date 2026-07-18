@@ -29,6 +29,17 @@ createRoot(container).render(
         <Route path="/jobs/:jobSlug/" element={<PublicJobDetailPage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
         <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
+        <Route path="/careers/:publicHandle/jobs" element={<PublicJobsPage />} />
+        <Route path="/careers/:publicHandle/jobs/" element={<PublicJobsPage />} />
+        <Route path="/careers/:publicHandle/jobs/:jobSlug" element={<PublicJobDetailPage />} />
+        <Route
+          path="/careers/:publicHandle/jobs/:jobSlug/apply"
+          element={<CandidateApplicationPage />}
+        />
+        <Route
+          path="/careers/:publicHandle/jobs/:jobSlug/apply/"
+          element={<CandidateApplicationPage />}
+        />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
