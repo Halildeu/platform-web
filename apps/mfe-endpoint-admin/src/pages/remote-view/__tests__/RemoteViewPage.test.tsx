@@ -34,6 +34,10 @@ const flush = () =>
 
 const VIEW_ROUTE = '/endpoint-admin/remote-access/sessions/:sessionId/view';
 
+function dispatchEvidenceDrain(nonce = 'test-cutoff-nonce-0001') {
+  window.dispatchEvent(new CustomEvent('faz226:view-only-evidence-drain', { detail: { nonce } }));
+}
+
 function renderAt(entry: string, props: RemoteViewPageProps = {}) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
@@ -284,6 +288,26 @@ describe('RemoteViewPage', () => {
       'data-render-ack-attempted-count',
       '1',
     );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-pending-count',
+      '0',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-rejected-count',
+      '0',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-last-accepted-seq',
+      '7',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-last-accepted-observed-at',
+      '100',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-last-accepted-sent-at',
+      '120',
+    );
     expect(screen.getByTestId('remote-view-frame-age')).toHaveTextContent('0s');
     sse.end();
   });
@@ -332,6 +356,21 @@ describe('RemoteViewPage', () => {
     });
     fireEvent.load(await screen.findByTestId('remote-view-frame'));
     expect(fetchImpl).toHaveBeenCalledTimes(2); // GET + seq=1 POST; seq=2 was replaced by seq=3
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-pending-count',
+        '2',
+      ),
+    );
+
+    act(() => dispatchEvidenceDrain());
+    await act(async () => sse.end());
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-view-closure-kind',
+        'stream-ended-after-drain',
+      ),
+    );
 
     resolveFirstAck({ status: 204, ok: true } as Response);
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(3));
@@ -340,6 +379,228 @@ describe('RemoteViewPage', () => {
     expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
       'data-render-ack-attempted-count',
       '2',
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-pending-count',
+        '0',
+      ),
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-accepted-count',
+      '2',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-last-accepted-seq',
+      '3',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-last-accepted-observed-at',
+      '120',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-last-accepted-sent-at',
+      '121',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-rejected-count',
+      '0',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-draining',
+      'true',
+    );
+  });
+
+  it('exposes a settled rejected acknowledgement without an accepted sequence', async () => {
+    const sse = controllableSse();
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve({ status: 409, ok: false } as Response);
+      }
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":9,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"FRAME"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-attempted-count',
+        '1',
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-pending-count',
+        '0',
+      ),
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-attempted-count',
+      '1',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-accepted-count',
+      '0',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-rejected-count',
+      '1',
+    );
+    expect(screen.getByTestId('remote-view-page')).not.toHaveAttribute(
+      'data-render-ack-last-accepted-seq',
+    );
+    expect(screen.getByTestId('remote-view-page')).not.toHaveAttribute(
+      'data-render-ack-last-accepted-observed-at',
+    );
+    expect(screen.getByTestId('remote-view-page')).not.toHaveAttribute(
+      'data-render-ack-last-accepted-sent-at',
+    );
+    sse.end();
+  });
+
+  it('drains an in-flight acknowledgement after a clean stream close', async () => {
+    const sse = controllableSse();
+    let resolveAck!: (response: Response) => void;
+    const ack = new Promise<Response>((resolve) => {
+      resolveAck = resolve;
+    });
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return ack;
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => callback(),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":11,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"FRAME"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+    await act(async () => sse.end());
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute('data-view-status', 'closed'),
+    );
+    act(() => dispatchEvidenceDrain('late-cutoff-nonce-0001'));
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-draining',
+      'false',
+    );
+    expect(screen.getByTestId('remote-view-page')).not.toHaveAttribute(
+      'data-render-ack-drain-nonce',
+    );
+
+    resolveAck({ status: 204, ok: true } as Response);
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-pending-count',
+        '0',
+      ),
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-attempted-count',
+      '1',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-accepted-count',
+      '1',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-rejected-count',
+      '0',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-view-closure-kind',
+      'stream-ended-before-drain',
+    );
+  });
+
+  it('cuts off new ACK scheduling and drains an acknowledgement already scheduled after paint', async () => {
+    const sse = controllableSse();
+    const scheduled: Array<() => void> = [];
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve({ status: 204, ok: true } as Response);
+      }
+      return Promise.resolve(sse.response);
+    });
+    renderAt('/endpoint-admin/remote-access/sessions/sess-1/view?streamId=op-1', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      tokenResolver: () => 'tkn',
+      afterPaint: (callback) => scheduled.push(callback),
+    });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      sse.push(
+        'event: meta\ndata: {"recording":false,"attended":true,"capability":"VIEW_ONLY","viewerId":"vw-opaque"}\n\n',
+      );
+      sse.push(
+        'event: frame\ndata: {"seq":20,"contentType":"image/png","observedAtEpochMillis":100,"sentAtEpochMillis":101,"dataB64":"A"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+    expect(scheduled).toHaveLength(1);
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-pending-count',
+      '1',
+    );
+
+    act(() => dispatchEvidenceDrain());
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-draining',
+      'true',
+    );
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-drain-nonce',
+      'test-cutoff-nonce-0001',
+    );
+    act(() => dispatchEvidenceDrain('replacement-cutoff-nonce-0002'));
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-drain-nonce',
+      'test-cutoff-nonce-0001',
+    );
+    await act(async () => {
+      sse.push(
+        'event: frame\ndata: {"seq":21,"contentType":"image/png","observedAtEpochMillis":110,"sentAtEpochMillis":111,"dataB64":"B"}\n\n',
+      );
+    });
+    fireEvent.load(await screen.findByTestId('remote-view-frame'));
+    expect(scheduled).toHaveLength(1); // post-cutoff frame cannot schedule an ACK
+
+    scheduled[0]();
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+        'data-render-ack-pending-count',
+        '0',
+      ),
+    );
+    const ackInit = fetchImpl.mock.calls[1][1] as RequestInit;
+    expect(JSON.parse(String(ackInit.body))).toEqual({ viewerId: 'vw-opaque', frameSeq: 20 });
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-render-ack-accepted-count',
+      '1',
     );
     sse.end();
   });
@@ -361,6 +622,10 @@ describe('RemoteViewPage', () => {
       /Oturum kapandı|Session closed/,
     );
     expect(stopBtn).toBeDisabled();
+    expect(screen.getByTestId('remote-view-page')).toHaveAttribute(
+      'data-view-closure-kind',
+      'local-stop',
+    );
     sse.end();
   });
 
