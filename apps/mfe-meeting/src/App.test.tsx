@@ -1,12 +1,15 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import MeetingApp from './App';
 import { createDemoWorkbenchData, normalizeWorkbenchPayload } from './meeting-api';
+import type { MeetingWorkbenchData } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 
 describe('MeetingApp', () => {
   const loadDemo = async () => createDemoWorkbenchData();
+
+  afterEach(() => window.history.replaceState({}, '', '/'));
 
   it('renders the meeting workbench with stats, controls, and transcript readiness surface', async () => {
     render(<MeetingApp loadWorkbench={loadDemo} />);
@@ -16,7 +19,7 @@ describe('MeetingApp', () => {
     expect(screen.getByLabelText('Veri kaynağı')).toHaveTextContent('Demo veri');
     expect(screen.getByLabelText('Meeting Intelligence metrikleri')).toHaveTextContent('Aktif');
     expect(screen.getByLabelText('Meeting Intelligence metrikleri')).toHaveTextContent('Kaynaklı');
-    expect(screen.getByLabelText('Meeting Intelligence metrikleri')).toHaveTextContent('6');
+    expect(screen.getByLabelText('Meeting Intelligence metrikleri')).toHaveTextContent('4');
     expect(screen.getByLabelText('Toplantılar')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Transkript' })).toBeInTheDocument();
     expect(screen.getByText('Recorder kanıtı')).toBeInTheDocument();
@@ -37,10 +40,15 @@ describe('MeetingApp', () => {
     const meetingList = screen.getByLabelText('Toplantılar');
     expect(within(meetingList).getByText('Direct-STT mTLS unblock')).toBeInTheDocument();
     expect(within(meetingList).queryByText('Faz 24 haftalık ürün durumu')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Faz 24 haftalık ürün durumu' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(meetingList).getByRole('button', { name: /Direct-STT mTLS unblock/i }));
     expect(screen.getByText('Direct-STT bekliyor')).toBeInTheDocument();
     expect(screen.getByText('Transkript akışı bekleniyor')).toBeInTheDocument();
     expect(screen.getByText('mTLS Secret: Blokeli')).toBeInTheDocument();
-    expect(screen.getAllByText(/kaynak bekliyor/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/kaynak doğrulanmadı/i).length).toBeGreaterThan(0);
   });
 
   it('searches meetings and selects the demo readout detail', async () => {
@@ -61,49 +69,31 @@ describe('MeetingApp', () => {
     ).toBeInTheDocument();
   });
 
-  it('opens policy-aware export/share/delete action surfaces without enabling mutations', async () => {
+  it('keeps export, share and delete disabled when canonical mutation endpoints are absent', async () => {
     render(<MeetingApp loadWorkbench={loadDemo} />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
     const actionRow = screen.getByLabelText('Toplantı aksiyonları');
-
-    fireEvent.click(within(actionRow).getByRole('button', { name: 'Dışa aktar' }));
-
-    expect(screen.getByLabelText('Dışa aktar politika durumu')).toHaveTextContent(
-      'Dışa aktar politikası',
-    );
-    expect(screen.getByLabelText('Dışa aktar politika durumu')).toHaveTextContent(
-      'Export policy + audit event + retention sınıfı',
-    );
-    expect(screen.getByRole('button', { name: 'Runtime mutasyon kapalı' })).toBeDisabled();
-
-    fireEvent.click(within(actionRow).getByRole('button', { name: 'Paylaş' }));
-
-    expect(screen.getByLabelText('Paylaş politika durumu')).toHaveTextContent('Paylaş politikası');
-    expect(screen.getByLabelText('Paylaş politika durumu')).toHaveTextContent(
-      'Recipient authorization + share audit + link TTL',
-    );
-
-    fireEvent.click(within(actionRow).getByRole('button', { name: 'Sil' }));
-
-    expect(screen.getByLabelText('Sil politika durumu')).toHaveTextContent('Sil politikası');
-    expect(screen.getByLabelText('Sil politika durumu')).toHaveTextContent(
-      'Retention decision + dual-control approval + delete audit',
+    expect(within(actionRow).getByRole('button', { name: 'Dışa aktar' })).toBeDisabled();
+    expect(within(actionRow).getByRole('button', { name: 'Paylaş' })).toBeDisabled();
+    expect(within(actionRow).getByRole('button', { name: 'Sil' })).toBeDisabled();
+    expect(within(actionRow).getByRole('button', { name: 'Dışa aktar' })).toHaveAttribute(
+      'title',
+      'Canonical export endpointi bağlı değil',
     );
   });
 
-  it('clears an open policy panel when the selected meeting changes', async () => {
+  it('writes an explicit meeting selection to the URL and preserves it across filters', async () => {
     render(<MeetingApp loadWorkbench={loadDemo} />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
-    const actionRow = screen.getByLabelText('Toplantı aksiyonları');
-    fireEvent.click(within(actionRow).getByRole('button', { name: 'Sil' }));
-    expect(screen.getByLabelText('Sil politika durumu')).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: /Direct-STT mTLS unblock/i }));
-
     expect(screen.getByRole('heading', { name: 'Direct-STT mTLS unblock' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Sil politika durumu')).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('meetingId')).toBe('mtg-direct-stt');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hazır' }));
+    expect(screen.getByRole('heading', { name: 'Direct-STT mTLS unblock' })).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('meetingId')).toBe('mtg-direct-stt');
   });
 
   it('connects a configured live transcript stream without sending audio', async () => {
@@ -344,6 +334,7 @@ describe('MeetingApp', () => {
         },
       ],
     });
+    window.history.replaceState({}, '', `/admin/meetings?meetingId=${record.id}`);
 
     render(
       <MeetingApp
@@ -365,6 +356,50 @@ describe('MeetingApp', () => {
     expect(await screen.findByText('Detay kısmen hazır')).toBeInTheDocument();
     expect(screen.getByText('Canonical aksiyon')).toBeInTheDocument();
     await waitFor(() => expect(loadDetail).toHaveBeenCalledTimes(1));
+  });
+
+  it('reloads the same selected meeting detail when the canonical list stays in api mode', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: 'same-meeting',
+          title: 'Aynı seçili toplantı',
+          status: 'COMPLETED',
+          createdAt: '2026-07-11T08:00:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    const workbench = {
+      records: [record],
+      source: {
+        mode: 'api' as const,
+        label: 'Canonical meeting-service',
+        detail: 'Canonical liste',
+        checkedAt: '2026-07-11T08:00:00Z',
+      },
+    };
+    const loadWorkbench = vi.fn().mockResolvedValue(workbench);
+    const loadDetail = vi.fn(async (meeting: MeetingRecord) => ({
+      ...meeting,
+      status: 'ready' as const,
+      detail: { state: 'ready' as const, label: 'Canonical sonuç hazır', detail: 'Hazır' },
+    }));
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=same-meeting');
+
+    render(
+      <MeetingApp
+        loadWorkbench={loadWorkbench}
+        loadDetail={loadDetail}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    await waitFor(() => expect(loadDetail).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Veriyi yenile' }));
+    await waitFor(() => expect(loadDetail).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('heading', { name: 'Aynı seçili toplantı' })).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('meetingId')).toBe('same-meeting');
   });
 
   it('reloads canonical data when the shell auth identity changes', async () => {
@@ -399,6 +434,7 @@ describe('MeetingApp', () => {
         },
       });
     let authChanged: (() => void) | undefined;
+    window.history.replaceState({}, '', `/admin/meetings?meetingId=${record.id}`);
 
     render(
       <MeetingApp
@@ -421,5 +457,219 @@ describe('MeetingApp', () => {
       await screen.findByRole('heading', { name: 'Yeni kimlik toplantısı' }),
     ).toBeInTheDocument();
     expect(loadWorkbench).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears prior meeting content immediately while a changed identity is revalidated', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: 'identity-bound-meeting',
+          title: 'Önceki kimliğin toplantısı',
+          status: 'COMPLETED',
+          createdAt: '2026-07-11T08:00:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    let resolveReload: ((value: MeetingWorkbenchData) => void) | undefined;
+    const loadWorkbench = vi
+      .fn()
+      .mockResolvedValueOnce({
+        records: [record],
+        source: {
+          mode: 'api',
+          label: 'Canonical meeting-service',
+          detail: 'Canonical liste',
+          checkedAt: '2026-07-11T08:00:00Z',
+        },
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise<MeetingWorkbenchData>((resolve) => {
+            resolveReload = resolve;
+          }),
+      );
+    let authChanged: (() => void) | undefined;
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=identity-bound-meeting');
+
+    render(
+      <MeetingApp
+        loadWorkbench={loadWorkbench}
+        loadDetail={async (meeting) => ({
+          ...meeting,
+          status: 'ready',
+          detail: { state: 'ready', label: 'Canonical sonuç hazır', detail: 'Hazır' },
+          summary: {
+            text: 'Önceki kimliğe ait hassas özet.',
+            confidence: 0,
+            citations: [],
+          },
+        })}
+        subscribeAuthChanges={(listener) => {
+          authChanged = listener;
+          return () => undefined;
+        }}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(await screen.findAllByText('Önceki kimliğe ait hassas özet.')).toHaveLength(2);
+    act(() => authChanged?.());
+
+    expect(screen.queryAllByText('Önceki kimliğe ait hassas özet.')).toHaveLength(0);
+    expect(screen.getByText('Yetki yeniden doğrulanıyor')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Canlı stream durumu')).not.toBeInTheDocument();
+
+    act(() =>
+      resolveReload?.({
+        records: [],
+        source: {
+          mode: 'unauthorized',
+          label: 'Toplantı yetkisi gerekli',
+          detail: 'Yeni kimlik bu toplantıyı göremiyor.',
+          checkedAt: '2026-07-11T08:01:00Z',
+        },
+      }),
+    );
+    expect(await screen.findByText('Toplantı yetkisi gerekli')).toBeInTheDocument();
+  });
+
+  it('keeps an unavailable deep-link id instead of silently selecting the first meeting', async () => {
+    const first = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: 'first-meeting',
+          title: 'İlk toplantı',
+          status: 'COMPLETED',
+          createdAt: '2026-07-11T08:00:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    const loadMeeting = vi.fn().mockRejectedValue({
+      response: { status: 404, data: { error: 'MEETING_NOT_FOUND' } },
+    });
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=missing-meeting');
+
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({
+          records: [first],
+          source: {
+            mode: 'api',
+            label: 'Canonical meeting-service',
+            detail: 'Canonical liste',
+            checkedAt: '2026-07-11T08:00:00Z',
+          },
+        })}
+        loadMeeting={loadMeeting}
+        loadDetail={vi.fn()}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(await screen.findByText('Toplantı kullanılamıyor')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'İlk toplantı' })).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('meetingId')).toBe('missing-meeting');
+    expect(loadMeeting).toHaveBeenCalledWith('missing-meeting');
+  });
+
+  it('announces a canonical ready result and exposes citation links only to final segments', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: 'ready-meeting',
+          title: 'Hazır canonical toplantı',
+          status: 'COMPLETED',
+          createdAt: '2026-07-11T08:00:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=ready-meeting');
+
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({
+          records: [record],
+          source: {
+            mode: 'api',
+            label: 'Canonical meeting-service',
+            detail: 'Canonical liste',
+            checkedAt: '2026-07-11T08:00:00Z',
+          },
+        })}
+        loadDetail={async (meeting) => ({
+          ...meeting,
+          status: 'ready',
+          detail: {
+            state: 'ready',
+            label: 'Canonical sonuç hazır',
+            detail: 'Final citation doğrulandı.',
+          },
+          intelligence: {
+            state: 'ready',
+            analysisRunId: 'run-1',
+            generatedAt: '2026-07-11T09:00:00Z',
+            persisted: true,
+            storageMode: 'canonical',
+            redacted: false,
+            redactionCount: 0,
+            rejectedClaimCount: 0,
+            ungroundedCount: 0,
+          },
+          transcript: [
+            {
+              id: 'segment-final',
+              speaker: 'Konuşmacı',
+              startedAtMs: 0,
+              status: 'final',
+              text: 'Doğrulanan final segment.',
+            },
+          ],
+          summary: {
+            text: 'Doğrulanmış özet.',
+            confidence: 0.95,
+            kind: 'ai-summary',
+            citations: [
+              {
+                segmentId: 'segment-final',
+                quote: 'Doğrulanan final segment.',
+                confidence: 'high',
+              },
+            ],
+          },
+        })}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Canonical sonuç hazır');
+    expect(screen.getByLabelText('Canonical sonuç kaydı')).toHaveTextContent(
+      'Kalıcı canonical sonuç',
+    );
+    expect(screen.getByRole('link', { name: /00:00 · Konuşmacı/i })).toHaveAttribute(
+      'href',
+      '#segment-segment-final',
+    );
+  });
+
+  it('keeps primary regions and disabled actions accessible at a 375px viewport', async () => {
+    const previousWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+    window.dispatchEvent(new Event('resize'));
+
+    render(<MeetingApp loadWorkbench={loadDemo} />);
+
+    expect(await screen.findByRole('heading', { name: 'Meeting Intelligence' })).toBeVisible();
+    expect(screen.getByLabelText('Toplantılar')).toBeVisible();
+    expect(screen.getByLabelText('Seçili toplantı')).toBeVisible();
+    const actions = screen.getByLabelText('Toplantı aksiyonları');
+    expect(within(actions).getAllByRole('button')).toHaveLength(3);
+    within(actions)
+      .getAllByRole('button')
+      .forEach((button) => expect(button).toBeDisabled());
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: previousWidth });
+    window.dispatchEvent(new Event('resize'));
   });
 });

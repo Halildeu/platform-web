@@ -26,8 +26,43 @@ export interface SourcedOutput {
   kind?: 'ai-summary' | 'canonical-description' | 'pending';
 }
 
+export type MeetingIntelligenceState =
+  | 'pending'
+  | 'ready'
+  | 'failed'
+  | 'retryable'
+  | 'revoked'
+  | 'deleted'
+  | 'retention-blocked'
+  | 'denied';
+
+export interface MeetingIntelligenceMeta {
+  state: MeetingIntelligenceState;
+  analysisRunId?: string;
+  generatedAt?: string;
+  schemaVersion?: string;
+  model?: string;
+  persisted: boolean;
+  storageMode?: string;
+  redacted: boolean;
+  redactionCount: number;
+  rejectedClaimCount: number;
+  ungroundedCount: number;
+}
+
 export interface MeetingDetailStatus {
-  state: 'idle' | 'loading' | 'ready' | 'partial' | 'unauthorized' | 'error';
+  state:
+    | 'idle'
+    | 'loading'
+    | 'pending'
+    | 'ready'
+    | 'partial'
+    | 'failed'
+    | 'retryable'
+    | 'revoked'
+    | 'deleted'
+    | 'retention-blocked'
+    | 'denied';
   label: string;
   detail: string;
 }
@@ -81,6 +116,7 @@ export interface MeetingRecord {
   language: string;
   source: 'desktop' | 'web' | 'calendar';
   detail?: MeetingDetailStatus;
+  intelligence?: MeetingIntelligenceMeta;
   transcriptFeed: TranscriptFeed;
   transcript: TranscriptSegment[];
   summary: SourcedOutput;
@@ -503,7 +539,11 @@ export function getMeetingOutputCounts(meeting: MeetingRecord): {
   const outputs = [meeting.summary, ...meeting.decisions, ...meeting.actions];
   return outputs.reduce(
     (acc, output) => {
-      const hasCitation = output.citations.length > 0;
+      const hasCitation = output.citations.some((citation) =>
+        meeting.transcript.some(
+          (segment) => segment.id === citation.segmentId && segment.status === 'final',
+        ),
+      );
       return {
         total: acc.total + 1,
         sourced: acc.sourced + (hasCitation ? 1 : 0),
@@ -576,5 +616,6 @@ export function findSelectedMeeting(
   records: MeetingRecord[],
   selectedId: string,
 ): MeetingRecord | null {
-  return records.find((meeting) => meeting.id === selectedId) ?? records[0] ?? null;
+  if (!selectedId) return null;
+  return records.find((meeting) => meeting.id === selectedId) ?? null;
 }
