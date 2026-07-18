@@ -154,9 +154,34 @@ export type CandidateStatusDto = {
   version: number;
   createdAt: string;
   updatedAt: string;
+  nextAction: 'WAIT_FOR_REVIEW' | 'PREPARE_FOR_INTERVIEW' | 'NONE';
+  withdrawalAllowed: boolean;
+  history: Array<{
+    status: ApplicationStatus;
+    occurredAt: string;
+  }>;
 };
 
-export type ApplicationStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'INTERVIEW_PENDING';
+export type ApplicationStatus =
+  | 'SUBMITTED'
+  | 'UNDER_REVIEW'
+  | 'INTERVIEW_PENDING'
+  | 'REJECTED'
+  | 'WITHDRAWN';
+
+export type RecruiterApplicationSummaryDto = {
+  publicRef: string;
+  jobSlug: string;
+  jobTitle: string;
+  fullName: string;
+  email: string;
+  city: string;
+  skills: string[];
+  status: ApplicationStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type RecruiterApplicationDto = {
   publicRef: string;
@@ -179,8 +204,53 @@ export type RecruiterApplicationDto = {
   updatedAt: string;
 };
 
+export type RecruiterApplicationHistoryEventDto = {
+  eventId: number;
+  fromStatus: ApplicationStatus | null;
+  toStatus: ApplicationStatus;
+  actorRef: string;
+  occurredAt: string;
+};
+
+export type RecruiterEvaluationRecommendation = 'ADVANCE' | 'HOLD' | 'NO_HIRE';
+
+export type RecruiterEvaluationCriterionDto = {
+  key: string;
+  label: string;
+  rating: number;
+  evidence: string;
+};
+
+export type RecruiterApplicationEvaluationDto = {
+  evaluationId: string;
+  actorRef: string;
+  policyVersion: 'structured-evaluation-v1';
+  jobRelatednessConfirmed: boolean;
+  recommendation: RecruiterEvaluationRecommendation;
+  criteria: RecruiterEvaluationCriterionDto[];
+  summary: string;
+  predecessorEvaluationId: string | null;
+  revision: number;
+  createdAt: string;
+};
+
+export type RecruiterApplicationEvaluationRequest = {
+  policyVersion: 'structured-evaluation-v1';
+  jobRelatednessConfirmed: true;
+  recommendation: RecruiterEvaluationRecommendation;
+  criteria: RecruiterEvaluationCriterionDto[];
+  summary: string;
+  predecessorEvaluationId?: string;
+};
+
+export type RecruiterApplicationDetailDto = {
+  application: RecruiterApplicationDto;
+  history: RecruiterApplicationHistoryEventDto[];
+  evaluations: RecruiterApplicationEvaluationDto[];
+};
+
 export type RecruiterApplicationPageDto = {
-  items: RecruiterApplicationDto[];
+  items: RecruiterApplicationSummaryDto[];
   page: number;
   size: number;
   total: number;
@@ -472,6 +542,27 @@ export const getCandidateStatus = async ({
   return safeJson<CandidateStatusDto>(response);
 };
 
+export const withdrawCandidateApplication = async ({
+  publicRef,
+  candidateAccessToken,
+}: CandidateSession): Promise<CandidateStatusDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !CANDIDATE_ACCESS_PATTERN.test(candidateAccessToken)) {
+    throw new Error('Başvuru takip oturumu geçersiz.');
+  }
+  const response = await fetch(
+    `${ATS_API_BASE}/candidate/applications/${encodeURIComponent(publicRef)}/withdraw`,
+    {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'X-ATS-Candidate-Access': candidateAccessToken,
+      },
+      credentials: 'same-origin',
+    },
+  );
+  return safeJson<CandidateStatusDto>(response);
+};
+
 export const saveCandidateSession = (receipt: ApplicationReceiptDto): boolean => {
   if (
     typeof window === 'undefined' ||
@@ -525,14 +616,41 @@ export const listRecruiterApplications = async (params?: {
   return response.data;
 };
 
+export const getRecruiterApplication = async (
+  publicRef: string,
+): Promise<RecruiterApplicationDetailDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef)) throw new Error('Başvuru referansı geçersiz.');
+  const response = await api.get<RecruiterApplicationDetailDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}`,
+  );
+  return response.data;
+};
+
 export const updateRecruiterApplicationStatus = async (
   publicRef: string,
   expectedVersion: number,
-  toStatus: Exclude<ApplicationStatus, 'SUBMITTED'>,
+  toStatus: 'UNDER_REVIEW' | 'INTERVIEW_PENDING' | 'REJECTED',
 ): Promise<RecruiterApplicationDto> => {
   const response = await api.put<RecruiterApplicationDto>(
     `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/status`,
     { expectedVersion, toStatus },
+  );
+  return response.data;
+};
+
+export const submitRecruiterApplicationEvaluation = async (
+  publicRef: string,
+  evaluation: RecruiterApplicationEvaluationRequest,
+  idempotencyKey: string,
+): Promise<RecruiterApplicationEvaluationDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef)) throw new Error('Başvuru referansı geçersiz.');
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.post<RecruiterApplicationEvaluationDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/evaluations`,
+    evaluation,
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
   );
   return response.data;
 };

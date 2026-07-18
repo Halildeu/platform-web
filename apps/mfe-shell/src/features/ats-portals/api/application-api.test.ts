@@ -11,6 +11,7 @@ import {
   getCandidateStatus,
   createCandidateAccessToken,
   createRecruiterJob,
+  getRecruiterApplication,
   getPublicJob,
   getResumeImport,
   listPublicJobs,
@@ -20,12 +21,16 @@ import {
   saveCandidateSession,
   replaceResumePdf,
   submitApplication,
+  submitRecruiterApplicationEvaluation,
   terminateResumeImport,
   transitionRecruiterJob,
   updateRecruiterJob,
   updateRecruiterApplicationStatus,
   updateResumeProposal,
   uploadResumePdf,
+  withdrawCandidateApplication,
+  type RecruiterJobDraftDto,
+  type RecruiterJobDto,
   type ResumeImportDto,
 } from './application-api';
 
@@ -236,6 +241,25 @@ describe('application-api', () => {
     expect(fetchMock.mock.calls[0][0]).not.toContain('A'.repeat(43));
   });
 
+  it('withdraws through the candidate header credential without URL or body leakage', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'WITHDRAWN', history: [] }));
+
+    await withdrawCandidateApplication({
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'A'.repeat(43),
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/ats/v1/candidate/applications/app_abcdefghijklmnopqrstuvwx/withdraw',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({ 'X-ATS-Candidate-Access': 'A'.repeat(43) }),
+      }),
+    );
+    expect(fetchMock.mock.calls[0][0]).not.toContain('A'.repeat(43));
+    expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('body');
+  });
+
   it('uses a versioned candidate-only PDF lifecycle without putting credentials or filenames in URLs', async () => {
     const token = 'R'.repeat(43);
     const resumeImport: ResumeImportDto = {
@@ -344,15 +368,44 @@ describe('application-api', () => {
     await expect(
       getCandidateStatus({ publicRef: 'bad-ref', candidateAccessToken: 'bad-token' }),
     ).rejects.toThrow('Başvuru takip oturumu geçersiz');
+    await expect(
+      withdrawCandidateApplication({ publicRef: 'bad-ref', candidateAccessToken: 'bad-token' }),
+    ).rejects.toThrow('Başvuru takip oturumu geçersiz');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('uses the authenticated shared HTTP client for tenant-bound recruiter operations', async () => {
     httpMocks.get.mockResolvedValueOnce({ data: { items: [], page: 0, size: 50, total: 0 } });
+    httpMocks.get.mockResolvedValueOnce({
+      data: { application: {}, history: [], evaluations: [] },
+    });
     httpMocks.put.mockResolvedValueOnce({ data: { status: 'UNDER_REVIEW' } });
+    httpMocks.post.mockResolvedValueOnce({
+      data: { evaluationId: 'eval_abcdefghijklmnopqrstuvwx' },
+    });
 
     await listRecruiterApplications({ status: 'SUBMITTED' });
+    await getRecruiterApplication('app_abcdefghijklmnopqrstuvwx');
     await updateRecruiterApplicationStatus('app_abcdefghijklmnopqrstuvwx', 0, 'UNDER_REVIEW');
+    const evaluation = {
+      policyVersion: 'structured-evaluation-v1' as const,
+      jobRelatednessConfirmed: true as const,
+      recommendation: 'ADVANCE' as const,
+      criteria: [
+        {
+          key: 'role_requirements',
+          label: 'Rol gereklilikleri',
+          rating: 3,
+          evidence: 'Sentetik işle ilgili somut kanıt.',
+        },
+      ],
+      summary: 'Sentetik insan değerlendirmesi gerekçesi.',
+    };
+    await submitRecruiterApplicationEvaluation(
+      'app_abcdefghijklmnopqrstuvwx',
+      evaluation,
+      'web-evaluation-1234',
+    );
 
     expect(httpMocks.get).toHaveBeenCalledWith(
       '/ats/v1/recruiter/applications?page=0&size=50&status=SUBMITTED',
@@ -361,10 +414,37 @@ describe('application-api', () => {
       '/ats/v1/recruiter/applications/app_abcdefghijklmnopqrstuvwx/status',
       { expectedVersion: 0, toStatus: 'UNDER_REVIEW' },
     );
+    expect(httpMocks.get).toHaveBeenNthCalledWith(
+      2,
+      '/ats/v1/recruiter/applications/app_abcdefghijklmnopqrstuvwx',
+    );
+    expect(httpMocks.post).toHaveBeenCalledWith(
+      '/ats/v1/recruiter/applications/app_abcdefghijklmnopqrstuvwx/evaluations',
+      evaluation,
+      { headers: { 'X-ATS-Idempotency-Key': 'web-evaluation-1234' } },
+    );
+  });
+
+  it('rejects malformed recruiter refs and evaluation keys before network access', async () => {
+    await expect(getRecruiterApplication('app_bad')).rejects.toThrow('Başvuru referansı geçersiz');
+    await expect(
+      submitRecruiterApplicationEvaluation(
+        'app_abcdefghijklmnopqrstuvwx',
+        {
+          policyVersion: 'structured-evaluation-v1',
+          jobRelatednessConfirmed: true,
+          recommendation: 'HOLD',
+          criteria: [],
+          summary: 'Sentetik gerekçe',
+        },
+        'short',
+      ),
+    ).rejects.toThrow('Güvenli işlem anahtarı geçersiz');
+    expect(httpMocks.post).not.toHaveBeenCalled();
   });
 
   it('uses versioned idempotent mutations for recruiter job lifecycle', async () => {
-    const job = {
+    const job: RecruiterJobDto = {
       jobId: `job_${'A'.repeat(24)}`,
       publicHandle: 'acik',
       slug: 'urun-yoneticisi',
@@ -375,13 +455,15 @@ describe('application-api', () => {
       employmentType: 'Tam zamanlı',
       summary: 'Kullanıcı ihtiyaçlarını ölçülebilir sonuçlara dönüştürün.',
       highlights: ['Ürün keşfi'],
+      applicationFields: ['fullName', 'email'],
+      noticeVersion: 'kvkk-application-v1' as const,
       status: 'DRAFT' as const,
       applyEnabled: false,
       version: 0,
       createdAt: '2026-07-17T10:00:00Z',
       updatedAt: '2026-07-17T10:00:00Z',
     };
-    const draft = {
+    const draft: RecruiterJobDraftDto & { slug: string } = {
       slug: job.slug,
       title: job.title,
       team: job.team,
@@ -390,6 +472,8 @@ describe('application-api', () => {
       employmentType: job.employmentType,
       summary: job.summary,
       highlights: job.highlights,
+      applicationFields: [...job.applicationFields],
+      noticeVersion: job.noticeVersion,
     };
     httpMocks.get.mockResolvedValueOnce({ data: [job] });
     httpMocks.post.mockResolvedValue({ data: job });
