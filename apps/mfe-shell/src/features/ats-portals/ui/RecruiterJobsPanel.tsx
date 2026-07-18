@@ -97,7 +97,7 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
-  const retryKeys = useRef(new Map<string, string>());
+  const retryKeys = useRef(new Map<string, { key: string; payloadFingerprint: string }>());
   const previewDialogRef = useRef<HTMLDivElement>(null);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -159,11 +159,12 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
     void load();
   }, [load]);
 
-  const mutationKey = (operation: string) => {
+  const mutationKey = (operation: string, payload: unknown) => {
+    const payloadFingerprint = JSON.stringify(payload);
     const existing = retryKeys.current.get(operation);
-    if (existing) return existing;
+    if (existing?.payloadFingerprint === payloadFingerprint) return existing.key;
     const created = createApplicationIdempotencyKey();
-    retryKeys.current.set(operation, created);
+    retryKeys.current.set(operation, { key: created, payloadFingerprint });
     return created;
   };
 
@@ -193,13 +194,12 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
     const operation = editing ? `update:${editing.jobId}:${editing.version}` : 'create';
     try {
       const payload = payloadFromForm(form);
+      const updatePayload = editing
+        ? { ...payload, slug: payload.slug ?? editing.slug }
+        : undefined;
       const saved = editing
-        ? await updateRecruiterJob(
-            editing,
-            { ...payload, slug: payload.slug ?? editing.slug },
-            mutationKey(operation),
-          )
-        : await createRecruiterJob(payload, mutationKey(operation));
+        ? await updateRecruiterJob(editing, updatePayload!, mutationKey(operation, updatePayload))
+        : await createRecruiterJob(payload, mutationKey(operation, payload));
       retryKeys.current.delete(operation);
       setJobs((current) =>
         editing
@@ -242,7 +242,12 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
     setActionError('');
     setSuccess('');
     try {
-      const updated = await transitionRecruiterJob(job, targetStatus, mutationKey(operation));
+      const transitionPayload = { expectedVersion: job.version, targetStatus };
+      const updated = await transitionRecruiterJob(
+        job,
+        targetStatus,
+        mutationKey(operation, transitionPayload),
+      );
       retryKeys.current.delete(operation);
       setJobs((current) => current.map((item) => (item.jobId === updated.jobId ? updated : item)));
       setSuccess(

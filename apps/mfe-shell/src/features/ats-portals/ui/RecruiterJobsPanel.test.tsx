@@ -50,6 +50,7 @@ const JOB = {
 
 describe('RecruiterJobsPanel', () => {
   beforeEach(() => {
+    apiMocks.createApplicationIdempotencyKey.mockReset().mockReturnValue('web-job-command-1234');
     apiMocks.listRecruiterJobs.mockResolvedValue([]);
     apiMocks.createRecruiterJob.mockResolvedValue(JOB);
     apiMocks.updateRecruiterJob.mockResolvedValue({ ...JOB, version: 1 });
@@ -167,6 +168,56 @@ describe('RecruiterJobsPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('başka bir işlemde güncellendi');
     expect(screen.queryByRole('form', { name: 'İlanı düzenle' })).not.toBeInTheDocument();
     expect(screen.getByText('Güncel Ürün Yöneticisi')).toBeVisible();
+  });
+
+  it('rotates an update key when the recruiter changes the failed request payload', async () => {
+    apiMocks.createApplicationIdempotencyKey
+      .mockReturnValueOnce('web-job-update-first')
+      .mockReturnValueOnce('web-job-update-second');
+    apiMocks.listRecruiterJobs.mockResolvedValue([JOB]);
+    apiMocks.updateRecruiterJob
+      .mockRejectedValueOnce(new Error('yanıt alınamadı'))
+      .mockResolvedValueOnce({ ...JOB, title: 'İkinci Değişiklik', version: 1 });
+
+    render(<RecruiterJobsPanel canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
+    fireEvent.change(screen.getByLabelText('İlan başlığı'), {
+      target: { value: 'İlk Değişiklik' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('yanıt alınamadı');
+
+    fireEvent.change(screen.getByLabelText('İlan başlığı'), {
+      target: { value: 'İkinci Değişiklik' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+
+    await waitFor(() => expect(apiMocks.updateRecruiterJob).toHaveBeenCalledTimes(2));
+    expect(apiMocks.updateRecruiterJob.mock.calls[0]?.[2]).toBe('web-job-update-first');
+    expect(apiMocks.updateRecruiterJob.mock.calls[1]?.[2]).toBe('web-job-update-second');
+  });
+
+  it('reuses an update key when the recruiter retries the exact failed payload', async () => {
+    apiMocks.createApplicationIdempotencyKey.mockReturnValue('web-job-update-retry');
+    apiMocks.listRecruiterJobs.mockResolvedValue([JOB]);
+    apiMocks.updateRecruiterJob
+      .mockRejectedValueOnce(new Error('yanıt alınamadı'))
+      .mockResolvedValueOnce({ ...JOB, title: 'Aynı Değişiklik', version: 1 });
+
+    render(<RecruiterJobsPanel canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
+    fireEvent.change(screen.getByLabelText('İlan başlığı'), {
+      target: { value: 'Aynı Değişiklik' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('yanıt alınamadı');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+
+    await waitFor(() => expect(apiMocks.updateRecruiterJob).toHaveBeenCalledTimes(2));
+    expect(apiMocks.updateRecruiterJob.mock.calls[0]?.[2]).toBe('web-job-update-retry');
+    expect(apiMocks.updateRecruiterJob.mock.calls[1]?.[2]).toBe('web-job-update-retry');
+    expect(apiMocks.createApplicationIdempotencyKey).toHaveBeenCalledTimes(1);
   });
 
   it('publishes a draft with expected version and exposes the public link', async () => {
