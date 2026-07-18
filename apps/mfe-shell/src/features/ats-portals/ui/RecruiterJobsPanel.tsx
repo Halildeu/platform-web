@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Badge } from '@mfe/design-system/primitives';
 import {
   createApplicationIdempotencyKey,
@@ -97,26 +98,51 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
   const [saving, setSaving] = useState(false);
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
   const retryKeys = useRef(new Map<string, string>());
+  const panelRef = useRef<HTMLElement>(null);
+  const previewDialogRef = useRef<HTMLDivElement>(null);
+  const previewTriggerRef = useRef<HTMLElement | null>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  const closePreview = useCallback(() => {
+    setPreviewing(null);
+    window.setTimeout(() => previewTriggerRef.current?.focus(), 0);
+  }, []);
 
   useEffect(() => {
     if (!previewing) return undefined;
     previewHeadingRef.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreviewing(null);
+      if (event.key === 'Escape') closePreview();
     };
+    const background = panelRef.current?.parentElement;
+    const previousAriaHidden = background?.getAttribute('aria-hidden');
+    const previousInert = background?.inert ?? false;
+    if (background) {
+      background.inert = true;
+      background.setAttribute('aria-hidden', 'true');
+    }
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [previewing]);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      if (background) {
+        background.inert = previousInert;
+        if (previousAriaHidden === null) background.removeAttribute('aria-hidden');
+        else background.setAttribute('aria-hidden', previousAriaHidden);
+      }
+    };
+  }, [closePreview, previewing]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setJobs(await listRecruiterJobs());
+      const loaded = await listRecruiterJobs();
+      setJobs(loaded);
+      return loaded;
     } catch (loadError) {
       setJobs([]);
       setError(loadError instanceof Error ? loadError.message : 'İlanlar yüklenemedi.');
+      return [];
     } finally {
       setLoading(false);
     }
@@ -135,6 +161,7 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
   };
 
   const openCreate = () => {
+    retryKeys.current.delete('create');
     setEditing(null);
     setForm(EMPTY_FORM);
     setFormOpen(true);
@@ -185,7 +212,17 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
           ? saveError.message
           : 'İlan kaydedilemedi; değişiklik yapılmadı.',
       );
-      await load();
+      const refreshed = await load();
+      if (editing) {
+        const freshJob = refreshed.find((job) => job.jobId === editing.jobId);
+        if (freshJob && freshJob.version !== editing.version) {
+          setFormOpen(false);
+          setEditing(null);
+          setActionError(
+            `“${freshJob.title}” başka bir işlemde güncellendi. Güncel ilanı yeniden açıp değişikliklerinizi tekrar uygulayın.`,
+          );
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -214,8 +251,37 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
     }
   };
 
+  const openPreview = (job: RecruiterJobDto, trigger: HTMLButtonElement) => {
+    previewTriggerRef.current = trigger;
+    setPreviewing(job);
+  };
+
+  const trapPreviewFocus: React.KeyboardEventHandler<HTMLDivElement> = (event) => {
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      previewDialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+    if (focusable.length === 0) {
+      event.preventDefault();
+      previewHeadingRef.current?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <section
+      ref={panelRef}
       id="recruiter-jobs"
       className="scroll-mt-24 rounded-3xl border border-border-subtle bg-surface-default p-4 shadow-xs sm:p-6"
       aria-labelledby="recruiter-jobs-heading"
@@ -448,72 +514,78 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
         </form>
       ) : null}
 
-      {previewing ? (
-        <div
-          className="fixed inset-0 z-[1700] flex items-start justify-center overflow-y-auto bg-black/60 p-3 sm:p-8"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="recruiter-job-preview-heading"
-          data-testid="recruiter-job-preview"
-        >
-          <article className="my-auto w-full max-w-4xl overflow-hidden rounded-3xl bg-surface-default shadow-2xl">
-            <div className="bg-text-primary px-5 py-7 text-white sm:px-8 sm:py-9">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold text-white/75">{previewing.team}</p>
-                  <h2
-                    ref={previewHeadingRef}
-                    id="recruiter-job-preview-heading"
-                    tabIndex={-1}
-                    className="mt-2 text-2xl font-bold outline-none sm:text-4xl"
-                  >
-                    {previewing.title}
-                  </h2>
-                  <p className="mt-4 text-sm text-white/80">
-                    {previewing.location} · {previewing.mode} · {previewing.employmentType}
-                  </p>
+      {previewing
+        ? createPortal(
+            <div
+              ref={previewDialogRef}
+              className="fixed inset-0 z-[1700] flex items-start justify-center overflow-y-auto bg-black/60 p-3 sm:p-8"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="recruiter-job-preview-heading"
+              data-testid="recruiter-job-preview"
+              onKeyDown={trapPreviewFocus}
+            >
+              <article className="my-auto w-full max-w-4xl overflow-hidden rounded-3xl bg-surface-default shadow-2xl">
+                <div className="bg-text-primary px-5 py-7 text-white sm:px-8 sm:py-9">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-bold text-white/75">{previewing.team}</p>
+                      <h2
+                        ref={previewHeadingRef}
+                        id="recruiter-job-preview-heading"
+                        tabIndex={-1}
+                        className="mt-2 text-2xl font-bold outline-none sm:text-4xl"
+                      >
+                        {previewing.title}
+                      </h2>
+                      <p className="mt-4 text-sm text-white/80">
+                        {previewing.location} · {previewing.mode} · {previewing.employmentType}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closePreview}
+                      className="min-h-11 rounded-xl border border-white/30 px-4 py-2 text-sm font-bold text-white"
+                    >
+                      Önizlemeyi kapat
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setPreviewing(null)}
-                  className="min-h-11 rounded-xl border border-white/30 px-4 py-2 text-sm font-bold text-white"
-                >
-                  Önizlemeyi kapat
-                </button>
-              </div>
-            </div>
-            <div className="grid gap-7 p-5 sm:p-8 lg:grid-cols-[minmax(0,1fr)_260px]">
-              <div>
-                <h3 className="text-lg font-bold">Pozisyon hakkında</h3>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-text-secondary">
-                  {previewing.summary}
-                </p>
-                {previewing.highlights.length ? (
-                  <ul className="mt-5 list-disc space-y-2 pl-5 text-sm text-text-secondary">
-                    {previewing.highlights.map((highlight) => (
-                      <li key={highlight}>{highlight}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-              <aside className="h-fit rounded-2xl border border-border-subtle bg-surface-muted p-4">
-                <p className="font-bold">Aday başvuru formu</p>
-                <p className="mt-2 text-xs leading-5 text-text-secondary">
-                  {previewing.applicationFields.length} alan · aydınlatma {previewing.noticeVersion}
-                </p>
-                <p className="mt-4 rounded-xl bg-surface-default p-3 text-xs text-text-secondary">
-                  Bu önizleme public yayına çıkmaz; aday yalnız ilan yayınlandıktan sonra
-                  başvurabilir.
-                </p>
-              </aside>
-            </div>
-          </article>
-        </div>
-      ) : null}
+                <div className="grid gap-7 p-5 sm:p-8 lg:grid-cols-[minmax(0,1fr)_260px]">
+                  <div>
+                    <h3 className="text-lg font-bold">Pozisyon hakkında</h3>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-text-secondary">
+                      {previewing.summary}
+                    </p>
+                    {previewing.highlights.length ? (
+                      <ul className="mt-5 list-disc space-y-2 pl-5 text-sm text-text-secondary">
+                        {previewing.highlights.map((highlight) => (
+                          <li key={highlight}>{highlight}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  <aside className="h-fit rounded-2xl border border-border-subtle bg-surface-muted p-4">
+                    <p className="font-bold">Aday başvuru formu</p>
+                    <p className="mt-2 text-xs leading-5 text-text-secondary">
+                      {previewing.applicationFields.length} alan · aydınlatma{' '}
+                      {previewing.noticeVersion}
+                    </p>
+                    <p className="mt-4 rounded-xl bg-surface-default p-3 text-xs text-text-secondary">
+                      Bu önizleme public yayına çıkmaz; aday yalnız ilan yayınlandıktan sonra
+                      başvurabilir.
+                    </p>
+                  </aside>
+                </div>
+              </article>
+            </div>,
+            document.body,
+          )
+        : null}
 
-      <div className="mt-6" aria-live="polite">
+      <div className="mt-6">
         {loading ? (
-          <p className="rounded-2xl bg-surface-muted p-5 text-sm text-text-secondary">
+          <p className="rounded-2xl bg-surface-muted p-5 text-sm text-text-secondary" role="status">
             İlanlar yükleniyor…
           </p>
         ) : null}
@@ -562,7 +634,10 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
                   Son değişiklik: {formatDate(job.updatedAt)}
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2">
-                  <ActionButton label="Önizle" onClick={() => setPreviewing(job)} />
+                  <ActionButton
+                    label="Önizle"
+                    onClick={(event) => openPreview(job, event.currentTarget)}
+                  />
                   {canManage && job.status !== 'CLOSED' && job.status !== 'ARCHIVED' ? (
                     <ActionButton label="Düzenle" onClick={() => openEdit(job)} />
                   ) : null}
@@ -642,7 +717,7 @@ const ActionButton = ({
   disabled = false,
 }: {
   label: string;
-  onClick: () => void;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
   primary?: boolean;
   disabled?: boolean;
 }) => (

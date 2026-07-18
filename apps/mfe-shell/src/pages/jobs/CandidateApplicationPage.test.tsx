@@ -135,12 +135,14 @@ describe('CandidateApplicationPage', () => {
     expect(apiMocks.saveCandidateSession).not.toHaveBeenCalled();
   });
 
-  it('keeps selected PDF bytes local while form fields can still be submitted', async () => {
+  it('states at the selection point that PDF bytes stay local and are not submitted', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
     const pdf = new File(['synthetic-pdf'], 'ornek-cv.pdf', { type: 'application/pdf' });
     fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
-    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent('dosya adı tutulmaz');
+    expect(screen.getByTestId('candidate-resume-meta')).toHaveTextContent(
+      'içeriği okunmaz, kaydedilmez veya başvuruyla gönderilmez',
+    );
     expect(screen.getByTestId('candidate-resume-meta')).not.toHaveTextContent('ornek-cv.pdf');
     expect(apiMocks.submitApplication).not.toHaveBeenCalled();
   });

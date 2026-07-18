@@ -103,7 +103,8 @@ describe('RecruiterJobsPanel', () => {
     apiMocks.listRecruiterJobs.mockResolvedValue([JOB]);
     render(<RecruiterJobsPanel canManage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Önizle' }));
+    const previewTrigger = await screen.findByRole('button', { name: 'Önizle' });
+    fireEvent.click(previewTrigger);
 
     const preview = screen.getByTestId('recruiter-job-preview');
     expect(preview).toBeVisible();
@@ -112,6 +113,56 @@ describe('RecruiterJobsPanel', () => {
     expect(screen.queryByRole('link', { name: 'Public ilanı aç' })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByTestId('recruiter-job-preview')).not.toBeInTheDocument();
+    await waitFor(() => expect(previewTrigger).toHaveFocus());
+  });
+
+  it('rotates the create idempotency key when the recruiter starts a distinct draft', async () => {
+    apiMocks.createApplicationIdempotencyKey
+      .mockReturnValueOnce('web-job-command-first')
+      .mockReturnValueOnce('web-job-command-second');
+    apiMocks.createRecruiterJob
+      .mockRejectedValueOnce(new Error('yanıt alınamadı'))
+      .mockResolvedValueOnce(JOB);
+
+    render(<RecruiterJobsPanel canManage />);
+    await screen.findByText('Henüz ilanınız yok.');
+
+    const fillAndSubmit = (title: string) => {
+      fireEvent.change(screen.getByLabelText('İlan başlığı'), { target: { value: title } });
+      fireEvent.change(screen.getByLabelText('Ekip'), { target: { value: 'Ürün' } });
+      fireEvent.change(screen.getByLabelText('Konum'), { target: { value: 'İstanbul' } });
+      fireEvent.change(screen.getByLabelText('İlan özeti'), { target: { value: JOB.summary } });
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+    };
+
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+    fillAndSubmit('İlk İlan');
+    expect(await screen.findByRole('alert')).toHaveTextContent('yanıt alınamadı');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Formu kapat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+    fillAndSubmit('İkinci İlan');
+
+    await waitFor(() => expect(apiMocks.createRecruiterJob).toHaveBeenCalledTimes(2));
+    expect(apiMocks.createRecruiterJob.mock.calls[0]?.[1]).toBe('web-job-command-first');
+    expect(apiMocks.createRecruiterJob.mock.calls[1]?.[1]).toBe('web-job-command-second');
+  });
+
+  it('closes a stale editor after a version conflict refresh', async () => {
+    const fresh = { ...JOB, version: 1, title: 'Güncel Ürün Yöneticisi' };
+    apiMocks.listRecruiterJobs.mockResolvedValueOnce([JOB]).mockResolvedValueOnce([fresh]);
+    apiMocks.updateRecruiterJob.mockRejectedValueOnce(new Error('409 sürüm çakışması'));
+
+    render(<RecruiterJobsPanel canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
+    fireEvent.change(screen.getByLabelText('İlan başlığı'), {
+      target: { value: 'Benim Değişikliğim' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('başka bir işlemde güncellendi');
+    expect(screen.queryByRole('form', { name: 'İlanı düzenle' })).not.toBeInTheDocument();
+    expect(screen.getByText('Güncel Ürün Yöneticisi')).toBeVisible();
   });
 
   it('publishes a draft with expected version and exposes the public link', async () => {

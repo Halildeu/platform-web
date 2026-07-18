@@ -525,8 +525,8 @@ const CandidateApplicationPage = () => {
                         data-testid="candidate-resume-meta"
                         className="font-medium text-state-success-text"
                       >
-                        PDF seçildi · {formatBytes(fileMeta.size)} · dosya adı tutulmaz · yalnız bu
-                        cihazda
+                        PDF yalnız yerel kontrol için seçildi · {formatBytes(fileMeta.size)} ·
+                        içeriği okunmaz, kaydedilmez veya başvuruyla gönderilmez
                       </span>
                       <button
                         type="button"
@@ -694,7 +694,7 @@ const CandidateApplicationPage = () => {
                   </dt>
                   <dd className="text-sm text-text-primary">
                     {fileMeta
-                      ? `PDF seçildi · ${formatBytes(fileMeta.size)} · dosya adı tutulmaz`
+                      ? `PDF yalnız yerel kontrol için seçildi · ${formatBytes(fileMeta.size)} · içerik başvuruyla gönderilmez`
                       : 'Eklenmedi'}
                   </dd>
                 </div>
@@ -805,6 +805,12 @@ const CandidateApplicationPage = () => {
                 {values.fullName} için başvuru güvenli servise kaydedildi. İK çalışma alanında
                 görünür ve durum değişikliklerini Aday Alanım’dan takip edebilirsiniz.
               </p>
+              {fileMeta ? (
+                <p className="mx-auto mt-3 max-w-xl rounded-xl border border-state-info-border bg-state-info-bg px-4 py-3 text-sm leading-6 text-text-primary">
+                  Seçtiğiniz PDF’nin içeriği bu başvuruya eklenmedi; yalnız kontrol edip
+                  onayladığınız form alanları kaydedildi.
+                </p>
+              ) : null}
               <div className="mx-auto mt-5 max-w-md rounded-xl border border-border-subtle bg-surface-subtle p-4">
                 <span className="block text-xs font-semibold text-text-secondary">
                   Başvuru referansı
@@ -848,7 +854,7 @@ const CandidateApplicationPage = () => {
           <section className={sectionClassName}>
             <h2 className="text-base font-bold">Başvurunuz sizde</h2>
             <ul className="mt-4 flex flex-col gap-3 text-sm leading-5 text-text-secondary">
-              <li>• CV önerilerini değiştirebilirsiniz.</li>
+              <li>• Formdaki bütün özgeçmiş alanlarını değiştirebilirsiniz.</li>
               <li>• Gönder düğmesinden önce hiçbir şey kaydedilmez.</li>
               <li>• Testte gerçek kişisel veri kullanmayın.</li>
               <li>• Oturum açmanız gerekmez.</li>
