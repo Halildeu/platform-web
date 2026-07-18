@@ -84,6 +84,26 @@ describe('application-api', () => {
     );
   });
 
+  it('rejects path-shaped public job slugs before making a network request', async () => {
+    await expect(getPublicJob('..')).rejects.toThrow('İlan adresi geçersiz');
+    await expect(
+      submitApplication('../applications', 'web-idempotency-123456', 'A'.repeat(43), {
+        fullName: 'Deniz Sentetik',
+        email: 'deniz@example.test',
+        phone: '+905550000000',
+        city: 'İstanbul',
+        summary: 'Sentetik özet',
+        experience: 'Sentetik deneyim',
+        education: 'Sentetik eğitim',
+        skills: ['Ürün'],
+        noticeVersion: 'kvkk-application-v1',
+        noticeAcceptedAt: '2026-07-16T10:00:00Z',
+        accuracyConfirmedAt: '2026-07-16T10:00:00Z',
+      }),
+    ).rejects.toThrow('İlan adresi geçersiz');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('submits strict JSON with an idempotency key and no caller tenant or status', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -113,14 +133,14 @@ describe('application-api', () => {
     };
 
     await submitApplication(
-      'ürün yöneticisi',
+      'urun-yoneticisi',
       'web-idempotency-123456',
       'A'.repeat(43),
       submission,
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/ats/v1/jobs/%C3%BCr%C3%BCn%20y%C3%B6neticisi/applications',
+      '/api/ats/v1/jobs/urun-yoneticisi/applications',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({

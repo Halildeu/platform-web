@@ -153,4 +153,16 @@ describe('RecruiterWorkspacePage', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Yeni ilan oluştur' })).not.toBeInTheDocument();
   });
+
+  it('honors explicit ATS action grants without module MANAGE access', async () => {
+    permissionMocks.getModuleLevel.mockReturnValue('VIEW');
+    permissionMocks.isActionAllowed.mockImplementation(
+      (action) => action === 'ATS_JOB_MANAGE' || action === 'ATS_APPLICATION_MANAGE',
+    );
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Yeni ilan oluştur' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu incele' }));
+    expect(screen.getByRole('button', { name: 'İnsan incelemesini başlat' })).toBeVisible();
+  });
 });

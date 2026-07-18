@@ -7,6 +7,7 @@ const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/u;
 const PUBLIC_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,7}$/u;
+const PUBLIC_JOB_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,15}$/u;
 
 export type ApplicationFieldKey =
   | 'fullName'
@@ -177,20 +178,29 @@ const publicJobsPath = (publicHandle?: string): string => {
   return `${ATS_API_BASE}/careers/${encodeURIComponent(publicHandle)}/jobs`;
 };
 
+const publicJobPath = (jobSlug: string, publicHandle?: string): string => {
+  if (jobSlug.length > 120 || !PUBLIC_JOB_SLUG_PATTERN.test(jobSlug)) {
+    throw new Error('İlan adresi geçersiz.');
+  }
+  return `${publicJobsPath(publicHandle)}/${encodeURIComponent(jobSlug)}`;
+};
+
 export const listPublicJobs = async (publicHandle?: string): Promise<PublicJobDto[]> => {
   const response = await fetch(publicJobsPath(publicHandle), {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
   });
-  return safeJson<PublicJobDto[]>(response);
+  const jobs = await safeJson<PublicJobDto[]>(response);
+  jobs.forEach((job) => publicJobPath(job.slug, publicHandle));
+  return jobs;
 };
 
 export const getPublicJob = async (
   jobSlug: string,
   publicHandle?: string,
 ): Promise<PublicJobDto> => {
-  const response = await fetch(`${publicJobsPath(publicHandle)}/${encodeURIComponent(jobSlug)}`, {
+  const response = await fetch(publicJobPath(jobSlug, publicHandle), {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
@@ -217,20 +227,17 @@ export const submitApplication = async (
   ) {
     throw new Error('Güvenli başvuru oturumu geçersiz; sayfayı yenileyip yeniden deneyin.');
   }
-  const response = await fetch(
-    `${publicJobsPath(publicHandle)}/${encodeURIComponent(jobSlug)}/applications`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'X-ATS-Idempotency-Key': idempotencyKey,
-        'X-ATS-Candidate-Access': candidateAccessToken,
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify(submission),
+  const response = await fetch(`${publicJobPath(jobSlug, publicHandle)}/applications`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-ATS-Idempotency-Key': idempotencyKey,
+      'X-ATS-Candidate-Access': candidateAccessToken,
     },
-  );
+    credentials: 'same-origin',
+    body: JSON.stringify(submission),
+  });
   return safeJson<ApplicationReceiptDto>(response);
 };
 
