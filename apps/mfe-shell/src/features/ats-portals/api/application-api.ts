@@ -5,6 +5,7 @@ export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
 const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
 const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
 const INTERVIEW_ID_PATTERN = /^int_[A-Za-z0-9_-]{24}$/u;
+const OFFER_ID_PATTERN = /^off_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/u;
 const PUBLIC_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,7}$/u;
@@ -95,7 +96,12 @@ export type CandidateStatusDto = {
   version: number;
   createdAt: string;
   updatedAt: string;
-  nextAction: 'WAIT_FOR_REVIEW' | 'PREPARE_FOR_INTERVIEW' | 'NONE';
+  nextAction:
+    | 'WAIT_FOR_REVIEW'
+    | 'PREPARE_FOR_INTERVIEW'
+    | 'REVIEW_OFFER'
+    | 'WAIT_FOR_HIRE_CONFIRMATION'
+    | 'NONE';
   withdrawalAllowed: boolean;
   history: Array<{
     status: ApplicationStatus;
@@ -107,6 +113,11 @@ export type ApplicationStatus =
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
   | 'INTERVIEW_PENDING'
+  | 'OFFER_PENDING'
+  | 'OFFER_ACCEPTED'
+  | 'OFFER_DECLINED'
+  | 'OFFER_WITHDRAWN'
+  | 'HIRED'
   | 'REJECTED'
   | 'WITHDRAWN';
 
@@ -297,6 +308,54 @@ export type InterviewScorecardRequest = {
   ratings: Array<{ criterionKey: string; rating: number; evidence: string }>;
   summary: string;
   predecessorScorecardId?: string;
+};
+
+export type OfferStatus = 'DRAFT' | 'EXTENDED' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN' | 'HIRED';
+export type OfferPayPeriod = 'HOURLY' | 'MONTHLY' | 'ANNUAL';
+export type OfferWorkMode = 'REMOTE' | 'HYBRID' | 'ONSITE';
+
+export type OfferTermsDto = {
+  roleTitle: string;
+  startDate: string;
+  employmentType: string;
+  workMode: OfferWorkMode;
+  location: string;
+  compensationAmount: number;
+  currency: string;
+  payPeriod: OfferPayPeriod;
+  expiresAt: string;
+  termsSummary: string;
+};
+
+export type RecruiterOfferRevisionDto = OfferTermsDto & {
+  version: number;
+  status: OfferStatus;
+  reason: string;
+  actorRef: string;
+  occurredAt: string;
+};
+
+export type RecruiterOfferWorkspaceDto = OfferTermsDto & {
+  offerId: string;
+  applicationPublicRef: string;
+  jobSlug: string;
+  jobTitle: string;
+  candidateName: string;
+  status: OfferStatus;
+  version: number;
+  revisions: RecruiterOfferRevisionDto[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CandidateOfferDto = OfferTermsDto & {
+  offerId: string;
+  applicationPublicRef: string;
+  jobTitle: string;
+  status: Exclude<OfferStatus, 'DRAFT'>;
+  version: number;
+  updatedAt: string;
+  legalBoundary: string;
 };
 
 export type RecruiterJobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'ARCHIVED';
@@ -657,6 +716,133 @@ export const getCandidateInterviews = async ({
     },
   );
   return safeJson<CandidateInterviewDto[]>(response);
+};
+
+export const listRecruiterOffers = async (
+  publicRef: string,
+): Promise<RecruiterOfferWorkspaceDto[]> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef)) throw new Error('Başvuru referansı geçersiz.');
+  const response = await api.get<RecruiterOfferWorkspaceDto[]>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/offers`,
+  );
+  return response.data;
+};
+
+export const createRecruiterOffer = async (
+  publicRef: string,
+  terms: OfferTermsDto,
+  idempotencyKey: string,
+): Promise<RecruiterOfferWorkspaceDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef)) throw new Error('Başvuru referansı geçersiz.');
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.post<RecruiterOfferWorkspaceDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/offers`,
+    terms,
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const updateRecruiterOffer = async (
+  publicRef: string,
+  offer: RecruiterOfferWorkspaceDto,
+  terms: OfferTermsDto,
+  reason: string,
+  idempotencyKey: string,
+): Promise<RecruiterOfferWorkspaceDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !OFFER_ID_PATTERN.test(offer.offerId)) {
+    throw new Error('Teklif referansı geçersiz.');
+  }
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.put<RecruiterOfferWorkspaceDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/offers/${encodeURIComponent(offer.offerId)}`,
+    { expectedVersion: offer.version, reason, terms },
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const transitionRecruiterOffer = async (
+  publicRef: string,
+  offer: RecruiterOfferWorkspaceDto,
+  target: 'EXTENDED' | 'WITHDRAWN' | 'HIRED',
+  reason: string,
+  idempotencyKey: string,
+): Promise<RecruiterOfferWorkspaceDto> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !OFFER_ID_PATTERN.test(offer.offerId)) {
+    throw new Error('Teklif referansı geçersiz.');
+  }
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await api.post<RecruiterOfferWorkspaceDto>(
+    `/ats/v1/recruiter/applications/${encodeURIComponent(publicRef)}/offers/${encodeURIComponent(offer.offerId)}/transitions`,
+    { expectedVersion: offer.version, target, reason },
+    { headers: { 'X-ATS-Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+};
+
+export const getCandidateOffers = async ({
+  publicRef,
+  candidateAccessToken,
+}: CandidateSession): Promise<CandidateOfferDto[]> => {
+  if (!PUBLIC_REF_PATTERN.test(publicRef) || !CANDIDATE_ACCESS_PATTERN.test(candidateAccessToken)) {
+    throw new Error('Başvuru takip oturumu geçersiz.');
+  }
+  const response = await fetch(
+    `${ATS_API_BASE}/candidate/applications/${encodeURIComponent(publicRef)}/offers`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'X-ATS-Candidate-Access': candidateAccessToken,
+      },
+      credentials: 'same-origin',
+    },
+  );
+  return safeJson<CandidateOfferDto[]>(response);
+};
+
+export const respondCandidateOffer = async (
+  session: CandidateSession,
+  offer: CandidateOfferDto,
+  target: 'ACCEPTED' | 'DECLINED',
+  idempotencyKey: string,
+): Promise<CandidateOfferDto> => {
+  if (
+    !PUBLIC_REF_PATTERN.test(session.publicRef) ||
+    !CANDIDATE_ACCESS_PATTERN.test(session.candidateAccessToken) ||
+    !OFFER_ID_PATTERN.test(offer.offerId)
+  ) {
+    throw new Error('Teklif yanıt oturumu geçersiz.');
+  }
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey)) {
+    throw new Error('Güvenli işlem anahtarı geçersiz.');
+  }
+  const response = await fetch(
+    `${ATS_API_BASE}/candidate/applications/${encodeURIComponent(session.publicRef)}/offers/${encodeURIComponent(offer.offerId)}/response`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-ATS-Candidate-Access': session.candidateAccessToken,
+        'X-ATS-Idempotency-Key': idempotencyKey,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        expectedVersion: offer.version,
+        target,
+        processAcknowledged: true,
+      }),
+    },
+  );
+  return safeJson<CandidateOfferDto>(response);
 };
 
 export const listRecruiterJobs = async (): Promise<RecruiterJobDto[]> => {

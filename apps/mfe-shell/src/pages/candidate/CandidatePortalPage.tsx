@@ -1,12 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  createApplicationIdempotencyKey,
   getCandidateInterviews,
+  getCandidateOffers,
   getCandidateStatus,
   readCandidateSession,
+  respondCandidateOffer,
   withdrawCandidateApplication,
   type ApplicationStatus,
   type CandidateInterviewDto,
+  type CandidateOfferDto,
   type CandidateSession,
   type CandidateStatusDto,
 } from '../../features/ats-portals/api/application-api';
@@ -24,6 +28,27 @@ const STATUS_COPY: Record<ApplicationStatus, { label: string; description: strin
     label: 'Mülakat planlaması',
     description: 'İnsan kontrollü mülakat planlama adımı bekleniyor.',
   },
+  OFFER_PENDING: {
+    label: 'Teklif yanıtınız bekleniyor',
+    description:
+      'İK tarafından iletilen teklif koşullarını inceleyip süreç yanıtınızı verebilirsiniz.',
+  },
+  OFFER_ACCEPTED: {
+    label: 'Teklifi kabul ettiniz',
+    description: 'ATS süreç kabulünüz kaydedildi; İK ekibinin işe alım sonucunu bekleyin.',
+  },
+  OFFER_DECLINED: {
+    label: 'Teklifi reddettiniz',
+    description: 'ATS süreç yanıtınız kaydedildi ve bu başvuru akışı kapandı.',
+  },
+  OFFER_WITHDRAWN: {
+    label: 'Teklif geri çekildi',
+    description: 'İK ekibi daha önce iletilen teklifi gerekçeli olarak geri çekti.',
+  },
+  HIRED: {
+    label: 'İşe alım sonucu kaydedildi',
+    description: 'İK ekibi kabul edilen teklifin işe alım sonucunu ATS sürecine kaydetti.',
+  },
   REJECTED: {
     label: 'Başvuru ilerletilmedi',
     description:
@@ -40,7 +65,30 @@ const NEXT_ACTION_COPY: Record<CandidateStatusDto['nextAction'], string> = {
     'Şu anda sizden bir işlem beklenmiyor. İK incelemesinin güncellenmesini bekleyin.',
   PREPARE_FOR_INTERVIEW:
     'Mülakat daveti ve planlama bilgileri için iletişim kanallarınızı kontrol edin.',
+  REVIEW_OFFER: 'İletilen teklif koşullarını aşağıda inceleyip kabul veya ret yanıtınızı verin.',
+  WAIT_FOR_HIRE_CONFIRMATION:
+    'Teklif kabulünüz kaydedildi. İK ekibinin insan kontrollü işe alım sonucunu bekleyin.',
   NONE: 'Bu başvuru için açık bir sonraki adım yok.',
+};
+
+const OFFER_STATUS_COPY: Record<CandidateOfferDto['status'], string> = {
+  EXTENDED: 'Yanıtınız bekleniyor',
+  ACCEPTED: 'Kabul edildi',
+  DECLINED: 'Reddedildi',
+  WITHDRAWN: 'İK geri çekti',
+  HIRED: 'İşe alındı',
+};
+
+const PAY_PERIOD_COPY: Record<CandidateOfferDto['payPeriod'], string> = {
+  HOURLY: 'saatlik',
+  MONTHLY: 'aylık',
+  ANNUAL: 'yıllık',
+};
+
+const WORK_MODE_COPY: Record<CandidateOfferDto['workMode'], string> = {
+  REMOTE: 'Uzaktan',
+  HYBRID: 'Hibrit',
+  ONSITE: 'Yerinde',
 };
 
 const INTERVIEW_TYPE_COPY: Record<CandidateInterviewDto['type'], string> = {
@@ -70,29 +118,50 @@ const formatDate = (value: string, timeZone?: string) =>
     ...(timeZone ? { timeZone } : {}),
   }).format(new Date(value));
 
+const formatMoney = (amount: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+};
+
 const CandidatePortalPage = () => {
   const [session] = useState<CandidateSession | null>(() => readCandidateSession());
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
   const [interviews, setInterviews] = useState<CandidateInterviewDto[]>([]);
+  const [offers, setOffers] = useState<CandidateOfferDto[]>([]);
   const [loading, setLoading] = useState(Boolean(session));
   const [interviewsLoading, setInterviewsLoading] = useState(Boolean(session));
+  const [offersLoading, setOffersLoading] = useState(Boolean(session));
   const [error, setError] = useState('');
   const [interviewError, setInterviewError] = useState('');
+  const [offerError, setOfferError] = useState('');
   const [actionError, setActionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [withdrawalConfirmed, setWithdrawalConfirmed] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [responseTarget, setResponseTarget] = useState<{
+    offer: CandidateOfferDto;
+    target: 'ACCEPTED' | 'DECLINED';
+  } | null>(null);
+  const [responseAcknowledged, setResponseAcknowledged] = useState(false);
+  const [responding, setResponding] = useState(false);
+  const offerMutation = useRef<{ signature: string; key: string } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setInterviewsLoading(true);
+    setOffersLoading(true);
     setError('');
     setInterviewError('');
-    const [statusResult, interviewResult] = await Promise.allSettled([
+    setOfferError('');
+    const [statusResult, interviewResult, offerResult] = await Promise.allSettled([
       getCandidateStatus(session),
       getCandidateInterviews(session),
+      getCandidateOffers(session),
     ]);
     if (statusResult.status === 'fulfilled') {
       setStatus(statusResult.value);
@@ -114,8 +183,17 @@ const CandidatePortalPage = () => {
           : 'Görüşme takvimi alınamadı.',
       );
     }
+    if (offerResult.status === 'fulfilled') {
+      setOffers(offerResult.value);
+    } else {
+      setOffers([]);
+      setOfferError(
+        offerResult.reason instanceof Error ? offerResult.reason.message : 'Teklifler alınamadı.',
+      );
+    }
     setLoading(false);
     setInterviewsLoading(false);
+    setOffersLoading(false);
   }, [session]);
 
   useEffect(() => {
@@ -135,7 +213,12 @@ const CandidatePortalPage = () => {
     try {
       setStatus(await withdrawCandidateApplication(session));
       try {
-        setInterviews(await getCandidateInterviews(session));
+        const [nextInterviews, nextOffers] = await Promise.all([
+          getCandidateInterviews(session),
+          getCandidateOffers(session),
+        ]);
+        setInterviews(nextInterviews);
+        setOffers(nextOffers);
       } catch {
         setInterviewError('Başvuru geri çekildi; güncel görüşme takvimini yenileyin.');
       }
@@ -149,6 +232,47 @@ const CandidatePortalPage = () => {
       await refresh();
     } finally {
       setWithdrawing(false);
+    }
+  };
+
+  const respondToOffer = async () => {
+    if (!session || !responseTarget || !responseAcknowledged || responding) return;
+    const signature = JSON.stringify({
+      offerId: responseTarget.offer.offerId,
+      expectedVersion: responseTarget.offer.version,
+      target: responseTarget.target,
+      processAcknowledged: true,
+    });
+    if (offerMutation.current?.signature !== signature) {
+      offerMutation.current = { signature, key: createApplicationIdempotencyKey() };
+    }
+    setResponding(true);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await respondCandidateOffer(
+        session,
+        responseTarget.offer,
+        responseTarget.target,
+        offerMutation.current.key,
+      );
+      offerMutation.current = null;
+      const accepted = responseTarget.target === 'ACCEPTED';
+      setResponseTarget(null);
+      setResponseAcknowledged(false);
+      setSuccessMessage(
+        accepted
+          ? 'Teklif kabul yanıtınız kalıcı olarak kaydedildi; İK sonucunu bekleyin.'
+          : 'Teklif ret yanıtınız kalıcı olarak kaydedildi.',
+      );
+      await refresh();
+    } catch (responseError) {
+      setActionError(
+        responseError instanceof Error ? responseError.message : 'Teklif yanıtı kaydedilemedi.',
+      );
+      await refresh();
+    } finally {
+      setResponding(false);
     }
   };
 
@@ -355,6 +479,185 @@ const CandidatePortalPage = () => {
                         </li>
                       ))}
                   </ol>
+                ) : null}
+              </section>
+
+              <section className="mt-6" aria-labelledby="candidate-offers-heading">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 id="candidate-offers-heading" className="text-base font-bold">
+                    Teklifim
+                  </h3>
+                  {offersLoading ? (
+                    <span className="text-xs text-text-secondary" role="status">
+                      Teklifler yükleniyor…
+                    </span>
+                  ) : null}
+                </div>
+                {offerError ? (
+                  <p
+                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+                    role="alert"
+                  >
+                    {offerError}
+                  </p>
+                ) : null}
+                {!offersLoading && !offerError && !offers.length ? (
+                  <p className="mt-3 rounded-xl border border-dashed border-border-subtle p-4 text-sm leading-6 text-text-secondary">
+                    Adaya iletilmiş bir teklif yok. İK taslakları burada görünmez.
+                  </p>
+                ) : null}
+                {offers.length ? (
+                  <div className="mt-3 space-y-4">
+                    {offers.map((offer) => (
+                      <article
+                        key={offer.offerId}
+                        className="rounded-2xl border border-action-primary bg-action-primary/5 p-5"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-action-primary">
+                              {offer.jobTitle}
+                            </p>
+                            <h4 className="mt-1 text-xl font-bold">{offer.roleTitle}</h4>
+                          </div>
+                          <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-bold">
+                            {OFFER_STATUS_COPY[offer.status]}
+                          </span>
+                        </div>
+                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                          <div>
+                            <dt className="text-xs font-semibold text-text-secondary">
+                              Brüt ücret
+                            </dt>
+                            <dd className="mt-1 font-bold">
+                              {formatMoney(offer.compensationAmount, offer.currency)} ·{' '}
+                              {PAY_PERIOD_COPY[offer.payPeriod]}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-semibold text-text-secondary">
+                              Başlangıç tarihi
+                            </dt>
+                            <dd className="mt-1 font-bold">{formatDate(offer.startDate)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-semibold text-text-secondary">
+                              Çalışma biçimi
+                            </dt>
+                            <dd className="mt-1">
+                              {offer.employmentType} · {WORK_MODE_COPY[offer.workMode]}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-semibold text-text-secondary">Konum</dt>
+                            <dd className="mt-1">{offer.location}</dd>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <dt className="text-xs font-semibold text-text-secondary">
+                              Yanıt son tarihi
+                            </dt>
+                            <dd className="mt-1 font-bold">{formatDate(offer.expiresAt)}</dd>
+                          </div>
+                        </dl>
+                        <div className="mt-4 rounded-xl border border-border-subtle bg-surface-default p-4">
+                          <p className="text-xs font-semibold text-text-secondary">Teklif özeti</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+                            {offer.termsSummary}
+                          </p>
+                        </div>
+                        <p className="mt-3 rounded-xl border border-state-info-border bg-state-info-bg p-3 text-xs leading-5 text-text-secondary">
+                          {offer.legalBoundary}
+                        </p>
+
+                        {offer.status === 'EXTENDED' ? (
+                          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                offerMutation.current = null;
+                                setResponseTarget({ offer, target: 'ACCEPTED' });
+                                setResponseAcknowledged(false);
+                                setActionError('');
+                                setSuccessMessage('');
+                              }}
+                              className="min-h-11 rounded-xl bg-action-primary px-4 text-sm font-bold text-action-primary-text"
+                            >
+                              Teklifi kabul etmeyi hazırla
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                offerMutation.current = null;
+                                setResponseTarget({ offer, target: 'DECLINED' });
+                                setResponseAcknowledged(false);
+                                setActionError('');
+                                setSuccessMessage('');
+                              }}
+                              className="min-h-11 rounded-xl border border-state-danger-border bg-surface-default px-4 text-sm font-bold"
+                            >
+                              Teklifi reddetmeyi hazırla
+                            </button>
+                          </div>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+
+                {responseTarget ? (
+                  <section
+                    className="mt-4 rounded-2xl border border-border-strong bg-surface-muted p-4"
+                    aria-label={
+                      responseTarget.target === 'ACCEPTED'
+                        ? 'Teklif kabul onayı'
+                        : 'Teklif ret onayı'
+                    }
+                  >
+                    <h4 className="font-bold">
+                      {responseTarget.target === 'ACCEPTED'
+                        ? 'Teklif kabul yanıtını doğrula'
+                        : 'Teklif ret yanıtını doğrula'}
+                    </h4>
+                    <p className="mt-2 text-sm leading-6 text-text-secondary">
+                      Bu yanıt geri alınamaz ve başvuru durumunu değiştirir. İş sözleşmesi
+                      oluşturmaz veya elektronik imza yerine geçmez.
+                    </p>
+                    <label className="mt-3 flex items-start gap-2 text-sm leading-5 text-text-primary">
+                      <input
+                        type="checkbox"
+                        checked={responseAcknowledged}
+                        onChange={(event) => setResponseAcknowledged(event.target.checked)}
+                        className="mt-1 h-4 w-4"
+                      />
+                      Koşulları ve yanıt son tarihini inceledim; bunun yalnız ATS süreç yanıtı
+                      olduğunu ve ayrı iş sözleşmesi/e-imza olmadığını anlıyorum.
+                    </label>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => void respondToOffer()}
+                        disabled={!responseAcknowledged || responding}
+                        className="min-h-11 flex-1 rounded-xl bg-action-primary px-4 text-sm font-bold text-action-primary-text disabled:opacity-50"
+                      >
+                        {responding
+                          ? 'Yanıt kaydediliyor…'
+                          : responseTarget.target === 'ACCEPTED'
+                            ? 'Kabul yanıtını kalıcı kaydet'
+                            : 'Ret yanıtını kalıcı kaydet'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResponseTarget(null);
+                          setResponseAcknowledged(false);
+                          offerMutation.current = null;
+                        }}
+                        className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold"
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
+                  </section>
                 ) : null}
               </section>
 
