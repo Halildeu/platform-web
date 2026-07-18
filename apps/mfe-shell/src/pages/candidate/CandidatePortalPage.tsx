@@ -3,32 +3,43 @@ import { Link } from 'react-router-dom';
 import {
   getCandidateStatus,
   readCandidateSession,
+  withdrawCandidateApplication,
   type ApplicationStatus,
   type CandidateSession,
   type CandidateStatusDto,
 } from '../../features/ats-portals/api/application-api';
 
-const STATUS_STEPS: ReadonlyArray<{
-  id: ApplicationStatus;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: 'SUBMITTED',
+const STATUS_COPY: Record<ApplicationStatus, { label: string; description: string }> = {
+  SUBMITTED: {
     label: 'Başvuru alındı',
     description: 'Formunuz kalıcı test başvurusu olarak kaydedildi.',
   },
-  {
-    id: 'UNDER_REVIEW',
+  UNDER_REVIEW: {
     label: 'İnsan incelemesinde',
     description: 'İK ekibi başvurunuzu inceliyor; otomatik eleme veya puanlama yapılmaz.',
   },
-  {
-    id: 'INTERVIEW_PENDING',
+  INTERVIEW_PENDING: {
     label: 'Mülakat planlaması',
     description: 'İnsan kontrollü mülakat planlama adımı bekleniyor.',
   },
-];
+  REJECTED: {
+    label: 'Başvuru ilerletilmedi',
+    description:
+      'İK ekibi işle ilgili kanıtları insan değerlendirmesiyle inceledi ve süreci kapattı.',
+  },
+  WITHDRAWN: {
+    label: 'Başvuru geri çekildi',
+    description: 'Başvuruyu geri çektiniz; bu durum terminaldir.',
+  },
+};
+
+const NEXT_ACTION_COPY: Record<CandidateStatusDto['nextAction'], string> = {
+  WAIT_FOR_REVIEW:
+    'Şu anda sizden bir işlem beklenmiyor. İK incelemesinin güncellenmesini bekleyin.',
+  PREPARE_FOR_INTERVIEW:
+    'Mülakat daveti ve planlama bilgileri için iletişim kanallarınızı kontrol edin.',
+  NONE: 'Bu başvuru için açık bir sonraki adım yok.',
+};
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat('tr-TR', {
@@ -41,6 +52,11 @@ const CandidatePortalPage = () => {
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
   const [loading, setLoading] = useState(Boolean(session));
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
+  const [withdrawalConfirmed, setWithdrawalConfirmed] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!session) return;
@@ -65,7 +81,25 @@ const CandidatePortalPage = () => {
     };
   }, [refresh]);
 
-  const currentIndex = status ? STATUS_STEPS.findIndex((step) => step.id === status.status) : -1;
+  const withdraw = async () => {
+    if (!session || !status?.withdrawalAllowed || !withdrawalConfirmed || withdrawing) return;
+    setWithdrawing(true);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      setStatus(await withdrawCandidateApplication(session));
+      setSuccessMessage('Başvurunuz geri çekildi. Güncel terminal durum aşağıda görünür.');
+      setWithdrawalOpen(false);
+      setWithdrawalConfirmed(false);
+    } catch (withdrawError) {
+      setActionError(
+        withdrawError instanceof Error ? withdrawError.message : 'Başvuru geri çekilemedi.',
+      );
+      await refresh();
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   return (
     <main
@@ -179,48 +213,120 @@ const CandidatePortalPage = () => {
                 </button>
               </div>
 
-              <ol className="mt-6 space-y-3">
-                {STATUS_STEPS.map((step, index) => {
-                  const reached = index <= currentIndex;
-                  const current = index === currentIndex;
-                  return (
-                    <li
-                      key={step.id}
-                      className={`grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 rounded-2xl border p-4 ${
-                        current
-                          ? 'border-action-primary bg-action-primary/5'
-                          : reached
-                            ? 'border-state-success-border bg-state-success-bg'
-                            : 'border-border-subtle bg-surface-subtle'
-                      }`}
-                    >
+              <div className="mt-6 rounded-2xl border border-action-primary bg-action-primary/5 p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-action-primary">
+                  Güncel durum
+                </p>
+                <h3 className="mt-2 text-xl font-bold">{STATUS_COPY[status.status].label}</h3>
+                <p className="mt-2 text-sm leading-6 text-text-secondary">
+                  {STATUS_COPY[status.status].description}
+                </p>
+              </div>
+
+              <section className="mt-6" aria-labelledby="candidate-next-action-heading">
+                <h3 id="candidate-next-action-heading" className="text-base font-bold">
+                  Sıradaki adım
+                </h3>
+                <p className="mt-2 rounded-xl border border-state-info-border bg-state-info-bg p-4 text-sm leading-6 text-text-secondary">
+                  {NEXT_ACTION_COPY[status.nextAction]}
+                </p>
+              </section>
+
+              <section className="mt-6" aria-labelledby="candidate-history-heading">
+                <h3 id="candidate-history-heading" className="text-base font-bold">
+                  Durum geçmişi
+                </h3>
+                <ol className="mt-3 space-y-3 border-l border-border-subtle pl-5">
+                  {(status.history?.length
+                    ? status.history
+                    : [{ status: status.status, occurredAt: status.updatedAt }]
+                  ).map((event, index) => (
+                    <li key={`${event.status}-${event.occurredAt}-${index}`} className="relative">
                       <span
-                        className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold ${
-                          reached
-                            ? 'bg-action-primary text-action-primary-text'
-                            : 'bg-surface-default text-text-secondary'
-                        }`}
+                        className="absolute -left-[1.6rem] top-1 h-3 w-3 rounded-full bg-action-primary"
                         aria-hidden="true"
-                      >
-                        {index + 1}
-                      </span>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold">{step.label}</h3>
-                          {current ? (
-                            <span className="rounded-full border border-action-primary px-2 py-0.5 text-[11px] font-bold">
-                              Şimdi
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-sm leading-6 text-text-secondary">
-                          {step.description}
-                        </p>
-                      </div>
+                      />
+                      <h4 className="text-sm font-bold">{STATUS_COPY[event.status].label}</h4>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        {formatDate(event.occurredAt)}
+                      </p>
                     </li>
-                  );
-                })}
-              </ol>
+                  ))}
+                </ol>
+              </section>
+
+              {status.withdrawalAllowed ? (
+                <section
+                  className="mt-6 border-t border-border-subtle pt-5"
+                  aria-labelledby="withdrawal-heading"
+                >
+                  <h3 id="withdrawal-heading" className="text-base font-bold">
+                    Başvuruyu geri çek
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-text-secondary">
+                    Bu işlem başvuruyu terminal duruma getirir; İK ekibi başvuruyu ilerletemez.
+                  </p>
+                  {!withdrawalOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawalOpen(true)}
+                      className="mt-3 min-h-11 rounded-xl border border-state-danger-border bg-surface-default px-4 text-sm font-bold text-text-primary"
+                    >
+                      Geri çekme onayını aç
+                    </button>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-4">
+                      <label className="flex items-start gap-2 text-sm leading-5 text-text-primary">
+                        <input
+                          type="checkbox"
+                          checked={withdrawalConfirmed}
+                          onChange={(event) => setWithdrawalConfirmed(event.target.checked)}
+                          className="mt-1 h-4 w-4"
+                        />
+                        Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını
+                        doğruluyorum.
+                      </label>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => void withdraw()}
+                          disabled={!withdrawalConfirmed || withdrawing}
+                          className="min-h-11 rounded-xl bg-state-danger-text px-4 text-sm font-bold text-text-inverse disabled:opacity-50"
+                        >
+                          {withdrawing ? 'Geri çekiliyor…' : 'Başvuruyu geri çek'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWithdrawalOpen(false);
+                            setWithdrawalConfirmed(false);
+                          }}
+                          className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold"
+                        >
+                          Vazgeç
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
+              {successMessage ? (
+                <p
+                  role="status"
+                  className="mt-5 rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-text-primary"
+                >
+                  {successMessage}
+                </p>
+              ) : null}
+              {actionError ? (
+                <p
+                  role="alert"
+                  className="mt-5 rounded-xl border border-state-danger-border bg-state-danger-bg p-4 text-sm font-semibold text-state-danger-text"
+                >
+                  {actionError}
+                </p>
+              ) : null}
             </section>
 
             <aside className="rounded-3xl border border-border-subtle bg-surface-default p-5 shadow-xs sm:p-6">
@@ -232,7 +338,7 @@ const CandidatePortalPage = () => {
                 </div>
                 <div>
                   <dt className="text-xs font-semibold text-text-secondary">Durum</dt>
-                  <dd className="mt-1 font-bold">{STATUS_STEPS[currentIndex]?.label}</dd>
+                  <dd className="mt-1 font-bold">{STATUS_COPY[status.status].label}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-semibold text-text-secondary">Gönderildi</dt>
