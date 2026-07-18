@@ -2,6 +2,7 @@ import { api } from '@mfe/shared-http';
 
 export const ATS_API_BASE = '/api/ats/v1';
 export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
+export const RESUME_IMPORT_NOTICE_VERSION = 'candidate-resume-import-v1' as const;
 const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
 const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
@@ -75,6 +76,65 @@ export type ApplicationSubmissionDto = {
   noticeVersion: typeof APPLICATION_NOTICE_VERSION;
   noticeAcceptedAt: string;
   accuracyConfirmedAt: string;
+  resumeImportId?: string;
+  resumeDraftVersion?: number;
+};
+
+export type ResumeProposalState =
+  | 'UNREVIEWED'
+  | 'ACCEPTED'
+  | 'EDITED'
+  | 'REJECTED'
+  | 'CONTROL_REQUIRED';
+
+export type ResumeProposalDto = {
+  field: ApplicationFieldKey;
+  proposedValue: string;
+  candidateValue: string | null;
+  state: ResumeProposalState;
+  version: number;
+  provenance: {
+    page: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    confidence: number;
+    parserVersion: string;
+  };
+};
+
+export type ResumeImportDto = {
+  importId: string;
+  jobSlug: string;
+  state: 'ACTIVE' | 'CONFIRMED' | 'CANCELLED' | 'REJECT_ALL' | 'EXPIRED' | 'FAILED' | 'SUPERSEDED';
+  version: number;
+  documentVersion: number;
+  noticeVersion: typeof RESUME_IMPORT_NOTICE_VERSION;
+  noticeAcceptedAt: string;
+  uploadExpiresAt: string;
+  firstUploadAt: string | null;
+  expiresAt: string | null;
+  parserVersion: string | null;
+  protectedSuppressed: number;
+  unsupportedOutput: number;
+  createdAt: string;
+  updatedAt: string;
+  purgedAt: string | null;
+  proposals: ResumeProposalDto[];
+};
+
+export type ResumeDraftDto = {
+  draftId: string;
+  importId: string;
+  version: number;
+  fields: Partial<Record<ApplicationFieldKey, string>>;
+  createdAt: string;
+};
+
+export type ResumeImportConfirmDto = {
+  resumeImport: ResumeImportDto;
+  draft: ResumeDraftDto;
 };
 
 export type ApplicationReceiptDto = {
@@ -239,6 +299,156 @@ export const submitApplication = async (
     body: JSON.stringify(submission),
   });
   return safeJson<ApplicationReceiptDto>(response);
+};
+
+const candidateResumePath = (importId: string): string =>
+  `${ATS_API_BASE}/candidate/resume-imports/${encodeURIComponent(importId)}`;
+
+const candidateHeaders = (candidateAccessToken: string): Record<string, string> => {
+  if (!CANDIDATE_ACCESS_PATTERN.test(candidateAccessToken)) {
+    throw new Error('Güvenli CV oturumu geçersiz; sayfayı yenileyip yeniden deneyin.');
+  }
+  return { 'X-ATS-Candidate-Access': candidateAccessToken };
+};
+
+export const createResumeImport = async (
+  jobSlug: string,
+  idempotencyKey: string,
+  candidateAccessToken: string,
+  noticeAcceptedAt: string,
+  publicHandle?: string,
+): Promise<ResumeImportDto> => {
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey))
+    throw new Error('Güvenli CV işlem anahtarı geçersiz.');
+  const response = await fetch(`${publicJobPath(jobSlug, publicHandle)}/resume-imports`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...candidateHeaders(candidateAccessToken),
+      'X-ATS-Idempotency-Key': idempotencyKey,
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      noticeVersion: RESUME_IMPORT_NOTICE_VERSION,
+      noticeAcceptedAt,
+    }),
+  });
+  return safeJson<ResumeImportDto>(response);
+};
+
+export const getResumeImport = async (
+  importId: string,
+  candidateAccessToken: string,
+): Promise<ResumeImportDto> => {
+  const response = await fetch(candidateResumePath(importId), {
+    method: 'GET',
+    headers: { Accept: 'application/json', ...candidateHeaders(candidateAccessToken) },
+    credentials: 'same-origin',
+  });
+  return safeJson<ResumeImportDto>(response);
+};
+
+export const uploadResumePdf = async (
+  resumeImport: ResumeImportDto,
+  file: File,
+  idempotencyKey: string,
+  candidateAccessToken: string,
+): Promise<{ resumeImport: ResumeImportDto; inFlight: boolean }> => {
+  if (!IDEMPOTENCY_PATTERN.test(idempotencyKey))
+    throw new Error('Güvenli PDF yükleme anahtarı geçersiz.');
+  const response = await fetch(`${candidateResumePath(resumeImport.importId)}/document`, {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/pdf',
+      ...candidateHeaders(candidateAccessToken),
+      'X-ATS-Idempotency-Key': idempotencyKey,
+      'X-ATS-Expected-Version': String(resumeImport.version),
+    },
+    credentials: 'same-origin',
+    body: file,
+  });
+  return {
+    resumeImport: await safeJson<ResumeImportDto>(response),
+    inFlight: response.status === 202,
+  };
+};
+
+export const replaceResumePdf = async (
+  resumeImport: ResumeImportDto,
+  candidateAccessToken: string,
+): Promise<ResumeImportDto> => {
+  const response = await fetch(`${candidateResumePath(resumeImport.importId)}/document/replace`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...candidateHeaders(candidateAccessToken),
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({ expectedVersion: resumeImport.version }),
+  });
+  return safeJson<ResumeImportDto>(response);
+};
+
+export const updateResumeProposal = async (
+  resumeImport: ResumeImportDto,
+  field: ApplicationFieldKey,
+  state: 'ACCEPTED' | 'EDITED' | 'REJECTED',
+  candidateAccessToken: string,
+  editedValue?: string,
+): Promise<ResumeImportDto> => {
+  const response = await fetch(`${candidateResumePath(resumeImport.importId)}/fields/${field}`, {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...candidateHeaders(candidateAccessToken),
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      expectedVersion: resumeImport.version,
+      state,
+      ...(state === 'EDITED' ? { editedValue } : {}),
+    }),
+  });
+  return safeJson<ResumeImportDto>(response);
+};
+
+export const confirmResumeImport = async (
+  resumeImport: ResumeImportDto,
+  candidateAccessToken: string,
+): Promise<ResumeImportConfirmDto> => {
+  const response = await fetch(`${candidateResumePath(resumeImport.importId)}/confirm`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...candidateHeaders(candidateAccessToken),
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({ expectedVersion: resumeImport.version }),
+  });
+  return safeJson<ResumeImportConfirmDto>(response);
+};
+
+export const terminateResumeImport = async (
+  resumeImport: ResumeImportDto,
+  candidateAccessToken: string,
+  terminalState: 'CANCELLED' | 'REJECT_ALL',
+): Promise<ResumeImportDto> => {
+  const response = await fetch(`${candidateResumePath(resumeImport.importId)}/terminate`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...candidateHeaders(candidateAccessToken),
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({ expectedVersion: resumeImport.version, terminalState }),
+  });
+  return safeJson<ResumeImportDto>(response);
 };
 
 export const getCandidateStatus = async ({
