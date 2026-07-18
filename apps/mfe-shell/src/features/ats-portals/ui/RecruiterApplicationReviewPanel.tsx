@@ -10,6 +10,7 @@ import {
   type RecruiterApplicationEvaluationRequest,
   type RecruiterEvaluationRecommendation,
 } from '../api/application-api';
+import RecruiterInterviewPanel from './RecruiterInterviewPanel';
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SUBMITTED: 'Başvuru alındı',
@@ -210,6 +211,13 @@ const RecruiterApplicationReviewPanel = ({
     } finally {
       setUpdating(false);
     }
+  };
+
+  const refreshAfterInterviewChange = async () => {
+    if (!detail) return;
+    const refreshed = await getRecruiterApplication(detail.application.publicRef);
+    setDetail(refreshed);
+    onApplicationChanged(refreshed.application);
   };
 
   const renderApplication = () => {
@@ -530,6 +538,15 @@ const RecruiterApplicationReviewPanel = ({
             </div>
           </form>
         ) : null}
+
+        <RecruiterInterviewPanel
+          publicRef={application.publicRef}
+          applicationStatus={application.status}
+          canManage={canManage && !terminal}
+          interviewerActorRef={latestEvaluation?.actorRef ?? null}
+          interviewerLabel="Atanmış İK görüşmecisi"
+          onApplicationRefresh={refreshAfterInterviewChange}
+        />
 
         {successMessage ? (
           <p

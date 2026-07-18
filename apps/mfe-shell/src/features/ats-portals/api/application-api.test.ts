@@ -7,7 +7,9 @@ vi.mock('@mfe/shared-http', () => ({ api: httpMocks }));
 import {
   confirmResumeImport,
   createApplicationIdempotencyKey,
+  createRecruiterInterview,
   createResumeImport,
+  getCandidateInterviews,
   getCandidateStatus,
   createCandidateAccessToken,
   createRecruiterJob,
@@ -16,13 +18,16 @@ import {
   getResumeImport,
   listPublicJobs,
   listRecruiterApplications,
+  listRecruiterInterviews,
   listRecruiterJobs,
   readCandidateSession,
   saveCandidateSession,
   replaceResumePdf,
   submitApplication,
   submitRecruiterApplicationEvaluation,
+  submitInterviewScorecard,
   terminateResumeImport,
+  transitionRecruiterInterview,
   transitionRecruiterJob,
   updateRecruiterJob,
   updateRecruiterApplicationStatus,
@@ -241,6 +246,24 @@ describe('application-api', () => {
     expect(fetchMock.mock.calls[0][0]).not.toContain('A'.repeat(43));
   });
 
+  it('loads the candidate-safe interview schedule without putting the token in the URL', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await getCandidateInterviews({
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'A'.repeat(43),
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/ats/v1/candidate/applications/app_abcdefghijklmnopqrstuvwx/interviews',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ 'X-ATS-Candidate-Access': 'A'.repeat(43) }),
+      }),
+    );
+    expect(fetchMock.mock.calls[0][0]).not.toContain('A'.repeat(43));
+  });
+
   it('withdraws through the candidate header credential without URL or body leakage', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'WITHDRAWN', history: [] }));
 
@@ -423,6 +446,107 @@ describe('application-api', () => {
       evaluation,
       { headers: { 'X-ATS-Idempotency-Key': 'web-evaluation-1234' } },
     );
+  });
+
+  it('uses versioned idempotent recruiter interview commands without caller tenant fields', async () => {
+    const publicRef = 'app_abcdefghijklmnopqrstuvwx';
+    const interview = {
+      interviewId: 'int_abcdefghijklmnopqrstuvwx',
+      applicationPublicRef: publicRef,
+      jobSlug: 'urun-yoneticisi',
+      jobTitle: 'Ürün Yöneticisi',
+      candidateName: 'Deniz Sentetik',
+      type: 'SCREENING' as const,
+      startsAt: '2026-07-20T07:00:00Z',
+      endsAt: '2026-07-20T08:00:00Z',
+      timeZone: 'Europe/Istanbul',
+      mode: 'VIDEO' as const,
+      location: 'https://meet.example.test/sentetik',
+      status: 'SCHEDULED' as const,
+      version: 0,
+      participants: [],
+      criteria: [],
+      scorecards: [],
+      scheduleHistory: [],
+      createdAt: '2026-07-18T10:00:00Z',
+      updatedAt: '2026-07-18T10:00:00Z',
+    };
+    const request = {
+      type: 'SCREENING' as const,
+      startsAt: interview.startsAt,
+      endsAt: interview.endsAt,
+      timeZone: interview.timeZone,
+      mode: interview.mode,
+      location: interview.location,
+      participants: [{ actorRef: 'user-1', displayLabel: 'İK görüşmecisi', role: 'LEAD' as const }],
+      criteria: [
+        {
+          key: 'role_delivery',
+          label: 'Rol teslimatı',
+          question: 'İşle ilgili teslimat örneğiniz nedir?',
+          evidencePrompt: 'Somut iş sonucunu kaydedin.',
+        },
+      ],
+    };
+    httpMocks.get.mockResolvedValueOnce({ data: [interview] });
+    httpMocks.post.mockResolvedValue({ data: interview });
+
+    await listRecruiterInterviews(publicRef);
+    await createRecruiterInterview(publicRef, request, 'web-interview-create-1234');
+    await transitionRecruiterInterview(
+      publicRef,
+      interview,
+      'CANCELLED',
+      'Aday ile yeniden planlanacak',
+      'web-interview-cancel-1234',
+    );
+    await submitInterviewScorecard(
+      interview.interviewId,
+      {
+        policyVersion: 'structured-interview-v1',
+        jobRelatednessConfirmed: true,
+        recommendation: 'HOLD',
+        ratings: [
+          {
+            criterionKey: 'role_delivery',
+            rating: 3,
+            evidence: 'Sentetik ve işle ilgili somut görüşme kanıtı.',
+          },
+        ],
+        summary: 'Sentetik insan scorecard gerekçesi.',
+      },
+      'web-scorecard-create-1234',
+    );
+
+    expect(httpMocks.get).toHaveBeenCalledWith(
+      `/ats/v1/recruiter/applications/${publicRef}/interviews`,
+    );
+    expect(httpMocks.post).toHaveBeenNthCalledWith(
+      1,
+      `/ats/v1/recruiter/applications/${publicRef}/interviews`,
+      request,
+      { headers: { 'X-ATS-Idempotency-Key': 'web-interview-create-1234' } },
+    );
+    expect(httpMocks.post).toHaveBeenNthCalledWith(
+      2,
+      `/ats/v1/recruiter/applications/${publicRef}/interviews/${interview.interviewId}/transitions`,
+      {
+        expectedVersion: 0,
+        target: 'CANCELLED',
+        reason: 'Aday ile yeniden planlanacak',
+      },
+      { headers: { 'X-ATS-Idempotency-Key': 'web-interview-cancel-1234' } },
+    );
+    expect(httpMocks.post).toHaveBeenNthCalledWith(
+      3,
+      `/ats/v1/interviews/${interview.interviewId}/scorecards`,
+      expect.objectContaining({
+        policyVersion: 'structured-interview-v1',
+        jobRelatednessConfirmed: true,
+      }),
+      { headers: { 'X-ATS-Idempotency-Key': 'web-scorecard-create-1234' } },
+    );
+    expect(request).not.toHaveProperty('tenantId');
   });
 
   it('rejects malformed recruiter refs and evaluation keys before network access', async () => {
