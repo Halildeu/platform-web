@@ -39,6 +39,26 @@ export interface RemoteViewPageProps {
   afterPaint?: (callback: () => void) => void;
 }
 
+interface RenderAckContext {
+  target: string;
+  url: string;
+  token: string | null;
+  active: boolean;
+  acceptingNew: boolean;
+  draining: boolean;
+  drainNonce: string | null;
+  streamStatus: RemoteViewStatus;
+  scheduledAcks: number;
+  abort: AbortController;
+  ackInFlight: boolean;
+  queuedAck: {
+    viewerId: string;
+    frameSeq: number;
+    observedAtEpochMillis: number;
+    sentAtEpochMillis: number;
+  } | null;
+}
+
 const VIEWER_PATH = '/endpoint-admin/remote-access/sessions';
 
 const wrapStyle: React.CSSProperties = {
@@ -164,28 +184,42 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   const [frameCount, setFrameCount] = React.useState(0);
   const [renderAckAttemptedCount, setRenderAckAttemptedCount] = React.useState(0);
   const [renderAckAcceptedCount, setRenderAckAcceptedCount] = React.useState(0);
+  const [renderAckRejectedCount, setRenderAckRejectedCount] = React.useState(0);
+  const [renderAckPendingCount, setRenderAckPendingCount] = React.useState(0);
+  const [renderAckDraining, setRenderAckDraining] = React.useState(false);
+  const [renderAckDrainNonce, setRenderAckDrainNonce] = React.useState<string | null>(null);
+  const [closureKind, setClosureKind] = React.useState<
+    'none' | 'stream-ended-before-drain' | 'stream-ended-after-drain' | 'local-stop'
+  >('none');
+  const [lastRenderAckAcceptedFrame, setLastRenderAckAcceptedFrame] = React.useState<{
+    seq: number;
+    observedAtEpochMillis: number;
+    sentAtEpochMillis: number;
+  } | null>(null);
   const [, tick] = React.useReducer((x: number) => x + 1, 0);
   const handleRef = React.useRef<RemoteViewStreamHandle | null>(null);
-  const ackContextRef = React.useRef<{
-    target: string;
-    url: string;
-    token: string | null;
-    active: boolean;
-    abort: AbortController;
-    ackInFlight: boolean;
-    queuedAck: { viewerId: string; frameSeq: number } | null;
-  } | null>(null);
+  const ackContextRef = React.useRef<RenderAckContext | null>(null);
   const lastAckAttemptedSeqRef = React.useRef(-1);
+  const localStopRequestedRef = React.useRef(false);
 
   const terminateAcknowledgements = React.useCallback(() => {
     const context = ackContextRef.current;
     if (!context) return;
     context.active = false;
+    context.acceptingNew = false;
+    context.draining = false;
+    context.drainNonce = null;
+    context.scheduledAcks = 0;
     context.queuedAck = null;
     context.abort.abort();
+    setRenderAckPendingCount(0);
+    setRenderAckDraining(false);
+    setRenderAckDrainNonce(null);
   }, []);
 
   const stop = React.useCallback(() => {
+    localStopRequestedRef.current = true;
+    setClosureKind('local-stop');
     terminateAcknowledgements();
     handleRef.current?.close();
     handleRef.current = null;
@@ -205,6 +239,13 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     setFrameCount(0);
     setRenderAckAttemptedCount(0);
     setRenderAckAcceptedCount(0);
+    setRenderAckRejectedCount(0);
+    setRenderAckPendingCount(0);
+    setRenderAckDraining(false);
+    setRenderAckDrainNonce(null);
+    setClosureKind('none');
+    setLastRenderAckAcceptedFrame(null);
+    localStopRequestedRef.current = false;
     lastAckAttemptedSeqRef.current = -1;
 
     if (missing) {
@@ -227,23 +268,44 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     )}/view?streamId=${encodeURIComponent(streamId)}`;
     const target = `${sessionId}\u0000${streamId}`;
     const ackAbort = new AbortController();
-    ackContextRef.current = {
+    const ackContext: RenderAckContext = {
       target,
       url,
       token,
       active: true,
+      acceptingNew: true,
+      draining: false,
+      drainNonce: null,
+      streamStatus: 'connecting',
+      scheduledAcks: 0,
       abort: ackAbort,
       ackInFlight: false,
       queuedAck: null,
     };
+    ackContextRef.current = ackContext;
     const handle = openRemoteViewStream({
       url,
       token,
       fetchImpl,
       onStatus: (s) => {
         if (!active) return;
+        ackContext.streamStatus = s;
         setStatus(s);
-        if (s === 'closed' || s === 'error' || s === 'forbidden' || s === 'busy') {
+        if (s === 'closed') {
+          if (ackContextRef.current === ackContext) {
+            ackContext.acceptingNew = false;
+          }
+          setClosureKind(
+            localStopRequestedRef.current
+              ? 'local-stop'
+              : ackContext.draining
+                ? 'stream-ended-after-drain'
+                : 'stream-ended-before-drain',
+          );
+          setMeta(null);
+          setFrame(null);
+          setFrameCount(0);
+        } else if (s === 'error' || s === 'forbidden' || s === 'busy') {
           terminateAcknowledgements();
           setMeta(null);
           setFrame(null);
@@ -259,9 +321,38 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
         setFrameCount((c) => c + 1);
       },
     });
+    const beginEvidenceDrain = (event: Event) => {
+      const nonce =
+        event instanceof CustomEvent && typeof event.detail?.nonce === 'string'
+          ? event.detail.nonce
+          : '';
+      if (
+        !/^[A-Za-z0-9_-]{16,96}$/.test(nonce) ||
+        !active ||
+        ackContextRef.current !== ackContext ||
+        !ackContext.active ||
+        ackContext.draining ||
+        !ackContext.acceptingNew ||
+        ackContext.streamStatus !== 'live'
+      ) {
+        return;
+      }
+      ackContext.acceptingNew = false;
+      ackContext.draining = true;
+      ackContext.drainNonce = nonce;
+      setRenderAckDraining(true);
+      setRenderAckDrainNonce(nonce);
+      setRenderAckPendingCount(
+        ackContext.scheduledAcks +
+          (ackContext.ackInFlight ? 1 : 0) +
+          (ackContext.queuedAck ? 1 : 0),
+      );
+    };
+    window.addEventListener('faz226:view-only-evidence-drain', beginEvidenceDrain);
     handleRef.current = handle;
     return () => {
       active = false;
+      window.removeEventListener('faz226:view-only-evidence-drain', beginEvidenceDrain);
       ackAbort.abort();
       if (ackContextRef.current?.target === target) {
         ackContextRef.current.active = false;
@@ -280,6 +371,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       const expectedTarget = `${sessionId}\u0000${streamId}`;
       if (
         !context?.active ||
+        !context.acceptingNew ||
         context.target !== expectedTarget ||
         !meta?.viewerId ||
         renderedFrame.seq <= lastAckAttemptedSeqRef.current
@@ -287,21 +379,44 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
         return;
       }
       lastAckAttemptedSeqRef.current = renderedFrame.seq;
+      const scheduledContext = context;
+      const publishPending = (current: RenderAckContext) => {
+        if (current.active && ackContextRef.current === current) {
+          setRenderAckPendingCount(
+            current.scheduledAcks + (current.ackInFlight ? 1 : 0) + (current.queuedAck ? 1 : 0),
+          );
+        }
+      };
+      scheduledContext.scheduledAcks += 1;
+      publishPending(scheduledContext);
       const send = () => {
+        scheduledContext.scheduledAcks = Math.max(0, scheduledContext.scheduledAcks - 1);
         const current = ackContextRef.current;
-        if (!current?.active || current.target !== expectedTarget || current.abort.signal.aborted)
+        if (
+          !current?.active ||
+          current !== scheduledContext ||
+          current.target !== expectedTarget ||
+          current.abort.signal.aborted
+        )
           return;
         const dispatch = (
-          context: NonNullable<typeof ackContextRef.current>,
-          acknowledgement: { viewerId: string; frameSeq: number },
+          context: RenderAckContext,
+          acknowledgement: {
+            viewerId: string;
+            frameSeq: number;
+            observedAtEpochMillis: number;
+            sentAtEpochMillis: number;
+          },
         ) => {
           if (!context.active || ackContextRef.current !== context || context.abort.signal.aborted)
             return;
           if (context.ackInFlight) {
             context.queuedAck = acknowledgement; // latest-wins: at most one pending POST
+            publishPending(context);
             return;
           }
           context.ackInFlight = true;
+          publishPending(context);
           setRenderAckAttemptedCount((count) => count + 1);
           void acknowledgeRemoteViewRender({
             url: context.url,
@@ -314,16 +429,32 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
             .then((accepted) => {
               if (accepted && context.active && ackContextRef.current === context) {
                 setRenderAckAcceptedCount((count) => count + 1);
+                setLastRenderAckAcceptedFrame({
+                  seq: acknowledgement.frameSeq,
+                  observedAtEpochMillis: acknowledgement.observedAtEpochMillis,
+                  sentAtEpochMillis: acknowledgement.sentAtEpochMillis,
+                });
+              } else if (context.active && ackContextRef.current === context) {
+                setRenderAckRejectedCount((count) => count + 1);
               }
             })
             .finally(() => {
               context.ackInFlight = false;
               const next = context.queuedAck;
               context.queuedAck = null;
-              if (next) dispatch(context, next);
+              if (next) {
+                dispatch(context, next);
+              } else {
+                publishPending(context);
+              }
             });
         };
-        dispatch(current, { viewerId: meta.viewerId, frameSeq: renderedFrame.seq });
+        dispatch(current, {
+          viewerId: meta.viewerId,
+          frameSeq: renderedFrame.seq,
+          observedAtEpochMillis: renderedFrame.observedAtEpochMillis,
+          sentAtEpochMillis: renderedFrame.sentAtEpochMillis,
+        });
       };
       if (afterPaint) {
         afterPaint(send);
@@ -367,6 +498,15 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       data-testid="remote-view-page"
       data-render-ack-attempted-count={renderAckAttemptedCount}
       data-render-ack-accepted-count={renderAckAcceptedCount}
+      data-render-ack-rejected-count={renderAckRejectedCount}
+      data-render-ack-pending-count={renderAckPendingCount}
+      data-render-ack-draining={renderAckDraining ? 'true' : 'false'}
+      data-render-ack-drain-nonce={renderAckDrainNonce ?? undefined}
+      data-render-ack-last-accepted-seq={lastRenderAckAcceptedFrame?.seq}
+      data-render-ack-last-accepted-observed-at={lastRenderAckAcceptedFrame?.observedAtEpochMillis}
+      data-render-ack-last-accepted-sent-at={lastRenderAckAcceptedFrame?.sentAtEpochMillis}
+      data-view-status={status}
+      data-view-closure-kind={closureKind}
       data-metadata-trusted={metadataTrusted ? 'true' : 'false'}
       data-viewer-id={meta?.viewerId}
       data-frame-seq={frame?.seq}
