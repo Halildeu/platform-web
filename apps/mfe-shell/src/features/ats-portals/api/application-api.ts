@@ -200,7 +200,7 @@ export type RecruiterApplicationPageDto = {
 export type InterviewType = 'SCREENING' | 'TECHNICAL' | 'BEHAVIORAL' | 'PANEL' | 'FINAL';
 export type InterviewMode = 'VIDEO' | 'PHONE' | 'ONSITE';
 export type InterviewStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
-export type InterviewParticipantRole = 'LEAD' | 'INTERVIEWER' | 'OBSERVER';
+export type InterviewParticipantRole = 'LEAD' | 'INTERVIEWER';
 export type InterviewRecommendation = 'ADVANCE' | 'HOLD' | 'NO_HIRE';
 
 export type InterviewParticipantDto = {
