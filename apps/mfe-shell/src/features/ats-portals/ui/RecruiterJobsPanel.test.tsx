@@ -101,18 +101,22 @@ describe('RecruiterJobsPanel', () => {
 
   it('previews a draft before publication without exposing a public link', async () => {
     apiMocks.listRecruiterJobs.mockResolvedValue([JOB]);
-    render(<RecruiterJobsPanel canManage />);
+    const { container } = render(<RecruiterJobsPanel canManage />);
 
     const previewTrigger = await screen.findByRole('button', { name: 'Önizle' });
     fireEvent.click(previewTrigger);
 
     const preview = screen.getByTestId('recruiter-job-preview');
     expect(preview).toBeVisible();
+    expect(container).toHaveProperty('inert', true);
+    expect(container).toHaveAttribute('aria-hidden', 'true');
     expect(within(preview).getByRole('heading', { name: JOB.title })).toBeVisible();
     expect(screen.getByText(/public yayına çıkmaz/i)).toBeVisible();
     expect(screen.queryByRole('link', { name: 'Public ilanı aç' })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByTestId('recruiter-job-preview')).not.toBeInTheDocument();
+    expect((container as HTMLElement & { inert?: boolean }).inert).toBeUndefined();
+    expect(container).not.toHaveAttribute('aria-hidden');
     await waitFor(() => expect(previewTrigger).toHaveFocus());
   });
 

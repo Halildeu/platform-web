@@ -98,7 +98,6 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
   const [saving, setSaving] = useState(false);
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
   const retryKeys = useRef(new Map<string, string>());
-  const panelRef = useRef<HTMLElement>(null);
   const previewDialogRef = useRef<HTMLDivElement>(null);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -114,21 +113,29 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closePreview();
     };
-    const background = panelRef.current?.parentElement;
-    const previousAriaHidden = background?.getAttribute('aria-hidden');
-    const previousInert = background?.inert ?? false;
-    if (background) {
-      background.inert = true;
-      background.setAttribute('aria-hidden', 'true');
-    }
+    const dialog = previewDialogRef.current;
+    const backgrounds = Array.from(document.body.children)
+      .filter(
+        (element): element is HTMLElement =>
+          element instanceof HTMLElement && element !== dialog && !element.contains(dialog),
+      )
+      .map((element) => ({
+        element,
+        previousAriaHidden: element.getAttribute('aria-hidden'),
+        previousInert: element.inert,
+      }));
+    backgrounds.forEach(({ element }) => {
+      element.inert = true;
+      element.setAttribute('aria-hidden', 'true');
+    });
     window.addEventListener('keydown', closeOnEscape);
     return () => {
       window.removeEventListener('keydown', closeOnEscape);
-      if (background) {
-        background.inert = previousInert;
-        if (previousAriaHidden === null) background.removeAttribute('aria-hidden');
-        else background.setAttribute('aria-hidden', previousAriaHidden);
-      }
+      backgrounds.forEach(({ element, previousAriaHidden, previousInert }) => {
+        element.inert = previousInert;
+        if (previousAriaHidden === null) element.removeAttribute('aria-hidden');
+        else element.setAttribute('aria-hidden', previousAriaHidden);
+      });
     };
   }, [closePreview, previewing]);
 
@@ -281,7 +288,6 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
 
   return (
     <section
-      ref={panelRef}
       id="recruiter-jobs"
       className="scroll-mt-24 rounded-3xl border border-border-subtle bg-surface-default p-4 shadow-xs sm:p-6"
       aria-labelledby="recruiter-jobs-heading"
