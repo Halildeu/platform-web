@@ -124,7 +124,15 @@ export const parseResumeText = (text: string): ParsedResume => {
 
   for (const candidate of flatText.match(/https?:\/\/[^\s]+/gu) ?? []) {
     const cleaned = candidate.replace(/[),.;]+$/u, '');
-    if (!parsed.linkedIn && /linkedin\.com/iu.test(cleaned)) parsed.linkedIn = cleaned;
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(cleaned);
+    } catch {
+      continue;
+    }
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const isLinkedIn = hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com');
+    if (!parsed.linkedIn && isLinkedIn) parsed.linkedIn = cleaned;
     else if (!parsed.portfolio) parsed.portfolio = cleaned;
   }
 

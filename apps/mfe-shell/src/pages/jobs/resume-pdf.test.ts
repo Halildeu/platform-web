@@ -72,6 +72,17 @@ Urun odakli ekibinizle calismak istiyorum.
     );
   });
 
+  it('classifies LinkedIn URLs by exact hostname rather than a hostile hostname substring', () => {
+    expect(
+      parseResumeText(
+        'https://linkedin.com.attacker.example/profile\nhttps://www.linkedin.com/in/demo',
+      ),
+    ).toMatchObject({
+      portfolio: 'https://linkedin.com.attacker.example/profile',
+      linkedIn: 'https://www.linkedin.com/in/demo',
+    });
+  });
+
   it('returns after bounded cleanup when a loaded PDF page and worker stop responding', async () => {
     vi.useFakeTimers();
     const never = new Promise<never>(() => undefined);
