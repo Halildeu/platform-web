@@ -3,6 +3,7 @@ import {
   isCandidateApplicationPath,
   isCandidatePortalPath,
   isPublicCandidatePath,
+  isPublicJobDetailPath,
   isPublicJobsPath,
   normalizePublicBasePath,
 } from './public-entry-routes';
@@ -23,6 +24,15 @@ describe('public entry routes', () => {
     expect(isCandidateApplicationPath(pathname)).toBe(false);
   });
 
+  it.each(['/jobs/urun-yoneticisi', '/jobs/senior-frontend-developer/'])(
+    'recognizes public job detail path %s',
+    (pathname) => {
+      expect(isPublicJobDetailPath(pathname)).toBe(true);
+      expect(isPublicCandidatePath(pathname)).toBe(true);
+      expect(isCandidateApplicationPath(pathname)).toBe(false);
+    },
+  );
+
   it.each(['/candidate', '/candidate/'])(
     'recognizes public candidate portal path %s',
     (pathname) => {
@@ -33,7 +43,7 @@ describe('public entry routes', () => {
     },
   );
 
-  it.each(['/', '/jobs/urun-yoneticisi', '/jobs/urun-yoneticisi/apply/preview', '/admin/ats'])(
+  it.each(['/', '/jobs/urun-yoneticisi/apply/preview', '/admin/ats'])(
     'keeps non-candidate path %s on the authenticated shell',
     (pathname) => {
       expect(isPublicCandidatePath(pathname)).toBe(false);
@@ -51,6 +61,8 @@ describe('public entry routes', () => {
     expect(isPublicJobsPath('/platform/jobs', '/platform/')).toBe(true);
     expect(isPublicJobsPath('/platform/jobs/', '/platform/')).toBe(true);
     expect(isPublicJobsPath('/jobs', '/platform/')).toBe(false);
+    expect(isPublicJobDetailPath('/platform/jobs/veri-bilimi-lideri', '/platform/')).toBe(true);
+    expect(isPublicJobDetailPath('/jobs/veri-bilimi-lideri', '/platform/')).toBe(false);
     expect(isCandidatePortalPath('/platform/candidate', '/platform/')).toBe(true);
     expect(isCandidatePortalPath('/platform/candidate/', '/platform/')).toBe(true);
     expect(isCandidatePortalPath('/candidate', '/platform/')).toBe(false);

@@ -101,8 +101,13 @@ const PublicJobDetailPage = () => {
                   </>
                 ) : null}
               </div>
-              <aside className="h-fit rounded-2xl border border-border-subtle bg-surface-muted p-5">
-                <h2 className="font-bold">Bu role başvurun</h2>
+              <section
+                aria-labelledby="public-job-apply-heading"
+                className="h-fit rounded-2xl border border-border-subtle bg-surface-muted p-5"
+              >
+                <h2 id="public-job-apply-heading" className="font-bold">
+                  Bu role başvurun
+                </h2>
                 <p className="mt-2 text-sm leading-6 text-text-secondary">
                   Formu doldurabilir, önizleyebilir ve göndermeden önce tüm bilgilerinizi
                   değiştirebilirsiniz.
@@ -113,7 +118,7 @@ const PublicJobDetailPage = () => {
                 >
                   Başvuru formuna geç
                 </Link>
-              </aside>
+              </section>
             </div>
           </article>
         ) : null}

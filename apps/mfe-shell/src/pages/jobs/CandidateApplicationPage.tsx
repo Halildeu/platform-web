@@ -10,6 +10,7 @@ import {
   type ApplicationReceiptDto,
   type PublicJobDto,
 } from '../../features/ats-portals/api/application-api';
+import { parseResumePdf, type ParsedResume } from './resume-pdf';
 
 type ApplicationValues = {
   fullName: string;
@@ -27,7 +28,10 @@ type ApplicationValues = {
 
 type LocalFileMeta = {
   size: number;
+  importedFieldCount: number;
 };
+
+type ResumeStatus = 'idle' | 'parsing' | 'success';
 
 type View = 'form' | 'preview' | 'receipt';
 
@@ -104,6 +108,18 @@ const isValidOptionalHttpUrl = (value: string) => {
   }
 };
 
+const mergeResumeIntoEmptyFields = (
+  current: ApplicationValues,
+  parsed: ParsedResume,
+): ApplicationValues =>
+  (Object.keys(current) as Array<keyof ApplicationValues>).reduce(
+    (merged, field) => ({
+      ...merged,
+      [field]: current[field].trim() ? current[field] : (parsed[field] ?? current[field]),
+    }),
+    current,
+  );
+
 const CandidateApplicationPage = () => {
   const { publicHandle, jobSlug = 'urun-yoneticisi' } = useParams();
   const jobsBase = publicHandle ? `/careers/${encodeURIComponent(publicHandle)}/jobs` : '/jobs';
@@ -113,6 +129,7 @@ const CandidateApplicationPage = () => {
   const [view, setView] = useState<View>('form');
   const [fileMeta, setFileMeta] = useState<LocalFileMeta | null>(null);
   const [fileError, setFileError] = useState('');
+  const [resumeStatus, setResumeStatus] = useState<ResumeStatus>('idle');
   const [formError, setFormError] = useState('');
   const [noticeAccepted, setNoticeAccepted] = useState(false);
   const [noticeAcceptedAt, setNoticeAcceptedAt] = useState('');
@@ -124,6 +141,7 @@ const CandidateApplicationPage = () => {
   const [candidateSessionSaved, setCandidateSessionSaved] = useState(false);
   const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
+  const resumeRequestIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const receiptHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -166,14 +184,17 @@ const CandidateApplicationPage = () => {
     };
 
   const applySyntheticResume = () => {
+    if (resumeStatus === 'parsing') return;
     setValues(SYNTHETIC_VALUES);
     setFormError('');
   };
 
-  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const requestId = ++resumeRequestIdRef.current;
     const file = event.target.files?.[0];
     setFileError('');
     setFileMeta(null);
+    setResumeStatus('idle');
     if (!file) return;
 
     const hasPdfExtension = file.name.toLowerCase().endsWith('.pdf');
@@ -191,21 +212,61 @@ const CandidateApplicationPage = () => {
     }
 
     // Privacy boundary: the filename is used transiently for client-side type
-    // validation, but is never retained or rendered. Clearing the native input
-    // also releases its FileList so the browser cannot keep showing the name.
-    // File bytes are never read, persisted or sent over the network.
-    setFileMeta({ size: file.size });
+    // validation, but is never retained or rendered. The bytes are read only in
+    // this browser tab to extract text; neither the file nor its raw text is
+    // persisted or sent over the network. Only candidate-reviewed form fields
+    // can later be submitted.
     event.target.value = '';
+    setResumeStatus('parsing');
+    try {
+      const parsed = await parseResumePdf(file);
+      if (requestId !== resumeRequestIdRef.current) return;
+      const recognized = Object.entries(parsed).filter(([, value]) => value?.trim()).length;
+      if (recognized === 0) {
+        setFileError(
+          'Bu PDF’den form alanı bulunamadı. Taranmış görüntü yerine metin içeren bir PDF seçin veya alanları elle doldurun.',
+        );
+        setResumeStatus('idle');
+        return;
+      }
+      if (!parsed.email?.trim().toLocaleLowerCase('tr-TR').endsWith('.test')) {
+        setFileError(
+          'Bu test sürümünde PDF’den dolum yalnız .test uzantılı sentetik e-posta içeren özgeçmişlerle kullanılabilir.',
+        );
+        setResumeStatus('idle');
+        return;
+      }
+      const imported = (Object.keys(parsed) as Array<keyof ApplicationValues>).filter(
+        (field) => parsed[field]?.trim() && !values[field].trim(),
+      ).length;
+      setValues((current) => mergeResumeIntoEmptyFields(current, parsed));
+      setFileMeta({ size: file.size, importedFieldCount: imported });
+      setResumeStatus('success');
+      setFormError('');
+      setSubmitError('');
+    } catch {
+      if (requestId !== resumeRequestIdRef.current) return;
+      setFileError(
+        'PDF güvenli biçimde okunamadı. Farklı bir metin tabanlı PDF seçin veya alanları elle doldurun.',
+      );
+      setResumeStatus('idle');
+    }
   };
 
   const removeFile = () => {
+    resumeRequestIdRef.current += 1;
     setFileMeta(null);
     setFileError('');
+    setResumeStatus('idle');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const openPreview: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (resumeStatus === 'parsing') {
+      setFormError('PDF okunurken önizlemeye geçemezsiniz. İşlem tamamlanınca tekrar deneyin.');
+      return;
+    }
     const missing = REQUIRED_FIELDS.some((field) => values[field].trim().length === 0);
     if (missing) {
       setFormError('Önizlemeye geçmek için yıldızlı alanları doldurun.');
@@ -297,9 +358,11 @@ const CandidateApplicationPage = () => {
   };
 
   const resetDemo = () => {
+    resumeRequestIdRef.current += 1;
     setValues(EMPTY_VALUES);
     setFileMeta(null);
     setFileError('');
+    setResumeStatus('idle');
     setFormError('');
     setNoticeAccepted(false);
     setAccuracyConfirmed(false);
@@ -338,6 +401,7 @@ const CandidateApplicationPage = () => {
         placeholder={options?.placeholder}
         required={options?.required}
         autoComplete={options?.autoComplete}
+        disabled={resumeStatus === 'parsing'}
       />
     </div>
   );
@@ -362,6 +426,7 @@ const CandidateApplicationPage = () => {
         placeholder={placeholder}
         required={required}
         rows={rows}
+        disabled={resumeStatus === 'parsing'}
       />
     </div>
   );
@@ -481,13 +546,15 @@ const CandidateApplicationPage = () => {
                       CV’nizle başlayın
                     </h2>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-text-secondary">
-                      PDF seçtiğinizde yalnız tür ve boyut bu tarayıcıda kontrol edilir. Dosya adı
-                      tutulmaz; içerik okunmaz, kaydedilmez veya ağa gönderilmez.
+                      PDF metni yalnız bu tarayıcıda okunur ve uygun alanlar otomatik doldurulur.
+                      Dosya adı ve ham içerik tutulmaz, kaydedilmez veya ağa gönderilmez;
+                      göndermeden önce tüm alanları kontrol edip değiştirebilirsiniz.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={applySyntheticResume}
+                    disabled={resumeStatus === 'parsing'}
                     data-testid="fill-synthetic-resume"
                     className="shrink-0 rounded-xl border border-action-primary px-4 py-2.5 text-sm font-semibold text-action-primary hover:bg-action-primary/5"
                   >
@@ -510,6 +577,7 @@ const CandidateApplicationPage = () => {
                     type="file"
                     accept="application/pdf,.pdf"
                     onChange={handleFileChange}
+                    disabled={resumeStatus === 'parsing'}
                     className="mx-auto mt-3 block max-w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-action-primary file:px-4 file:py-2 file:font-semibold file:text-action-primary-text"
                     aria-describedby="candidate-resume-boundary candidate-resume-error"
                   />
@@ -517,16 +585,30 @@ const CandidateApplicationPage = () => {
                     id="candidate-resume-boundary"
                     className="mt-3 text-center text-xs text-text-secondary"
                   >
-                    Test ortamında gerçek kişisel veri içeren bir dosya kullanmayın.
+                    Test ortamında gerçek kişisel veri içeren bir dosya kullanmayın. Sunucuya yalnız
+                    önizleyip onayladığınız form alanları gönderilir.
                   </p>
+                  {resumeStatus === 'parsing' ? (
+                    <p
+                      role="status"
+                      data-testid="candidate-resume-parsing"
+                      className="mt-4 text-center text-sm font-semibold text-action-primary"
+                    >
+                      PDF bu cihazda okunuyor ve form hazırlanıyor…
+                    </p>
+                  ) : null}
                   {fileMeta ? (
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-state-success-border bg-state-success-bg px-3 py-2 text-sm">
                       <span
+                        role="status"
                         data-testid="candidate-resume-meta"
                         className="font-medium text-state-success-text"
                       >
-                        PDF yalnız yerel kontrol için seçildi · {formatBytes(fileMeta.size)} ·
-                        içeriği okunmaz, kaydedilmez veya başvuruyla gönderilmez
+                        {fileMeta.importedFieldCount > 0
+                          ? `${fileMeta.importedFieldCount} boş alan PDF’den dolduruldu`
+                          : 'PDF okundu; dolu alanlarınız değiştirilmedi'}{' '}
+                        · {formatBytes(fileMeta.size)} · dosya adı ve ham içerik tutulmaz veya
+                        başvuruyla gönderilmez
                       </span>
                       <button
                         type="button"
@@ -635,6 +717,7 @@ const CandidateApplicationPage = () => {
 
               <button
                 type="submit"
+                disabled={resumeStatus === 'parsing'}
                 className="min-h-12 rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text shadow-sm hover:opacity-90 focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-2"
               >
                 Başvuruyu önizle
@@ -694,7 +777,7 @@ const CandidateApplicationPage = () => {
                   </dt>
                   <dd className="text-sm text-text-primary">
                     {fileMeta
-                      ? `PDF yalnız yerel kontrol için seçildi · ${formatBytes(fileMeta.size)} · içerik başvuruyla gönderilmez`
+                      ? `PDF bu cihazda okundu · ${formatBytes(fileMeta.size)} · dosya ve ham içerik başvuruyla gönderilmez`
                       : 'Eklenmedi'}
                   </dd>
                 </div>
