@@ -51,6 +51,34 @@ describe('Tooltip — temel render', () => {
 /* ------------------------------------------------------------------ */
 
 describe('Tooltip — hover interaction', () => {
+  it('unmount sirasinda bekleyen acma ve kapatma timerlarini temizler', () => {
+    vi.useFakeTimers();
+    const firstRender = render(
+      <Tooltip content="Tip text" openDelay={100}>
+        <button>Open timer</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByText('Open timer').parentElement!);
+    expect(vi.getTimerCount()).toBe(1);
+    firstRender.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+
+    const secondRender = render(
+      <Tooltip content="Tip text" openDelay={0} closeDelay={100}>
+        <button>Close timer</button>
+      </Tooltip>,
+    );
+    const wrapper = screen.getByText('Close timer').parentElement!;
+
+    fireEvent.mouseEnter(wrapper);
+    act(() => vi.runOnlyPendingTimers());
+    fireEvent.mouseLeave(wrapper);
+    expect(vi.getTimerCount()).toBe(1);
+    secondRender.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('hover ile tooltip gorunur olur', () => {
     vi.useFakeTimers();
     render(
@@ -324,7 +352,7 @@ describe('Tooltip — interaction & role', () => {
 
 describe('Tooltip — quality signals', () => {
   it('handles error and invalid states', () => {
-    const { container } = render(<div role="alert" aria-invalid="true" data-testid="error-el">Error message</div>);
+    render(<div role="alert" aria-invalid="true" data-testid="error-el">Error message</div>);
     const el = screen.getByTestId('error-el');
     expect(el).toBeInTheDocument();
     expect(el).toHaveAttribute('aria-invalid', 'true');
@@ -333,7 +361,7 @@ describe('Tooltip — quality signals', () => {
   });
 
   it('renders empty state when no data is provided', () => {
-    const { container } = render(<div data-testid="empty-state" data-empty="true">No data available</div>);
+    render(<div data-testid="empty-state" data-empty="true">No data available</div>);
     const el = screen.getByTestId('empty-state');
     expect(el).toBeInTheDocument();
     expect(el).toHaveTextContent('No data available');
@@ -341,7 +369,7 @@ describe('Tooltip — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');
