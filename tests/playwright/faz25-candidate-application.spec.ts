@@ -35,6 +35,52 @@ const SECOND_JOB = {
 };
 
 const installAtsApi = async (page: Page, submissions: Array<Record<string, unknown>> = []) => {
+  const proposalValues: Record<string, string> = {
+    fullName: 'Deniz Yilmaz',
+    email: 'deniz.yilmaz@example.test',
+    phone: '+90 555 000 00 00',
+    city: 'Istanbul',
+    summary: 'Kullanici ihtiyacini urune donusturen urun profesyoneli.',
+    experience: 'Urun Uzmani - Ornek Teknoloji - 2022-2026',
+    education: 'Yonetim Bilisim Sistemleri - Ornek Universitesi - 2020',
+    skills: 'Urun kesfi, kullanici arastirmasi, analitik',
+  };
+  const buildProposals = () =>
+    Object.entries(proposalValues).map(([field, proposedValue]) => ({
+      field,
+      proposedValue,
+      candidateValue: null,
+      state: 'UNREVIEWED',
+      version: 0,
+      provenance: {
+        page: 1,
+        x: 48,
+        y: 120,
+        width: 240,
+        height: 14,
+        confidence: 0.96,
+        parserVersion: 'pdfbox-resume-v1',
+      },
+    }));
+  let resumeImport: Record<string, any> = {
+    importId: 'ri_abcdefghijklmnopqrstuvwx',
+    jobSlug: JOB.slug,
+    state: 'ACTIVE',
+    version: 0,
+    documentVersion: 0,
+    noticeVersion: 'candidate-resume-import-v1',
+    noticeAcceptedAt: '2026-07-18T06:00:00Z',
+    uploadExpiresAt: '2026-07-18T06:15:00Z',
+    firstUploadAt: null,
+    expiresAt: null,
+    parserVersion: null,
+    protectedSuppressed: 0,
+    unsupportedOutput: 0,
+    createdAt: '2026-07-18T06:00:00Z',
+    updatedAt: '2026-07-18T06:00:00Z',
+    purgedAt: null,
+    proposals: [],
+  };
   await page.route('**/api/ats/v1/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -51,6 +97,111 @@ const installAtsApi = async (page: Page, submissions: Array<Record<string, unkno
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(JOB),
+      });
+      return;
+    }
+    if (request.method() === 'POST' && path.endsWith(`/jobs/${JOB.slug}/resume-imports`)) {
+      const body = JSON.parse(request.postData() ?? '{}') as Record<string, unknown>;
+      resumeImport = { ...resumeImport, noticeAcceptedAt: body.noticeAcceptedAt };
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(resumeImport),
+      });
+      return;
+    }
+    if (
+      request.method() === 'PUT' &&
+      path.endsWith(`/candidate/resume-imports/${resumeImport.importId}/document`)
+    ) {
+      resumeImport = {
+        ...resumeImport,
+        version: resumeImport.version + 1,
+        documentVersion: resumeImport.documentVersion || 1,
+        firstUploadAt: resumeImport.firstUploadAt ?? '2026-07-18T06:01:00Z',
+        expiresAt: '2026-07-19T06:01:00Z',
+        parserVersion: 'pdfbox-resume-v1',
+        protectedSuppressed: 1,
+        proposals: buildProposals(),
+      };
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(resumeImport),
+      });
+      return;
+    }
+    if (
+      request.method() === 'GET' &&
+      path.endsWith(`/candidate/resume-imports/${resumeImport.importId}`)
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(resumeImport),
+      });
+      return;
+    }
+    const fieldMatch = path.match(/\/candidate\/resume-imports\/[^/]+\/fields\/([^/]+)$/u);
+    if (request.method() === 'PUT' && fieldMatch) {
+      const body = JSON.parse(request.postData() ?? '{}') as {
+        state: string;
+        editedValue?: string;
+      };
+      resumeImport = {
+        ...resumeImport,
+        version: resumeImport.version + 1,
+        proposals: resumeImport.proposals.map((proposal: Record<string, unknown>) =>
+          proposal.field === fieldMatch[1]
+            ? {
+                ...proposal,
+                state: body.state,
+                candidateValue: body.state === 'EDITED' ? body.editedValue : null,
+                version: Number(proposal.version) + 1,
+              }
+            : proposal,
+        ),
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(resumeImport),
+      });
+      return;
+    }
+    if (
+      request.method() === 'POST' &&
+      path.endsWith(`/candidate/resume-imports/${resumeImport.importId}/confirm`)
+    ) {
+      const fields = Object.fromEntries(
+        resumeImport.proposals
+          .filter((proposal: Record<string, unknown>) =>
+            ['ACCEPTED', 'EDITED'].includes(String(proposal.state)),
+          )
+          .map((proposal: Record<string, unknown>) => [
+            proposal.field,
+            proposal.state === 'EDITED' ? proposal.candidateValue : proposal.proposedValue,
+          ]),
+      );
+      resumeImport = {
+        ...resumeImport,
+        state: 'CONFIRMED',
+        version: resumeImport.version + 1,
+        proposals: [],
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          resumeImport,
+          draft: {
+            draftId: '11111111-1111-1111-1111-111111111111',
+            importId: resumeImport.importId,
+            version: 0,
+            fields,
+            createdAt: '2026-07-18T06:02:00Z',
+          },
+        }),
       });
       return;
     }
@@ -136,15 +287,20 @@ test.describe('Faz 25 public candidate journey', () => {
     });
     await expect(page.getByTestId('candidate-application-page')).toBeVisible();
     await expect(page.getByRole('heading', { name: JOB.title })).toBeVisible();
+    await page.getByLabel(/CV içe aktarma aydınlatmasını okudum/i).check();
     await page.getByTestId('candidate-resume').setInputFiles({
       name: 'ornek-cv.pdf',
       mimeType: 'application/pdf',
       buffer: buildSyntheticResumePdf(),
     });
-
-    await expect(page.getByTestId('candidate-resume-meta')).toContainText(
-      '11 boş alan PDF’den dolduruldu',
-    );
+    await expect(page.getByTestId('candidate-resume-review')).toBeVisible();
+    await expect(page.getByTestId('candidate-email')).toHaveValue('');
+    await page.getByRole('button', { name: 'Güvenli önerileri kabul et' }).click();
+    await expect(
+      page.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }).click();
+    await expect(page.getByTestId('candidate-resume-meta')).toContainText('8 alan forma aktarıldı');
     await expect(page.getByTestId('candidate-email')).toHaveValue('deniz.yilmaz@example.test');
     expect(authBootstrapLogs).toEqual([]);
   });
@@ -205,26 +361,28 @@ test.describe('Faz 25 public candidate journey', () => {
     await page.getByRole('link', { name: 'Ürün Yöneticisi ilanını incele' }).click();
     await page.getByRole('link', { name: 'Başvuru formuna geç' }).click();
 
+    await page.getByLabel(/CV içe aktarma aydınlatmasını okudum/i).check();
     await page.getByTestId('candidate-resume').setInputFiles({
       name: 'ornek-cv.pdf',
       mimeType: 'application/pdf',
       buffer: buildSyntheticResumePdf(),
     });
-    await expect(page.getByTestId('candidate-resume-meta')).toContainText(
-      '11 boş alan PDF’den dolduruldu',
-    );
+    await expect(page.getByTestId('candidate-resume-review')).toBeVisible();
+    await expect(page.getByTestId('candidate-fullName')).toHaveValue('');
+    await page.getByRole('button', { name: 'Güvenli önerileri kabul et' }).click();
+    await expect(
+      page.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }).click();
+    await expect(page.getByTestId('candidate-resume-meta')).toContainText('8 alan forma aktarıldı');
     await expect(page.getByTestId('candidate-fullName')).toHaveValue('Deniz Yilmaz');
     await expect(page.getByTestId('candidate-email')).toHaveValue('deniz.yilmaz@example.test');
     await expect(page.getByTestId('candidate-experience')).toHaveValue(
       'Urun Uzmani - Ornek Teknoloji - 2022-2026',
     );
-    await expect(page.getByTestId('candidate-resume-meta')).toContainText('ham içerik tutulmaz');
+    await expect(page.getByTestId('candidate-resume-meta')).toContainText('ham PDF tutulmadı');
     await expect(page.getByTestId('candidate-resume-meta')).not.toContainText('ornek-cv.pdf');
-    expect(
-      await page
-        .getByTestId('candidate-resume')
-        .evaluate((input: HTMLInputElement) => input.files?.length ?? -1),
-    ).toBe(0);
+    await expect(page.getByTestId('candidate-resume')).toHaveCount(0);
     await page.getByTestId('candidate-fullName').fill('Düzenlenmiş Demo Adayı');
     await page.getByRole('button', { name: 'Başvuruyu önizle' }).click();
 
@@ -266,6 +424,8 @@ test.describe('Faz 25 public candidate journey', () => {
         'portfolio',
         'skills',
         'summary',
+        'resumeImportId',
+        'resumeDraftVersion',
       ].sort(),
     );
     const serializedSubmission = JSON.stringify(submissions[0]);
