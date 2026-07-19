@@ -32,6 +32,7 @@ export default function App() {
     setReply('');
     setInternalNote('');
     setAssignee('');
+    setBusy(false);
     operationKeys.current.clear();
   };
 
@@ -56,6 +57,7 @@ export default function App() {
     setError('');
     try {
       const next = await listCases();
+      if (requestSequence !== selectionSequence.current) return;
       setItems(next);
       setLoadState('ready');
       if (selectedId) {
@@ -66,6 +68,7 @@ export default function App() {
         }
       }
     } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
       setLoadState('error');
       showRequestError(requestError);
     }
@@ -94,97 +97,131 @@ export default function App() {
 
   const changeStatus = async (status: string) => {
     if (!selected) return;
+    const requestSequence = ++selectionSequence.current;
+    const caseId = selected.id;
+    const version = selected.version;
     setBusy(true);
     setError('');
     try {
-      await updateCase(selected.id, selected.version, { status });
+      await updateCase(caseId, version, { status });
+      if (requestSequence !== selectionSequence.current) return;
       try {
-        setSelected(await getCase(selected.id));
-        setItems(await listCases());
+        const [fresh, next] = await Promise.all([getCase(caseId), listCases()]);
+        if (requestSequence !== selectionSequence.current) return;
+        setSelected(fresh);
+        setAssignee(fresh.assignedTo ?? '');
+        setItems(next);
       } catch (refreshError) {
-        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        if (requestSequence === selectionSequence.current) {
+          showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        }
       }
     } catch (requestError) {
       await handleWriteFailure(
         requestError,
-        selected.id,
+        caseId,
         setSelected,
         setAssignee,
         showRequestError,
+        () => requestSequence === selectionSequence.current,
       );
     } finally {
-      setBusy(false);
+      if (requestSequence === selectionSequence.current) setBusy(false);
     }
   };
 
   const saveAssignment = async () => {
     if (!selected) return;
+    const requestSequence = ++selectionSequence.current;
+    const caseId = selected.id;
+    const version = selected.version;
     setBusy(true);
     setError('');
     try {
-      await updateCase(selected.id, selected.version, { assignedTo: assignee.trim() || null });
+      await updateCase(caseId, version, { assignedTo: assignee.trim() || null });
+      if (requestSequence !== selectionSequence.current) return;
       try {
-        const fresh = await getCase(selected.id);
+        const [fresh, next] = await Promise.all([getCase(caseId), listCases()]);
+        if (requestSequence !== selectionSequence.current) return;
         setSelected(fresh);
         setAssignee(fresh.assignedTo ?? '');
-        setItems(await listCases());
+        setItems(next);
       } catch (refreshError) {
-        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        if (requestSequence === selectionSequence.current) {
+          showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        }
       }
     } catch (requestError) {
       await handleWriteFailure(
         requestError,
-        selected.id,
+        caseId,
         setSelected,
         setAssignee,
         showRequestError,
+        () => requestSequence === selectionSequence.current,
       );
     } finally {
-      setBusy(false);
+      if (requestSequence === selectionSequence.current) setBusy(false);
     }
   };
 
   const saveInternalNote = async () => {
     if (!selected || !internalNote.trim()) return;
+    const requestSequence = ++selectionSequence.current;
+    const caseId = selected.id;
     setBusy(true);
     setError('');
     const note = internalNote.trim();
-    const operation = operationKey('internal-note', selected.id, note);
+    const operation = operationKey('internal-note', caseId, note);
     try {
-      await addInternalNote(selected.id, note, operation.key);
+      await addInternalNote(caseId, note, operation.key);
+      if (requestSequence !== selectionSequence.current) return;
       operationKeys.current.delete(operation.identity);
       setInternalNote('');
       try {
-        setSelected(await getCase(selected.id));
+        const fresh = await getCase(caseId);
+        if (requestSequence !== selectionSequence.current) return;
+        setSelected(fresh);
+        setAssignee(fresh.assignedTo ?? '');
       } catch (refreshError) {
-        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        if (requestSequence === selectionSequence.current) {
+          showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        }
       }
     } catch (requestError) {
-      showRequestError(requestError);
+      if (requestSequence === selectionSequence.current) showRequestError(requestError);
     } finally {
-      setBusy(false);
+      if (requestSequence === selectionSequence.current) setBusy(false);
     }
   };
 
   const sendReply = async () => {
     if (!selected || !reply.trim()) return;
+    const requestSequence = ++selectionSequence.current;
+    const caseId = selected.id;
     setBusy(true);
     setError('');
     const body = reply.trim();
-    const operation = operationKey('reporter-reply', selected.id, body);
+    const operation = operationKey('reporter-reply', caseId, body);
     try {
-      await replyToReporter(selected.id, body, operation.key);
+      await replyToReporter(caseId, body, operation.key);
+      if (requestSequence !== selectionSequence.current) return;
       operationKeys.current.delete(operation.identity);
       setReply('');
       try {
-        setSelected(await getCase(selected.id));
+        const fresh = await getCase(caseId);
+        if (requestSequence !== selectionSequence.current) return;
+        setSelected(fresh);
+        setAssignee(fresh.assignedTo ?? '');
       } catch (refreshError) {
-        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        if (requestSequence === selectionSequence.current) {
+          showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+        }
       }
     } catch (requestError) {
-      showRequestError(requestError);
+      if (requestSequence === selectionSequence.current) showRequestError(requestError);
     } finally {
-      setBusy(false);
+      if (requestSequence === selectionSequence.current) setBusy(false);
     }
   };
 
@@ -393,18 +430,21 @@ async function handleWriteFailure(
   setSelected: (value: EthicsCaseDetail | null) => void,
   setAssignee: (value: string) => void,
   showError: (value: unknown) => void,
+  isCurrent: () => boolean,
 ) {
+  if (!isCurrent()) return;
   if ([409, 412].includes(responseStatus(error) ?? 0)) {
     try {
       const fresh = await getCase(caseId);
+      if (!isCurrent()) return;
       setSelected(fresh);
       setAssignee(fresh.assignedTo ?? '');
     } catch (refreshError) {
-      showError(refreshError);
+      if (isCurrent()) showError(refreshError);
       return;
     }
   }
-  showError(error);
+  if (isCurrent()) showError(error);
 }
 
 function showRequestErrorAfterWrite(

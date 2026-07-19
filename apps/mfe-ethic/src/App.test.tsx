@@ -89,6 +89,40 @@ describe('Etik Speak manager MFE', () => {
     await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /#11111111/ })).not.toBeInTheDocument();
   });
+  test('late list response cannot repopulate state after authorization purge', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    expect(await screen.findByText('Sentetik anlatım')).toBeInTheDocument();
+    let resolveOldList!: (value: (typeof summary)[]) => void;
+    vi.mocked(api.listCases)
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveOldList = resolve)))
+      .mockRejectedValueOnce({ response: { status: 401 } });
+    await userEvent.click(screen.getByRole('button', { name: 'Yenile' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yenile' }));
+    await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
+    resolveOldList([summary]);
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /#11111111/ })).not.toBeInTheDocument(),
+    );
+  });
+  test('late post-write detail cannot repopulate state after authorization purge', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    let resolveOldDetail!: (value: typeof detail) => void;
+    vi.mocked(api.getCase).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveOldDetail = resolve)),
+    );
+    await userEvent.type(screen.getByLabelText("Reporter'a güvenli yanıt"), 'Güvenli yanıt');
+    await userEvent.click(screen.getByRole('button', { name: 'Yanıtı gönder' }));
+    await waitFor(() => expect(api.replyToReporter).toHaveBeenCalled());
+    vi.mocked(api.listCases).mockRejectedValueOnce({ response: { status: 403 } });
+    await userEvent.click(screen.getByRole('button', { name: 'Yenile' }));
+    await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
+    resolveOldDetail(detail);
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Sentetik bildirim' })).not.toBeInTheDocument(),
+    );
+  });
   test('object-level 404 deny removes previously rendered sensitive case data', async () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
