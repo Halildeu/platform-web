@@ -9,6 +9,19 @@ name: CI - Web Image Build + GHCR Push
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/mfe-ethic/**'
+      - 'apps/mfe-shell/**'
+      - 'packages/**'
+      - 'scripts/deploy/**'
+      - 'scripts/sync-public-evidence.mjs'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci-web-image-push.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,6 +34,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Build + Push ${{ matrix.variant }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -69,8 +83,10 @@ jobs:
             enable_ethic: 'true'
 
     steps:
-      - name: Checkout
+      - name: Checkout exact immutable source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # K2 (Wave 1.1) — Docker build context'ine taze evidence + scorecard yaz.
       # GHCR image içine baked olur, Design Lab Truth Plane production'da güncel kalır.
@@ -108,7 +124,7 @@ jobs:
         id: image
         env:
           BUILD_VARIANT: ${{ matrix.variant }}
-          BUILD_SHA: ${{ github.sha }}
+          BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           image_ref="$(node scripts/deploy/derive-build-image-ref.mjs \
@@ -117,6 +133,12 @@ jobs:
           {
             echo "ref=$image_ref"
             echo "short=${BUILD_SHA:0:7}"
+            echo 'tags<<EOF'
+            echo "$image_ref"
+            if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/heads/main ]]; then
+              echo "${REGISTRY}/${IMAGE_OWNER}/${{ matrix.image_name }}:latest"
+            fi
+            echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
       - name: Build + Push image (${{ matrix.variant }})
@@ -138,12 +160,10 @@ jobs:
             VITE_NOTIFY_VAPID_PUBLIC_KEY=${{ vars.NOTIFY_VAPID_PUBLIC_KEY }}
             VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE=${{ matrix.enable_endpoint_admin }}
             VITE_SHELL_ENABLE_ETHIC_REMOTE=${{ matrix.enable_ethic }}
-            BUILD_SHA=${{ github.sha }}
-            BUILD_REF=${{ github.ref_name }}
+            BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
+            BUILD_REF=${{ github.head_ref || github.ref_name }}
             BUILD_IMAGE=${{ steps.image.outputs.ref }}
-          tags: |
-            ${{ steps.image.outputs.ref }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:latest
+          tags: ${{ steps.image.outputs.tags }}
           # Cache scope-v2: 2026-05-03 prod variant cache-bust — eski scope
           # Vite build output'unu çakıyor, secret değişimleri yansımıyordu.
           cache-from: type=gha,scope=${{ matrix.variant }}-v2
@@ -156,9 +176,10 @@ jobs:
       # (Faz 21.6 follow-up). Secret `GITOPS_DISPATCH_PAT` fine-grained PAT,
       # `Halildeu/platform-k8s-gitops` üstünde "Contents: write" yetkisi.
       - name: Dispatch testai deploy to gitops
-        if: matrix.variant == 'testai'
+        if: matrix.variant == 'testai' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITOPS_DISPATCH_PAT }}
+          SOURCE_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::warning::GITOPS_DISPATCH_PAT not set; skipping dispatch"
@@ -172,24 +193,26 @@ jobs:
           gh api repos/Halildeu/platform-k8s-gitops/dispatches \
             -X POST \
             -f event_type=testai-deploy \
-            -F "client_payload[sha]=${{ github.sha }}" \
+            -F "client_payload[sha]=${{ github.event.pull_request.head.sha || github.sha }}" \
             -F "client_payload[short_sha]=${{ steps.image.outputs.short }}" \
-            -F "client_payload[ref]=${{ github.ref_name }}" \
+            -F "client_payload[ref]=${SOURCE_REF}" \
             -F "client_payload[image]=${IMAGE_REF}" \
             -F "client_payload[image_tag]=${TAG}" \
             -F "client_payload[image_digest]=${DIGEST}"
           echo "Dispatched testai-deploy to platform-k8s-gitops"
-          echo "  - sha:      ${{ github.sha }}"
+          echo "  - sha:      ${{ github.event.pull_request.head.sha || github.sha }}"
           echo "  - tag:      ${TAG}"
           echo "  - digest:   ${DIGEST}"
 
       - name: Summary — digest (19.9 pin için kanıt)
         run: |
-          echo "### ${{ matrix.image_name }} image push (${{ matrix.variant }})" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag**: \`sha-${{ steps.image.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image**: \`${{ steps.image.outputs.ref }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Pinnable**: \`${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build args**:" >> $GITHUB_STEP_SUMMARY
-          echo "  - VITE_KEYCLOAK_URL: \`${{ matrix.kc_url }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "  - VITE_KEYCLOAK_REALM: \`${{ matrix.kc_realm }}\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### ${{ matrix.image_name }} image push (${{ matrix.variant }})"
+            echo "- **Tag**: \`sha-${{ steps.image.outputs.short }}\`"
+            echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`"
+            echo "- **Image**: \`${{ steps.image.outputs.ref }}\`"
+            echo "- **Pinnable**: \`${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}\`"
+            echo "- **Build args**:"
+            echo "  - VITE_KEYCLOAK_URL: \`${{ matrix.kc_url }}\`"
+            echo "  - VITE_KEYCLOAK_REALM: \`${{ matrix.kc_realm }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

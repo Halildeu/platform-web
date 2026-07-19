@@ -89,6 +89,15 @@ describe('Etik Speak manager MFE', () => {
     await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /#11111111/ })).not.toBeInTheDocument();
   });
+  test('object-level 404 deny removes previously rendered sensitive case data', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    expect(await screen.findByText('Sentetik anlatım')).toBeInTheDocument();
+    vi.mocked(api.listCases).mockRejectedValueOnce({ response: { status: 404 } });
+    await userEvent.click(screen.getByRole('button', { name: 'Yenile' }));
+    await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent(/bulunamadı.*yetkisi/i);
+  });
   test('late case response cannot replace the most recently selected case', async () => {
     const second = {
       ...summary,

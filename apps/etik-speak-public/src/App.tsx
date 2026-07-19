@@ -44,6 +44,15 @@ export default function App() {
     }
   }, [view]);
 
+  useEffect(() => {
+    if (view !== 'receipt' || receiptSaved) return undefined;
+    const guardUnsavedReceipt = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', guardUnsavedReceipt);
+    return () => window.removeEventListener('beforeunload', guardUnsavedReceipt);
+  }, [receiptSaved, view]);
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
@@ -361,11 +370,11 @@ function ReceiptView({
       <dl>
         <div>
           <dt>Bildirim numarası</dt>
-          <dd>{receipt.receiptId}</dd>
+          <dd data-testid="etik-receipt-id">{receipt.receiptId}</dd>
         </div>
         <div>
           <dt>Erişim sırrı</dt>
-          <dd>{receipt.accessSecret}</dd>
+          <dd data-testid="etik-access-secret">{receipt.accessSecret}</dd>
         </div>
       </dl>
       <button className="primary full" onClick={download}>

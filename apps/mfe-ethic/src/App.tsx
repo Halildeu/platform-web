@@ -371,8 +371,8 @@ export default function App() {
 function readableError(error: unknown): string {
   const status = responseStatus(error);
   if (status === 401) return 'Oturum doğrulanamadı. Yeniden giriş yapın.';
-  if (status === 403)
-    return 'Bu vaka için yetkiniz yok veya çıkar çatışması kuralı erişimi engelledi.';
+  if (status === 403 || status === 404)
+    return 'Vaka bulunamadı veya ürün yetkisi/çıkar çatışması kuralı erişimi engelledi.';
   if (status === 409 || status === 412)
     return 'Vaka başka bir yetkili tarafından güncellendi. Güncel sürüm yüklendi; taslağınızı kontrol edip yeniden deneyin.';
   return 'Etik Speak servisine ulaşılamadı. İşlemin sonucu doğrulanamadı; yeniden göndermeden önce Yenile ile durumu kontrol edin.';
@@ -381,7 +381,11 @@ function readableError(error: unknown): string {
 const responseStatus = (error: unknown) =>
   (error as { response?: { status?: number } })?.response?.status;
 
-const isAuthorizationFailure = (error: unknown) => [401, 403].includes(responseStatus(error) ?? 0);
+// Object authorization deliberately uses the same 404 class as a missing case
+// to avoid an existence oracle. Treat it as sensitive authorization loss and
+// purge any narrative already rendered in the manager surface.
+const isAuthorizationFailure = (error: unknown) =>
+  [401, 403, 404].includes(responseStatus(error) ?? 0);
 
 async function handleWriteFailure(
   error: unknown,
