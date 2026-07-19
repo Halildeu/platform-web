@@ -2,11 +2,12 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   closeMailbox,
   createReport,
-  listMessages,
+  getMailbox,
   newAccessSecret,
   openMailbox,
   sendReporterMessage,
   type Message,
+  type ReporterCaseStatus,
   type Receipt,
 } from './public-api';
 
@@ -31,6 +32,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [mailboxStatus, setMailboxStatus] = useState<ReporterCaseStatus | null>(null);
   const [mailboxReply, setMailboxReply] = useState('');
   const [receiptSaved, setReceiptSaved] = useState(false);
   const intakeOperation = useRef({ key: crypto.randomUUID(), secret: newAccessSecret() });
@@ -88,7 +90,9 @@ export default function App() {
     const form = new FormData(event.currentTarget);
     try {
       await openMailbox(String(form.get('receiptId')), String(form.get('accessSecret')));
-      setMessages(await listMessages());
+      const mailbox = await getMailbox();
+      setMessages(mailbox.messages);
+      setMailboxStatus(mailbox.status);
       setView('mailbox');
     } catch {
       setError(
@@ -109,7 +113,9 @@ export default function App() {
       await sendReporterMessage(body, replyOperation.current.key);
       replyOperation.current = null;
       setMailboxReply('');
-      setMessages(await listMessages());
+      const mailbox = await getMailbox();
+      setMessages(mailbox.messages);
+      setMailboxStatus(mailbox.status);
     } catch (e) {
       setError(message(e));
     } finally {
@@ -170,6 +176,7 @@ export default function App() {
         {view === 'mailbox-login' && <MailboxLogin busy={busy} onSubmit={login} />}{' '}
         {view === 'mailbox' && (
           <Mailbox
+            status={mailboxStatus}
             messages={messages}
             reply={mailboxReply}
             setReply={setMailboxReply}
@@ -180,6 +187,7 @@ export default function App() {
                 await closeMailbox();
               } finally {
                 setMessages([]);
+                setMailboxStatus(null);
                 setMailboxReply('');
                 replyOperation.current = null;
                 setView('home');
@@ -425,6 +433,7 @@ function MailboxLogin({
   );
 }
 function Mailbox({
+  status,
   messages,
   reply,
   setReply,
@@ -432,6 +441,7 @@ function Mailbox({
   onSend,
   onClose,
 }: {
+  status: ReporterCaseStatus | null;
   messages: Message[];
   reply: string;
   setReply: (v: string) => void;
@@ -442,6 +452,11 @@ function Mailbox({
   return (
     <section className="panel mailbox" aria-labelledby="mailbox-title">
       <h1 id="mailbox-title">Güvenli mailbox</h1>
+      {status && (
+        <p className="case-status" data-testid="etik-case-status">
+          Bildirim durumu: <strong>{reporterStatusLabel(status)}</strong>
+        </p>
+      )}
       <p className="help">
         Bu oturum kısa sürelidir. Ortak cihazda işiniz bitince pencereyi kapatın.
       </p>
@@ -472,6 +487,14 @@ function Mailbox({
       </button>
     </section>
   );
+}
+
+function reporterStatusLabel(status: ReporterCaseStatus) {
+  return {
+    NEW: 'Alındı',
+    IN_REVIEW: 'İncelemede',
+    CLOSED: 'Sonuçlandırıldı',
+  }[status];
 }
 
 function PrivacyNotice() {

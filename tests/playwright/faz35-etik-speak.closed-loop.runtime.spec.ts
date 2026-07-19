@@ -439,6 +439,7 @@ const completeReporterMailbox = async (journey: ReporterJourney) => {
   await page.getByLabel('Bildirim numarası').fill(journey.receiptId);
   await page.getByLabel('Erişim sırrı').fill(journey.accessSecret);
   await page.getByRole('button', { name: 'Güvenli mailbox aç' }).click();
+  await expect(page.getByTestId('etik-case-status')).toHaveText('Bildirim durumu: İncelemede');
   await expect(page.getByText(journey.staffReply)).toBeVisible();
   await expect(page.getByText(journey.internalNote)).toHaveCount(0);
   await page.getByLabel('Yanıtınız').fill(journey.reporterReply);

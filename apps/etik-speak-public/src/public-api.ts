@@ -14,6 +14,11 @@ export interface Message {
   body: string;
   createdAt: string;
 }
+export type ReporterCaseStatus = 'NEW' | 'IN_REVIEW' | 'CLOSED';
+export interface MailboxView {
+  status: ReporterCaseStatus;
+  messages: Message[];
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
@@ -74,11 +79,17 @@ const validMessage = (value: unknown): value is Message => {
     typeof item.createdAt === 'string'
   );
 };
-export async function listMessages() {
+export async function getMailbox() {
   const result = await request<unknown>('/mailbox/messages');
-  if (!Array.isArray(result) || !result.every(validMessage))
-    throw new Error('Mailbox mesajları doğrulanamadı.');
-  return result;
+  const mailbox = result as Partial<MailboxView> | null;
+  if (
+    !mailbox ||
+    !['NEW', 'IN_REVIEW', 'CLOSED'].includes(mailbox.status ?? '') ||
+    !Array.isArray(mailbox.messages) ||
+    !mailbox.messages.every(validMessage)
+  )
+    throw new Error('Mailbox durumu ve mesajları doğrulanamadı.');
+  return mailbox as MailboxView;
 }
 export const closeMailbox = () => request<unknown>('/mailbox/session', { method: 'DELETE' });
 export async function sendReporterMessage(body: string, idempotencyKey: string) {

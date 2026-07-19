@@ -393,6 +393,13 @@ body {
   gap: 0.8rem;
 }
 
+.mailbox .case-status {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--etik-border);
+  border-radius: 10px;
+  background: var(--etik-surface-muted);
+}
+
 .mailbox li {
   max-width: 86%;
   padding: 1rem;
