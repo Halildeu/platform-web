@@ -133,12 +133,11 @@ jobs:
           {
             echo "ref=$image_ref"
             echo "short=${BUILD_SHA:0:7}"
-            echo 'tags<<EOF'
-            echo "$image_ref"
             if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/heads/main ]]; then
-              echo "${REGISTRY}/${IMAGE_OWNER}/${{ matrix.image_name }}:latest"
+              echo "latest=${REGISTRY}/${IMAGE_OWNER}/${{ matrix.image_name }}:latest"
+            else
+              echo 'latest='
             fi
-            echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
       - name: Build + Push image (${{ matrix.variant }})
@@ -163,7 +162,9 @@ jobs:
             BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
             BUILD_REF=${{ github.head_ref || github.ref_name }}
             BUILD_IMAGE=${{ steps.image.outputs.ref }}
-          tags: ${{ steps.image.outputs.tags }}
+          tags: |
+            ${{ steps.image.outputs.ref }}
+            ${{ steps.image.outputs.latest }}
           # Cache scope-v2: 2026-05-03 prod variant cache-bust — eski scope
           # Vite build output'unu çakıyor, secret değişimleri yansımıyordu.
           cache-from: type=gha,scope=${{ matrix.variant }}-v2
