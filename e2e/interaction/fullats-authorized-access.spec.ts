@@ -321,6 +321,32 @@ test.describe('Full ATS authorized product access', () => {
         }),
       });
     });
+    await page.route(
+      `**/api/ats/v1/recruiter/applications/${SYNTHETIC_RECRUITER_APPLICATION.publicRef}`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            application: SYNTHETIC_RECRUITER_APPLICATION,
+            history: [],
+            evaluations: [],
+          }),
+        });
+      },
+    );
+    for (const childResource of ['interviews', 'offers']) {
+      await page.route(
+        `**/api/ats/v1/recruiter/applications/${SYNTHETIC_RECRUITER_APPLICATION.publicRef}/${childResource}`,
+        async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          });
+        },
+      );
+    }
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/admin/ats/recruiter', { waitUntil: 'networkidle' });
@@ -340,7 +366,11 @@ test.describe('Full ATS authorized product access', () => {
     for (const action of ['Adaya mesaj gönder', 'Adayı reddet', 'Teklif gönder']) {
       await expect(workspace.getByRole('button', { name: new RegExp(action) })).toHaveCount(0);
     }
-    expect(dataRequests).toEqual([]);
+    expect(dataRequests).toEqual([
+      `GET /api/ats/v1/recruiter/applications/${SYNTHETIC_RECRUITER_APPLICATION.publicRef}`,
+      `GET /api/ats/v1/recruiter/applications/${SYNTHETIC_RECRUITER_APPLICATION.publicRef}/interviews`,
+      `GET /api/ats/v1/recruiter/applications/${SYNTHETIC_RECRUITER_APPLICATION.publicRef}/offers`,
+    ]);
 
     const overflow = await page.evaluate(() => ({
       viewportWidth: window.innerWidth,
