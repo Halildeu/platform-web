@@ -167,7 +167,7 @@ const addManagerResponse = async (page: Page, journey: ReporterJourney) => {
   await page.getByLabel('Yetkili ataması').fill('team:ethics-test');
   await page.getByRole('button', { name: 'Atamayı kaydet' }).click();
   await page.getByRole('button', { name: 'İncelemeye al' }).click();
-  await expect(page.getByText('İncelemede', { exact: true })).toBeVisible();
+  await expect(page.getByText('İncelemede', { exact: true }).first()).toBeVisible();
   await page.getByLabel('Yetkili ekip notu').fill(journey.internalNote);
   await page.getByRole('button', { name: 'İç notu kaydet' }).click();
   await page.getByLabel("Reporter'a güvenli yanıt").fill(journey.staffReply);
