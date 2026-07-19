@@ -12,6 +12,30 @@ type KeycloakLoginRedirectOptions = {
   redirectUri: string;
 };
 
+type KeycloakLoginOptions = KeycloakLoginRedirectOptions & {
+  scope?: string;
+};
+
+const ETHICS_MANAGER_LOGIN_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
+
+/**
+ * Etik Speak manager yetkileri frontend istemcisinde optional scope olarak
+ * tutulur. Böylece suite'in diğer modülleri ethics audience/scope almaz;
+ * yalnız /ethic yoluna dönen interaktif giriş açıkça bu yetkileri ister.
+ */
+export const buildKeycloakLoginOptions = (redirectUri: string): KeycloakLoginOptions => {
+  try {
+    const path = new URL(redirectUri, 'https://invalid.local').pathname;
+    if (path === '/ethic' || path.startsWith('/ethic/')) {
+      return { redirectUri, scope: ETHICS_MANAGER_LOGIN_SCOPE };
+    }
+  } catch {
+    // keycloak-js redirectUri doğrulamasını yapmaya devam eder. Geçersiz bir
+    // URI için genişletilmiş scope vermemek fail-closed davranıştır.
+  }
+  return { redirectUri };
+};
+
 const LOGIN_URL_TIMEOUT_MS = 3_000;
 
 const summarizeUrl = (value: string): string => {
@@ -105,7 +129,7 @@ export const startKeycloakLogin = async ({
   }
 
   console.info(`[Auth] Falling back to keycloak.login(). redirectUri=${summarizeUrl(redirectUri)}`);
-  await keycloak.login({ redirectUri });
+  await keycloak.login(buildKeycloakLoginOptions(redirectUri));
 };
 
 export const resolveKeycloakLoginUrl = async ({
@@ -141,7 +165,7 @@ export const resolveKeycloakLoginUrl = async ({
         );
       }
       const loginUrl = await Promise.race<string>([
-        keycloak.createLoginUrl({ redirectUri }),
+        keycloak.createLoginUrl(buildKeycloakLoginOptions(redirectUri)),
         new Promise<string>((_, reject) => {
           window.setTimeout(() => {
             reject(
