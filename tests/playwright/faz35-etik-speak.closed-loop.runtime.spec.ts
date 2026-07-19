@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { lstatSync, readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs';
 import {
   expect,
   test,
@@ -37,19 +37,24 @@ type ReporterJourney = {
 const requiredSecretFile = (environmentName: string) => {
   const path = process.env[environmentName]?.trim();
   if (!path) throw new Error(`${environmentName} is required for the live synthetic gate.`);
-  const metadata = lstatSync(path);
-  if (!metadata.isFile() || metadata.isSymbolicLink()) {
-    throw new Error(`${environmentName} must point to a regular non-symlink file.`);
+  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()) {
+      throw new Error(`${environmentName} must point to a regular non-symlink file.`);
+    }
+    if ((metadata.mode & 0o077) !== 0) {
+      throw new Error(`${environmentName} must not be accessible by group or other users.`);
+    }
+    if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
+      throw new Error(`${environmentName} must be owned by the current user.`);
+    }
+    const value = readFileSync(descriptor, 'utf8').trim();
+    if (!value) throw new Error(`${environmentName} is empty.`);
+    return value;
+  } finally {
+    closeSync(descriptor);
   }
-  if ((metadata.mode & 0o077) !== 0) {
-    throw new Error(`${environmentName} must not be accessible by group or other users.`);
-  }
-  if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
-    throw new Error(`${environmentName} must be owned by the current user.`);
-  }
-  const value = readFileSync(path, 'utf8').trim();
-  if (!value) throw new Error(`${environmentName} is empty.`);
-  return value;
 };
 
 const requiredManagerPassword = () => requiredSecretFile('ETIK_MANAGER_PASSWORD_FILE');
