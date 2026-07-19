@@ -9,6 +9,14 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/ci-etik-speak-public-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/etik-speak-public/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci-etik-speak-public-image.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,6 +25,7 @@ permissions:
 
 jobs:
   build-test-push:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,15 +43,26 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive immutable and release tags
+        id: tags
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          {
+            echo 'value<<EOF'
+            echo "ghcr.io/halildeu/platform-web-etik-speak-public:sha-${SOURCE_SHA}"
+            if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/heads/main ]]; then
+              echo 'ghcr.io/halildeu/platform-web-etik-speak-public:latest'
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - id: image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/etik-speak-public/Dockerfile
           push: true
-          tags: |
-            ghcr.io/halildeu/platform-web-etik-speak-public:sha-${{ github.sha }}
-            ghcr.io/halildeu/platform-web-etik-speak-public:latest
+          tags: ${{ steps.tags.outputs.value }}
           cache-from: type=gha,scope=etik-speak-public
           cache-to: type=gha,scope=etik-speak-public,mode=max
           provenance: false
