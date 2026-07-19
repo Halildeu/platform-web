@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildKeycloakLoginOptions } from './keycloakClient';
+import { buildKeycloakLoginOptions, hasEthicsManagerTokenContract } from './keycloakClient';
+
+const token = (claims: Record<string, unknown>) =>
+  `header.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.signature`;
 
 describe('buildKeycloakLoginOptions', () => {
   it('Etik Speak manager dönüşünde audience ve yönetim scope talep eder', () => {
@@ -26,5 +29,27 @@ describe('buildKeycloakLoginOptions', () => {
     expect(buildKeycloakLoginOptions('https://testai.acik.com/ethical-decoy')).toEqual({
       redirectUri: 'https://testai.acik.com/ethical-decoy',
     });
+  });
+
+  it('mevcut suite tokenında exact Etik staff kontratını fail-closed doğrular', () => {
+    expect(
+      hasEthicsManagerTokenContract(
+        token({
+          aud: ['frontend', 'ethics-manager'],
+          scope: 'openid profile ethics:case:manage',
+          realm_access: { roles: ['ethics-manager'] },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      hasEthicsManagerTokenContract(
+        token({
+          aud: ['frontend'],
+          scope: 'openid profile',
+          realm_access: { roles: ['ethics-manager'] },
+        }),
+      ),
+    ).toBe(false);
+    expect(hasEthicsManagerTokenContract('not-a-jwt')).toBe(false);
   });
 });

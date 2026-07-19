@@ -1,5 +1,6 @@
 import Keycloak from 'keycloak-js';
 import { authConfig } from './auth-config';
+import { decodeJwtPayload } from '../../features/auth/model/auth.slice';
 
 // STORY-0034: FE Keycloak / OIDC Integration
 const keycloak = new Keycloak({
@@ -17,6 +18,31 @@ type KeycloakLoginOptions = KeycloakLoginRedirectOptions & {
 };
 
 const ETHICS_MANAGER_LOGIN_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
+
+const asStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  return typeof value === 'string' ? [value] : [];
+};
+
+/** Exact bearer contract required by the isolated Etik Speak staff API. */
+export const hasEthicsManagerTokenContract = (token: string | null | undefined): boolean => {
+  if (!token) return false;
+  const claims = decodeJwtPayload(token);
+  if (!claims) return false;
+  const audience = asStringArray(claims['aud']);
+  const scope =
+    typeof claims['scope'] === 'string' ? claims['scope'].split(/\s+/).filter(Boolean) : [];
+  const realmAccess = claims['realm_access'];
+  const roles =
+    realmAccess && typeof realmAccess === 'object' && !Array.isArray(realmAccess)
+      ? asStringArray((realmAccess as Record<string, unknown>)['roles'])
+      : [];
+  return (
+    audience.includes('ethics-manager') &&
+    scope.includes('ethics:case:manage') &&
+    roles.includes('ethics-manager')
+  );
+};
 
 /**
  * Etik Speak manager yetkileri frontend istemcisinde optional scope olarak

@@ -85,6 +85,40 @@ const clickFirst = async (page: Page, selectors: string[]) => {
   await target.click();
 };
 
+const assertCanonicalAccessSecret = (value: string) => {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(value)) {
+    throw new Error('Mailbox access secret failed canonical format validation.');
+  }
+};
+
+const readManagerTokenContract = async (page: Page) =>
+  page.evaluate(() => {
+    const token = (window as typeof window & { __keycloak?: { token?: string } }).__keycloak?.token;
+    if (!token) throw new Error('Keycloak access token is unavailable in the suite shell.');
+    const encoded = token.split('.')[1];
+    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const parsed = JSON.parse(
+      window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')),
+    );
+    return {
+      audience: parsed.aud as string | string[],
+      scope: (parsed.scope as string | undefined) ?? '',
+      orgId: (parsed.org_id as string | undefined) ?? '',
+      roles: (parsed.realm_access?.roles as string[] | undefined) ?? [],
+    };
+  });
+
+const assertManagerTokenContract = (
+  claims: Awaited<ReturnType<typeof readManagerTokenContract>>,
+) => {
+  expect(Array.isArray(claims.audience) ? claims.audience : [claims.audience]).toContain(
+    'ethics-manager',
+  );
+  expect(claims.scope.split(' ')).toContain('ethics:case:manage');
+  expect(claims.roles).toContain('ethics-manager');
+  expect(claims.orgId).toBe('00000000-0000-0000-0000-000000000001');
+};
+
 const loginManager = async (page: Page, password: string) => {
   await page.goto(`${managerRoot}/login?redirect=${encodeURIComponent('/ethic')}`, {
     waitUntil: 'domcontentloaded',
@@ -106,6 +140,42 @@ const loginManager = async (page: Page, password: string) => {
   await page.waitForURL((url) => !url.pathname.includes('/realms/'), { timeout: 60_000 });
   await page.goto(`${managerRoot}/ethic`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Etik Speak' })).toBeVisible({ timeout: 60_000 });
+};
+
+const proveExistingSuiteSessionUpgrade = async (browser: Browser, password: string) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(`${managerRoot}/login?redirect=${encodeURIComponent('/home')}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  const login = await firstVisible(page, [
+    '[data-testid="corporate-login-button"]',
+    'button:has-text("Güvenli Kurumsal Giriş")',
+    'button:has-text("Kurumsal Giriş")',
+    'button:has-text("Sign In")',
+  ]);
+  if (login) await login.click();
+  await fillFirst(
+    page,
+    ['#username', 'input[name="username"]', 'input[type="email"]'],
+    managerUsername,
+  );
+  await fillFirst(page, ['#password', 'input[name="password"]'], password);
+  await clickFirst(page, ['#kc-login', 'button[type="submit"]', 'input[type="submit"]']);
+  await page.waitForURL((url) => !url.pathname.includes('/realms/'), { timeout: 60_000 });
+
+  const suiteClaims = await readManagerTokenContract(page);
+  expect(
+    (Array.isArray(suiteClaims.audience) ? suiteClaims.audience : [suiteClaims.audience]).includes(
+      'ethics-manager',
+    ),
+  ).toBe(false);
+  expect(suiteClaims.scope.split(' ').includes('ethics:case:manage')).toBe(false);
+
+  await page.goto(`${managerRoot}/ethic`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Etik Speak' })).toBeVisible({ timeout: 60_000 });
+  assertManagerTokenContract(await readManagerTokenContract(page));
+  await context.close();
 };
 
 const publicArtifact = async (
@@ -190,27 +260,7 @@ const assertPublicBoundaryAndIdempotency = async (
 };
 
 const assertManagerTokenAndStaleWriter = async (page: Page, subject: string) => {
-  const claims = await page.evaluate(() => {
-    const token = (window as typeof window & { __keycloak?: { token?: string } }).__keycloak?.token;
-    if (!token) throw new Error('Keycloak access token is unavailable in the suite shell.');
-    const encoded = token.split('.')[1];
-    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    const parsed = JSON.parse(
-      window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')),
-    );
-    return {
-      audience: parsed.aud as string | string[],
-      scope: (parsed.scope as string | undefined) ?? '',
-      orgId: (parsed.org_id as string | undefined) ?? '',
-      roles: (parsed.realm_access?.roles as string[] | undefined) ?? [],
-    };
-  });
-  expect(Array.isArray(claims.audience) ? claims.audience : [claims.audience]).toContain(
-    'ethics-manager',
-  );
-  expect(claims.scope.split(' ')).toContain('ethics:case:manage');
-  expect(claims.roles).toContain('ethics-manager');
-  expect(claims.orgId).toBe('00000000-0000-0000-0000-000000000001');
+  assertManagerTokenContract(await readManagerTokenContract(page));
 
   const selected = await page.evaluate(async (expectedSubject) => {
     const token = (window as typeof window & { __keycloak?: { token?: string } }).__keycloak?.token;
@@ -332,7 +382,7 @@ const createReporterJourney = async (
   const receiptId = (await page.getByTestId('etik-receipt-id').textContent())?.trim() ?? '';
   const accessSecret = (await page.getByTestId('etik-access-secret').textContent())?.trim() ?? '';
   expect(receiptId).not.toBe('');
-  expect(accessSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  assertCanonicalAccessSecret(accessSecret);
   await page.getByRole('checkbox').check();
   await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
 
@@ -420,6 +470,18 @@ const completeReporterMailbox = async (journey: ReporterJourney) => {
 // Receipt/access secret must never land in retry traces, videos or failure screenshots.
 test.use({ trace: 'off', video: 'off', screenshot: 'off' });
 
+test('mailbox access-secret format failure is redacted', () => {
+  const sentinel = 'raw-mailbox-secret-that-must-never-appear';
+  let message = '';
+  try {
+    assertCanonicalAccessSecret(sentinel);
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  expect(message).toBe('Mailbox access secret failed canonical format validation.');
+  expect(message.includes(sentinel)).toBe(false);
+});
+
 test.describe('Faz 35 ES-210 live synthetic closed loop', () => {
   test('both public hosts and testai manager persist one authorized dialogue per host', async ({
     browser,
@@ -440,6 +502,7 @@ test.describe('Faz 35 ES-210 live synthetic closed loop', () => {
     }
 
     const runNonce = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+    await proveExistingSuiteSessionUpgrade(browser, password);
     await assertPublicBoundaryAndIdempotency(browser, canonicalPublic, publicGate, runNonce);
     const journeys = [
       await createReporterJourney(browser, canonicalPublic, 'etik', runNonce, publicGate),
