@@ -16,6 +16,10 @@ const apiMocks = vi.hoisted(() => ({
   rescheduleRecruiterInterview: vi.fn(),
   transitionRecruiterInterview: vi.fn(),
   submitInterviewScorecard: vi.fn(),
+  listRecruiterOffers: vi.fn(),
+  createRecruiterOffer: vi.fn(),
+  updateRecruiterOffer: vi.fn(),
+  transitionRecruiterOffer: vi.fn(),
   listRecruiterJobs: vi.fn(),
   createRecruiterJob: vi.fn(),
   updateRecruiterJob: vi.fn(),
@@ -52,6 +56,10 @@ vi.mock('../api/application-api', () => ({
   rescheduleRecruiterInterview: apiMocks.rescheduleRecruiterInterview,
   transitionRecruiterInterview: apiMocks.transitionRecruiterInterview,
   submitInterviewScorecard: apiMocks.submitInterviewScorecard,
+  listRecruiterOffers: apiMocks.listRecruiterOffers,
+  createRecruiterOffer: apiMocks.createRecruiterOffer,
+  updateRecruiterOffer: apiMocks.updateRecruiterOffer,
+  transitionRecruiterOffer: apiMocks.transitionRecruiterOffer,
   listRecruiterJobs: apiMocks.listRecruiterJobs,
   createRecruiterJob: apiMocks.createRecruiterJob,
   updateRecruiterJob: apiMocks.updateRecruiterJob,
@@ -185,6 +193,7 @@ describe('RecruiterWorkspacePage', () => {
     });
     apiMocks.listRecruiterJobs.mockResolvedValue([]);
     apiMocks.listRecruiterInterviews.mockResolvedValue([]);
+    apiMocks.listRecruiterOffers.mockResolvedValue([]);
     apiMocks.createRecruiterInterview.mockResolvedValue(INTERVIEW);
     apiMocks.rescheduleRecruiterInterview.mockResolvedValue(INTERVIEW);
     apiMocks.transitionRecruiterInterview.mockResolvedValue(INTERVIEW);

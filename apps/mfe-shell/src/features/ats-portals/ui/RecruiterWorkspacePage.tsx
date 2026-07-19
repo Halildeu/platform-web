@@ -26,6 +26,27 @@ const STAGES: ReadonlyArray<{
     label: 'Mülakat planlaması',
     description: 'İnsan kontrollü planlama adımı bekleniyor.',
   },
+  {
+    id: 'OFFER_PENDING',
+    label: 'Teklif yanıtı',
+    description: 'Adaya iletilen teklifin yanıtı bekleniyor.',
+  },
+  {
+    id: 'OFFER_ACCEPTED',
+    label: 'Teklif kabulü',
+    description: 'İK işe alım sonucunu insan eylemiyle doğrular.',
+  },
+  { id: 'HIRED', label: 'İşe alındı', description: 'İnsan kontrollü işe alım sonucu kaydedildi.' },
+  {
+    id: 'OFFER_DECLINED',
+    label: 'Teklif reddi',
+    description: 'Aday teklif süreç yanıtını reddetti.',
+  },
+  {
+    id: 'OFFER_WITHDRAWN',
+    label: 'Teklif geri çekildi',
+    description: 'İK iletilen teklifi gerekçeli olarak geri çekti.',
+  },
   { id: 'REJECTED', label: 'Reddedildi', description: 'Gerekçeli insan kararıyla kapandı.' },
   { id: 'WITHDRAWN', label: 'Geri çekildi', description: 'Aday başvurusunu geri çekti.' },
 ];
@@ -133,8 +154,8 @@ const RecruiterWorkspacePage = () => {
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
               İlanlarınızı oluşturup yayınlayın; adayın gönderdiği kalıcı başvuruyu inceleyin ve
-              yalnız izin verilen insan kontrollü adımlarda ilerletin. Otomatik puanlama, sıralama
-              veya karar yürütülmez.
+              yalnız izin verilen insan kontrollü adımlarda görüşme, teklif ve işe alım sonucuna
+              ilerletin. Otomatik puanlama, sıralama veya karar yürütülmez.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -164,7 +185,7 @@ const RecruiterWorkspacePage = () => {
 
       <RecruiterJobsPanel canManage={canManageJobs} />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="İK çalışma özeti">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="İK çalışma özeti">
         {[
           [String(jobs.length), 'Pozisyon', 'Başvurusu bulunan ilan'],
           [String(applications.length), 'Kalıcı başvuru', 'Tenant-korumalı kayıt'],
@@ -182,6 +203,20 @@ const RecruiterWorkspacePage = () => {
             ),
             'Mülakat planlaması',
             'İnsan kontrollü adım',
+          ],
+          [
+            String(
+              applications.filter((application) =>
+                ['OFFER_PENDING', 'OFFER_ACCEPTED'].includes(application.status),
+              ).length,
+            ),
+            'Aktif teklif',
+            'Aday veya İK insan eylemi bekleniyor',
+          ],
+          [
+            String(applications.filter((application) => application.status === 'HIRED').length),
+            'İşe alındı',
+            'Kalıcı süreç sonucu',
           ],
         ].map(([value, label, detail]) => (
           <article

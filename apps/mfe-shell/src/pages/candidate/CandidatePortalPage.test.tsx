@@ -10,12 +10,18 @@ const apiMocks = vi.hoisted(() => ({
   readCandidateSession: vi.fn(),
   getCandidateStatus: vi.fn(),
   getCandidateInterviews: vi.fn(),
+  getCandidateOffers: vi.fn(),
+  respondCandidateOffer: vi.fn(),
+  createApplicationIdempotencyKey: vi.fn(() => 'web-offer-response-1234'),
   withdrawCandidateApplication: vi.fn(),
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
   readCandidateSession: apiMocks.readCandidateSession,
   getCandidateStatus: apiMocks.getCandidateStatus,
   getCandidateInterviews: apiMocks.getCandidateInterviews,
+  getCandidateOffers: apiMocks.getCandidateOffers,
+  respondCandidateOffer: apiMocks.respondCandidateOffer,
+  createApplicationIdempotencyKey: apiMocks.createApplicationIdempotencyKey,
   withdrawCandidateApplication: apiMocks.withdrawCandidateApplication,
 }));
 
@@ -50,6 +56,7 @@ describe('CandidatePortalPage', () => {
     apiMocks.readCandidateSession.mockReturnValue(SESSION);
     apiMocks.getCandidateStatus.mockResolvedValue(STATUS);
     apiMocks.getCandidateInterviews.mockResolvedValue([]);
+    apiMocks.getCandidateOffers.mockResolvedValue([]);
     apiMocks.withdrawCandidateApplication.mockResolvedValue({
       ...STATUS,
       status: 'WITHDRAWN',
@@ -139,5 +146,59 @@ describe('CandidatePortalPage', () => {
     );
     expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
     expect(apiMocks.getCandidateInterviews).toHaveBeenCalledWith(SESSION);
+  });
+
+  it('shows candidate-safe offer terms and records an explicitly acknowledged response', async () => {
+    const offer = {
+      offerId: 'off_abcdefghijklmnopqrstuvwx',
+      applicationPublicRef: SESSION.publicRef,
+      jobTitle: 'Ürün Yöneticisi',
+      roleTitle: 'Kıdemli Ürün Yöneticisi',
+      startDate: '2026-08-03',
+      employmentType: 'Tam zamanlı',
+      workMode: 'HYBRID',
+      location: 'İstanbul',
+      compensationAmount: 120000,
+      currency: 'TRY',
+      payPeriod: 'MONTHLY',
+      expiresAt: '2026-07-25T12:00:00Z',
+      termsSummary: 'Sentetik teklif koşulları ve yan haklar özeti.',
+      status: 'EXTENDED',
+      version: 1,
+      updatedAt: '2026-07-18T12:00:00Z',
+      legalBoundary: 'Bu yanıt ATS sürecini kaydeder; ayrı iş sözleşmesi veya e-imza değildir.',
+      actorRef: 'must-not-render',
+      revisions: [{ reason: 'must-not-render' }],
+    };
+    apiMocks.getCandidateStatus.mockResolvedValue({
+      ...STATUS,
+      status: 'OFFER_PENDING',
+      nextAction: 'REVIEW_OFFER',
+      withdrawalAllowed: false,
+    });
+    apiMocks.getCandidateOffers.mockResolvedValue([offer]);
+    apiMocks.respondCandidateOffer.mockResolvedValue({ ...offer, status: 'ACCEPTED', version: 2 });
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Kıdemli Ürün Yöneticisi' })).toBeVisible();
+    expect(screen.getByText((content) => content.includes('120.000'))).toBeVisible();
+    expect(screen.getByText(/ayrı iş sözleşmesi veya e-imza değildir/i)).toBeVisible();
+    expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi kabul etmeyi hazırla' }));
+    const submit = screen.getByRole('button', { name: 'Kabul yanıtını kalıcı kaydet' });
+    expect(submit).toBeDisabled();
+    fireEvent.click(screen.getByLabelText(/yalnız ATS süreç yanıtı olduğunu/i));
+    fireEvent.click(submit);
+
+    expect(apiMocks.respondCandidateOffer).toHaveBeenCalledWith(
+      SESSION,
+      offer,
+      'ACCEPTED',
+      'web-offer-response-1234',
+    );
+    expect(
+      await screen.findByText(/Teklif kabul yanıtınız kalıcı olarak kaydedildi/i),
+    ).toBeVisible();
   });
 });

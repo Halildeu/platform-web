@@ -8,8 +8,10 @@ import {
   confirmResumeImport,
   createApplicationIdempotencyKey,
   createRecruiterInterview,
+  createRecruiterOffer,
   createResumeImport,
   getCandidateInterviews,
+  getCandidateOffers,
   getCandidateStatus,
   createCandidateAccessToken,
   createRecruiterJob,
@@ -20,17 +22,21 @@ import {
   listRecruiterApplications,
   listRecruiterInterviews,
   listRecruiterJobs,
+  listRecruiterOffers,
   readCandidateSession,
-  saveCandidateSession,
+  respondCandidateOffer,
   replaceResumePdf,
+  saveCandidateSession,
   submitApplication,
   submitRecruiterApplicationEvaluation,
   submitInterviewScorecard,
   terminateResumeImport,
   transitionRecruiterInterview,
+  transitionRecruiterOffer,
   transitionRecruiterJob,
   updateRecruiterJob,
   updateRecruiterApplicationStatus,
+  updateRecruiterOffer,
   updateResumeProposal,
   uploadResumePdf,
   withdrawCandidateApplication,
@@ -262,6 +268,70 @@ describe('application-api', () => {
       }),
     );
     expect(fetchMock.mock.calls[0][0]).not.toContain('A'.repeat(43));
+  });
+
+  it('loads and responds to candidate-safe offers without credential or internal-field leakage', async () => {
+    const session = {
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'A'.repeat(43),
+    };
+    const offer = {
+      offerId: 'off_abcdefghijklmnopqrstuvwx',
+      applicationPublicRef: session.publicRef,
+      jobTitle: 'Ürün Yöneticisi',
+      roleTitle: 'Kıdemli Ürün Yöneticisi',
+      startDate: '2026-08-03',
+      employmentType: 'Tam zamanlı',
+      workMode: 'HYBRID' as const,
+      location: 'İstanbul',
+      compensationAmount: 120000,
+      currency: 'TRY',
+      payPeriod: 'MONTHLY' as const,
+      expiresAt: '2026-07-25T12:00:00Z',
+      termsSummary: 'Sentetik teklif koşulları ve yan haklar özeti.',
+      status: 'EXTENDED' as const,
+      version: 1,
+      updatedAt: '2026-07-18T12:00:00Z',
+      legalBoundary: 'Bu süreç ayrı iş sözleşmesi veya e-imza değildir.',
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse([offer]))
+      .mockResolvedValueOnce(jsonResponse({ ...offer, status: 'ACCEPTED', version: 2 }));
+
+    await getCandidateOffers(session);
+    await respondCandidateOffer(session, offer, 'ACCEPTED', 'web-offer-response-1234');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `/api/ats/v1/candidate/applications/${session.publicRef}/offers`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          'X-ATS-Candidate-Access': session.candidateAccessToken,
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `/api/ats/v1/candidate/applications/${session.publicRef}/offers/${offer.offerId}/response`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'X-ATS-Candidate-Access': session.candidateAccessToken,
+          'X-ATS-Idempotency-Key': 'web-offer-response-1234',
+        }),
+        body: JSON.stringify({
+          expectedVersion: 1,
+          target: 'ACCEPTED',
+          processAcknowledged: true,
+        }),
+      }),
+    );
+    expect(fetchMock.mock.calls[0][0]).not.toContain(session.candidateAccessToken);
+    expect(fetchMock.mock.calls[1][0]).not.toContain(session.candidateAccessToken);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toEqual(
+      expect.objectContaining({ tenantId: expect.anything(), actorRef: expect.anything() }),
+    );
   });
 
   it('withdraws through the candidate header credential without URL or body leakage', async () => {
@@ -547,6 +617,77 @@ describe('application-api', () => {
       { headers: { 'X-ATS-Idempotency-Key': 'web-scorecard-create-1234' } },
     );
     expect(request).not.toHaveProperty('tenantId');
+  });
+
+  it('uses authenticated versioned offer commands and never accepts caller tenant fields', async () => {
+    const publicRef = 'app_abcdefghijklmnopqrstuvwx';
+    const terms = {
+      roleTitle: 'Kıdemli Ürün Yöneticisi',
+      startDate: '2026-08-03',
+      employmentType: 'Tam zamanlı',
+      workMode: 'HYBRID' as const,
+      location: 'İstanbul',
+      compensationAmount: 120000,
+      currency: 'TRY',
+      payPeriod: 'MONTHLY' as const,
+      expiresAt: '2026-07-25T12:00:00Z',
+      termsSummary: 'Sentetik teklif koşulları ve yan haklar özeti.',
+    };
+    const offer = {
+      ...terms,
+      offerId: 'off_abcdefghijklmnopqrstuvwx',
+      applicationPublicRef: publicRef,
+      jobSlug: 'urun-yoneticisi',
+      jobTitle: 'Ürün Yöneticisi',
+      candidateName: 'Deniz Sentetik',
+      status: 'DRAFT' as const,
+      version: 0,
+      revisions: [],
+      createdAt: '2026-07-18T12:00:00Z',
+      updatedAt: '2026-07-18T12:00:00Z',
+    };
+    httpMocks.get.mockResolvedValueOnce({ data: [offer] });
+    httpMocks.post.mockResolvedValue({ data: offer });
+    httpMocks.put.mockResolvedValueOnce({ data: { ...offer, version: 1 } });
+
+    await listRecruiterOffers(publicRef);
+    await createRecruiterOffer(publicRef, terms, 'web-offer-create-1234');
+    await updateRecruiterOffer(
+      publicRef,
+      offer,
+      terms,
+      'İnsan revizyon gerekçesi',
+      'web-offer-update-1234',
+    );
+    await transitionRecruiterOffer(
+      publicRef,
+      offer,
+      'EXTENDED',
+      'İnsan iletim gerekçesi',
+      'web-offer-extend-1234',
+    );
+
+    expect(httpMocks.get).toHaveBeenCalledWith(
+      `/ats/v1/recruiter/applications/${publicRef}/offers`,
+    );
+    expect(httpMocks.post).toHaveBeenNthCalledWith(
+      1,
+      `/ats/v1/recruiter/applications/${publicRef}/offers`,
+      terms,
+      { headers: { 'X-ATS-Idempotency-Key': 'web-offer-create-1234' } },
+    );
+    expect(httpMocks.put).toHaveBeenCalledWith(
+      `/ats/v1/recruiter/applications/${publicRef}/offers/${offer.offerId}`,
+      { expectedVersion: 0, reason: 'İnsan revizyon gerekçesi', terms },
+      { headers: { 'X-ATS-Idempotency-Key': 'web-offer-update-1234' } },
+    );
+    expect(httpMocks.post).toHaveBeenNthCalledWith(
+      2,
+      `/ats/v1/recruiter/applications/${publicRef}/offers/${offer.offerId}/transitions`,
+      { expectedVersion: 0, target: 'EXTENDED', reason: 'İnsan iletim gerekçesi' },
+      { headers: { 'X-ATS-Idempotency-Key': 'web-offer-extend-1234' } },
+    );
+    expect(terms).not.toHaveProperty('tenantId');
   });
 
   it('rejects malformed recruiter refs and evaluation keys before network access', async () => {

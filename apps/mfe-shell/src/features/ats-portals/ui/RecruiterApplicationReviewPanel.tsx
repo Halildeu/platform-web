@@ -11,11 +11,17 @@ import {
   type RecruiterEvaluationRecommendation,
 } from '../api/application-api';
 import RecruiterInterviewPanel from './RecruiterInterviewPanel';
+import RecruiterOfferPanel from './RecruiterOfferPanel';
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SUBMITTED: 'Başvuru alındı',
   UNDER_REVIEW: 'İnsan incelemesinde',
   INTERVIEW_PENDING: 'Mülakat planlaması bekliyor',
+  OFFER_PENDING: 'Aday teklif yanıtı bekleniyor',
+  OFFER_ACCEPTED: 'Aday teklifi kabul etti',
+  OFFER_DECLINED: 'Aday teklifi reddetti',
+  OFFER_WITHDRAWN: 'Teklif İK tarafından geri çekildi',
+  HIRED: 'İşe alındı',
   REJECTED: 'İnsan kararıyla reddedildi',
   WITHDRAWN: 'Aday tarafından geri çekildi',
 };
@@ -114,11 +120,20 @@ const RecruiterApplicationReviewPanel = ({
   }, [detail?.application.publicRef]);
 
   const latestEvaluation = useMemo(() => latestEvaluationOf(detail), [detail]);
-  const terminal =
-    detail?.application.status === 'REJECTED' || detail?.application.status === 'WITHDRAWN';
+  const earlyPipeline = Boolean(
+    detail &&
+    ['SUBMITTED', 'UNDER_REVIEW', 'INTERVIEW_PENDING'].includes(detail.application.status),
+  );
+  const terminal = Boolean(
+    detail &&
+    ['REJECTED', 'WITHDRAWN', 'OFFER_DECLINED', 'OFFER_WITHDRAWN', 'HIRED'].includes(
+      detail.application.status,
+    ),
+  );
+  const applicationActionsLocked = Boolean(detail) && !earlyPipeline;
 
   const changeStatus = async (toStatus: 'UNDER_REVIEW' | 'INTERVIEW_PENDING' | 'REJECTED') => {
-    if (!canManage || !detail || updating || terminal) return;
+    if (!canManage || !detail || updating || !earlyPipeline) return;
     setUpdating(true);
     setActionError('');
     setSuccessMessage('');
@@ -170,7 +185,7 @@ const RecruiterApplicationReviewPanel = ({
 
   const submitEvaluation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!detail || !canManage || terminal || updating) return;
+    if (!detail || !canManage || !earlyPipeline || updating) return;
     if (!evaluationForm.jobRelatednessConfirmed) {
       setActionError('Değerlendirmenin yalnız işle ilgili ölçütlere dayandığını doğrulayın.');
       return;
@@ -306,9 +321,11 @@ const RecruiterApplicationReviewPanel = ({
             <p className="mt-2 rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm font-semibold text-text-secondary">
               Bu başvuruyu görüntüleyebilirsiniz; değerlendirme ve aşama değiştirme yetkiniz yok.
             </p>
-          ) : terminal ? (
+          ) : applicationActionsLocked ? (
             <p className="mt-2 rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm font-semibold text-text-secondary">
-              Bu başvuru terminal durumdadır; yeni değerlendirme veya aşama değişikliği yapılamaz.
+              {terminal
+                ? 'Bu başvuru terminal durumdadır; yeni değerlendirme veya genel aşama değişikliği yapılamaz.'
+                : 'Teklif akışı aktiftir; genel değerlendirme ve aşama eylemleri kilitlidir.'}
             </p>
           ) : (
             <div className="mt-2 space-y-3">
@@ -542,9 +559,18 @@ const RecruiterApplicationReviewPanel = ({
         <RecruiterInterviewPanel
           publicRef={application.publicRef}
           applicationStatus={application.status}
-          canManage={canManage && !terminal}
+          canManage={canManage && earlyPipeline}
           interviewerActorRef={latestEvaluation?.actorRef ?? null}
           interviewerLabel="Atanmış İK görüşmecisi"
+          onApplicationRefresh={refreshAfterInterviewChange}
+        />
+
+        <RecruiterOfferPanel
+          publicRef={application.publicRef}
+          jobTitle={application.jobTitle}
+          candidateLocation={application.city}
+          applicationStatus={application.status}
+          canManage={canManage}
           onApplicationRefresh={refreshAfterInterviewChange}
         />
 
