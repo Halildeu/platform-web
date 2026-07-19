@@ -6,9 +6,8 @@ COPY apps/etik-speak-public ./apps/etik-speak-public
 RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter etik-speak-public build
 
-FROM nginx:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY --from=builder /app/apps/etik-speak-public/dist /usr/share/nginx/html
-RUN rm /etc/nginx/conf.d/default.conf
 COPY apps/etik-speak-public/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/etik-speak-public/security-headers.conf.inc /etc/nginx/security-headers.conf.inc
 EXPOSE 8080
-USER 101:101

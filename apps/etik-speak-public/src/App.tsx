@@ -1,22 +1,48 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
+  closeMailbox,
   createReport,
   listMessages,
+  newAccessSecret,
   openMailbox,
   sendReporterMessage,
   type Message,
   type Receipt,
 } from './public-api';
 
-type View = 'home' | 'report' | 'receipt' | 'mailbox-login' | 'mailbox';
+type View =
+  | 'home'
+  | 'report'
+  | 'receipt'
+  | 'mailbox-login'
+  | 'mailbox'
+  | 'privacy'
+  | 'accessibility';
+
+const initialView = (): View => {
+  if (window.location.pathname === '/privacy') return 'privacy';
+  if (window.location.pathname === '/accessibility') return 'accessibility';
+  return 'home';
+};
 
 export default function App() {
-  const [view, setView] = useState<View>('home');
+  const [view, setView] = useState<View>(initialView);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [mailboxReply, setMailboxReply] = useState('');
+  const [receiptSaved, setReceiptSaved] = useState(false);
+  const intakeOperation = useRef({ key: crypto.randomUUID(), secret: newAccessSecret() });
+  const replyOperation = useRef<{ body: string; key: string } | null>(null);
+
+  useEffect(() => {
+    const heading = document.querySelector<HTMLElement>('#main-content h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus();
+    }
+  }, [view]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -24,6 +50,7 @@ export default function App() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
+      const operation = intakeOperation.current;
       const result = await createReport(
         {
           mode: form.get('mode'),
@@ -32,9 +59,12 @@ export default function App() {
           description: form.get('description'),
           locale: 'tr',
         },
-        crypto.randomUUID(),
+        operation.key,
+        operation.secret,
       );
       setReceipt(result);
+      setReceiptSaved(false);
+      intakeOperation.current = { key: crypto.randomUUID(), secret: newAccessSecret() };
       setView('receipt');
     } catch (e) {
       setError(message(e));
@@ -63,8 +93,12 @@ export default function App() {
     if (!mailboxReply.trim()) return;
     setBusy(true);
     setError('');
+    const body = mailboxReply.trim();
+    if (!replyOperation.current || replyOperation.current.body !== body)
+      replyOperation.current = { body, key: crypto.randomUUID() };
     try {
-      await sendReporterMessage(mailboxReply.trim());
+      await sendReporterMessage(body, replyOperation.current.key);
+      replyOperation.current = null;
       setMailboxReply('');
       setMessages(await listMessages());
     } catch (e) {
@@ -76,14 +110,29 @@ export default function App() {
 
   return (
     <div className="public-shell">
+      <a className="skip-link" href="#main-content">
+        Ana içeriğe geç
+      </a>
       <header className="public-header">
-        <button className="brand" onClick={() => setView('home')} aria-label="Etik Speak ana sayfa">
+        <button
+          className="brand"
+          onClick={() => {
+            if (view === 'receipt' && !receiptSaved) {
+              setError(
+                'Ana sayfaya dönmeden önce erişim bilgisini indirin veya kaydettiğinizi onaylayın.',
+              );
+              return;
+            }
+            setView('home');
+          }}
+          aria-label="Etik Speak ana sayfa"
+        >
           <span className="brand-mark" aria-hidden="true">
             e
           </span>
           <span>Etik Speak</span>
         </button>
-        <span className="security-note">Güvenli · Gizli · Hesapsız</span>
+        <span className="security-note">Hesapsız test pilotu · Yalnız sentetik veri</span>
       </header>
       <main id="main-content">
         {error && (
@@ -106,7 +155,9 @@ export default function App() {
         {view === 'report' && (
           <ReportForm busy={busy} onSubmit={submit} onBack={() => setView('home')} />
         )}{' '}
-        {view === 'receipt' && receipt && <ReceiptView receipt={receipt} />}{' '}
+        {view === 'receipt' && receipt && (
+          <ReceiptView receipt={receipt} saved={receiptSaved} onSaved={setReceiptSaved} />
+        )}{' '}
         {view === 'mailbox-login' && <MailboxLogin busy={busy} onSubmit={login} />}{' '}
         {view === 'mailbox' && (
           <Mailbox
@@ -115,8 +166,20 @@ export default function App() {
             setReply={setMailboxReply}
             busy={busy}
             onSend={reply}
+            onClose={async () => {
+              try {
+                await closeMailbox();
+              } finally {
+                setMessages([]);
+                setMailboxReply('');
+                replyOperation.current = null;
+                setView('home');
+              }
+            }}
           />
         )}
+        {view === 'privacy' && <PrivacyNotice />}
+        {view === 'accessibility' && <AccessibilityNotice />}
       </main>
       <footer>
         <p>
@@ -124,7 +187,7 @@ export default function App() {
           hattı değildir.
         </p>
         <nav aria-label="Yasal bağlantılar">
-          <a href="/privacy">Gizlilik ve aydınlatma</a>
+          <a href="/privacy">Test pilotu veri kullanımı</a>
           <a href="/accessibility">Erişilebilirlik</a>
         </nav>
       </footer>
@@ -138,8 +201,8 @@ function Home({ onReport, onMailbox }: { onReport: () => void; onMailbox: () => 
       <div className="eyebrow">Güvenli bildirim kanalı</div>
       <h1 id="hero-title">Sesinizi güvenle duyurun.</h1>
       <p className="lead">
-        Etik ihlal, uygunsuz davranış veya endişenizi hesap açmadan iletin. Kimliğinizi paylaşmak
-        zorunda değilsiniz.
+        İlk test pilotunda yalnız sentetik bir etik bildirimini hesap açmadan iletin. Bu ortam
+        gerçek kişi veya olay verisi kabulü için henüz açılmamıştır.
       </p>
       <div className="hero-actions">
         <button className="primary" onClick={onReport}>
@@ -152,8 +215,8 @@ function Home({ onReport, onMailbox }: { onReport: () => void; onMailbox: () => 
       <div className="trust-grid">
         <article>
           <span aria-hidden="true">◌</span>
-          <h2>Kimlik tercihi sizde</h2>
-          <p>Anonim, gizli veya isimli bildirim yapabilirsiniz.</p>
+          <h2>İlk dilim anonimdir</h2>
+          <p>Kimlik kasası onaylanana kadar gizli ve isimli modlar veri toplamaz.</p>
         </article>
         <article>
           <span aria-hidden="true">↔</span>
@@ -247,7 +310,12 @@ function ReportForm({
         </fieldset>
         <label className="check">
           <input type="checkbox" required />
-          <span>Gizlilik ve aydınlatma metnini okudum.</span>
+          <span>
+            <a href="/privacy" target="_blank" rel="noreferrer">
+              Test pilotu veri kullanımı ve sınırını
+            </a>{' '}
+            okudum; yalnız sentetik veri gireceğim.
+          </span>
         </label>
         <button className="primary full" disabled={busy}>
           {busy ? 'Güvenli şekilde kaydediliyor…' : 'Bildirimi gönder'}
@@ -256,7 +324,15 @@ function ReportForm({
     </section>
   );
 }
-function ReceiptView({ receipt }: { receipt: Receipt }) {
+function ReceiptView({
+  receipt,
+  saved,
+  onSaved,
+}: {
+  receipt: Receipt;
+  saved: boolean;
+  onSaved: (value: boolean) => void;
+}) {
   const download = () => {
     const blob = new Blob(
       [
@@ -270,13 +346,14 @@ function ReceiptView({ receipt }: { receipt: Receipt }) {
     a.download = 'etik-speak-erisim-bilgisi.txt';
     a.click();
     URL.revokeObjectURL(url);
+    onSaved(true);
   };
   return (
     <section className="panel receipt" aria-labelledby="receipt-title">
       <div className="success-mark" aria-hidden="true">
         ✓
       </div>
-      <h1 id="receipt-title">Bildiriminiz güvenle kaydedildi.</h1>
+      <h1 id="receipt-title">Test bildiriminiz kalıcı olarak kaydedildi.</h1>
       <p>
         Bu iki değeri şimdi kaydedin. Erişim sırrı tekrar gösterilmeyecek ve kaybolursa geri
         alınamayacaktır.
@@ -294,6 +371,14 @@ function ReceiptView({ receipt }: { receipt: Receipt }) {
       <button className="primary full" onClick={download}>
         Erişim bilgisini indir
       </button>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={saved}
+          onChange={(event) => onSaved(event.target.checked)}
+        />
+        <span>Bildirim numarası ile erişim sırrını güvenli bir yere kaydettim.</span>
+      </label>
       <p className="help">
         Bu ekranın görüntüsünü ortak cihazda bırakmayın ve bilgileri e-postayla göndermeyin.
       </p>
@@ -336,12 +421,14 @@ function Mailbox({
   setReply,
   busy,
   onSend,
+  onClose,
 }: {
   messages: Message[];
   reply: string;
   setReply: (v: string) => void;
   busy: boolean;
   onSend: () => void;
+  onClose: () => void;
 }) {
   return (
     <section className="panel mailbox" aria-labelledby="mailbox-title">
@@ -355,7 +442,7 @@ function Mailbox({
           <li key={m.id} className={m.authorType === 'STAFF' ? 'staff' : 'reporter'}>
             <strong>{m.authorType === 'STAFF' ? 'Etik ekibi' : 'Siz'}</strong>
             <p>{m.body}</p>
-            <time>{new Date(m.createdAt).toLocaleString('tr-TR')}</time>
+            <time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleString('tr-TR')}</time>
           </li>
         ))}
       </ol>
@@ -371,6 +458,55 @@ function Mailbox({
       <button className="primary" disabled={busy || !reply.trim()} onClick={onSend}>
         Yanıtı gönder
       </button>
+      <button className="secondary" disabled={busy} onClick={onClose}>
+        Mailbox oturumunu kapat
+      </button>
+    </section>
+  );
+}
+
+function PrivacyNotice() {
+  return (
+    <section className="panel legal" aria-labelledby="privacy-title">
+      <h1 id="privacy-title">Test pilotu veri kullanımı</h1>
+      <p>
+        Bu sayfa production aydınlatma metni değildir. Faz 35 ilk test kabulünde yalnız yetkili test
+        kullanıcıları ve sentetik vaka verileri kullanılabilir; gerçek kişi, sağlık, finans,
+        iletişim veya olay verisi girilmemelidir.
+      </p>
+      <h2>Bu testte hangi kayıtlar oluşur?</h2>
+      <ul>
+        <li>Kategori, konu, sentetik anlatım ve seçili bildirim modu</li>
+        <li>Tek yönlü hash ile korunan erişim sırrı ve kısa süreli mailbox oturumu</li>
+        <li>Reporter/staff mesajları ile işlem audit kayıtları</li>
+      </ul>
+      <p>
+        Gerçek kullanıcı açılışı; onaylı KVKK aydınlatma metni, retention/silme politikası ve isimli
+        Legal/DPO kabulü tamamlanana kadar yapılmaz. Pilot notice sürümü: tr-test-pilot-v1.
+      </p>
+      <a className="secondary legal-link" href="/">
+        Ana sayfaya dön
+      </a>
+    </section>
+  );
+}
+
+function AccessibilityNotice() {
+  return (
+    <section className="panel legal" aria-labelledby="accessibility-title">
+      <h1 id="accessibility-title">Erişilebilirlik</h1>
+      <p>
+        Kritik pilot yolu klavye, görünür odak, semantik başlık ve ekran okuyucu durum mesajlarıyla
+        kullanılacak şekilde hazırlanır. Bir engelle karşılaşırsanız gerçek veya hassas veri
+        girmeden test sorumlusuna kullandığınız adımı ve tarayıcıyı bildirin.
+      </p>
+      <p>
+        Production erişilebilirlik kabulü, gerçek browser E2E ve WCAG kontrolü sonrasında ilan
+        edilir.
+      </p>
+      <a className="secondary legal-link" href="/">
+        Ana sayfaya dön
+      </a>
     </section>
   );
 }

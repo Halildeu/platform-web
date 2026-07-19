@@ -461,3 +461,29 @@ footer a {
     flex-direction: column;
   }
 }
+
+.skip-link {
+  position: fixed;
+  z-index: 20;
+  top: 0.5rem;
+  left: 0.5rem;
+  transform: translateY(-160%);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--etik-surface);
+  color: var(--etik-ink-strong);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.legal li {
+  margin-block: 0.5rem;
+}
+
+.legal-link {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+}

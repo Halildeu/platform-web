@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
 import {
   addInternalNote,
@@ -22,21 +22,52 @@ export default function App() {
   const [internalNote, setInternalNote] = useState('');
   const [assignee, setAssignee] = useState('');
   const [busy, setBusy] = useState(false);
+  const selectionSequence = useRef(0);
+  const operationKeys = useRef(new Map<string, string>());
+
+  const clearSensitiveState = () => {
+    selectionSequence.current += 1;
+    setItems([]);
+    setSelected(null);
+    setReply('');
+    setInternalNote('');
+    setAssignee('');
+    operationKeys.current.clear();
+  };
+
+  const showRequestError = (requestError: unknown) => {
+    if (isAuthorizationFailure(requestError)) clearSensitiveState();
+    setError(readableError(requestError));
+  };
+
+  const operationKey = (kind: string, caseId: string, body: string) => {
+    const identity = `${kind}\n${caseId}\n${body}`;
+    const existing = operationKeys.current.get(identity);
+    if (existing) return { identity, key: existing };
+    const key = crypto.randomUUID();
+    operationKeys.current.set(identity, key);
+    return { identity, key };
+  };
 
   const refresh = async () => {
+    const requestSequence = ++selectionSequence.current;
+    const selectedId = selected?.id;
     setLoadState('loading');
     setError('');
     try {
       const next = await listCases();
       setItems(next);
       setLoadState('ready');
-      if (selected) {
-        const fresh = await getCase(selected.id);
-        setSelected(fresh);
+      if (selectedId) {
+        const fresh = await getCase(selectedId);
+        if (requestSequence === selectionSequence.current) {
+          setSelected(fresh);
+          setAssignee(fresh.assignedTo ?? '');
+        }
       }
     } catch (requestError) {
       setLoadState('error');
-      setError(readableError(requestError));
+      showRequestError(requestError);
     }
   };
 
@@ -45,13 +76,19 @@ export default function App() {
   }, []);
 
   const openCase = async (item: EthicsCaseSummary) => {
+    const requestSequence = ++selectionSequence.current;
     setError('');
+    setReply('');
+    setInternalNote('');
+    setAssignee('');
     try {
       const next = await getCase(item.id);
-      setSelected(next);
-      setAssignee(next.assignedTo ?? '');
+      if (requestSequence === selectionSequence.current) {
+        setSelected(next);
+        setAssignee(next.assignedTo ?? '');
+      }
     } catch (requestError) {
-      setError(readableError(requestError));
+      if (requestSequence === selectionSequence.current) showRequestError(requestError);
     }
   };
 
@@ -61,10 +98,20 @@ export default function App() {
     setError('');
     try {
       await updateCase(selected.id, selected.version, { status });
-      setSelected(await getCase(selected.id));
-      setItems(await listCases());
+      try {
+        setSelected(await getCase(selected.id));
+        setItems(await listCases());
+      } catch (refreshError) {
+        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+      }
     } catch (requestError) {
-      setError(readableError(requestError));
+      await handleWriteFailure(
+        requestError,
+        selected.id,
+        setSelected,
+        setAssignee,
+        showRequestError,
+      );
     } finally {
       setBusy(false);
     }
@@ -76,12 +123,22 @@ export default function App() {
     setError('');
     try {
       await updateCase(selected.id, selected.version, { assignedTo: assignee.trim() || null });
-      const fresh = await getCase(selected.id);
-      setSelected(fresh);
-      setAssignee(fresh.assignedTo ?? '');
-      setItems(await listCases());
+      try {
+        const fresh = await getCase(selected.id);
+        setSelected(fresh);
+        setAssignee(fresh.assignedTo ?? '');
+        setItems(await listCases());
+      } catch (refreshError) {
+        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+      }
     } catch (requestError) {
-      setError(readableError(requestError));
+      await handleWriteFailure(
+        requestError,
+        selected.id,
+        setSelected,
+        setAssignee,
+        showRequestError,
+      );
     } finally {
       setBusy(false);
     }
@@ -91,12 +148,19 @@ export default function App() {
     if (!selected || !internalNote.trim()) return;
     setBusy(true);
     setError('');
+    const note = internalNote.trim();
+    const operation = operationKey('internal-note', selected.id, note);
     try {
-      await addInternalNote(selected.id, internalNote.trim());
+      await addInternalNote(selected.id, note, operation.key);
+      operationKeys.current.delete(operation.identity);
       setInternalNote('');
-      setSelected(await getCase(selected.id));
+      try {
+        setSelected(await getCase(selected.id));
+      } catch (refreshError) {
+        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+      }
     } catch (requestError) {
-      setError(readableError(requestError));
+      showRequestError(requestError);
     } finally {
       setBusy(false);
     }
@@ -106,12 +170,19 @@ export default function App() {
     if (!selected || !reply.trim()) return;
     setBusy(true);
     setError('');
+    const body = reply.trim();
+    const operation = operationKey('reporter-reply', selected.id, body);
     try {
-      await replyToReporter(selected.id, reply.trim());
+      await replyToReporter(selected.id, body, operation.key);
+      operationKeys.current.delete(operation.identity);
       setReply('');
-      setSelected(await getCase(selected.id));
+      try {
+        setSelected(await getCase(selected.id));
+      } catch (refreshError) {
+        showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
+      }
     } catch (requestError) {
-      setError(readableError(requestError));
+      showRequestError(requestError);
     } finally {
       setBusy(false);
     }
@@ -159,11 +230,16 @@ export default function App() {
                   <li key={item.id}>
                     <button
                       className={selected?.id === item.id ? 'is-selected' : ''}
+                      aria-label={`Vaka #${item.id.toUpperCase()} · ${statusLabel(item.status)}`}
                       onClick={() => void openCase(item)}
                     >
                       <span className="ethics-case-list-id">{shortId(item.id)}</span>
                       <span>{statusLabel(item.status)}</span>
-                      <small>{new Date(item.updatedAt).toLocaleString('tr-TR')}</small>
+                      <small>
+                        <time dateTime={item.updatedAt}>
+                          {new Date(item.updatedAt).toLocaleString('tr-TR')}
+                        </time>
+                      </small>
                     </button>
                   </li>
                 ))}
@@ -293,11 +369,53 @@ export default function App() {
 }
 
 function readableError(error: unknown): string {
-  const status = (error as { response?: { status?: number } })?.response?.status;
+  const status = responseStatus(error);
   if (status === 401) return 'Oturum doğrulanamadı. Yeniden giriş yapın.';
   if (status === 403)
     return 'Bu vaka için yetkiniz yok veya çıkar çatışması kuralı erişimi engelledi.';
-  return 'Etik Speak servisine ulaşılamadı. İşlem uygulanmadı; güvenle yeniden deneyebilirsiniz.';
+  if (status === 409 || status === 412)
+    return 'Vaka başka bir yetkili tarafından güncellendi. Güncel sürüm yüklendi; taslağınızı kontrol edip yeniden deneyin.';
+  return 'Etik Speak servisine ulaşılamadı. İşlemin sonucu doğrulanamadı; yeniden göndermeden önce Yenile ile durumu kontrol edin.';
+}
+
+const responseStatus = (error: unknown) =>
+  (error as { response?: { status?: number } })?.response?.status;
+
+const isAuthorizationFailure = (error: unknown) => [401, 403].includes(responseStatus(error) ?? 0);
+
+async function handleWriteFailure(
+  error: unknown,
+  caseId: string,
+  setSelected: (value: EthicsCaseDetail | null) => void,
+  setAssignee: (value: string) => void,
+  showError: (value: unknown) => void,
+) {
+  if ([409, 412].includes(responseStatus(error) ?? 0)) {
+    try {
+      const fresh = await getCase(caseId);
+      setSelected(fresh);
+      setAssignee(fresh.assignedTo ?? '');
+    } catch (refreshError) {
+      showError(refreshError);
+      return;
+    }
+  }
+  showError(error);
+}
+
+function showRequestErrorAfterWrite(
+  error: unknown,
+  clearSensitiveState: () => void,
+  setError: (value: string) => void,
+) {
+  if (isAuthorizationFailure(error)) {
+    clearSensitiveState();
+    setError(readableError(error));
+    return;
+  }
+  setError(
+    'İşlem kaydedildi ancak ekran yenilenemedi. Yeniden göndermeyin; Yenile ile durumu kontrol edin.',
+  );
 }
 const shortId = (id: string) => `#${id.slice(0, 8).toUpperCase()}`;
 const statusLabel = (status: string) =>

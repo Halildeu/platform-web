@@ -46,6 +46,29 @@ jobs:
           cache-from: type=gha,scope=etik-speak-public
           cache-to: type=gha,scope=etik-speak-public,mode=max
           provenance: false
+      - name: Pinned container startup and security-header smoke
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          image="ghcr.io/halildeu/platform-web-etik-speak-public@${IMAGE_DIGEST}"
+          container="etik-speak-public-smoke-${GITHUB_RUN_ID}"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" -p 127.0.0.1:18080:8080 "$image"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs "$container"
+              exit 1
+            fi
+            sleep 1
+          done
+          headers="$(curl --fail --silent --show-error --dump-header - --output /dev/null http://127.0.0.1:18080/)"
+          printf '%s' "$headers" | grep -Eiq '^Content-Security-Policy:'
+          printf '%s' "$headers" | grep -Eiq '^Referrer-Policy: no-referrer'
+          printf '%s' "$headers" | grep -Eiq '^Cache-Control: no-store'
       - name: Immutable image evidence
         run: |
           {

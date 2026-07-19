@@ -44,19 +44,27 @@ export async function updateCase(
   );
   return response.data;
 }
-export async function replyToReporter(id: string, body: string): Promise<EthicsMessage> {
+export async function replyToReporter(
+  id: string,
+  body: string,
+  idempotencyKey: string,
+): Promise<EthicsMessage> {
   const response = await api.post<EthicsMessage>(
     `/v1/ethics/cases/${encodeURIComponent(id)}/messages`,
     { body },
-    { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
   );
   return response.data;
 }
-export async function addInternalNote(id: string, body: string): Promise<EthicsMessage> {
+export async function addInternalNote(
+  id: string,
+  body: string,
+  idempotencyKey: string,
+): Promise<EthicsMessage> {
   const response = await api.post<EthicsMessage>(
     `/v1/ethics/cases/${encodeURIComponent(id)}/internal-notes`,
     { body },
-    { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
   );
   return response.data;
 }

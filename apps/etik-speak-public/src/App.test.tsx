@@ -5,15 +5,16 @@ import App from './App';
 import * as api from './public-api';
 vi.mock('./public-api');
 describe('Etik Speak public reporter', () => {
-  beforeEach(() =>
+  beforeEach(() => {
+    vi.mocked(api.newAccessSecret).mockReturnValue('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdef');
     vi.mocked(api.createReport).mockResolvedValue({
       receiptId: 'r-1',
       accessSecret: 'secret-once',
       createdAt: '2026-07-18T12:00:00Z',
       mailboxPath: '/mailbox',
       idempotentReplay: false,
-    }),
-  );
+    });
+  });
   test('anonymous intake shows receipt only after durable API success', async () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Yeni bildirim yap' }));
