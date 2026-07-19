@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import {
   expect,
   test,
@@ -13,6 +13,9 @@ const canonicalPublic = process.env.ETIK_PUBLIC_URL ?? 'https://etik.acik.com';
 const aliasPublic = process.env.SPEAKUP_PUBLIC_URL ?? 'https://speakup.acik.com';
 const managerRoot = process.env.ETIK_MANAGER_ROOT ?? 'https://testai.acik.com';
 const managerUsername = process.env.ETIK_MANAGER_USERNAME ?? 'ethics-manager-test';
+const publicGateUsername = process.env.ETIK_PUBLIC_GATE_USERNAME ?? 'etik-test';
+
+type HttpCredentials = { username: string; password: string };
 
 type ReporterJourney = {
   label: string;
@@ -29,13 +32,30 @@ type ReporterJourney = {
   observedConsole: string[];
 };
 
-const requiredPassword = () => {
-  const path = process.env.ETIK_MANAGER_PASSWORD_FILE?.trim();
-  if (!path) throw new Error('ETIK_MANAGER_PASSWORD_FILE is required for the live synthetic gate.');
+const requiredSecretFile = (environmentName: string) => {
+  const path = process.env[environmentName]?.trim();
+  if (!path) throw new Error(`${environmentName} is required for the live synthetic gate.`);
+  const metadata = lstatSync(path);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error(`${environmentName} must point to a regular non-symlink file.`);
+  }
+  if ((metadata.mode & 0o077) !== 0) {
+    throw new Error(`${environmentName} must not be accessible by group or other users.`);
+  }
+  if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
+    throw new Error(`${environmentName} must be owned by the current user.`);
+  }
   const value = readFileSync(path, 'utf8').trim();
-  if (!value) throw new Error('ETIK_MANAGER_PASSWORD_FILE is empty.');
+  if (!value) throw new Error(`${environmentName} is empty.`);
   return value;
 };
+
+const requiredManagerPassword = () => requiredSecretFile('ETIK_MANAGER_PASSWORD_FILE');
+
+const requiredPublicGate = (): HttpCredentials => ({
+  username: publicGateUsername,
+  password: requiredSecretFile('ETIK_PUBLIC_GATE_PASSWORD_FILE'),
+});
 
 const firstVisible = async (page: Page, selectors: string[], timeout = 20_000) => {
   const deadline = Date.now() + timeout;
@@ -84,8 +104,19 @@ const loginManager = async (page: Page, password: string) => {
   await expect(page.getByRole('heading', { name: 'Etik Speak' })).toBeVisible({ timeout: 60_000 });
 };
 
-const publicArtifact = async (request: APIRequestContext, base: string) => {
-  const response = await request.get(base, { failOnStatusCode: true });
+const publicArtifact = async (
+  request: APIRequestContext,
+  base: string,
+  credentials: HttpCredentials,
+) => {
+  const authorization = `Basic ${Buffer.from(
+    `${credentials.username}:${credentials.password}`,
+    'utf8',
+  ).toString('base64')}`;
+  const response = await request.get(base, {
+    failOnStatusCode: true,
+    headers: { Authorization: authorization },
+  });
   const body = await response.body();
   return {
     digest: createHash('sha256').update(body).digest('hex'),
@@ -100,8 +131,9 @@ const createReporterJourney = async (
   base: string,
   label: string,
   runNonce: string,
+  credentials: HttpCredentials,
 ): Promise<ReporterJourney> => {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ httpCredentials: credentials });
   const page = await context.newPage();
   const observedUrls: string[] = [];
   const observedConsole: string[] = [];
@@ -217,9 +249,10 @@ test.describe('Faz 35 ES-210 live synthetic closed loop', () => {
     browser,
     request,
   }) => {
-    const password = requiredPassword();
-    const canonicalArtifact = await publicArtifact(request, canonicalPublic);
-    const aliasArtifact = await publicArtifact(request, aliasPublic);
+    const password = requiredManagerPassword();
+    const publicGate = requiredPublicGate();
+    const canonicalArtifact = await publicArtifact(request, canonicalPublic, publicGate);
+    const aliasArtifact = await publicArtifact(request, aliasPublic, publicGate);
     expect(aliasArtifact.digest).toBe(canonicalArtifact.digest);
     for (const artifact of [canonicalArtifact, aliasArtifact]) {
       expect(artifact.csp).toContain("default-src 'self'");
@@ -229,13 +262,13 @@ test.describe('Faz 35 ES-210 live synthetic closed loop', () => {
 
     const runNonce = `${Date.now()}-${randomUUID().slice(0, 8)}`;
     const journeys = [
-      await createReporterJourney(browser, canonicalPublic, 'etik', runNonce),
-      await createReporterJourney(browser, aliasPublic, 'speakup', runNonce),
+      await createReporterJourney(browser, canonicalPublic, 'etik', runNonce, publicGate),
+      await createReporterJourney(browser, aliasPublic, 'speakup', runNonce, publicGate),
     ];
 
     // A receipt is bound to its ingress channel; alias parity must not become
     // cross-host mailbox credential portability.
-    const crossHostContext = await browser.newContext();
+    const crossHostContext = await browser.newContext({ httpCredentials: publicGate });
     const crossHostPage = await crossHostContext.newPage();
     await crossHostPage.goto(aliasPublic, { waitUntil: 'domcontentloaded' });
     await crossHostPage.getByRole('button', { name: 'Bildirimi takip et' }).click();
