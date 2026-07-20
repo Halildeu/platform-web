@@ -108,7 +108,14 @@ const startManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'
   }
   if (!hasEthicsManagerContract(keycloak.tokenParsed)) {
     if (!claimUpgradeAttempt()) return 'denied';
-    await keycloak.login({ redirectUri: managerRedirectUri(), scope: ETHICS_MANAGER_SCOPE });
+    // prompt=login: SSO override — canonical suite session'ı ethics-manager
+    // scope taşımıyorsa KC her zaman fresh login sorar. Yoksa auto-SSO aynı
+    // scope-less token'ı geri döndürür + denied cycle'a takılır.
+    await keycloak.login({
+      redirectUri: managerRedirectUri(),
+      scope: ETHICS_MANAGER_SCOPE,
+      prompt: 'login',
+    });
     return 'redirecting';
   }
   clearUpgradeAttempt();
