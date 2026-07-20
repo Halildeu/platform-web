@@ -45,8 +45,9 @@ export function Stack({
   direction = 'column',
   gap = 2,
 }: PropsWithChildren<{ direction?: 'row' | 'column'; gap?: number }>) {
+  const safeGap = Number.isInteger(gap) && gap >= 0 && gap <= 8 ? gap : 2;
   return (
-    <div style={{ display: 'flex', flexDirection: direction, gap: `${gap * 0.25}rem` }}>
+    <div className={`manager-stack manager-stack-${direction} manager-gap-${safeGap}`}>
       {children}
     </div>
   );

@@ -17,3 +17,9 @@
 /apps/mfe-reporting/src/__tests__/grid-architecture.contract.test.ts @Halildeu
 /apps/mfe-reporting/src/__tests__/grid-architecture-exceptions.json @Halildeu
 /apps/mfe-reporting/src/__tests__/grid-architecture-exceptions.schema.json @Halildeu
+
+# Etik Speak manager trust boundary. The standalone artifact deliberately
+# consumes this exact domain surface; changes require the product/security owner.
+/apps/mfe-ethic/** @Halildeu
+/apps/etik-speak-manager/** @Halildeu
+/.github/workflows/ci-etik-speak-manager-image.yml @Halildeu

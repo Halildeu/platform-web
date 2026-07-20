@@ -8,6 +8,22 @@ export const registerAccessTokenProvider = (provider: AccessTokenProvider): void
   accessTokenProvider = provider;
 };
 
+export const clearAccessTokenProvider = (): void => {
+  accessTokenProvider = undefined;
+};
+
+const safeCallerHeaders = (headers: Record<string, string> | undefined): Record<string, string> => {
+  const safe: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers ?? {})) {
+    const normalized = name.toLowerCase();
+    if (normalized === 'authorization' || normalized === 'cookie') {
+      throw new Error(`Korunan HTTP başlığı caller tarafından ayarlanamaz: ${name}`);
+    }
+    safe[name] = value;
+  }
+  return safe;
+};
+
 const request = async <T>(
   method: 'GET' | 'POST' | 'PATCH',
   path: string,
@@ -20,10 +36,10 @@ const request = async <T>(
     method,
     credentials: 'omit',
     headers: {
+      ...safeCallerHeaders(config?.headers),
       Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...config?.headers,
+      Authorization: `Bearer ${token}`,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

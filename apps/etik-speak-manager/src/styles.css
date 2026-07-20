@@ -44,6 +44,54 @@ textarea {
   font: inherit;
 }
 
+.manager-stack {
+  display: flex;
+}
+
+.manager-stack-row {
+  flex-direction: row;
+}
+
+.manager-stack-column {
+  flex-direction: column;
+}
+
+.manager-gap-0 {
+  gap: 0;
+}
+
+.manager-gap-1 {
+  gap: 0.25rem;
+}
+
+.manager-gap-2 {
+  gap: 0.5rem;
+}
+
+.manager-gap-3 {
+  gap: 0.75rem;
+}
+
+.manager-gap-4 {
+  gap: 1rem;
+}
+
+.manager-gap-5 {
+  gap: 1.25rem;
+}
+
+.manager-gap-6 {
+  gap: 1.5rem;
+}
+
+.manager-gap-7 {
+  gap: 1.75rem;
+}
+
+.manager-gap-8 {
+  gap: 2rem;
+}
+
 .manager-session-state {
   max-width: 44rem;
   margin: 12vh auto;

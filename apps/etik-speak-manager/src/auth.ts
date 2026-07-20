@@ -1,5 +1,5 @@
 import Keycloak, { type KeycloakTokenParsed } from 'keycloak-js';
-import { registerAccessTokenProvider } from './standalone-http';
+import { clearAccessTokenProvider, registerAccessTokenProvider } from './standalone-http';
 
 export const ETHICS_MANAGER_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
 
@@ -27,10 +27,52 @@ export const hasEthicsManagerContract = (
 };
 
 let keycloak: Keycloak | undefined;
+const UPGRADE_MARKER = 'etikSpeakManagerAuthUpgrade_v1';
+const UPGRADE_TTL_MS = 5 * 60 * 1000;
+const invalidationListeners = new Set<() => void>();
 
-const managerRedirectUri = () => `${window.location.origin}/ethic/`;
+export const managerRedirectUri = () => {
+  const { pathname, search, hash } = window.location;
+  const safePath =
+    pathname === '/ethic' || pathname.startsWith('/ethic/')
+      ? `${pathname}${search}${hash}`
+      : '/ethic/';
+  return `${window.location.origin}${safePath}`;
+};
 
-export const initializeManagerSession = async (): Promise<'ready' | 'redirecting'> => {
+export const claimUpgradeAttempt = (): boolean => {
+  try {
+    const raw = window.sessionStorage.getItem(UPGRADE_MARKER);
+    if (raw) {
+      const attemptedAt = Number.parseInt(raw, 10);
+      if (Number.isFinite(attemptedAt) && Date.now() - attemptedAt < UPGRADE_TTL_MS) return false;
+    }
+    window.sessionStorage.setItem(UPGRADE_MARKER, String(Date.now()));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const clearUpgradeAttempt = (): void => {
+  try {
+    window.sessionStorage.removeItem(UPGRADE_MARKER);
+  } catch {
+    // A valid token contract is authoritative when storage is unavailable.
+  }
+};
+
+const invalidateManagerSession = (): void => {
+  clearAccessTokenProvider();
+  invalidationListeners.forEach((listener) => listener());
+};
+
+export const subscribeManagerSessionInvalidation = (listener: () => void): (() => void) => {
+  invalidationListeners.add(listener);
+  return () => invalidationListeners.delete(listener);
+};
+
+export const initializeManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'> => {
   keycloak ??= new Keycloak({
     url: window.location.origin,
     realm: 'platform-test',
@@ -43,17 +85,29 @@ export const initializeManagerSession = async (): Promise<'ready' | 'redirecting
     pkceMethod: 'S256',
   });
 
-  if (!authenticated || !hasEthicsManagerContract(keycloak.tokenParsed)) {
+  if (!authenticated) {
+    if (!claimUpgradeAttempt()) return 'denied';
     await keycloak.login({ redirectUri: managerRedirectUri(), scope: ETHICS_MANAGER_SCOPE });
     return 'redirecting';
   }
+  if (!hasEthicsManagerContract(keycloak.tokenParsed)) {
+    if (!claimUpgradeAttempt()) return 'denied';
+    await keycloak.login({ redirectUri: managerRedirectUri(), scope: ETHICS_MANAGER_SCOPE });
+    return 'redirecting';
+  }
+  clearUpgradeAttempt();
 
   registerAccessTokenProvider(async () => {
-    await keycloak?.updateToken(30);
-    if (!keycloak?.token || !hasEthicsManagerContract(keycloak.tokenParsed)) {
-      throw new Error('Etik Speak yetkili oturum sözleşmesi artık geçerli değil.');
+    try {
+      await keycloak?.updateToken(30);
+      if (!keycloak?.token || !hasEthicsManagerContract(keycloak.tokenParsed)) {
+        throw new Error('Etik Speak yetkili oturum sözleşmesi artık geçerli değil.');
+      }
+      return keycloak.token;
+    } catch (error) {
+      invalidateManagerSession();
+      throw error;
     }
-    return keycloak.token;
   });
   return 'ready';
 };
