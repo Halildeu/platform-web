@@ -59,7 +59,7 @@
   "dependencies": {
     "@mfe/shared-types": "*",
     "clsx": "^2.1.1",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "echarts-gl": "^2.0.9",
     "echarts-liquidfill": "~3.1.0",
     "echarts-wordcloud": "~2.1.0",
