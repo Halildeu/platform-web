@@ -3,6 +3,7 @@ type RequestConfig = { headers?: Record<string, string> };
 type ApiResponse<T> = { data: T };
 
 let accessTokenProvider: AccessTokenProvider | undefined;
+let authorizationFailureHandler: (() => void) | undefined;
 
 export const registerAccessTokenProvider = (provider: AccessTokenProvider): void => {
   accessTokenProvider = provider;
@@ -10,6 +11,14 @@ export const registerAccessTokenProvider = (provider: AccessTokenProvider): void
 
 export const clearAccessTokenProvider = (): void => {
   accessTokenProvider = undefined;
+};
+
+export const registerAuthorizationFailureHandler = (handler: () => void): void => {
+  authorizationFailureHandler = handler;
+};
+
+export const clearAuthorizationFailureHandler = (): void => {
+  authorizationFailureHandler = undefined;
 };
 
 const safeCallerHeaders = (headers: Record<string, string> | undefined): Record<string, string> => {
@@ -48,6 +57,10 @@ const request = async <T>(
     ? await response.json()
     : await response.text();
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      clearAccessTokenProvider();
+      authorizationFailureHandler?.();
+    }
     throw { response: { status: response.status, data } };
   }
   return { data: data as T };

@@ -3,7 +3,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* .npmrc* ./
 COPY apps/etik-speak-manager ./apps/etik-speak-manager
-COPY apps/mfe-ethic ./apps/mfe-ethic
+COPY apps/mfe-ethic/src ./apps/mfe-ethic/src
 RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter etik-speak-manager build
 

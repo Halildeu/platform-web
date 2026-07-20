@@ -1,5 +1,9 @@
 import Keycloak, { type KeycloakTokenParsed } from 'keycloak-js';
-import { clearAccessTokenProvider, registerAccessTokenProvider } from './standalone-http';
+import {
+  clearAccessTokenProvider,
+  registerAccessTokenProvider,
+  registerAuthorizationFailureHandler,
+} from './standalone-http';
 
 export const ETHICS_MANAGER_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
 
@@ -109,6 +113,7 @@ const startManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'
   }
   clearUpgradeAttempt();
 
+  registerAuthorizationFailureHandler(invalidateManagerSession);
   registerAccessTokenProvider(async () => {
     try {
       await keycloak?.updateToken(30);

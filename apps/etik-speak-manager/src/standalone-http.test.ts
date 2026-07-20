@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, clearAccessTokenProvider, registerAccessTokenProvider } from './standalone-http';
+import {
+  api,
+  clearAccessTokenProvider,
+  clearAuthorizationFailureHandler,
+  registerAccessTokenProvider,
+  registerAuthorizationFailureHandler,
+} from './standalone-http';
 
 describe('Etik Speak manager HTTP boundary', () => {
   afterEach(() => {
     clearAccessTokenProvider();
+    clearAuthorizationFailureHandler();
     vi.unstubAllGlobals();
   });
 
@@ -49,5 +56,36 @@ describe('Etik Speak manager HTTP boundary', () => {
     registerAccessTokenProvider(vi.fn().mockResolvedValue('fresh-token'));
     clearAccessTokenProvider();
     await expect(api.get('/v1/ethics/cases')).rejects.toThrow('oturumu henüz hazır değil');
+  });
+
+  it.each([401, 403])('invalidates the protected tree on session-level HTTP %s', async (status) => {
+    const invalidate = vi.fn();
+    registerAuthorizationFailureHandler(invalidate);
+    registerAccessTokenProvider(vi.fn().mockResolvedValue('fresh-token'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 'AUTHORIZATION_LOST' }), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    await expect(api.get('/v1/ethics/cases')).rejects.toMatchObject({ response: { status } });
+    expect(invalidate).toHaveBeenCalledOnce();
+    await expect(api.get('/v1/ethics/cases')).rejects.toThrow('oturumu henüz hazır değil');
+  });
+
+  it('does not turn object-level 404 into a global session invalidation', async () => {
+    const invalidate = vi.fn();
+    registerAuthorizationFailureHandler(invalidate);
+    registerAccessTokenProvider(vi.fn().mockResolvedValue('fresh-token'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 404 })));
+
+    await expect(api.get('/v1/ethics/cases/masked')).rejects.toMatchObject({
+      response: { status: 404 },
+    });
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });
