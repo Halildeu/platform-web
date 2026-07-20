@@ -20,6 +20,8 @@ on:
   workflow_dispatch:
 
 permissions:
+  id-token: write
+  attestations: write
   contents: read
   packages: write
 
@@ -71,6 +73,12 @@ jobs:
           cache-from: type=gha,scope=etik-speak-public
           cache-to: type=gha,scope=etik-speak-public,mode=max
           provenance: false
+      - name: Sign GitHub artifact provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ghcr.io/halildeu/platform-web-etik-speak-public
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
       - name: Pinned container startup and security-header smoke
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}

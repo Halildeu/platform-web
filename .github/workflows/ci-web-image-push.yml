@@ -25,6 +25,8 @@ on:
   workflow_dispatch:
 
 permissions:
+  id-token: write
+  attestations: write
   contents: read
   packages: write
 
@@ -170,6 +172,13 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.variant }}-v2
           cache-to: type=gha,scope=${{ matrix.variant }}-v2,mode=max
           provenance: false
+
+      - name: Sign GitHub artifact provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
       # iter-50 Step 3.2 (Codex 019dded6) — testai variant SUCCESS sonra
       # platform-k8s-gitops repo'suna `repository_dispatch` event'i tetikle.
