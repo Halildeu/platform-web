@@ -36,6 +36,7 @@ import {
 } from '../../features/ats-product-catalog/model/ats-capability-registry';
 import { RECRUITER_WORKSPACE_ENTRY } from '../../features/ats-portals/model/ats-portal-registry';
 import { EndpointAdminRouteBoundary } from './EndpointAdminRouteBoundary';
+import { EthicsTokenGate } from './EthicsTokenGate';
 const ReportBuilderWizard = React.lazy(() =>
   import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
     default: m.ReportBuilderWizard,
@@ -157,7 +158,9 @@ export const AppRouter: React.FC = () => {
           element={
             ethicEnabled ? (
               <ProtectedRoute requiredModule="ETHIC">
-                <EthicApp />
+                <EthicsTokenGate>
+                  <EthicApp />
+                </EthicsTokenGate>
               </ProtectedRoute>
             ) : (
               <Navigate to={defaultShellPath} replace />

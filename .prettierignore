@@ -7,6 +7,10 @@ coverage
 pnpm-lock.yaml
 apps/docs/.next
 
+# Nginx CSP must remain one physical line. Generic prose wrapping inserts a
+# newline into the emitted HTTP header and makes the response malformed.
+apps/etik-speak-public/security-headers.conf.inc
+
 # Generated artifacts — must round-trip through their generator script
 # unchanged. Prettier formatting (e.g. inline-arrays) drifts from the
 # raw JSON.stringify output and breaks the freshness check.

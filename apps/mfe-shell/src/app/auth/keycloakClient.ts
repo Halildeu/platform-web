@@ -1,5 +1,6 @@
 import Keycloak from 'keycloak-js';
 import { authConfig } from './auth-config';
+import { decodeJwtPayload } from '../../features/auth/model/auth.slice';
 
 // STORY-0034: FE Keycloak / OIDC Integration
 const keycloak = new Keycloak({
@@ -10,6 +11,55 @@ const keycloak = new Keycloak({
 
 type KeycloakLoginRedirectOptions = {
   redirectUri: string;
+};
+
+type KeycloakLoginOptions = KeycloakLoginRedirectOptions & {
+  scope?: string;
+};
+
+const ETHICS_MANAGER_LOGIN_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
+
+const asStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  return typeof value === 'string' ? [value] : [];
+};
+
+/** Exact bearer contract required by the isolated Etik Speak staff API. */
+export const hasEthicsManagerTokenContract = (token: string | null | undefined): boolean => {
+  if (!token) return false;
+  const claims = decodeJwtPayload(token);
+  if (!claims) return false;
+  const audience = asStringArray(claims['aud']);
+  const scope =
+    typeof claims['scope'] === 'string' ? claims['scope'].split(/\s+/).filter(Boolean) : [];
+  const realmAccess = claims['realm_access'];
+  const roles =
+    realmAccess && typeof realmAccess === 'object' && !Array.isArray(realmAccess)
+      ? asStringArray((realmAccess as Record<string, unknown>)['roles'])
+      : [];
+  return (
+    audience.includes('ethics-manager') &&
+    scope.includes('ethics:case:manage') &&
+    roles.includes('ethics-manager')
+  );
+};
+
+/**
+ * Etik Speak manager yetkileri frontend istemcisinde optional scope olarak
+ * tutulur. Böylece suite'in diğer modülleri ethics audience/scope almaz;
+ * yalnız /ethic yoluna dönen interaktif giriş açıkça bu yetkileri ister.
+ */
+export const buildKeycloakLoginOptions = (redirectUri: string): KeycloakLoginOptions => {
+  try {
+    const path = new URL(redirectUri, 'https://invalid.local').pathname;
+    if (path === '/ethic' || path.startsWith('/ethic/')) {
+      return { redirectUri, scope: ETHICS_MANAGER_LOGIN_SCOPE };
+    }
+  } catch {
+    // keycloak-js redirectUri doğrulamasını yapmaya devam eder. Geçersiz bir
+    // URI için genişletilmiş scope vermemek fail-closed davranıştır.
+  }
+  return { redirectUri };
 };
 
 const LOGIN_URL_TIMEOUT_MS = 3_000;
@@ -105,7 +155,7 @@ export const startKeycloakLogin = async ({
   }
 
   console.info(`[Auth] Falling back to keycloak.login(). redirectUri=${summarizeUrl(redirectUri)}`);
-  await keycloak.login({ redirectUri });
+  await keycloak.login(buildKeycloakLoginOptions(redirectUri));
 };
 
 export const resolveKeycloakLoginUrl = async ({
@@ -141,7 +191,7 @@ export const resolveKeycloakLoginUrl = async ({
         );
       }
       const loginUrl = await Promise.race<string>([
-        keycloak.createLoginUrl({ redirectUri }),
+        keycloak.createLoginUrl(buildKeycloakLoginOptions(redirectUri)),
         new Promise<string>((_, reject) => {
           window.setTimeout(() => {
             reject(

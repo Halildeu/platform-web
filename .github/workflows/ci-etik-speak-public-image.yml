@@ -1,0 +1,113 @@
+name: CI - Etik Speak Public Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/etik-speak-public/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci-etik-speak-public-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/etik-speak-public/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci-etik-speak-public-image.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  attestations: write
+  contents: read
+  packages: write
+
+jobs:
+  build-test-push:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          # A pull_request workflow normally checks out GitHub's synthetic
+          # merge ref. The immutable tag and build input must instead describe
+          # the same exact source head so provenance is not overstated.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - run: pnpm install --frozen-lockfile
+      - name: Public artifact unit and production build
+        run: pnpm --filter etik-speak-public test && pnpm --filter etik-speak-public build
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive immutable and release tags
+        id: tags
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          {
+            echo 'value<<EOF'
+            echo "ghcr.io/halildeu/platform-web-etik-speak-public:sha-${SOURCE_SHA}"
+            if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/heads/main ]]; then
+              echo 'ghcr.io/halildeu/platform-web-etik-speak-public:latest'
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - id: image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: apps/etik-speak-public/Dockerfile
+          push: true
+          build-args: |
+            BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
+          tags: ${{ steps.tags.outputs.value }}
+          cache-from: type=gha,scope=etik-speak-public
+          cache-to: type=gha,scope=etik-speak-public,mode=max
+          provenance: false
+      - name: Sign GitHub artifact provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-name: ghcr.io/halildeu/platform-web-etik-speak-public
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - name: Pinned container startup and security-header smoke
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          image="ghcr.io/halildeu/platform-web-etik-speak-public@${IMAGE_DIGEST}"
+          container="etik-speak-public-smoke-${GITHUB_RUN_ID}"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" -p 127.0.0.1:18080:8080 "$image"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs "$container"
+              exit 1
+            fi
+            sleep 1
+          done
+          headers="$(curl --fail --silent --show-error --dump-header - --output /dev/null http://127.0.0.1:18080/)"
+          printf '%s' "$headers" | grep -Eiq '^Content-Security-Policy:'
+          printf '%s' "$headers" | grep -Eiq '^Referrer-Policy: no-referrer'
+          printf '%s' "$headers" | grep -Eiq '^Cache-Control: no-store'
+      - name: Immutable image evidence
+        run: |
+          {
+            echo "### Etik Speak public artifact"
+            echo "- Digest: \`${{ steps.image.outputs.digest }}\`"
+            echo "- Both public hosts must pin this exact digest."
+          } >> "$GITHUB_STEP_SUMMARY"

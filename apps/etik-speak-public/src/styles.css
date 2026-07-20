@@ -1,0 +1,496 @@
+:root {
+  --etik-ink: oklch(31% 0.04 168deg);
+  --etik-ink-strong: oklch(28% 0.05 168deg);
+  --etik-ink-muted: oklch(48% 0.03 168deg);
+  --etik-ink-subtle: oklch(53% 0.025 168deg);
+  --etik-canvas: oklch(97.5% 0.01 160deg);
+  --etik-surface: oklch(100% 0 0deg);
+  --etik-surface-muted: oklch(96% 0.008 160deg);
+  --etik-surface-soft: oklch(97% 0.012 160deg);
+  --etik-border: oklch(90% 0.02 160deg);
+  --etik-border-strong: oklch(75% 0.035 160deg);
+  --etik-brand: oklch(47% 0.09 168deg);
+  --etik-brand-hover: oklch(37% 0.07 168deg);
+  --etik-brand-soft: oklch(93% 0.035 160deg);
+  --etik-focus: oklch(82% 0.09 165deg);
+  --etik-danger: oklch(51% 0.18 28deg);
+  --etik-danger-text: oklch(36% 0.13 28deg);
+  --etik-danger-surface: oklch(97% 0.025 28deg);
+  --etik-footer: oklch(27% 0.045 168deg);
+  --etik-footer-text: oklch(91% 0.025 160deg);
+  --etik-shadow: 0 24px 70px oklch(32% 0.04 168deg / 8%);
+
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: var(--etik-ink);
+  background: var(--etik-canvas);
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+.public-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-header {
+  height: 74px;
+  padding: 0 clamp(1rem, 5vw, 4rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--etik-surface);
+  border-bottom: 1px solid var(--etik-border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border: none;
+  background: none;
+  color: var(--etik-ink-strong);
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--etik-brand);
+  color: var(--etik-surface);
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.security-note {
+  font-size: 0.85rem;
+  color: var(--etik-ink-muted);
+}
+
+.hero {
+  width: min(1080px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: clamp(4rem, 10vw, 8rem) 0;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  font-size: 0.75rem;
+  color: var(--etik-brand);
+}
+
+.hero h1 {
+  max-width: 760px;
+  font:
+    700 clamp(2.8rem, 8vw, 6.5rem)/0.98 Georgia,
+    serif;
+  letter-spacing: -0.045em;
+  margin: 0.6rem 0 1.5rem;
+  color: var(--etik-ink-strong);
+}
+
+.lead {
+  max-width: 680px;
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  line-height: 1.65;
+  color: var(--etik-ink-muted);
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin: 2rem 0 4rem;
+}
+
+.primary,
+.secondary,
+.back {
+  min-height: 48px;
+  border-radius: 12px;
+  padding: 0.8rem 1.25rem;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  border: 1px solid var(--etik-brand);
+  background: var(--etik-brand);
+  color: var(--etik-surface);
+}
+
+.primary:hover {
+  background: var(--etik-brand-hover);
+}
+
+.secondary {
+  border: 1px solid var(--etik-border-strong);
+  background: var(--etik-surface);
+  color: var(--etik-ink-strong);
+}
+
+.back {
+  border: none;
+  background: transparent;
+  color: var(--etik-brand);
+  padding-left: 0;
+}
+
+.full {
+  width: 100%;
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.trust-grid article {
+  padding: 1.4rem;
+  background: var(--etik-surface);
+  border: 1px solid var(--etik-border);
+  border-radius: 18px;
+}
+
+.trust-grid article > span {
+  font-size: 1.8rem;
+  color: var(--etik-brand);
+}
+
+.trust-grid h2 {
+  font-size: 1rem;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.trust-grid p {
+  font-size: 0.9rem;
+  color: var(--etik-ink-subtle);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.panel {
+  width: min(720px, calc(100% - 2rem));
+  margin: 3rem auto;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  background: var(--etik-surface);
+  border: 1px solid var(--etik-border);
+  border-radius: 22px;
+  box-shadow: var(--etik-shadow);
+}
+
+.panel h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(2rem, 5vw, 3.3rem);
+  font-weight: 700;
+  line-height: 1.05;
+  margin: 0.5rem 0 1rem;
+}
+
+.step {
+  float: right;
+  color: var(--etik-ink-subtle);
+  font-size: 0.85rem;
+}
+
+.panel form,
+.panel fieldset {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.panel fieldset {
+  border: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.panel legend,
+.panel label {
+  font-weight: 700;
+}
+
+.panel label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.panel input,
+.panel select,
+.panel textarea {
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid var(--etik-border-strong);
+  border-radius: 10px;
+  background: var(--etik-surface);
+  color: var(--etik-ink);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.panel input:focus,
+.panel select:focus,
+.panel textarea:focus,
+.primary:focus-visible,
+.secondary:focus-visible,
+.brand:focus-visible {
+  outline: 3px solid var(--etik-focus);
+  outline-offset: 2px;
+}
+
+.radio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.7rem;
+}
+
+.radio-grid label {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 1rem;
+  border: 1px solid var(--etik-border);
+  border-radius: 12px;
+}
+
+/* Structural overrides intentionally follow the shared panel control rules. */
+/* stylelint-disable no-descending-specificity */
+.radio-grid input {
+  width: auto;
+}
+
+.radio-grid span {
+  font-size: 0.82rem;
+  color: var(--etik-ink-subtle);
+  font-weight: 400;
+}
+/* stylelint-enable no-descending-specificity */
+
+.radio-grid label[aria-disabled='true'] {
+  background: var(--etik-surface-muted);
+  color: var(--etik-ink-subtle);
+}
+
+.attachment-state {
+  padding: 1rem !important;
+  border: 1px dashed var(--etik-border-strong) !important;
+  border-radius: 12px;
+}
+
+.attachment-state p {
+  margin: 0;
+  color: var(--etik-ink-muted);
+  line-height: 1.5;
+}
+
+.attachment-state input:disabled {
+  background: var(--etik-surface-muted);
+  color: var(--etik-ink-subtle);
+}
+
+.check {
+  grid-template-columns: auto 1fr !important;
+  align-items: center;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- checkbox overrides panel input width */
+.check input {
+  width: auto;
+}
+
+.help {
+  color: var(--etik-ink-subtle);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.alert {
+  width: min(720px, calc(100% - 2rem));
+  margin: 2rem auto -1rem;
+  padding: 1rem;
+  border-left: 4px solid var(--etik-danger);
+  background: var(--etik-danger-surface);
+  color: var(--etik-danger-text);
+  border-radius: 8px;
+}
+
+.receipt {
+  text-align: center;
+}
+
+.success-mark {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--etik-brand-soft);
+  color: var(--etik-brand);
+  font-size: 2rem;
+}
+
+.receipt dl {
+  text-align: left;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.receipt dl div {
+  padding: 1rem;
+  background: var(--etik-surface-soft);
+  border-radius: 10px;
+}
+
+.receipt dt {
+  font-size: 0.8rem;
+  color: var(--etik-ink-subtle);
+}
+
+.receipt dd {
+  margin: 0.35rem 0 0;
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+
+.mailbox ol {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.mailbox .case-status {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--etik-border);
+  border-radius: 10px;
+  background: var(--etik-surface-muted);
+}
+
+.mailbox li {
+  max-width: 86%;
+  padding: 1rem;
+  border-radius: 14px;
+  background: var(--etik-surface-muted);
+}
+
+.mailbox li.reporter {
+  margin-left: auto;
+  background: var(--etik-brand-soft);
+}
+
+.mailbox time {
+  font-size: 0.75rem;
+  color: var(--etik-ink-subtle);
+}
+
+.mailbox .empty {
+  max-width: 100%;
+  text-align: center;
+}
+
+.mailbox label {
+  margin-top: 1.3rem;
+}
+
+footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem clamp(1rem, 5vw, 4rem);
+  background: var(--etik-footer);
+  color: var(--etik-footer-text);
+  font-size: 0.82rem;
+}
+
+footer nav {
+  display: flex;
+  gap: 1rem;
+}
+
+footer a {
+  color: var(--etik-surface);
+}
+
+@media (width <= 720px) {
+  .security-note {
+    display: none;
+  }
+
+  .trust-grid,
+  .radio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    padding-top: 3.5rem;
+  }
+
+  .hero h1 {
+    font-size: 3.4rem;
+  }
+
+  footer {
+    flex-direction: column;
+  }
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 20;
+  top: 0.5rem;
+  left: 0.5rem;
+  transform: translateY(-160%);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--etik-surface);
+  color: var(--etik-ink-strong);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.legal li {
+  margin-block: 0.5rem;
+}
+
+.legal-link {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
