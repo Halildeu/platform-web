@@ -1,0 +1,130 @@
+name: Release - Etik Speak Manager Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/etik-speak-manager/**'
+      - 'apps/mfe-ethic/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/release-etik-speak-manager-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: etik-speak-manager-release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Validate exact trusted-main source before publication
+        run: |
+          pnpm --filter etik-speak-manager test
+          pnpm exec tsc -p apps/etik-speak-manager/tsconfig.json
+      - name: Install isolated Chromium for digest-pinned smoke
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build exact trusted-main candidate
+        run: |
+          docker build \
+            --build-arg BUILD_SHA="${GITHUB_SHA}" \
+            --provenance=false \
+            --tag etik-speak-manager:candidate \
+            --file apps/etik-speak-manager/Dockerfile .
+      - name: Smoke candidate before registry credentials or publication
+        run: |
+          container="etik-speak-manager-candidate-${GITHUB_RUN_ID}"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" -p 127.0.0.1:18080:8080 etik-speak-manager:candidate
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then docker logs "$container"; exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:18080/ethic/ | grep -q 'Etik Speak'
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve or publish the immutable source tag
+        id: publish
+        run: |
+          repository='ghcr.io/halildeu/platform-web-etik-speak-manager'
+          immutable_ref="${repository}:sha-${GITHUB_SHA}"
+          run_ref="${repository}:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if docker manifest inspect "$run_ref" >/dev/null 2>&1; then
+            echo "FATAL: unique run tag already exists: ${run_ref}" >&2
+            exit 1
+          fi
+          docker tag etik-speak-manager:candidate "$run_ref"
+          docker push "$run_ref"
+          docker pull "$run_ref"
+          run_digest="$(docker image inspect --format '{{ join .RepoDigests "\n" }}' "$run_ref" \
+            | sed -nE 's#^ghcr.io/halildeu/platform-web-etik-speak-manager@(sha256:[0-9a-f]{64})$#\1#p' \
+            | head -1)"
+          test -n "$run_digest"
+          if docker manifest inspect "$immutable_ref" >/dev/null 2>&1; then
+            docker pull "$immutable_ref"
+          else
+            docker tag etik-speak-manager:candidate "$immutable_ref"
+            docker push "$immutable_ref"
+          fi
+          docker pull "$immutable_ref"
+          digest="$(docker image inspect --format '{{ join .RepoDigests "\n" }}' "$immutable_ref" \
+            | sed -nE 's#^ghcr.io/halildeu/platform-web-etik-speak-manager@(sha256:[0-9a-f]{64})$#\1#p' \
+            | head -1)"
+          test -n "$digest"
+          test "$digest" = "$run_digest"
+          revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$immutable_ref")"
+          test "$revision" = "$GITHUB_SHA"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+      - name: Smoke the exact registry digest before attestation
+        env:
+          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          image="ghcr.io/halildeu/platform-web-etik-speak-manager@${IMAGE_DIGEST}"
+          revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")"
+          test "$revision" = "$GITHUB_SHA"
+          container="etik-speak-manager-digest-${GITHUB_RUN_ID}"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" -p 127.0.0.1:18080:8080 "$image"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then docker logs "$container"; exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:18080/ethic/ | grep -q 'Etik Speak'
+          node apps/etik-speak-manager/scripts/browser-smoke.mjs http://127.0.0.1:18080
+      - name: Sign GitHub artifact provenance after digest smoke
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-name: ghcr.io/halildeu/platform-web-etik-speak-manager
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+      - name: Immutable image evidence
+        run: |
+          echo "Digest: \`${{ steps.publish.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,142 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  --text-primary: oklch(28% 0.05 255deg);
+  --text-secondary: oklch(48% 0.03 250deg);
+  --surface-raised-bg: oklch(100% 0 0deg);
+  --surface-muted-bg: oklch(97% 0.01 240deg);
+  --border-default: oklch(85% 0.02 240deg);
+  --action-primary-bg: oklch(43% 0.11 235deg);
+  --action-primary-text: oklch(100% 0 0deg);
+  --focus-ring: oklch(50% 0.15 240deg / 30%);
+  --state-danger-border: oklch(48% 0.18 25deg);
+  --state-danger-bg: oklch(97% 0.02 15deg);
+  --state-danger-text: oklch(38% 0.14 15deg);
+  --state-warning-border: oklch(58% 0.15 65deg);
+  --state-warning-bg: oklch(98% 0.03 85deg);
+  --page-bg: oklch(95% 0.015 240deg);
+  --success-bg: oklch(94% 0.06 145deg);
+  --success-text: oklch(40% 0.12 145deg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--page-bg);
+  color: var(--text-primary);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.manager-stack {
+  display: flex;
+}
+
+.manager-stack-row {
+  flex-direction: row;
+}
+
+.manager-stack-column {
+  flex-direction: column;
+}
+
+.manager-gap-0 {
+  gap: 0;
+}
+
+.manager-gap-1 {
+  gap: 0.25rem;
+}
+
+.manager-gap-2 {
+  gap: 0.5rem;
+}
+
+.manager-gap-3 {
+  gap: 0.75rem;
+}
+
+.manager-gap-4 {
+  gap: 1rem;
+}
+
+.manager-gap-5 {
+  gap: 1.25rem;
+}
+
+.manager-gap-6 {
+  gap: 1.5rem;
+}
+
+.manager-gap-7 {
+  gap: 1.75rem;
+}
+
+.manager-gap-8 {
+  gap: 2rem;
+}
+
+.manager-session-state {
+  max-width: 44rem;
+  margin: 12vh auto;
+  padding: 2rem;
+  background: var(--surface-raised-bg);
+  border-radius: 1rem;
+}
+
+.manager-card {
+  padding: 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.875rem;
+  background: var(--surface-raised-bg);
+}
+
+.manager-badge {
+  display: inline-flex;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success-text);
+  font-weight: 700;
+}
+
+.manager-button {
+  border: 1px solid var(--action-primary-bg);
+  border-radius: 0.55rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manager-button.is-secondary {
+  background: var(--surface-raised-bg);
+  color: var(--action-primary-bg);
+}
+
+.manager-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.manager-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}

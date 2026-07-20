@@ -1,0 +1,78 @@
+name: CI - Etik Speak Manager Image
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/etik-speak-manager/**'
+      - 'apps/mfe-ethic/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci-etik-speak-manager-image.yml'
+      - '.github/workflows/release-etik-speak-manager-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Manager security contract and production build
+        run: |
+          pnpm --filter etik-speak-manager test
+          pnpm exec tsc -p apps/etik-speak-manager/tsconfig.json
+          pnpm --filter etik-speak-manager build
+      - name: Build unprivileged local candidate
+        run: |
+          docker build \
+            --build-arg BUILD_SHA="${GITHUB_SHA}" \
+            --provenance=false \
+            --tag etik-speak-manager:candidate \
+            --file apps/etik-speak-manager/Dockerfile .
+      - name: Install isolated Chromium for runtime boot smoke
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Local candidate route, security and browser smoke
+        run: |
+          container="etik-speak-manager-validate-${GITHUB_RUN_ID}"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" -p 127.0.0.1:18080:8080 etik-speak-manager:candidate
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then docker logs "$container"; exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error --dump-header /tmp/root.headers \
+            --output /tmp/manager.html http://127.0.0.1:18080/ethic/
+          curl --fail --silent --show-error --dump-header /tmp/deep.headers \
+            --output /tmp/deep.html http://127.0.0.1:18080/ethic/cases/synthetic
+          curl --silent --show-error --dump-header /tmp/redirect.headers \
+            --output /dev/null http://127.0.0.1:18080/ethic
+          grep -q 'Etik Speak' /tmp/manager.html
+          cmp /tmp/manager.html /tmp/deep.html
+          grep -Eiq '^HTTP/[^ ]+ 308' /tmp/redirect.headers
+          grep -Eiq '^Location: /ethic/' /tmp/redirect.headers
+          grep -Fq "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'" /tmp/root.headers
+          grep -Eiq '^Cache-Control: no-store' /tmp/root.headers
+          asset="$(grep -oE '/ethic/assets/[^" ]+\.js' /tmp/manager.html | head -1)"
+          test -n "$asset"
+          curl --fail --silent --show-error --dump-header /tmp/asset.headers \
+            --output /dev/null "http://127.0.0.1:18080${asset}"
+          grep -Eiq '^Cache-Control: public,max-age=31536000,immutable' /tmp/asset.headers
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18080/ethic/assets/missing.js)" = 404
+          node apps/etik-speak-manager/scripts/browser-smoke.mjs http://127.0.0.1:18080
