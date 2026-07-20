@@ -101,6 +101,7 @@ describe('canlı liste + segment akışı', () => {
     expect(screen.getByTestId('live-mode-badge')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('A segmenti')).toBeInTheDocument());
     expect(mockSegments).toHaveBeenCalledWith('iv-smoke-1', 'iv-smoke-1/tr-aaa');
+    expect(screen.getByTestId('protected-screening-panel')).toBeInTheDocument();
     // Yazma yüzeyleri canlı modda gizli — dürüst sınır kartı var:
     expect(screen.getByTestId('live-write-surfaces-note')).toBeInTheDocument();
     expect(screen.queryByTestId('consent-state-select')).not.toBeInTheDocument();

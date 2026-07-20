@@ -724,6 +724,10 @@ jobs:
     name: P5 Deployment Readiness (Chromium)
     uses: ./.github/workflows/faz25-p5-deployment-readiness.yml
 
+  p3-protected-screening-required:
+    name: P3 Protected Screening Reviewer (Chromium)
+    uses: ./.github/workflows/faz25-p3-protected-screening.yml
+
   web-test-gate-required:
     name: Web Test Gate (aggregator)
     runs-on: ubuntu-latest
@@ -736,6 +740,7 @@ jobs:
       - lint-warn-visibility-advisory
       - visual-invariant-required
       - p5-deployment-readiness-required
+      - p3-protected-screening-required
     # Always run so the aggregator can read advisory results when STRICT_GATES=true.
     # Skip on baseline-only manual runs (visual-invariant-required is skipped).
     if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline')
@@ -749,13 +754,15 @@ jobs:
           cssom_result="${{ needs.cssom-canary-required.result }}"
           visual_result="${{ needs.visual-invariant-required.result }}"
           p5_result="${{ needs.p5-deployment-readiness-required.result }}"
+          p3_screening_result="${{ needs.p3-protected-screening-required.result }}"
           echo "unit-required: $unit_result"
           echo "token-drift-required: $token_result"
           echo "semantic-layer-required: $semantic_result"
           echo "cssom-canary-required: $cssom_result"
           echo "visual-invariant-required: $visual_result"
           echo "p5-deployment-readiness-required: $p5_result"
-          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" || "$p5_result" != "success" ]]; then
+          echo "p3-protected-screening-required: $p3_screening_result"
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" || "$p5_result" != "success" || "$p3_screening_result" != "success" ]]; then
             echo "::error::A required job failed."
             exit 1
           fi
