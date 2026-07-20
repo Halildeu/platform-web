@@ -69,6 +69,8 @@ jobs:
           context: .
           file: apps/etik-speak-public/Dockerfile
           push: true
+          build-args: |
+            BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
           tags: ${{ steps.tags.outputs.value }}
           cache-from: type=gha,scope=etik-speak-public
           cache-to: type=gha,scope=etik-speak-public,mode=max

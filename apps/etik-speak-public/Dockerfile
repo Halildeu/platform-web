@@ -7,6 +7,8 @@ RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter etik-speak-public build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
+ARG BUILD_SHA=""
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
 COPY --from=builder /app/apps/etik-speak-public/dist /usr/share/nginx/html
 COPY apps/etik-speak-public/nginx.conf /etc/nginx/conf.d/default.conf
 COPY apps/etik-speak-public/security-headers.conf.inc /etc/nginx/security-headers.conf.inc
