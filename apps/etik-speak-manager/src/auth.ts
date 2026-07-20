@@ -27,16 +27,15 @@ export const hasEthicsManagerContract = (
 };
 
 let keycloak: Keycloak | undefined;
+let initialization: Promise<'ready' | 'redirecting' | 'denied'> | undefined;
 const UPGRADE_MARKER = 'etikSpeakManagerAuthUpgrade_v1';
 const UPGRADE_TTL_MS = 5 * 60 * 1000;
 const invalidationListeners = new Set<() => void>();
 
 export const managerRedirectUri = () => {
-  const { pathname, search, hash } = window.location;
+  const { pathname, search } = window.location;
   const safePath =
-    pathname === '/ethic' || pathname.startsWith('/ethic/')
-      ? `${pathname}${search}${hash}`
-      : '/ethic/';
+    pathname === '/ethic' || pathname.startsWith('/ethic/') ? `${pathname}${search}` : '/ethic/';
   return `${window.location.origin}${safePath}`;
 };
 
@@ -72,12 +71,25 @@ export const subscribeManagerSessionInvalidation = (listener: () => void): (() =
   return () => invalidationListeners.delete(listener);
 };
 
-export const initializeManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'> => {
+const startManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'> => {
   keycloak ??= new Keycloak({
     url: window.location.origin,
     realm: 'platform-test',
     clientId: 'frontend',
   });
+
+  keycloak.onAuthLogout = invalidateManagerSession;
+  keycloak.onAuthRefreshError = invalidateManagerSession;
+  keycloak.onTokenExpired = () => {
+    void keycloak
+      ?.updateToken(30)
+      .then(() => {
+        if (!keycloak?.token || !hasEthicsManagerContract(keycloak.tokenParsed)) {
+          invalidateManagerSession();
+        }
+      })
+      .catch(invalidateManagerSession);
+  };
 
   const authenticated = await keycloak.init({
     onLoad: 'check-sso',
@@ -110,4 +122,9 @@ export const initializeManagerSession = async (): Promise<'ready' | 'redirecting
     }
   });
   return 'ready';
+};
+
+export const initializeManagerSession = (): Promise<'ready' | 'redirecting' | 'denied'> => {
+  initialization ??= startManagerSession();
+  return initialization;
 };

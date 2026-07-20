@@ -20,7 +20,7 @@ describe('Etik Speak manager auth contract', () => {
   });
 
   it('preserves only same-origin ethic deep links', () => {
-    expect(managerRedirectUri()).toBe('http://localhost:3000/ethic/cases/demo?tab=messages#latest');
+    expect(managerRedirectUri()).toBe('http://localhost:3000/ethic/cases/demo?tab=messages');
     window.history.replaceState({}, '', '/unrelated?case=secret');
     expect(managerRedirectUri()).toBe('http://localhost:3000/ethic/');
   });

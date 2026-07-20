@@ -131,8 +131,6 @@ jobs:
           docker push "${repository}:${immutable_tag}" | tee /tmp/push.log
           digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' /tmp/push.log | tail -1)"
           test -n "$digest"
-          docker tag etik-speak-manager:candidate "${repository}:latest"
-          docker push "${repository}:latest"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
       - name: Sign GitHub artifact provenance after smoke and publication
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
