@@ -43,7 +43,9 @@ jobs:
             --provenance=false \
             --tag etik-speak-manager:candidate \
             --file apps/etik-speak-manager/Dockerfile .
-      - name: Local candidate route and security smoke
+      - name: Install isolated Chromium for runtime boot smoke
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Local candidate route, security and browser smoke
         run: |
           container="etik-speak-manager-validate-${GITHUB_RUN_ID}"
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
@@ -73,7 +75,4 @@ jobs:
           grep -Eiq '^Cache-Control: public,max-age=31536000,immutable' /tmp/asset.headers
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:18080/ethic/assets/missing.js)" = 404
-      - name: Install isolated Chromium for runtime boot smoke
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Execute the production bundle and auth gate in Chromium
-        run: node apps/etik-speak-manager/scripts/browser-smoke.mjs http://127.0.0.1:18080
+          node apps/etik-speak-manager/scripts/browser-smoke.mjs http://127.0.0.1:18080
