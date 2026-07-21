@@ -171,7 +171,16 @@ jobs:
           # Vite build output'unu çakıyor, secret değişimleri yansımıyordu.
           cache-from: type=gha,scope=${{ matrix.variant }}-v2
           cache-to: type=gha,scope=${{ matrix.variant }}-v2,mode=max
-          provenance: false
+          # P5-WEB-SC-01 (2026-07-21): SLSA-style Buildx provenance embedded IN
+          # image manifest — kaynak ref, workflow identity, builder materials,
+          # tarih attach edilir. mode=max: max provenance (source dir + tools +
+          # steps). Complementary to GitHub attest-build-provenance below (Sigstore
+          # cosign registry attestation) — Buildx provenance manifest-embedded,
+          # GitHub attestation registry-referenced. Both fail-closed verifiable.
+          provenance: mode=max
+          # SBOM (SPDX) embedded in manifest via Buildx — enables offline SBOM
+          # inspection via `docker buildx imagetools inspect --format json`.
+          sbom: true
 
       - name: Sign GitHub artifact provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
