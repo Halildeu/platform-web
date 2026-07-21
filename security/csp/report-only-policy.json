@@ -2,20 +2,31 @@
   "mode": "report-only",
   "directives": {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'wasm-unsafe-eval'"],
+    "base-uri": ["'none'"],
+    "object-src": ["'none'"],
+    "script-src": ["'self'"],
+    "script-src-attr": ["'none'"],
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:"],
-    "connect-src": [
-      "'self'",
-      "https://api.platform-security.internal",
-      "https://security-gateway.internal"
-    ],
+    "font-src": ["'self'", "data:"],
+    "connect-src": ["'self'"],
+    "frame-src": ["'self'"],
     "frame-ancestors": ["'none'"],
-    "report-uri": ["https://security-gateway.internal/api/csp/report"]
+    "form-action": ["'self'"],
+    "manifest-src": ["'self'"]
+  },
+  "silentCheckSso": {
+    "mode": "report-only",
+    "directives": {
+      "default-src": ["'none'"],
+      "script-src": ["'self'"],
+      "frame-ancestors": ["'self'"]
+    },
+    "notes": "Ayrı politika: Keycloak silent-SSO iframe'i SPA (same-origin) tarafından açılır, ana policy'nin 'none' frame-ancestors kısıtı enforce sırasında SSO'yu kırar. script-src 'self' inline yasağını korur (parent.postMessage /silent-check-sso.js'ten geliyor)."
   },
   "metadata": {
     "owner": "platform-security",
-    "lastReviewedAt": "2025-11-03",
-    "notes": "İhlal triage süreci tamamlanana kadar report-only modunda. Raporlar Security Gateway (security-gateway.internal/api/csp/report) üzerinden toplanır."
+    "lastReviewedAt": "2026-07-21",
+    "notes": "Faz 22 Sec slice-1a — nginx SPA layer'da Report-Only enable; violation'lar browser securitypolicyviolation event'i ile gözlemlenir (backend collector'a bağlı DEĞİL). Enforce follow-up PR ile — kritik akışlarda 0-unexplained-violation gate'i geçildikten sonra. Nginx add_header inheritance REPLACE olduğu için main policy her HTML location'da tekrarlanır; silentCheckSso ayrı `location = /silent-check-sso.html` bloğunda ayrı policy tanımlı. `security-gateway.internal` report-uri endpoint'i testai'de erişilebilir değil, bu yüzden collector-driven değil browser-native ihlal gözlem seçildi."
   }
 }
