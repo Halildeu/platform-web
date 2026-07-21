@@ -19,6 +19,8 @@ import { useEffect, useMemo, useState } from 'react';
 import './styles.css';
 import {
   createPendingWorkbenchData,
+  describeMeetingDetailError,
+  loadMeetingById,
   loadMeetingDetail,
   loadMeetingWorkbenchData,
   type MeetingWorkbenchData,
@@ -36,18 +38,16 @@ import {
   filterMeetings,
   findSelectedMeeting,
   gateStateLabel,
-  getPolicyAction,
   orderTranscriptSegments,
-  policyActionLabel,
-  policyActionStateLabel,
   segmentStatusLabel,
   sourceLabel,
   statusLabel,
   type EvidenceCitation,
-  type MeetingPolicyActionKind,
+  type MeetingDetailStatus,
   type MeetingRecord,
   type MeetingStatus,
 } from './meeting-workbench';
+import { readMeetingSelection, writeMeetingSelection } from './meeting-selection';
 import { parseWsStreamEventMessage } from './ws-stream-events';
 import { getShellServices } from './shell-services';
 
@@ -61,6 +61,7 @@ const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
 
 export interface MeetingAppProps {
   loadWorkbench?: () => Promise<MeetingWorkbenchData>;
+  loadMeeting?: (meetingId: string) => Promise<MeetingRecord>;
   loadDetail?: (meeting: MeetingRecord) => Promise<MeetingRecord>;
   subscribeAuthChanges?: (listener: () => void) => () => void;
   resolveLiveStreamEndpoint?: (meeting: MeetingRecord) => string | null;
@@ -144,7 +145,11 @@ function DataSourceBanner({
   onReload: () => void;
 }) {
   return (
-    <section className={`source-banner source-${data.source.mode}`} aria-label="Veri kaynağı">
+    <section
+      className={`source-banner source-${data.source.mode}`}
+      aria-label="Veri kaynağı"
+      aria-live="polite"
+    >
       <div>
         <AlertCircle size={18} aria-hidden="true" />
         <span>
@@ -169,12 +174,15 @@ function CitationTrail({
   citations: EvidenceCitation[];
   confidence: number;
 }) {
-  if (citations.length === 0) {
+  const finalCitations = citations.filter((citation) =>
+    meeting.transcript.some(
+      (segment) => segment.id === citation.segmentId && segment.status === 'final',
+    ),
+  );
+  if (finalCitations.length === 0) {
     return (
       <div className="citation-trail">
-        <span className="confidence-chip confidence-low">
-          {confidenceLabel(confidence)} güven · kaynak bekliyor
-        </span>
+        <span className="confidence-chip confidence-low">Kaynak doğrulanmadı</span>
       </div>
     );
   }
@@ -184,7 +192,7 @@ function CitationTrail({
       <span className={`confidence-chip confidence-${confidence >= 0.85 ? 'high' : 'medium'}`}>
         {confidenceLabel(confidence)} güven
       </span>
-      {citations.map((citation) => {
+      {finalCitations.map((citation) => {
         const segment = meeting.transcript.find((item) => item.id === citation.segmentId);
         const label = segment
           ? `${formatOffset(segment.startedAtMs)} · ${segment.speaker}`
@@ -296,9 +304,64 @@ function LiveStreamStatusPanel({
   );
 }
 
+function DetailStatusPanel({
+  status,
+  onRetry,
+}: {
+  status: MeetingDetailStatus;
+  onRetry: () => void;
+}) {
+  const canRetry = ['pending', 'failed', 'retryable'].includes(status.state);
+  const role = ['failed', 'revoked', 'deleted', 'retention-blocked', 'denied'].includes(
+    status.state,
+  )
+    ? 'alert'
+    : 'status';
+  return (
+    <section
+      className={`detail-status detail-status-${status.state}`}
+      aria-label="Toplantı detay durumu"
+      role={role}
+    >
+      <span className="detail-status-copy">
+        <strong>{status.label}</strong>
+        <span>{status.detail}</span>
+      </span>
+      {canRetry ? (
+        <button
+          type="button"
+          className="detail-retry-button"
+          onClick={onRetry}
+          aria-label="Canonical sonucu yeniden dene"
+        >
+          <RefreshCw size={15} aria-hidden="true" />
+          Yeniden dene
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
 function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   return (
     <section className="insight-panel" aria-label="Toplantı çıktıları">
+      {meeting.intelligence?.state === 'ready' ? (
+        <div className="result-provenance" aria-label="Canonical sonuç kaydı">
+          <span className="result-provenance-main">
+            <strong>Kalıcı canonical sonuç</strong>
+            <small>
+              {meeting.intelligence.generatedAt
+                ? formatStart(meeting.intelligence.generatedAt)
+                : 'Zaman bilgisi yok'}
+            </small>
+          </span>
+          <span>
+            {meeting.intelligence.redacted
+              ? `${meeting.intelligence.redactionCount} redaksiyon`
+              : 'Redaksiyon yok'}
+          </span>
+        </div>
+      ) : null}
       <div className="summary-block">
         <h3>{meeting.summary.kind === 'canonical-description' ? 'Toplantı açıklaması' : 'Özet'}</h3>
         <p>{meeting.summary.text}</p>
@@ -375,68 +438,9 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   );
 }
 
-function ActionPolicyPanel({
-  meeting,
-  selectedAction,
-  onSelectAction,
-  onClose,
-}: {
-  meeting: MeetingRecord;
-  selectedAction: MeetingPolicyActionKind;
-  onSelectAction: (kind: MeetingPolicyActionKind) => void;
-  onClose: () => void;
-}) {
-  const policyAction = getPolicyAction(meeting, selectedAction);
-
-  return (
-    <section className="action-policy-panel" aria-label={`${policyAction.label} politika durumu`}>
-      <div className="policy-panel-header">
-        <div>
-          <span className={`policy-state policy-${policyAction.state}`}>
-            {policyActionStateLabel(policyAction.state)}
-          </span>
-          <h3>{policyAction.label} politikası</h3>
-        </div>
-        <button type="button" className="policy-close-button" onClick={onClose}>
-          Kapat
-        </button>
-      </div>
-
-      <div className="policy-action-tabs" aria-label="Aksiyon türü">
-        {(['export', 'share', 'delete'] as MeetingPolicyActionKind[]).map((kind) => (
-          <button
-            type="button"
-            key={kind}
-            className={`policy-tab ${selectedAction === kind ? 'active' : ''}`}
-            onClick={() => onSelectAction(kind)}
-          >
-            {policyActionLabel(kind)}
-          </button>
-        ))}
-      </div>
-
-      <div className="policy-body">
-        <p>{policyAction.detail}</p>
-        <dl>
-          <div>
-            <dt>Gereken kapı</dt>
-            <dd>{policyAction.requirement}</dd>
-          </div>
-          <div>
-            <dt>Audit olayı</dt>
-            <dd>{policyAction.auditTag}</dd>
-          </div>
-        </dl>
-        <button type="button" className="policy-disabled-action" disabled>
-          Runtime mutasyon kapalı
-        </button>
-      </div>
-    </section>
-  );
-}
-
 export default function MeetingApp({
   loadWorkbench = loadMeetingWorkbenchData,
+  loadMeeting = loadMeetingById,
   loadDetail = loadMeetingDetail,
   subscribeAuthChanges = defaultSubscribeAuthChanges,
   resolveLiveStreamEndpoint = defaultResolveLiveStreamEndpoint,
@@ -449,20 +453,44 @@ export default function MeetingApp({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [detailReloadToken, setDetailReloadToken] = useState(0);
   const [authRevision, setAuthRevision] = useState(0);
-  const [selectedId, setSelectedId] = useState(workbench.records[0]?.id ?? '');
-  const [selectedPolicyAction, setSelectedPolicyAction] = useState<MeetingPolicyActionKind | null>(
-    null,
-  );
+  const [selectedId, setSelectedId] = useState(() => readMeetingSelection());
+  const [selectionStatus, setSelectionStatus] = useState<MeetingDetailStatus | null>(null);
   const [liveStreamToken, setLiveStreamToken] = useState(0);
   const [liveStream, setLiveStream] = useState<MeetingLiveStreamSnapshot>(() =>
     createLiveStreamSnapshot('not-configured'),
   );
 
   useEffect(
-    () => subscribeAuthChanges(() => setAuthRevision((value) => value + 1)),
+    () =>
+      subscribeAuthChanges(() => {
+        setWorkbench(createPendingWorkbenchData());
+        setSelectionStatus({
+          state: 'loading',
+          label: 'Yetki yeniden doğrulanıyor',
+          detail: 'Önceki kimliğe ait toplantı içeriği temizlendi; yeni oturum doğrulanıyor.',
+        });
+        setLiveStream(
+          createLiveStreamSnapshot(
+            'not-configured',
+            undefined,
+            'Kimlik değişti; stream yeniden yetkilendirilecek.',
+          ),
+        );
+        setAuthRevision((value) => value + 1);
+      }),
     [subscribeAuthChanges],
   );
+
+  useEffect(() => {
+    const syncFromHistory = () => {
+      setSelectedId(readMeetingSelection());
+      setSelectionStatus(null);
+    };
+    window.addEventListener('popstate', syncFromHistory);
+    return () => window.removeEventListener('popstate', syncFromHistory);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -471,11 +499,14 @@ export default function MeetingApp({
       .then((data) => {
         if (!cancelled) {
           setWorkbench(data);
-          setSelectedPolicyAction(null);
-          setSelectedId((current) => {
-            if (data.records.some((meeting) => meeting.id === current)) return current;
-            return data.records[0]?.id ?? '';
-          });
+          setSelectionStatus(null);
+          setSelectedId(
+            (current) =>
+              current || (data.source.mode === 'demo' ? (data.records[0]?.id ?? '') : ''),
+          );
+          if (data.source.mode === 'api' || data.source.mode === 'empty') {
+            setDetailReloadToken((value) => value + 1);
+          }
         }
       })
       .finally(() => {
@@ -489,7 +520,51 @@ export default function MeetingApp({
   }, [authRevision, loadWorkbench, reloadToken]);
 
   useEffect(() => {
-    if (workbench.source.mode !== 'api' || !selectedId) return;
+    if (
+      isLoading ||
+      !['api', 'empty'].includes(workbench.source.mode) ||
+      !selectedId ||
+      workbench.records.some((meeting) => meeting.id === selectedId)
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setSelectionStatus({
+      state: 'loading',
+      label: 'Toplantı doğrulanıyor',
+      detail: 'Deep-link seçimi canonical meeting-service üzerinden doğrulanıyor.',
+    });
+    loadMeeting(selectedId)
+      .then((meeting) => {
+        if (cancelled) return;
+        setSelectionStatus(null);
+        setWorkbench((current) => ({
+          ...current,
+          records: current.records.some((item) => item.id === meeting.id)
+            ? current.records
+            : [meeting, ...current.records],
+        }));
+        setDetailReloadToken((value) => value + 1);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setSelectionStatus(describeMeetingDetailError(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    detailReloadToken,
+    isLoading,
+    loadMeeting,
+    selectedId,
+    workbench.records,
+    workbench.source.mode,
+  ]);
+
+  useEffect(() => {
+    if (!['api', 'empty'].includes(workbench.source.mode) || !selectedId) return;
     const selected = workbench.records.find((meeting) => meeting.id === selectedId);
     if (!selected) return;
     if (selected.detail && selected.detail.state !== 'idle') return;
@@ -503,8 +578,8 @@ export default function MeetingApp({
               ...meeting,
               detail: {
                 state: 'loading',
-                label: 'Canonical detay yükleniyor',
-                detail: 'Transcript, oturum, aksiyon ve karar kaynakları okunuyor.',
+                label: 'Canonical sonuç yükleniyor',
+                detail: 'Kalıcı intelligence snapshot ve final transcript doğrulanıyor.',
               },
             }
           : meeting,
@@ -523,22 +598,14 @@ export default function MeetingApp({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        const unauthorized =
-          error instanceof Error &&
-          (error.name === 'MeetingUnauthenticatedError' || /unauthenticated/i.test(error.message));
+        const detail = describeMeetingDetailError(error);
         setWorkbench((current) => ({
           ...current,
           records: current.records.map((meeting) =>
             meeting.id === selectedId
               ? {
                   ...meeting,
-                  detail: {
-                    state: unauthorized ? 'unauthorized' : 'error',
-                    label: unauthorized ? 'Detay yetkisi gerekli' : 'Detay alınamadı',
-                    detail: unauthorized
-                      ? 'MEETING veya TRANSCRIPT görüntüleme yetkisi doğrulanamadı.'
-                      : 'Canonical toplantı alt kaynaklarına ulaşılamadı.',
-                  },
+                  detail,
                 }
               : meeting,
           ),
@@ -548,19 +615,15 @@ export default function MeetingApp({
     return () => {
       cancelled = true;
     };
-  }, [loadDetail, reloadToken, selectedId, workbench.source.mode]);
+  }, [detailReloadToken, loadDetail, reloadToken, selectedId, workbench.source.mode]);
 
   const filteredMeetings = useMemo(
     () => filterMeetings(workbench.records, { query, status: statusFilter }),
     [query, statusFilter, workbench.records],
   );
   const selectedMeeting = useMemo(
-    () =>
-      findSelectedMeeting(
-        filteredMeetings.length > 0 ? filteredMeetings : workbench.records,
-        selectedId,
-      ),
-    [filteredMeetings, selectedId, workbench.records],
+    () => findSelectedMeeting(workbench.records, selectedId),
+    [selectedId, workbench.records],
   );
   const renderedSelectedMeeting =
     selectedMeeting && liveStream.segments.length > 0
@@ -578,7 +641,27 @@ export default function MeetingApp({
   const stats = computeStats(workbench.records);
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedId(meetingId);
-    setSelectedPolicyAction(null);
+    setSelectionStatus(null);
+    writeMeetingSelection(meetingId);
+  };
+  const handleRetryDetail = () => {
+    setSelectionStatus(null);
+    setWorkbench((current) => ({
+      ...current,
+      records: current.records.map((meeting) =>
+        meeting.id === selectedId
+          ? {
+              ...meeting,
+              detail: {
+                state: 'idle',
+                label: 'Canonical sonuç bekliyor',
+                detail: 'Sonuç yeniden doğrulanacak.',
+              },
+            }
+          : meeting,
+      ),
+    }));
+    setDetailReloadToken((value) => value + 1);
   };
 
   useEffect(() => {
@@ -685,27 +768,27 @@ export default function MeetingApp({
         <div className="action-row" aria-label="Toplantı aksiyonları">
           <button
             type="button"
-            disabled={!selectedMeeting}
+            disabled
             aria-label="Paylaş"
-            onClick={() => setSelectedPolicyAction('share')}
+            title="Canonical paylaşım endpointi bağlı değil"
           >
             <Share2 size={16} aria-hidden="true" />
             Paylaş
           </button>
           <button
             type="button"
-            disabled={!selectedMeeting}
+            disabled
             aria-label="Dışa aktar"
-            onClick={() => setSelectedPolicyAction('export')}
+            title="Canonical export endpointi bağlı değil"
           >
             <Download size={16} aria-hidden="true" />
             Dışa aktar
           </button>
           <button
             type="button"
-            disabled={!selectedMeeting}
+            disabled
             aria-label="Sil"
-            onClick={() => setSelectedPolicyAction('delete')}
+            title="Canonical silme endpointi bağlı değil"
           >
             <Trash2 size={16} aria-hidden="true" />
             Sil
@@ -799,22 +882,10 @@ export default function MeetingApp({
               </span>
             </div>
 
-            {renderedSelectedMeeting.detail && renderedSelectedMeeting.detail.state !== 'ready' ? (
-              <section
-                className={`detail-status detail-status-${renderedSelectedMeeting.detail.state}`}
-                aria-label="Toplantı detay durumu"
-              >
-                <strong>{renderedSelectedMeeting.detail.label}</strong>
-                <span>{renderedSelectedMeeting.detail.detail}</span>
-              </section>
-            ) : null}
-
-            {selectedPolicyAction ? (
-              <ActionPolicyPanel
-                meeting={renderedSelectedMeeting}
-                selectedAction={selectedPolicyAction}
-                onSelectAction={setSelectedPolicyAction}
-                onClose={() => setSelectedPolicyAction(null)}
+            {renderedSelectedMeeting.detail && renderedSelectedMeeting.detail.state !== 'idle' ? (
+              <DetailStatusPanel
+                status={renderedSelectedMeeting.detail}
+                onRetry={handleRetryDetail}
               />
             ) : null}
 
@@ -838,8 +909,21 @@ export default function MeetingApp({
             </div>
           </section>
         ) : (
-          <section className="meeting-detail empty-selection">
-            <strong>Toplantı bulunamadı.</strong>
+          <section className="meeting-detail empty-selection" aria-label="Toplantı seçimi">
+            {selectionStatus ? (
+              <DetailStatusPanel status={selectionStatus} onRetry={handleRetryDetail} />
+            ) : (
+              <span className="empty-selection-copy">
+                <strong>
+                  {selectedId ? 'Seçili toplantı açılamadı.' : 'Ayrıntı için bir toplantı seçin.'}
+                </strong>
+                <small>
+                  {selectedId
+                    ? 'İçerik gösterilmedi ve başka bir toplantıya geçilmedi.'
+                    : 'Seçiminiz URL üzerinde korunur.'}
+                </small>
+              </span>
+            )}
           </section>
         )}
       </section>

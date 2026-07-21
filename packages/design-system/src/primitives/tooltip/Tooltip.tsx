@@ -94,6 +94,13 @@ export const Tooltip = React.forwardRef<HTMLSpanElement, TooltipProps>(({
     };
   }, [visible, layerId]);
 
+  useEffect(() => {
+    return () => {
+      clearTimeout(showTimeoutRef.current);
+      clearTimeout(hideTimeoutRef.current);
+    };
+  }, []);
+
   const show = useCallback(() => {
     if (disabled) return;
     clearTimeout(hideTimeoutRef.current);

@@ -22,8 +22,8 @@ describe('meeting workbench domain', () => {
       live: 1,
       blocked: 1,
       openActions: 4,
-      sourcedOutputs: 6,
-      uncitedOutputs: 3,
+      sourcedOutputs: 4,
+      uncitedOutputs: 5,
     });
   });
 
@@ -63,8 +63,9 @@ describe('meeting workbench domain', () => {
     expect(ordered.map((segment) => segment.id)).toEqual(['earlier', 'final', 'draft']);
   });
 
-  it('falls back to the first visible meeting when selected id is not present', () => {
-    expect(findSelectedMeeting(meetings, 'missing')?.id).toBe(meetings[0]?.id);
+  it('keeps selection explicit when the requested meeting is not present', () => {
+    expect(findSelectedMeeting(meetings, 'missing')).toBeNull();
+    expect(findSelectedMeeting(meetings, '')).toBeNull();
     expect(findSelectedMeeting([], 'missing')).toBeNull();
   });
 
@@ -85,8 +86,8 @@ describe('meeting workbench domain', () => {
 
     expect(weekly && getMeetingOutputCounts(weekly)).toEqual({
       total: 4,
-      sourced: 4,
-      uncited: 0,
+      sourced: 2,
+      uncited: 2,
     });
     expect(blocked && getMeetingOutputCounts(blocked)).toEqual({
       total: 2,

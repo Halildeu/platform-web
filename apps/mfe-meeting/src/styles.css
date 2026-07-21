@@ -172,8 +172,9 @@ button {
 
 .detail-status {
   display: flex;
-  gap: 0.35rem;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0 1.25rem 1rem;
   padding: 0.75rem 0.9rem;
   border: 1px solid var(--meeting-border);
@@ -181,19 +182,52 @@ button {
   color: var(--meeting-text-action);
 }
 
-.detail-status span {
-  color: inherit;
-  font-size: 0.82rem;
+.detail-status-copy {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
-.detail-status-partial {
+.detail-status-copy > span {
+  color: inherit;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.detail-retry-button {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: var(--meeting-surface);
+  color: var(--meeting-text-action);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.detail-status-ready {
+  border-color: var(--meeting-live-border);
+  background: var(--meeting-live-bg);
+  color: var(--meeting-success-text);
+}
+
+.detail-status-loading,
+.detail-status-pending,
+.detail-status-partial,
+.detail-status-retryable {
   border-color: var(--meeting-warning-border);
   background: var(--meeting-warning-bg);
   color: var(--meeting-warning-text);
 }
 
-.detail-status-unauthorized,
-.detail-status-error {
+.detail-status-failed,
+.detail-status-revoked,
+.detail-status-deleted,
+.detail-status-retention-blocked,
+.detail-status-denied {
   border-color: var(--meeting-danger-border);
   background: var(--meeting-danger-bg);
   color: var(--meeting-danger-text);
@@ -822,6 +856,32 @@ button {
   margin-bottom: 16px;
 }
 
+.result-provenance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--meeting-live-border);
+  border-radius: 7px;
+  background: var(--meeting-live-bg);
+  color: var(--meeting-success-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.result-provenance-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.result-provenance small {
+  color: var(--meeting-text-muted);
+  font-weight: 600;
+}
+
 .summary-block p,
 .quiet-copy {
   color: var(--meeting-text-muted);
@@ -937,6 +997,23 @@ button {
   min-height: 360px;
   place-items: center;
   color: var(--meeting-text-secondary);
+  padding: 18px;
+  text-align: center;
+}
+
+.empty-selection-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.empty-selection small {
+  line-height: 1.45;
+}
+
+.empty-selection .detail-status {
+  width: min(100%, 620px);
+  margin: 0;
+  text-align: left;
 }
 
 @media (width <= 1100px) {
@@ -962,7 +1039,9 @@ button {
 
   .meeting-header,
   .detail-header,
-  .source-banner {
+  .source-banner,
+  .detail-status,
+  .result-provenance {
     flex-direction: column;
     align-items: stretch;
   }
@@ -992,5 +1071,30 @@ button {
 
   .policy-panel-header {
     align-items: stretch;
+  }
+}
+
+@media (width <= 480px) {
+  .metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .action-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .action-row button {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 6px;
+  }
+
+  .detail-header h2,
+  .meeting-list-copy strong,
+  .meeting-list-copy span {
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 }
