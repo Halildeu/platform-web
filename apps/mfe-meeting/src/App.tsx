@@ -33,6 +33,11 @@ import {
   type MeetingLiveStreamSnapshot,
 } from './meeting-live-stream';
 import {
+  connectLiveTranscriptSse,
+  type LiveTranscriptSseController,
+  type LiveTranscriptSseSnapshot,
+} from './meeting-live-transcript-sse';
+import {
   computeStats,
   confidenceLabel,
   filterMeetings,
@@ -461,6 +466,13 @@ export default function MeetingApp({
   const [liveStream, setLiveStream] = useState<MeetingLiveStreamSnapshot>(() =>
     createLiveStreamSnapshot('not-configured'),
   );
+  // Faz 24 İ2-T — SSE broadcast fed by audio-gateway when this browser is a
+  // viewer OTHER than the recording desktop. Separate track from the WS
+  // liveStream (owner-recorder path); chunks are draft-only, canonical
+  // persistence stays in meeting-service.
+  const [liveTranscriptSse, setLiveTranscriptSse] = useState<LiveTranscriptSseSnapshot | null>(
+    null,
+  );
 
   useEffect(
     () =>
@@ -625,19 +637,30 @@ export default function MeetingApp({
     () => findSelectedMeeting(workbench.records, selectedId),
     [selectedId, workbench.records],
   );
-  const renderedSelectedMeeting =
-    selectedMeeting && liveStream.segments.length > 0
-      ? {
-          ...selectedMeeting,
-          status: 'live' as const,
-          transcriptFeed: {
-            state: 'live' as const,
-            label: liveStream.label,
-            detail: liveStream.detail,
-          },
-          transcript: [...selectedMeeting.transcript, ...liveStream.segments],
-        }
-      : selectedMeeting;
+  // Faz 24 İ2-T — merge WS live-stream (owner-recorder path) chunks + SSE
+  // broadcast (multi-viewer path) chunks into the rendered transcript
+  // list. Broadcast SSE chunks feed viewers who are NOT recording; owner
+  // recorder still uses the WS path. Order is stable — WS segments first,
+  // SSE chunks appended so the UI reveals broadcast frames as they arrive.
+  const liveTranscriptSseChunks = liveTranscriptSse?.chunks ?? [];
+  const hasLiveSegments =
+    !!selectedMeeting && (liveStream.segments.length > 0 || liveTranscriptSseChunks.length > 0);
+  const renderedSelectedMeeting = hasLiveSegments && selectedMeeting
+    ? {
+        ...selectedMeeting,
+        status: 'live' as const,
+        transcriptFeed: {
+          state: 'live' as const,
+          label: liveStream.label,
+          detail: liveStream.detail,
+        },
+        transcript: [
+          ...selectedMeeting.transcript,
+          ...liveStream.segments,
+          ...liveTranscriptSseChunks,
+        ],
+      }
+    : selectedMeeting;
   const stats = computeStats(workbench.records);
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedId(meetingId);
@@ -751,6 +774,32 @@ export default function MeetingApp({
       socket.close();
     };
   }, [resolveLiveStreamEndpoint, selectedMeeting, liveStreamToken, webSocketFactory]);
+
+  // Faz 24 İ2-T — subscribe to audio-gateway live transcript SSE broadcast
+  // whenever a meeting is selected. Feature is not-configured if the env var
+  // VITE_MEETING_LIVE_TRANSCRIPT_SSE_URL is unset (return a no-op controller
+  // + snapshot state `not-configured`). Late-mount viewers only see events
+  // after they connect; canonical replay lives on meeting-service.
+  useEffect(() => {
+    if (!selectedMeeting) {
+      setLiveTranscriptSse(null);
+      return;
+    }
+    let controller: LiveTranscriptSseController | null = null;
+    try {
+      controller = connectLiveTranscriptSse(selectedMeeting.id, {
+        onSnapshot: (snapshot) => setLiveTranscriptSse(snapshot),
+      });
+    } catch {
+      setLiveTranscriptSse(null);
+      return;
+    }
+    // Seed initial state so the UI knows if the feature is wired at all.
+    setLiveTranscriptSse(controller.snapshot());
+    return () => {
+      controller?.close();
+    };
+  }, [selectedMeeting]);
 
   return (
     // Faz 24 smoke contract — `data-testid="mfe-meeting-root"` on the outer
