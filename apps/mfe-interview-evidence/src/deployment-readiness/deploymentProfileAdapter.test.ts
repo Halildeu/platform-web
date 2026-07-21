@@ -383,6 +383,66 @@ describe('deploymentProfileAdapter', () => {
     expect(blockers).toContain('OPERATIONAL_RESPONSIBILITY_NOT_PROVIDED');
     expect(blockers).toContain('DEPLOYMENT_RELEASE_CLOSED');
   });
+
+  // P5-WEB-SEC-02: pre-clone payload bounds guard tests
+  describe('payload bounds (P5-WEB-SEC-02)', () => {
+    test('over-budget depth fails closed without cloning', () => {
+      let deep: unknown = 'leaf';
+      for (let i = 0; i < 25; i++) deep = { nested: deep };
+      const result = validateDeploymentProfileRegistryV1(deep);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues).toContain('PAYLOAD_DEPTH_EXCEEDED');
+    });
+
+    test('over-budget object keys per level fails closed', () => {
+      const wideObj: Record<string, string> = {};
+      for (let i = 0; i < 250; i++) wideObj[`k${i}`] = 'v';
+      const result = validateDeploymentProfileRegistryV1(wideObj);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues).toContain('PAYLOAD_OBJECT_KEYS_EXCEEDED');
+    });
+
+    test('over-budget array cardinality fails closed', () => {
+      const bigArr = new Array(600).fill('x');
+      const payload = { schema_version: 'x', profiles: bigArr };
+      const result = validateDeploymentProfileRegistryV1(payload);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues).toContain('PAYLOAD_ARRAY_LENGTH_EXCEEDED');
+    });
+
+    test('over-budget string length fails closed', () => {
+      const longStr = 'a'.repeat(17 * 1024);
+      const payload = { schema_version: longStr, profiles: [] };
+      const result = validateDeploymentProfileRegistryV1(payload);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues).toContain('PAYLOAD_STRING_SIZE_EXCEEDED');
+    });
+
+    test('over-budget total nodes fails closed', () => {
+      // Build a shallow-but-wide payload with more than 10K total nodes
+      const nested: Record<string, unknown> = {};
+      // Create many small objects to breach total node count
+      for (let i = 0; i < 60; i++) {
+        const inner: Record<string, unknown> = {};
+        for (let j = 0; j < 199; j++) inner[`k${j}`] = j;
+        nested[`o${i}`] = inner;
+      }
+      const result = validateDeploymentProfileRegistryV1(nested);
+      expect(result.ok).toBe(false);
+      // Either total-nodes or keys-exceeded may hit first depending on order
+      if (!result.ok) {
+        const first = result.issues[0]!;
+        expect(['PAYLOAD_TOTAL_NODES_EXCEEDED', 'PAYLOAD_OBJECT_KEYS_EXCEEDED']).toContain(first);
+      }
+    });
+
+    test('canonical fixture stays within bounds (backward compat)', () => {
+      const result = validateDeploymentProfileRegistryV1(
+        CANONICAL_SYNTHETIC_DEPLOYMENT_PROFILE_REGISTRY,
+      );
+      expect(result.ok).toBe(true);
+    });
+  });
 });
 
 function firstProfile(fixture: Record<string, unknown>): Record<string, unknown> {

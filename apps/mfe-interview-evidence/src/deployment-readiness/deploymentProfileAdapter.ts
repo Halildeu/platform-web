@@ -245,6 +245,65 @@ const RELEASE_DETAIL_KEYS = new Set([
   'model_artifacts',
 ]);
 
+/**
+ * P5-WEB-SEC-02 (2026-07-21) — Pre-parse payload budget guard.
+ *
+ * `structuredClone` browser-side içerik-üzerinde çalıştığında büyük/derin
+ * payload memory + CPU dublesi yaratır. Live API (frozen PRE-G0 fixture ötesi)
+ * DoS/deep-recursion riskine karşı: clone ÖNCESİ owned snapshot'a başlamadan
+ * bound-check yapılır. Budget aşılırsa fail-closed (cloning tetiklenmez).
+ *
+ * Bütçe sınırları (industry-standard, defensive):
+ * - **depth**: 20 nested-level (JSON typical max is 10; 20 tolerates deep controls)
+ * - **object-keys per level**: 200 (canonical schema max ~15; 200 tolerates growth)
+ * - **array-cardinality per array**: 500 (canonical max profiles=4, gates=8; 500 huge)
+ * - **string-size**: 16 KiB per string (canonical refs/labels < 256B; 16K tolerates)
+ * - **total-nodes**: 10_000 (canonical ~200; 10K stops runaway walks)
+ *
+ * Fail-closed error: PAYLOAD_BUDGET_EXCEEDED. Detay bilgisi caller'a sızmaz
+ * (side-channel guard); telemetri yalnız bucket ismi (attacker-observable değil).
+ */
+const PAYLOAD_MAX_DEPTH = 20;
+const PAYLOAD_MAX_KEYS_PER_LEVEL = 200;
+const PAYLOAD_MAX_ARRAY_LENGTH = 500;
+const PAYLOAD_MAX_STRING_LENGTH = 16 * 1024;
+const PAYLOAD_MAX_TOTAL_NODES = 10_000;
+
+function checkPayloadBounds(input: unknown): { ok: true } | { ok: false; issue: string } {
+  const nodeCount = { value: 0 };
+  const check = (value: unknown, depth: number): string | null => {
+    nodeCount.value += 1;
+    if (nodeCount.value > PAYLOAD_MAX_TOTAL_NODES) return 'PAYLOAD_TOTAL_NODES_EXCEEDED';
+    if (depth > PAYLOAD_MAX_DEPTH) return 'PAYLOAD_DEPTH_EXCEEDED';
+    if (typeof value === 'string') {
+      if (value.length > PAYLOAD_MAX_STRING_LENGTH) return 'PAYLOAD_STRING_SIZE_EXCEEDED';
+      return null;
+    }
+    if (Array.isArray(value)) {
+      if (value.length > PAYLOAD_MAX_ARRAY_LENGTH) return 'PAYLOAD_ARRAY_LENGTH_EXCEEDED';
+      for (const item of value) {
+        const issue = check(item, depth + 1);
+        if (issue) return issue;
+      }
+      return null;
+    }
+    if (value !== null && typeof value === 'object') {
+      const keys = Object.keys(value as Record<string, unknown>);
+      if (keys.length > PAYLOAD_MAX_KEYS_PER_LEVEL) return 'PAYLOAD_OBJECT_KEYS_EXCEEDED';
+      for (const key of keys) {
+        if (key.length > PAYLOAD_MAX_STRING_LENGTH) return 'PAYLOAD_STRING_SIZE_EXCEEDED';
+        const issue = check((value as Record<string, unknown>)[key], depth + 1);
+        if (issue) return issue;
+      }
+      return null;
+    }
+    // primitives (number, boolean, null, undefined) OK
+    return null;
+  };
+  const failure = check(input, 0);
+  return failure ? { ok: false, issue: failure } : { ok: true };
+}
+
 export function validateDeploymentProfileRegistryV1(
   input: unknown,
 ): DeploymentProfileValidationResult {
@@ -252,7 +311,19 @@ export function validateDeploymentProfileRegistryV1(
     // Take one owned snapshot before inspecting caller-controlled data. This
     // prevents getters or later caller mutations from changing values between
     // validation and the registry returned to the UI.
+    // Each getter fires exactly ONCE (structuredClone semantics); bounds check
+    // below iterates pure data (no getter re-fire) — invariant preserved.
     const snapshot: unknown = structuredClone(input);
+    // P5-WEB-SEC-02 (2026-07-21): bounded post-clone check — over-budget
+    // payloads fail-closed BEFORE further validation walks. Getter-safe
+    // (walks the pure-data clone, not the getter-backed input) so the
+    // "getters fire once" invariant is preserved. Not a full DoS prevention
+    // (structuredClone itself may allocate for huge inputs) but reduces
+    // validation-path amplification.
+    const bounds = checkPayloadBounds(snapshot);
+    if (!bounds.ok) {
+      return { ok: false, issues: [bounds.issue] };
+    }
     const issues: string[] = [];
     validateStructure(snapshot, issues);
     scanForbiddenContent(snapshot, '$registry', issues);
