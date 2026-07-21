@@ -308,16 +308,22 @@ export function validateDeploymentProfileRegistryV1(
   input: unknown,
 ): DeploymentProfileValidationResult {
   try {
-    // P5-WEB-SEC-02: bounded pre-check BEFORE structuredClone — over-budget
-    // payloads reddedilir, browser memory/CPU dublesi tetiklenmez.
-    const bounds = checkPayloadBounds(input);
-    if (!bounds.ok) {
-      return { ok: false, issues: [bounds.issue] };
-    }
     // Take one owned snapshot before inspecting caller-controlled data. This
     // prevents getters or later caller mutations from changing values between
     // validation and the registry returned to the UI.
+    // Each getter fires exactly ONCE (structuredClone semantics); bounds check
+    // below iterates pure data (no getter re-fire) — invariant preserved.
     const snapshot: unknown = structuredClone(input);
+    // P5-WEB-SEC-02 (2026-07-21): bounded post-clone check — over-budget
+    // payloads fail-closed BEFORE further validation walks. Getter-safe
+    // (walks the pure-data clone, not the getter-backed input) so the
+    // "getters fire once" invariant is preserved. Not a full DoS prevention
+    // (structuredClone itself may allocate for huge inputs) but reduces
+    // validation-path amplification.
+    const bounds = checkPayloadBounds(snapshot);
+    if (!bounds.ok) {
+      return { ok: false, issues: [bounds.issue] };
+    }
     const issues: string[] = [];
     validateStructure(snapshot, issues);
     scanForbiddenContent(snapshot, '$registry', issues);
