@@ -670,7 +670,13 @@ export default function MeetingApp({
   }, [resolveLiveStreamEndpoint, selectedMeeting, liveStreamToken, webSocketFactory]);
 
   return (
-    <main className="meeting-app">
+    // Faz 24 smoke contract — `data-testid="mfe-meeting-root"` on the outer
+    // <main> is the DOM-visible pin the web/mobile Playwright + Detox smoke
+    // tests use to confirm the remote MFE actually mounted (see
+    // apps/mfe-shell/tests/e2e/mfe-meeting.smoke.spec.ts + platform-mobile
+    // maestro/meeting-viewer-anchor.yaml). Do NOT rename without updating
+    // both callers — this is a public smoke contract, not an internal id.
+    <main className="meeting-app" data-testid="mfe-meeting-root">
       <header className="meeting-header">
         <div>
           <span className="eyebrow">Faz 24</span>
