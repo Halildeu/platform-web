@@ -54,12 +54,13 @@ function locationBody(config, matcher) {
 }
 
 /** True if html contains a <script> tag with no src attribute but a non-empty body.
- *  CodeQL js/incomplete-multi-character-sanitization amend: the closing tag
- *  pattern tolerates HTML5-legal whitespace before `>` (browsers accept
- *  `</script >` verbatim) and rejects tag-name suffixes (`</scripty>` must
- *  NOT close the script) via a right-bracket-anchored `\s*>` clause. */
+ *  CodeQL js/bad-html-filtering-regexp: browsers treat any `</script<space
+ *  or tab or newline><anything up to '>'>` as a script close. Word-boundary
+ *  after `script` rejects tag-name suffixes (`</scripty>` must NOT close),
+ *  and `[^>]*` after the boundary swallows whitespace + attribute-like
+ *  garbage. */
 function hasInlineScriptBody(html) {
-  const re = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+  const re = /<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
     const attrs = m[1] || '';
