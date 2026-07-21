@@ -138,12 +138,27 @@ server {
     index index.html;
 
     # Entry files MUST NOT cache (hashed asset references)
+    # Faz 22 Sec slice-1a — CSP Report-Only, main policy repeated per HTML
+    # location because nginx add_header inheritance is REPLACE, not merge:
+    # a location-level add_header wipes server-level ones. `always` keeps the
+    # header on 4xx/5xx responses too so violation reports flow on errors.
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-store, must-revalidate" always;
+        add_header Content-Security-Policy-Report-Only "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'" always;
     }
     location = /index.html {
         add_header Cache-Control "no-store, must-revalidate" always;
+        add_header Content-Security-Policy-Report-Only "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'" always;
+    }
+    # Keycloak silent-SSO iframe entry — SEPARATE policy (frame-ancestors
+    # 'self' is required so the SPA can host the KC silent-check iframe;
+    # the main policy's 'none' would break it on enforce). Inline script
+    # externalized to /silent-check-sso.js so script-src stays 'self'-only.
+    location = /silent-check-sso.html {
+        try_files $uri =404;
+        add_header Cache-Control "no-store, must-revalidate" always;
+        add_header Content-Security-Policy-Report-Only "default-src 'none'; script-src 'self'; frame-ancestors 'self'" always;
     }
     location = /remoteEntry.js {
         try_files $uri =404;
@@ -204,9 +219,13 @@ server {
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
-    # SPA catch-all
+    # SPA catch-all — HTML fallback serves /index.html for client-side
+    # routes; the main CSP-Report-Only header is repeated here (nginx
+    # add_header inheritance = REPLACE) so React-router deep links carry
+    # the same policy as the direct-entry locations above.
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Content-Security-Policy-Report-Only "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'" always;
     }
 
     # Health

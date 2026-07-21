@@ -5,8 +5,11 @@
   <title>Silent Check SSO</title>
 </head>
 <body>
-  <script>
-    parent.postMessage(location.href, location.origin);
-  </script>
+  <!-- Faz 22 Sec slice-1a — inline body externalized to /silent-check-sso.js
+       so the SPA-nginx CSP `script-src 'self'` policy (Report-Only in this
+       slice, enforce follow-up) keeps this iframe compliant. The JS just
+       posts the current URL back to the parent so the KC adapter can finish
+       the silent token check. -->
+  <script src="/silent-check-sso.js"></script>
 </body>
 </html>
