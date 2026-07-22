@@ -52,6 +52,12 @@ const EndpointComplianceGapPage = React.lazy(
   () => import('../../pages/compliance-gap/EndpointComplianceGapPage'),
 );
 const ApprovalInboxPage = React.lazy(() => import('../../pages/approval/ApprovalInboxPage'));
+// platform-web#982 — real, server-enforced dual-control queue for destructive
+// endpoint commands. Deliberately separate from ApprovalInboxPage, which still
+// runs on the policy-change pilot's mock actor + localStorage store.
+const CommandApprovalInboxPage = React.lazy(
+  () => import('../../pages/approval/CommandApprovalInboxPage'),
+);
 const ApprovalCasePage = React.lazy(() => import('../../pages/approval/ApprovalCasePage'));
 const ApprovalProposeForm = React.lazy(() => import('../../pages/approval/ApprovalProposeForm'));
 // AG-028 Phase 3 — device-scoped, approve-only managed-uninstall approval
@@ -125,6 +131,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="compliance/policies" element={<EndpointCompliancePoliciesPage />} />
         <Route path="compliance/gaps" element={<EndpointComplianceGapPage />} />
         <Route path="approvals" element={<ApprovalInboxPage />} />
+        <Route path="approvals/commands" element={<CommandApprovalInboxPage />} />
         {/* AG-028 Phase 3 — device-scoped uninstall approval (more
             specific than `approvals/:requestId`, so declared first). */}
         <Route

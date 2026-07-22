@@ -53,6 +53,11 @@ export const ENDPOINT_ADMIN_ROUTES: readonly EndpointAdminRoute[] = [
     discoverable: false,
     note: 'Mock actor + localStorage policy-approval pilot, not the real backend maker-checker queue — deferred to slice S3.',
   },
+  // platform-web#982 — the inverse of the row above: a real, server-enforced
+  // dual-control queue (BE-017) that had no entry point at all, so the four
+  // destructive actions could be raised from the device drawer and never
+  // completed. Fleet-wide (`GET /endpoint-commands`) and therefore discoverable.
+  { path: 'approvals/commands', scope: 'fleet', discoverable: true },
   {
     path: 'approvals/uninstall/:deviceId/:requestId',
     scope: 'detail',

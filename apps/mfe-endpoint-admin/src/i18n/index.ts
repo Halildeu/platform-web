@@ -19,6 +19,29 @@ const DICT_TR = {
   'endpointAdmin.nav.catalog': 'Yazılım Kataloğu',
   'endpointAdmin.nav.bundles': 'Onaylı Paketler',
   'endpointAdmin.nav.agentUpdates': 'Ajan Güncellemeleri',
+  // platform-web#982 — dual-control inbox for destructive endpoint commands.
+  'endpointAdmin.nav.commandApprovals': 'Komut Onayları',
+  'endpointAdmin.commandApproval.title': 'Bekleyen Komut Onayları',
+  'endpointAdmin.commandApproval.subtitle':
+    'Çift onay gerektiren uç birim komutları. Bir komutu gönderen kişi kendi komutunu onaylayamaz.',
+  'endpointAdmin.commandApproval.loading': 'Bekleyen onaylar yükleniyor…',
+  'endpointAdmin.commandApproval.loadError': 'Bekleyen onaylar yüklenemedi.',
+  'endpointAdmin.commandApproval.empty': 'Bekleyen komut onayı yok.',
+  'endpointAdmin.commandApproval.issuedBy': 'Gönderen:',
+  'endpointAdmin.commandApproval.ownCommand':
+    'Bu komutu siz gönderdiniz; kararı ikinci bir yönetici vermelidir.',
+  'endpointAdmin.commandApproval.decide': 'Karar Ver',
+  'endpointAdmin.commandApproval.approve': 'Onayla',
+  'endpointAdmin.commandApproval.reject': 'Reddet',
+  'endpointAdmin.commandApproval.reasonLabel': 'Gerekçe (reddetmek için zorunlu)',
+  'endpointAdmin.commandApproval.rejectNeedsReason': 'Reddetmek için gerekçe girin.',
+  'endpointAdmin.commandApproval.done.APPROVE': 'Onaylandı; komut cihaza gönderiliyor.',
+  'endpointAdmin.commandApproval.done.REJECT': 'Reddedildi; komut cihaza gönderilmeyecek.',
+  'endpointAdmin.commandApproval.error.selfApprove':
+    'Kendi gönderdiğiniz komutu onaylayamazsınız; kararı ikinci bir yönetici vermelidir.',
+  'endpointAdmin.commandApproval.error.conflict':
+    'Bu komut artık onay beklemiyor (onaylanmış, reddedilmiş veya süresi geçmiş olabilir).',
+  'endpointAdmin.commandApproval.error.generic': 'Onay kararı kaydedilemedi.',
   'endpointAdmin.nav.outdated': 'Güncellenebilir Yazılımlar',
   'endpointAdmin.nav.prohibited': 'Yasaklı Yazılımlar',
   'endpointAdmin.nav.softwareDiff': 'Yazılım Değişiklikleri',
@@ -1740,6 +1763,29 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.nav.catalog': 'Software Catalog',
   'endpointAdmin.nav.bundles': 'Approved Bundles',
   'endpointAdmin.nav.agentUpdates': 'Agent Updates',
+  // platform-web#982 — dual-control inbox for destructive endpoint commands.
+  'endpointAdmin.nav.commandApprovals': 'Command Approvals',
+  'endpointAdmin.commandApproval.title': 'Pending Command Approvals',
+  'endpointAdmin.commandApproval.subtitle':
+    'Endpoint commands that require dual control. Whoever raised a command cannot approve it.',
+  'endpointAdmin.commandApproval.loading': 'Loading pending approvals…',
+  'endpointAdmin.commandApproval.loadError': 'Could not load pending approvals.',
+  'endpointAdmin.commandApproval.empty': 'No command is waiting for approval.',
+  'endpointAdmin.commandApproval.issuedBy': 'Raised by:',
+  'endpointAdmin.commandApproval.ownCommand':
+    'You raised this command; a second administrator has to decide it.',
+  'endpointAdmin.commandApproval.decide': 'Decide',
+  'endpointAdmin.commandApproval.approve': 'Approve',
+  'endpointAdmin.commandApproval.reject': 'Reject',
+  'endpointAdmin.commandApproval.reasonLabel': 'Reason (required to reject)',
+  'endpointAdmin.commandApproval.rejectNeedsReason': 'Enter a reason to reject.',
+  'endpointAdmin.commandApproval.done.APPROVE': 'Approved; the command is being dispatched.',
+  'endpointAdmin.commandApproval.done.REJECT': 'Rejected; the command will not be dispatched.',
+  'endpointAdmin.commandApproval.error.selfApprove':
+    'You cannot approve a command you raised; a second administrator has to decide it.',
+  'endpointAdmin.commandApproval.error.conflict':
+    'This command is no longer awaiting approval (it may have been approved, rejected or expired).',
+  'endpointAdmin.commandApproval.error.generic': 'Could not record the approval decision.',
   'endpointAdmin.nav.outdated': 'Outdated Software',
   'endpointAdmin.nav.prohibited': 'Prohibited Software',
   'endpointAdmin.nav.softwareDiff': 'Software Changes',
