@@ -1195,6 +1195,8 @@ const DICT_TR = {
   'endpointAdmin.modal.agentUpdate.tier.LAB_ONLY_EVIDENCE': 'Yalnızca laboratuvar',
   'endpointAdmin.modal.agentUpdate.dispatchError': 'Ajan güncelleme komutu gönderilemedi.',
   'endpointAdmin.modal.agentUpdate.dispatch': 'Güncelle',
+  'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
+    'Göndermek için bir sürüm seçin ve gerekçe girin.',
   // GAP 1 slice 2 — AG-029 release catalog management.
   'endpointAdmin.releases.page.title': 'Ajan Güncelleme Sürümleri',
   'endpointAdmin.releases.page.newButton': 'Yeni Sürüm',
@@ -2852,6 +2854,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.agentUpdate.tier.LAB_ONLY_EVIDENCE': 'Lab only',
   'endpointAdmin.modal.agentUpdate.dispatchError': 'Could not dispatch the agent update command.',
   'endpointAdmin.modal.agentUpdate.dispatch': 'Update',
+  'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
+    'Pick a release and enter a reason to dispatch.',
   // GAP 1 slice 2 — AG-029 release catalog management.
   'endpointAdmin.releases.page.title': 'Agent Update Releases',
   'endpointAdmin.releases.page.newButton': 'New Release',

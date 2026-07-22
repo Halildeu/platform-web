@@ -88,6 +88,10 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
   const noReleases = !releasesLoading && !releasesError && dispatchable.length === 0;
   const canDispatch =
     !!selectedReleaseId && trimmedReason.length > 0 && !reasonTooLong && !dispatching;
+  // Explain a dead submit button, but only when the operator can actually act on
+  // it: while dispatching, or when the catalog has nothing dispatchable at all
+  // (that case renders its own warning), a hint would be noise.
+  const showDispatchHint = !canDispatch && !dispatching && dispatchable.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,126 +123,154 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
         ref={panelRef as React.RefObject<HTMLFormElement>}
         onSubmit={handleSubmit}
         tabIndex={-1}
-        className="relative w-full max-w-md bg-surface-default rounded-xl shadow-2xl p-6 mx-4"
+        className="relative w-full max-w-md bg-surface-default rounded-xl shadow-2xl mx-4 max-h-[85vh] flex flex-col"
         data-testid="agent-update-modal-form"
       >
-        <h3 className="text-lg font-semibold text-text-primary mb-1">
-          {t('endpointAdmin.modal.title.UPDATE_AGENT')}
-        </h3>
-        <p className="text-xs text-text-secondary mb-4">
-          {t('endpointAdmin.modal.agentUpdate.note')}
-        </p>
+        <div className="px-6 pt-6 pb-3">
+          <h3 className="text-lg font-semibold text-text-primary mb-1">
+            {t('endpointAdmin.modal.title.UPDATE_AGENT')}
+          </h3>
+          <p className="text-xs text-text-secondary">{t('endpointAdmin.modal.agentUpdate.note')}</p>
+        </div>
 
-        <div className="block mb-4">
-          <span className="text-sm text-text-secondary block mb-2">
-            {t('endpointAdmin.modal.agentUpdate.releaseLabel')}
-          </span>
+        {/* The release list grows with the catalog — 31 approved releases on the
+            test fleet rendered a 2656px form into an 872px viewport, pushing the
+            (required) reason field and both action buttons off-screen with no way
+            to scroll to them, so the dispatch could never be completed. The panel
+            is now bounded like InstallPreflightModal / UninstallConfirmModal, and
+            the list carries its own scroll box so the reason field stays reachable
+            no matter how many releases are approved. */}
+        <div className="px-6 pb-4 overflow-y-auto">
+          <div className="block mb-4">
+            <span className="text-sm text-text-secondary block mb-2">
+              {t('endpointAdmin.modal.agentUpdate.releaseLabel')}
+            </span>
 
-          {releasesLoading && (
-            <div
-              className="text-sm text-text-secondary"
-              data-testid="agent-update-releases-loading"
-            >
-              {t('endpointAdmin.modal.agentUpdate.loading')}
-            </div>
-          )}
-          {releasesError && (
-            <div className="text-sm text-danger" data-testid="agent-update-releases-error">
-              {t('endpointAdmin.modal.agentUpdate.releasesError')}
-            </div>
-          )}
-          {noReleases && (
-            <div
-              className="rounded-md border border-state-warning-border bg-state-warning-subtle px-3 py-2 text-sm text-state-warning-text"
-              data-testid="agent-update-no-releases"
-            >
-              {t('endpointAdmin.modal.agentUpdate.noReleases')}
-            </div>
-          )}
+            {releasesLoading && (
+              <div
+                className="text-sm text-text-secondary"
+                data-testid="agent-update-releases-loading"
+              >
+                {t('endpointAdmin.modal.agentUpdate.loading')}
+              </div>
+            )}
+            {releasesError && (
+              <div className="text-sm text-danger" data-testid="agent-update-releases-error">
+                {t('endpointAdmin.modal.agentUpdate.releasesError')}
+              </div>
+            )}
+            {noReleases && (
+              <div
+                className="rounded-md border border-state-warning-border bg-state-warning-subtle px-3 py-2 text-sm text-state-warning-text"
+                data-testid="agent-update-no-releases"
+              >
+                {t('endpointAdmin.modal.agentUpdate.noReleases')}
+              </div>
+            )}
 
-          {dispatchable.length > 0 && (
-            <ul className="space-y-2" data-testid="agent-update-release-list">
-              {dispatchable.map((r) => (
-                <li key={r.releaseId}>
-                  <label
-                    className="flex items-start gap-2 rounded-md border border-border-default px-3 py-2 cursor-pointer hover:bg-surface-hover"
-                    data-testid={`agent-update-release-${r.releaseId}`}
-                  >
-                    <input
-                      type="radio"
-                      name="agent-update-release"
-                      value={r.releaseId}
-                      checked={selectedReleaseId === r.releaseId}
-                      onChange={() => setSelectedReleaseId(r.releaseId)}
-                      className="mt-1"
-                      data-testid={`agent-update-release-radio-${r.releaseId}`}
-                    />
-                    <span className="flex-1">
-                      <span className="font-mono text-sm text-text-primary">{r.targetVersion}</span>
-                      <span className="flex flex-wrap gap-1 mt-1">
-                        <span
-                          className="text-xs rounded bg-surface-subtle px-1.5 py-0.5 text-text-secondary"
-                          data-testid={`agent-update-release-channel-${r.releaseId}`}
-                        >
-                          {r.channel}
+            {dispatchable.length > 0 && (
+              <ul
+                className="space-y-2 max-h-64 overflow-y-auto pr-1"
+                data-testid="agent-update-release-list"
+              >
+                {dispatchable.map((r) => (
+                  <li key={r.releaseId}>
+                    <label
+                      className="flex items-start gap-2 rounded-md border border-border-default px-3 py-2 cursor-pointer hover:bg-surface-hover"
+                      data-testid={`agent-update-release-${r.releaseId}`}
+                    >
+                      <input
+                        type="radio"
+                        name="agent-update-release"
+                        value={r.releaseId}
+                        checked={selectedReleaseId === r.releaseId}
+                        onChange={() => setSelectedReleaseId(r.releaseId)}
+                        className="mt-1"
+                        data-testid={`agent-update-release-radio-${r.releaseId}`}
+                      />
+                      <span className="flex-1">
+                        <span className="font-mono text-sm text-text-primary">
+                          {r.targetVersion}
                         </span>
-                        <span
-                          className={
-                            r.signingTier === 'TRUSTED_SIGNED'
-                              ? 'text-xs rounded bg-state-success-subtle px-1.5 py-0.5 text-state-success-text'
-                              : 'text-xs rounded bg-state-warning-subtle px-1.5 py-0.5 text-state-warning-text'
-                          }
-                        >
-                          {t(`endpointAdmin.modal.agentUpdate.tier.${r.signingTier}`)}
+                        <span className="flex flex-wrap gap-1 mt-1">
+                          <span
+                            className="text-xs rounded bg-surface-subtle px-1.5 py-0.5 text-text-secondary"
+                            data-testid={`agent-update-release-channel-${r.releaseId}`}
+                          >
+                            {r.channel}
+                          </span>
+                          <span
+                            className={
+                              r.signingTier === 'TRUSTED_SIGNED'
+                                ? 'text-xs rounded bg-state-success-subtle px-1.5 py-0.5 text-state-success-text'
+                                : 'text-xs rounded bg-state-warning-subtle px-1.5 py-0.5 text-state-warning-text'
+                            }
+                          >
+                            {t(`endpointAdmin.modal.agentUpdate.tier.${r.signingTier}`)}
+                          </span>
                         </span>
                       </span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <label className="block mb-4">
+            <span className="text-sm text-text-secondary block mb-1">
+              {t('endpointAdmin.modal.field.reason')}
+            </span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={t('endpointAdmin.modal.field.reasonPlaceholder')}
+              data-testid="agent-update-reason"
+              aria-invalid={reasonError || reasonTooLong}
+              rows={3}
+              maxLength={600}
+              className="w-full rounded-md border border-border-default px-3 py-2 text-sm bg-surface-default"
+            />
+            <div className="flex items-center justify-between mt-1">
+              {reasonError ? (
+                <span className="text-xs text-danger" data-testid="agent-update-reason-error">
+                  {t('endpointAdmin.modal.requiredField')}
+                </span>
+              ) : reasonTooLong ? (
+                <span className="text-xs text-danger">
+                  {t('endpointAdmin.modal.reasonTooLong')}
+                </span>
+              ) : (
+                <span />
+              )}
+              <span className="text-xs text-text-subtle">{trimmedReason.length}/512</span>
+            </div>
+          </label>
+
+          {dispatchError && (
+            <div
+              className="text-sm text-danger"
+              role="alert"
+              data-testid="agent-update-dispatch-error"
+            >
+              {t('endpointAdmin.modal.agentUpdate.dispatchError')}
+            </div>
           )}
         </div>
 
-        <label className="block mb-4">
-          <span className="text-sm text-text-secondary block mb-1">
-            {t('endpointAdmin.modal.field.reason')}
-          </span>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={t('endpointAdmin.modal.field.reasonPlaceholder')}
-            data-testid="agent-update-reason"
-            aria-invalid={reasonError || reasonTooLong}
-            rows={3}
-            maxLength={600}
-            className="w-full rounded-md border border-border-default px-3 py-2 text-sm bg-surface-default"
-          />
-          <div className="flex items-center justify-between mt-1">
-            {reasonError ? (
-              <span className="text-xs text-danger" data-testid="agent-update-reason-error">
-                {t('endpointAdmin.modal.requiredField')}
-              </span>
-            ) : reasonTooLong ? (
-              <span className="text-xs text-danger">{t('endpointAdmin.modal.reasonTooLong')}</span>
-            ) : (
-              <span />
-            )}
-            <span className="text-xs text-text-subtle">{trimmedReason.length}/512</span>
-          </div>
-        </label>
-
-        {dispatchError && (
-          <div
-            className="text-sm text-danger mb-3"
-            role="alert"
-            data-testid="agent-update-dispatch-error"
-          >
-            {t('endpointAdmin.modal.agentUpdate.dispatchError')}
-          </div>
-        )}
-
-        <div className="flex items-center justify-end gap-2">
+        <div className="px-6 py-4 border-t border-border-default flex items-center justify-end gap-2">
+          {/* The submit button stays disabled until a release AND a reason are
+              present. Without this hint the operator faces a dead button with no
+              explanation: the inline required-field error only renders after a
+              submit that the disabled button itself prevents. */}
+          {showDispatchHint && (
+            <span
+              className="text-xs text-text-secondary mr-auto"
+              data-testid="agent-update-dispatch-hint"
+            >
+              {t('endpointAdmin.modal.agentUpdate.dispatchDisabledHint')}
+            </span>
+          )}
           <button
             type="button"
             onClick={onCancel}

@@ -109,4 +109,70 @@ describe('AgentUpdateModal', () => {
     expect(screen.getByTestId('agent-update-no-releases')).toBeInTheDocument();
     expect((screen.getByTestId('agent-update-submit') as HTMLButtonElement).disabled).toBe(true);
   });
+
+  // Regression: with 31 approved releases the panel grew to 2656px inside an
+  // 872px viewport. `useScrollLock` pins the page, the overlay centres the form,
+  // and nothing scrolled — so the required reason field and BOTH action buttons
+  // sat below the fold, unreachable, and the dispatch could never be completed.
+  // jsdom does not lay out, so these assert the structural invariants that make
+  // the overflow impossible rather than measuring pixels.
+  describe('uzun release listesi ekrani tasirmaz', () => {
+    const manyReleases = () =>
+      Array.from({ length: 31 }, (_, i) => ({
+        ...h.REL,
+        id: `uuid-rel-${i}`,
+        releaseId: `rel-${i}`,
+        targetVersion: `0.3.${i}`,
+      }));
+
+    const scrollableAncestor = (el: HTMLElement | null) => {
+      for (let node = el?.parentElement; node; node = node.parentElement) {
+        if (/overflow-(y-)?auto/.test(node.className)) return node;
+      }
+      return null;
+    };
+
+    it('panel yuksekligi sinirli ve govde kaydirilabilir', () => {
+      h.page = h.mkPage(manyReleases()) as Record<string, unknown>;
+      renderModal();
+
+      const form = screen.getByTestId('agent-update-modal-form');
+      expect(form.className).toMatch(/max-h-/);
+      expect(form.className).toMatch(/flex-col/);
+      // The reason field must be reachable by scrolling the panel body.
+      expect(scrollableAncestor(screen.getByTestId('agent-update-reason'))).not.toBeNull();
+      // …and the list gets its own box so it cannot monopolise the panel.
+      expect(screen.getByTestId('agent-update-release-list').className).toMatch(/overflow-y-auto/);
+    });
+
+    it('aksiyon dugmeleri kaydirma kabinin DISINDA kalir', () => {
+      h.page = h.mkPage(manyReleases()) as Record<string, unknown>;
+      renderModal();
+
+      // Guard against a vacuous pass: the assertion below only means anything
+      // once a scrolling body exists at all.
+      expect(scrollableAncestor(screen.getByTestId('agent-update-reason'))).not.toBeNull();
+
+      // This is the invariant that actually broke: buttons inside the scrolling
+      // body can be pushed out of view by server-driven content.
+      expect(scrollableAncestor(screen.getByTestId('agent-update-submit'))).toBeNull();
+      expect(scrollableAncestor(screen.getByTestId('agent-update-cancel'))).toBeNull();
+    });
+
+    it('submit kapaliyken sebebi yaziyla acikla', () => {
+      renderModal();
+      expect((screen.getByTestId('agent-update-submit') as HTMLButtonElement).disabled).toBe(true);
+      // A dead button with no explanation is what made the modal look broken:
+      // the required-field error only renders after a submit the disabled button
+      // prevents, so the hint has to carry the reason.
+      expect(screen.getByTestId('agent-update-dispatch-hint')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('agent-update-release-radio-rel-1'));
+      fireEvent.change(screen.getByTestId('agent-update-reason'), {
+        target: { value: 'gerekce' },
+      });
+      expect((screen.getByTestId('agent-update-submit') as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByTestId('agent-update-dispatch-hint')).toBeNull();
+    });
+  });
 });
