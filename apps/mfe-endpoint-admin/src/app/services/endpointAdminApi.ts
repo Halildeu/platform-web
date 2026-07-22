@@ -2116,6 +2116,16 @@ export const {
   useCreateEndpointEnrollmentMutation,
   useListEndpointAuditEventsQuery,
   useListDeviceCommandsQuery,
+  useListEndpointCommandsQuery,
+  // Consumed today as `endpointAdminApi.useXxx(...)`; also re-exported so the
+  // module has ONE documented consumption path and a by-name import cannot hit
+  // a bundle-time MISSING_EXPORT. Surfaced by the hook-export guard test.
+  useGetDeviceSoftwareInventoryQuery,
+  useGetDeviceHardwareInventoryLatestQuery,
+  useGetDeviceHardwareInventoryHistoryQuery,
+  useGetDeviceHealthLatestQuery,
+  useGetDeviceHealthHistoryQuery,
+  useApproveEndpointCommandMutation,
   useGetEndpointCommandQuery,
   useCreateDeviceCommandMutation,
   useCreateLocalPasswordChangeMutation,
