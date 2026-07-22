@@ -286,7 +286,7 @@ const DICT_TR = {
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
   'endpointAdmin.enrollments.page.description':
-    'Yeni Windows cihazlarına agent kurarken tek kullanımlık enrollment token üretin. Token oluşturulduktan sonra yalnızca tek bir kez gösterilir.',
+    'Yeni Windows cihazı kurulumu veya mevcut cihazın TPM/sertifika yenilemesi için tek kullanımlık enrollment token üretin. Token oluşturulduktan sonra yalnızca tek bir kez gösterilir.',
   'endpointAdmin.enrollments.page.createButton': 'Yeni Enrollment Oluştur',
   'endpointAdmin.enrollments.page.loading': 'Enrollment listesi yükleniyor…',
   'endpointAdmin.enrollments.page.refreshing': 'Liste güncelleniyor…',
@@ -304,6 +304,14 @@ const DICT_TR = {
   'endpointAdmin.enrollments.table.consumedAt': 'Kullanıldı',
   'endpointAdmin.enrollments.table.deviceId': 'Cihaz',
   'endpointAdmin.enrollments.dialog.title': 'Yeni Enrollment Oluştur',
+  'endpointAdmin.enrollments.dialog.targetLabel': 'Kayıt hedefi',
+  'endpointAdmin.enrollments.dialog.targetNew': 'Yeni cihaz',
+  'endpointAdmin.enrollments.dialog.targetExisting': 'Mevcut cihazı yenile',
+  'endpointAdmin.enrollments.dialog.deviceLabel': 'Hedef cihaz',
+  'endpointAdmin.enrollments.dialog.devicePlaceholder': 'Cihaz seçin',
+  'endpointAdmin.enrollments.dialog.devicesLoading': 'Cihazlar yükleniyor…',
+  'endpointAdmin.enrollments.dialog.devicesError': 'Cihaz listesi alınamadı.',
+  'endpointAdmin.enrollments.dialog.devicesEmpty': 'Yenilenebilir aktif cihaz bulunamadı.',
   'endpointAdmin.enrollments.dialog.expiresLabel': 'Geçerlilik (dakika)',
   'endpointAdmin.enrollments.dialog.noteLabel': 'Açıklama (opsiyonel)',
   'endpointAdmin.enrollments.dialog.cancel': 'İptal',
@@ -316,14 +324,23 @@ const DICT_TR = {
   'endpointAdmin.enrollments.dialog.errorExpiresRange':
     'Geçerlilik süresi 1 ile 10080 (7 gün) arasında olmalı.',
   'endpointAdmin.enrollments.dialog.errorNoteLength': 'Açıklama 512 karakteri aşamaz.',
+  'endpointAdmin.enrollments.dialog.errorDeviceRequired': 'Yenilenecek cihazı seçin.',
+  'endpointAdmin.enrollments.dialog.errorDeviceMismatch':
+    'Sunucunun token hedefi istekle eşleşmedi. Güvenlik için token gösterilmedi; tekrar deneyin.',
   'endpointAdmin.enrollments.dialog.errorGeneric': 'Enrollment oluşturulamadı. Tekrar deneyin.',
   'endpointAdmin.enrollments.modal.title': 'Enrollment Token (Tek Defa Görünür)',
   'endpointAdmin.enrollments.modal.warning':
     'Bu token yalnızca şimdi gösterilir. Kapattıktan sonra tekrar görüntülenemez. Hemen güvenli bir yere kopyalayın veya aşağıdaki komutu hedef cihaza yapıştırın.',
+  'endpointAdmin.enrollments.modal.renewalWarning':
+    'Bu token seçilen mevcut cihaza bağlıdır ve yalnızca şimdi gösterilir. Aşağıdaki yenileme komutunu aynı cihazda Administrator PowerShell ile çalıştırın.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
   'endpointAdmin.enrollments.modal.oneCommandLabel': 'Tek Komut Kurulum (Administrator PowerShell)',
   'endpointAdmin.enrollments.modal.oneCommandHelp':
     'Bu komut güncel agent sürümü için geçerlidir. Administrator PowerShell’e yapıştırın; kurulum hash hatası verirse yeni bir token oluşturun.',
+  'endpointAdmin.enrollments.modal.renewalCommandLabel':
+    'TPM / Sertifika Yenileme (Administrator PowerShell)',
+  'endpointAdmin.enrollments.modal.renewalCommandHelp':
+    'Yüklü ajanla TPM kimliğini seçilen cihaza yeniler, hizmeti yeniden başlatır ve işlem sonunda hassas ortam değişkenlerini temizler.',
   'endpointAdmin.enrollments.modal.oneCommandLoading': 'Kurulum komutu hazırlanıyor…',
   'endpointAdmin.enrollments.modal.oneCommandError':
     'Güncel paket bilgisi alınamadı; güvenilir tek-komut şu an üretilemiyor. Tekrar deneyin veya aşağıdaki manuel adımları kullanın.',
@@ -2019,7 +2036,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
   'endpointAdmin.enrollments.page.description':
-    'Mint one-time enrollment tokens for installing the agent on new Windows hosts. The raw token is revealed exactly once.',
+    'Mint one-time enrollment tokens for a new Windows installation or an existing device TPM/certificate renewal. The raw token is revealed exactly once.',
   'endpointAdmin.enrollments.page.createButton': 'Create new enrollment',
   'endpointAdmin.enrollments.page.loading': 'Loading enrollments…',
   'endpointAdmin.enrollments.page.refreshing': 'Refreshing…',
@@ -2038,6 +2055,14 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.table.consumedAt': 'Consumed',
   'endpointAdmin.enrollments.table.deviceId': 'Device',
   'endpointAdmin.enrollments.dialog.title': 'Create new enrollment',
+  'endpointAdmin.enrollments.dialog.targetLabel': 'Enrollment target',
+  'endpointAdmin.enrollments.dialog.targetNew': 'New device',
+  'endpointAdmin.enrollments.dialog.targetExisting': 'Renew existing device',
+  'endpointAdmin.enrollments.dialog.deviceLabel': 'Target device',
+  'endpointAdmin.enrollments.dialog.devicePlaceholder': 'Select a device',
+  'endpointAdmin.enrollments.dialog.devicesLoading': 'Loading devices…',
+  'endpointAdmin.enrollments.dialog.devicesError': 'Could not load devices.',
+  'endpointAdmin.enrollments.dialog.devicesEmpty': 'No active device is eligible for renewal.',
   'endpointAdmin.enrollments.dialog.expiresLabel': 'Expires in (minutes)',
   'endpointAdmin.enrollments.dialog.noteLabel': 'Note (optional)',
   'endpointAdmin.enrollments.dialog.cancel': 'Cancel',
@@ -2050,15 +2075,24 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.dialog.errorExpiresRange':
     'Expiration must be between 1 and 10080 minutes (7 days).',
   'endpointAdmin.enrollments.dialog.errorNoteLength': 'Note must not exceed 512 characters.',
+  'endpointAdmin.enrollments.dialog.errorDeviceRequired': 'Select the device to renew.',
+  'endpointAdmin.enrollments.dialog.errorDeviceMismatch':
+    'The server token target did not match the request. The token was hidden for safety; retry.',
   'endpointAdmin.enrollments.dialog.errorGeneric': 'Could not create the enrollment. Please retry.',
   'endpointAdmin.enrollments.modal.title': 'Enrollment token (reveal once)',
   'endpointAdmin.enrollments.modal.warning':
     'This token is shown only now. After closing this dialog it cannot be retrieved. Copy it to a secure place or paste the install snippet on the target host now.',
+  'endpointAdmin.enrollments.modal.renewalWarning':
+    'This token is bound to the selected existing device and is shown only now. Run the renewal command below in Administrator PowerShell on that same device.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
   'endpointAdmin.enrollments.modal.oneCommandLabel':
     'One-command install (Administrator PowerShell)',
   'endpointAdmin.enrollments.modal.oneCommandHelp':
     'Valid for the current agent release. Paste it into an Administrator PowerShell; if the install fails on the hash, generate a new token.',
+  'endpointAdmin.enrollments.modal.renewalCommandLabel':
+    'TPM / certificate renewal (Administrator PowerShell)',
+  'endpointAdmin.enrollments.modal.renewalCommandHelp':
+    'Uses the installed agent to renew TPM identity for the selected device, restarts the service, and clears sensitive process environment variables afterward.',
   'endpointAdmin.enrollments.modal.oneCommandLoading': 'Preparing install command…',
   'endpointAdmin.enrollments.modal.oneCommandError':
     'Couldn’t fetch current package info; the trusted one-command can’t be generated now. Retry, or use the manual steps below.',

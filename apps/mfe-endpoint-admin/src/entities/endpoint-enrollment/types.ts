@@ -30,6 +30,8 @@ export interface CreateEndpointEnrollmentArgs {
   expiresInMinutes: number;
   /** Optional, <=512 chars. */
   note?: string;
+  /** Existing tenant-visible device for certificate/TPM re-enrollment. */
+  deviceId?: string;
 }
 
 /**
@@ -43,4 +45,6 @@ export interface CreateEndpointEnrollmentResponse {
   enrollmentId: string;
   token: string;
   expiresAt: string;
+  /** Null for first-time enrollment; exact requested device for re-enrollment. */
+  deviceId: string | null;
 }

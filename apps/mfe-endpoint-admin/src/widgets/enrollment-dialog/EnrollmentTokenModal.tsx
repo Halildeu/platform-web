@@ -27,6 +27,8 @@ import { useEndpointAdminI18n } from '../../i18n';
 export interface EnrollmentTokenModalProps {
   response: CreateEndpointEnrollmentResponse | null;
   apiUrl: string;
+  /** Dedicated mTLS device API used only by existing-device TPM renewal. */
+  tpmRenewalApiUrl: string;
   /**
    * Public base for the artifact host, e.g. `https://testai.acik.com/artifacts`.
    * Mirrors `apiUrl`: derived from `window.location.origin` by the parent so the
@@ -105,6 +107,23 @@ function buildOneCommand(args: {
   ].join(' ');
 }
 
+/** Existing-device TPM/certificate renewal using the already-installed agent. */
+function buildTpmRenewalCommand(token: string, apiUrl: string): string {
+  const q = (value: string): string => `'${powerShellEscape(value)}'`;
+  return [
+    `$env:ENDPOINT_AGENT_ENROLLMENT_TOKEN = ${q(token)};`,
+    `$env:ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX = 'adcomputer:';`,
+    `try {`,
+    `& 'C:\\Program Files\\EndpointAgent\\endpoint-agent.exe' --auto-enroll-tpm --api-url ${q(apiUrl)};`,
+    `if ($LASTEXITCODE -ne 0) { throw 'TPM renewal failed.' };`,
+    `Restart-Service EndpointAgent`,
+    `} finally {`,
+    `Remove-Item Env:\\ENDPOINT_AGENT_ENROLLMENT_TOKEN -ErrorAction SilentlyContinue;`,
+    `Remove-Item Env:\\ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX -ErrorAction SilentlyContinue`,
+    `}`,
+  ].join(' ');
+}
+
 /** Always-visible manual (advanced) fallback — operator already has the zip. */
 function formatManualSnippet(token: string, apiUrl: string): string {
   return [
@@ -119,6 +138,7 @@ type CopyKind = 'token' | 'snippet' | 'onecommand';
 export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   response,
   apiUrl,
+  tpmRenewalApiUrl,
   artifactBaseUrl,
   onClose,
 }) => {
@@ -132,6 +152,9 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   // or off-schema manifest → error state (no command rendered).
   React.useEffect(() => {
     if (!response) {
+      return undefined;
+    }
+    if (response.deviceId !== null) {
       return undefined;
     }
     if (typeof fetch !== 'function') {
@@ -170,9 +193,11 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
     return null;
   }
 
-  const snippet = formatManualSnippet(response.token, apiUrl);
-  const oneCommand =
-    manifestState.status === 'ready'
+  const isRenewal = response.deviceId !== null;
+  const snippet = isRenewal ? null : formatManualSnippet(response.token, apiUrl);
+  const oneCommand = isRenewal
+    ? buildTpmRenewalCommand(response.token, tpmRenewalApiUrl)
+    : manifestState.status === 'ready'
       ? buildOneCommand({
           token: response.token,
           apiUrl,
@@ -219,7 +244,11 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
       >
         <h2 id="enrollment-token-modal-title">{t('endpointAdmin.enrollments.modal.title')}</h2>
         <p data-testid="enrollment-token-modal-warning">
-          {t('endpointAdmin.enrollments.modal.warning')}
+          {t(
+            isRenewal
+              ? 'endpointAdmin.enrollments.modal.renewalWarning'
+              : 'endpointAdmin.enrollments.modal.warning',
+          )}
         </p>
 
         <section style={{ marginTop: 16 }}>
@@ -248,18 +277,28 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
         </section>
 
         <section style={{ marginTop: 16 }}>
-          <h3>{t('endpointAdmin.enrollments.modal.oneCommandLabel')}</h3>
+          <h3>
+            {t(
+              isRenewal
+                ? 'endpointAdmin.enrollments.modal.renewalCommandLabel'
+                : 'endpointAdmin.enrollments.modal.oneCommandLabel',
+            )}
+          </h3>
           <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
-            {t('endpointAdmin.enrollments.modal.oneCommandHelp')}
+            {t(
+              isRenewal
+                ? 'endpointAdmin.enrollments.modal.renewalCommandHelp'
+                : 'endpointAdmin.enrollments.modal.oneCommandHelp',
+            )}
           </p>
 
-          {manifestState.status === 'loading' && (
+          {!isRenewal && manifestState.status === 'loading' && (
             <p data-testid="enrollment-token-modal-onecommand-loading" style={{ opacity: 0.7 }}>
               {t('endpointAdmin.enrollments.modal.oneCommandLoading')}
             </p>
           )}
 
-          {manifestState.status === 'error' && (
+          {!isRenewal && manifestState.status === 'error' && (
             <div data-testid="enrollment-token-modal-onecommand-error">
               <p style={{ color: '#b00020' }}>
                 {t('endpointAdmin.enrollments.modal.oneCommandError')}
@@ -301,32 +340,34 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
           )}
         </section>
 
-        <section style={{ marginTop: 16 }}>
-          <h3>{t('endpointAdmin.enrollments.modal.manualLabel')}</h3>
-          <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
-            {t('endpointAdmin.enrollments.modal.manualHelp')}
-          </p>
-          <pre
-            data-testid="enrollment-token-modal-snippet"
-            style={{
-              padding: 8,
-              background: '#f5f5f5',
-              fontFamily: 'monospace',
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {snippet}
-          </pre>
-          <button
-            type="button"
-            data-testid="enrollment-token-modal-copy-snippet"
-            onClick={() => handleCopy(snippet, 'snippet')}
-          >
-            {copied === 'snippet'
-              ? t('endpointAdmin.enrollments.modal.copied')
-              : t('endpointAdmin.enrollments.modal.copy')}
-          </button>
-        </section>
+        {snippet !== null && (
+          <section style={{ marginTop: 16 }}>
+            <h3>{t('endpointAdmin.enrollments.modal.manualLabel')}</h3>
+            <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
+              {t('endpointAdmin.enrollments.modal.manualHelp')}
+            </p>
+            <pre
+              data-testid="enrollment-token-modal-snippet"
+              style={{
+                padding: 8,
+                background: '#f5f5f5',
+                fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {snippet}
+            </pre>
+            <button
+              type="button"
+              data-testid="enrollment-token-modal-copy-snippet"
+              onClick={() => handleCopy(snippet, 'snippet')}
+            >
+              {copied === 'snippet'
+                ? t('endpointAdmin.enrollments.modal.copied')
+                : t('endpointAdmin.enrollments.modal.copy')}
+            </button>
+          </section>
+        )}
 
         <p style={{ marginTop: 16 }}>
           <strong>{t('endpointAdmin.enrollments.modal.expiresLabel')}:</strong>{' '}
