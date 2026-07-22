@@ -34,11 +34,18 @@ import {
  * NinjaOne / ManageEngine Endpoint Central): Devices · Software & Deployment ·
  * Security & Compliance · Audit.
  *
- * The approval inbox is deliberately NOT surfaced here yet: its page still runs
- * on a mock actor + a browser-localStorage policy-approval pilot (not the real
- * backend maker-checker queue), so listing it fleet-wide would be false
+ * The POLICY approval inbox is deliberately NOT surfaced here: its page still
+ * runs on a mock actor + a browser-localStorage policy-approval pilot (not the
+ * real backend maker-checker queue), so listing it fleet-wide would be false
  * discoverability. It returns once real OpenFGA authz + a backend-backed global
  * inbox land (slice S3).
+ *
+ * `commandApprovals` IS surfaced, because it is the opposite case: the queue is
+ * backend-enforced (BE-017 `POST /endpoint-commands/{id}/approval`, approver ≠
+ * issuer) and fleet-wide (`GET /endpoint-commands`). Until platform-web#982 it
+ * had no entry point at all, so the four dual-control actions could be raised
+ * from the device drawer but never completed — the reverse failure of the mock
+ * inbox: a real capability with no discoverability.
  *
  * Device- and session-scoped surfaces (remote-response terminal, VIEW_ONLY
  * viewer, device-scoped uninstall/approval-case pages) are intentionally NOT
@@ -198,6 +205,12 @@ export const ENDPOINT_ADMIN_NAV: EndpointAdminNavSection[] = [
         labelKey: 'endpointAdmin.nav.complianceGaps',
         path: 'compliance/gaps',
         icon: IconWarning,
+      },
+      {
+        key: 'commandApprovals',
+        labelKey: 'endpointAdmin.nav.commandApprovals',
+        path: 'approvals/commands',
+        icon: IconShield,
       },
     ],
   },

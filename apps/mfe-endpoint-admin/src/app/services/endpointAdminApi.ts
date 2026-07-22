@@ -35,6 +35,7 @@ import type {
   ClearDisplayPolicyArgs,
 } from '../../entities/endpoint-display-policy/types';
 import type {
+  ApproveEndpointCommandBody,
   EndpointCommand,
   CreateEndpointCommandBody,
   CreateLocalPasswordChangeBody,
@@ -1057,6 +1058,73 @@ export const endpointAdminApi = createApi({
           ...deviceScope,
         ];
       },
+    }),
+    /**
+     * BE-017 — fleet-wide command list, used by the approval inbox.
+     *   gateway GET /api/v1/endpoint-admin/endpoint-commands[?deviceId=]
+     *   → service /api/v1/admin/endpoint-commands
+     *   @RequireModule(VIEWER='can_view')
+     *
+     * Returns a PLAIN List<EndpointCommandDto> (no Page envelope). The
+     * endpoint has no `approvalStatus` filter, so the inbox narrows to
+     * PENDING client-side; the tenant's command list is small enough that a
+     * server-side filter would be premature.
+     */
+    listEndpointCommands: builder.query<EndpointCommand[], { deviceId?: string } | void>({
+      query: (args) => ({
+        url: '/endpoint-admin/endpoint-commands',
+        method: 'GET',
+        ...(args && args.deviceId ? { params: { deviceId: args.deviceId } } : {}),
+      }),
+      providesTags: (result) => {
+        const listScope = [{ type: 'EndpointCommand' as const, id: 'LIST' }];
+        if (!result) return listScope;
+        return [
+          ...result.map((c) => ({ type: 'EndpointCommand' as const, id: c.id })),
+          ...listScope,
+        ];
+      },
+    }),
+    /**
+     * BE-017 — a second admin's dual-control decision on a destructive
+     * command.
+     *   gateway POST /api/v1/endpoint-admin/endpoint-commands/{commandId}/approval
+     *   → service /api/v1/admin/endpoint-commands/{commandId}/approval
+     *   @RequireModule(MANAGER='can_manage')
+     *
+     * Body: `{ decision: 'APPROVE' | 'REJECT', reason? }` — reason is
+     * mandatory for REJECT (service-layer validated), optional for APPROVE.
+     *
+     * Error contract:
+     *  - 403 → maker-checker violation: the approver is the issuer. This is
+     *          the gate working, not a failure; surface it as such.
+     *  - 409 → the command already left PENDING (approved, rejected,
+     *          cancelled or expired meanwhile).
+     *
+     * Board: platform-web#982. The backend has enforced dual control since
+     * BE-017, but nothing in the MFE could record the second decision, so
+     * every LOCK_USER_LOGIN / UNLOCK_USER_LOGIN / CHANGE_LOCAL_PASSWORD /
+     * ROTATE_CREDENTIAL raised from the product stayed PENDING forever.
+     */
+    approveEndpointCommand: builder.mutation<
+      EndpointCommand,
+      { commandId: string; deviceId?: string; body: ApproveEndpointCommandBody }
+    >({
+      query: ({ commandId, body }) => ({
+        url: `/endpoint-admin/endpoint-commands/${encodeURIComponent(commandId)}/approval`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { commandId, deviceId }) => [
+        { type: 'EndpointCommand' as const, id: commandId },
+        { type: 'EndpointCommand' as const, id: 'LIST' },
+        ...(deviceId
+          ? [
+              { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+              { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+            ]
+          : []),
+      ],
     }),
     /**
      * Backend: `AdminEndpointCommandController.getCommand` —
