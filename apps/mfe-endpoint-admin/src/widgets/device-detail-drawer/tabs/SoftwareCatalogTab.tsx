@@ -122,6 +122,52 @@ const POST_VERIFICATION_BADGE: Record<InstallPostVerification, string> = {
   UNKNOWN: 'bg-surface-muted text-text-secondary',
 };
 
+/**
+ * Pulls the agent's failure reason out of an audit row's redacted payload.
+ *
+ * The agent reports a structured reason — `finalStatus: "FAILED_EGRESS"` with
+ * `failedReasonCode: "egress_not_ready"` — and the backend deliberately keeps
+ * both through redaction (`InstallEvidencePayloadPolicy` /
+ * `UninstallEvidencePayloadPolicy` allow-list them). Until now nothing rendered
+ * them, so a failed install showed as "Başarısız" with no way to tell a device
+ * that cannot reach the package source from a package that failed to install —
+ * two problems for two different teams. See platform-web#980.
+ */
+function readFailureReason(
+  payload: Record<string, unknown> | null | undefined,
+  section: 'install' | 'uninstall',
+): string | null {
+  const inner = payload?.[section];
+  if (!inner || typeof inner !== 'object') return null;
+  const record = inner as Record<string, unknown>;
+  const code = record.failedReasonCode ?? record.finalStatus;
+  if (typeof code !== 'string') return null;
+  const trimmed = code.trim();
+  // A successful run also carries a finalStatus; only failures are worth surfacing.
+  if (!trimmed || trimmed === 'SUCCEEDED') return null;
+  return trimmed;
+}
+
+/**
+ * Translates a reason code, falling back to the raw code. Fail-open on purpose:
+ * a newer agent emitting an unmapped code must still tell the operator
+ * something rather than silently rendering nothing.
+ */
+function describeFailureReason(code: string, t: (key: string) => string): string {
+  // `winget_exit_<n>` is built at runtime from the installer's exit code
+  // (install_winget.go), so it cannot have a static entry.
+  const wingetExit = /^winget_exit_(-?\d+)$/.exec(code);
+  if (wingetExit) {
+    return t('endpointAdmin.drawer.install.failureReason.wingetExit').replace(
+      '{code}',
+      wingetExit[1],
+    );
+  }
+  const key = `endpointAdmin.drawer.install.failureReason.${code}`;
+  const translated = t(key);
+  return translated === key ? code : translated;
+}
+
 const DEFAULT_APPROVALS_PATH = '/endpoint-admin/approvals';
 
 interface SelectedItem {
@@ -389,63 +435,80 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({
             </tr>
           </thead>
           <tbody>
-            {auditRows.map((row) => (
-              <tr
-                key={row.auditId}
-                className="border-t border-border-subtle"
-                data-testid={`install-audit-row-${row.auditId}`}
-              >
-                <td className="px-3 py-2">{row.catalogItemId ?? row.catalogItemUuid}</td>
-                <td className="px-3 py-2">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${DECISION_RECORDED_BADGE[row.preflightDecision]}`}
-                  >
-                    {row.preflightDecision}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
-                  {row.resultStatus
-                    ? t(`endpointAdmin.drawer.install.resultStatus.${row.resultStatus}`)
-                    : t('endpointAdmin.drawer.install.resultStatus.pending')}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-col gap-0.5">
-                    {row.postVerification ? (
-                      <span
-                        data-testid={`install-audit-postverif-${row.auditId}`}
-                        className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs ${POST_VERIFICATION_BADGE[row.postVerification]}`}
-                        title={t(
-                          `endpointAdmin.drawer.install.postVerification.${row.postVerification}.aria`,
-                        )}
-                      >
-                        {t(`endpointAdmin.drawer.install.postVerification.${row.postVerification}`)}
+            {auditRows.map((row) => {
+              const failureReason = readFailureReason(row.redactedPayload, 'install');
+              return (
+                <tr
+                  key={row.auditId}
+                  className="border-t border-border-subtle"
+                  data-testid={`install-audit-row-${row.auditId}`}
+                >
+                  <td className="px-3 py-2">{row.catalogItemId ?? row.catalogItemUuid}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${DECISION_RECORDED_BADGE[row.preflightDecision]}`}
+                    >
+                      {row.preflightDecision}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      <span>
+                        {row.resultStatus
+                          ? t(`endpointAdmin.drawer.install.resultStatus.${row.resultStatus}`)
+                          : t('endpointAdmin.drawer.install.resultStatus.pending')}
                       </span>
-                    ) : (
-                      <span
-                        data-testid={`install-audit-postverif-${row.auditId}`}
-                        className="text-xs text-text-secondary"
-                      >
-                        {t('endpointAdmin.drawer.install.postVerification.pending')}
-                      </span>
-                    )}
-                    {row.detectedVersion && (
-                      <span
-                        data-testid={`install-audit-detected-version-${row.auditId}`}
-                        className="font-mono text-xs text-text-secondary"
-                        title={t(
-                          'endpointAdmin.drawer.softwareCatalog.recentInstalls.detectedVersion',
-                        ).replace('{version}', row.detectedVersion)}
-                      >
-                        {row.detectedVersion}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-3 py-2 text-xs text-text-secondary">
-                  {formatTimestamp(row.reportedAt)}
-                </td>
-              </tr>
-            ))}
+                      {failureReason && (
+                        <span
+                          data-testid={`install-audit-failure-reason-${row.auditId}`}
+                          className="text-xs text-state-danger-text"
+                        >
+                          {describeFailureReason(failureReason, t)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      {row.postVerification ? (
+                        <span
+                          data-testid={`install-audit-postverif-${row.auditId}`}
+                          className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs ${POST_VERIFICATION_BADGE[row.postVerification]}`}
+                          title={t(
+                            `endpointAdmin.drawer.install.postVerification.${row.postVerification}.aria`,
+                          )}
+                        >
+                          {t(
+                            `endpointAdmin.drawer.install.postVerification.${row.postVerification}`,
+                          )}
+                        </span>
+                      ) : (
+                        <span
+                          data-testid={`install-audit-postverif-${row.auditId}`}
+                          className="text-xs text-text-secondary"
+                        >
+                          {t('endpointAdmin.drawer.install.postVerification.pending')}
+                        </span>
+                      )}
+                      {row.detectedVersion && (
+                        <span
+                          data-testid={`install-audit-detected-version-${row.auditId}`}
+                          className="font-mono text-xs text-text-secondary"
+                          title={t(
+                            'endpointAdmin.drawer.softwareCatalog.recentInstalls.detectedVersion',
+                          ).replace('{version}', row.detectedVersion)}
+                        >
+                          {row.detectedVersion}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-text-secondary">
+                    {formatTimestamp(row.reportedAt)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -524,32 +587,45 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({
             </tr>
           </thead>
           <tbody>
-            {uninstallAuditRows.map((row) => (
-              <tr
-                key={row.auditId}
-                className="border-t border-border-subtle"
-                data-testid={`uninstall-audit-row-${row.auditId}`}
-              >
-                <td className="px-3 py-2">
-                  <UninstallResultStatusBadge
-                    value={row.resultStatus}
-                    testIdPrefix={`uninstall-audit-result-${row.auditId}`}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <UninstallVerificationBadge
-                    value={row.verification}
-                    testIdPrefix={`uninstall-audit-verification-${row.auditId}`}
-                  />
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-text-secondary">
-                  {row.exitCode === null ? '—' : row.exitCode}
-                </td>
-                <td className="px-3 py-2 text-xs text-text-secondary">
-                  {formatTimestamp(row.reportedAt)}
-                </td>
-              </tr>
-            ))}
+            {uninstallAuditRows.map((row) => {
+              const failureReason = readFailureReason(row.redactedPayload, 'uninstall');
+              return (
+                <tr
+                  key={row.auditId}
+                  className="border-t border-border-subtle"
+                  data-testid={`uninstall-audit-row-${row.auditId}`}
+                >
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      <UninstallResultStatusBadge
+                        value={row.resultStatus}
+                        testIdPrefix={`uninstall-audit-result-${row.auditId}`}
+                      />
+                      {failureReason && (
+                        <span
+                          data-testid={`uninstall-audit-failure-reason-${row.auditId}`}
+                          className="text-xs text-state-danger-text"
+                        >
+                          {describeFailureReason(failureReason, t)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <UninstallVerificationBadge
+                      value={row.verification}
+                      testIdPrefix={`uninstall-audit-verification-${row.auditId}`}
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs text-text-secondary">
+                    {row.exitCode === null ? '—' : row.exitCode}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-text-secondary">
+                    {formatTimestamp(row.reportedAt)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
