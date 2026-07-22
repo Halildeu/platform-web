@@ -446,6 +446,96 @@ describe('SoftwareCatalogTab — recent installs panel', () => {
     expect(screen.getByTestId('install-audit-row-a-1').textContent).toContain('—');
   });
 
+  // platform-web#980 — a failed install used to render just "Başarısız". The
+  // agent's reason travels all the way to redactedPayload (the backend
+  // allow-lists it through redaction); nothing rendered it, so the operator
+  // could not tell an unreachable package source from a package that failed
+  // to install. Observed live on SRB-AIDENETIMPC: FAILED_EGRESS /
+  // egress_not_ready.
+  describe('basarisiz kurulumun sebebi gosterilir', () => {
+    const failedWith = (payload: Record<string, unknown> | null) =>
+      buildAudit({
+        auditId: 'a-1',
+        preflightDecision: 'WARN',
+        resultStatus: 'FAILED',
+        postVerification: null,
+        detectedVersion: null,
+        redactedPayload: payload,
+      });
+
+    it('failedReasonCode Turkce karsiligiyla gosterilir', () => {
+      mockCatalog([]);
+      mockAudits([
+        failedWith({
+          install: { finalStatus: 'FAILED_EGRESS', failedReasonCode: 'egress_not_ready' },
+        }),
+      ]);
+      render(<SoftwareCatalogTab device={buildDevice()} active />);
+      // The suite resolves to the English dictionary; the assertion that
+      // matters in any locale is that the code was translated, not echoed.
+      const text = screen.getByTestId('install-audit-failure-reason-a-1').textContent;
+      expect(text).toBe('Device could not reach the package source (network/proxy)');
+      expect(text).not.toBe('egress_not_ready');
+    });
+
+    it('failedReasonCode yoksa finalStatus kullanilir', () => {
+      mockCatalog([]);
+      mockAudits([failedWith({ install: { finalStatus: 'FAILED_TIMEOUT' } })]);
+      render(<SoftwareCatalogTab device={buildDevice()} active />);
+      const text = screen.getByTestId('install-audit-failure-reason-a-1').textContent;
+      expect(text).toBe('Timed out');
+      expect(text).not.toBe('FAILED_TIMEOUT');
+    });
+
+    it('winget_exit_<n> cikis koduyla birlikte gosterilir', () => {
+      mockCatalog([]);
+      mockAudits([
+        failedWith({
+          install: { finalStatus: 'FAILED_INSTALL', failedReasonCode: 'winget_exit_1603' },
+        }),
+      ]);
+      render(<SoftwareCatalogTab device={buildDevice()} active />);
+      // The exit code is interpolated, so the operator sees the actual number
+      // rather than a generic "install failed".
+      expect(screen.getByTestId('install-audit-failure-reason-a-1').textContent).toBe(
+        'WinGet exit code 1603',
+      );
+    });
+
+    it('eslesmeyen kod ham haliyle gosterilir (fail-open)', () => {
+      // A newer agent build must never render a blank cell just because the
+      // dictionary has not caught up.
+      mockCatalog([]);
+      mockAudits([
+        failedWith({ install: { failedReasonCode: 'brand_new_reason_from_a_newer_agent' } }),
+      ]);
+      render(<SoftwareCatalogTab device={buildDevice()} active />);
+      expect(screen.getByTestId('install-audit-failure-reason-a-1').textContent).toBe(
+        'brand_new_reason_from_a_newer_agent',
+      );
+    });
+
+    it('basarili kurulumda sebep satiri hic cikmaz', () => {
+      mockCatalog([]);
+      mockAudits([
+        buildAudit({
+          auditId: 'a-1',
+          resultStatus: 'SUCCEEDED',
+          redactedPayload: { install: { finalStatus: 'SUCCEEDED' } },
+        }),
+      ]);
+      render(<SoftwareCatalogTab device={buildDevice()} active />);
+      expect(screen.queryByTestId('install-audit-failure-reason-a-1')).toBeNull();
+    });
+
+    it('redactedPayload null iken sebep satiri cikmaz', () => {
+      mockCatalog([]);
+      mockAudits([failedWith(null)]);
+      render(<SoftwareCatalogTab device={buildDevice()} active />);
+      expect(screen.queryByTestId('install-audit-failure-reason-a-1')).toBeNull();
+    });
+  });
+
   // BE-028 — post-verification verdict badge + detected version.
   it('postVerification SATISFIED yesil badge + detectedVersion gosterir (REGISTRY authoritative)', () => {
     mockCatalog([]);

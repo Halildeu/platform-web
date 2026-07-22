@@ -1197,6 +1197,51 @@ const DICT_TR = {
   'endpointAdmin.modal.agentUpdate.dispatch': 'Güncelle',
   'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
     'Göndermek için bir sürüm seçin ve gerekçe girin.',
+  // platform-web#980 — the agent reports a structured failure reason that the
+  // backend keeps through redaction; these render it instead of a bare
+  // "Başarısız". Codes come from platform-agent internal/winget.
+  'endpointAdmin.drawer.install.failureReason.egress_not_ready':
+    'Cihaz paket kaynağına ulaşamadı (ağ/proxy)',
+  'endpointAdmin.drawer.install.failureReason.winget_not_installed': 'Cihazda WinGet kurulu değil',
+  'endpointAdmin.drawer.install.failureReason.locator_unavailable': 'WinGet konumlandırılamadı',
+  'endpointAdmin.drawer.install.failureReason.install_timeout': 'Kurulum zaman aşımına uğradı',
+  'endpointAdmin.drawer.install.failureReason.preexisting_version_conflict':
+    'Cihazda çakışan bir sürüm zaten kurulu',
+  'endpointAdmin.drawer.install.failureReason.provider_unsupported':
+    'Paket sağlayıcısı desteklenmiyor',
+  'endpointAdmin.drawer.install.failureReason.package_id_missing':
+    'Katalog kaydında paket kimliği yok',
+  'endpointAdmin.drawer.install.failureReason.detection_rule_invalid':
+    'Katalog tespit kuralı geçersiz',
+  'endpointAdmin.drawer.install.failureReason.detection_rule_package_id_mismatch':
+    'Tespit kuralı paket kimliğiyle uyuşmuyor',
+  'endpointAdmin.drawer.install.failureReason.args_policy_preset_unknown':
+    'Kurulum argüman profili tanınmıyor',
+  'endpointAdmin.drawer.install.failureReason.args_preset_render_failed':
+    'Kurulum argümanları üretilemedi',
+  'endpointAdmin.drawer.install.failureReason.detection_probe_unwired':
+    'Tespit yordamı bu ajan sürümünde yok',
+  'endpointAdmin.drawer.install.failureReason.install_runner_unwired':
+    'Kurulum yürütücüsü bu ajan sürümünde yok',
+  'endpointAdmin.drawer.install.failureReason.post_verify_inconclusive_version_required':
+    'Kurulum sonrası sürüm doğrulanamadı',
+  'endpointAdmin.drawer.install.failureReason.post_verify_version_predicate_failed':
+    'Kurulan sürüm beklenen koşulu karşılamadı',
+  'endpointAdmin.drawer.install.failureReason.wingetExit': 'WinGet hata kodu {code}',
+  // finalStatus fallbacks — used when the agent reports no finer-grained code.
+  'endpointAdmin.drawer.install.failureReason.FAILED_EGRESS': 'Cihaz paket kaynağına ulaşamadı',
+  'endpointAdmin.drawer.install.failureReason.FAILED_INSTALL': 'Kurulum başarısız oldu',
+  'endpointAdmin.drawer.install.failureReason.FAILED_TIMEOUT': 'Zaman aşımı',
+  'endpointAdmin.drawer.install.failureReason.FAILED_VERIFICATION': 'Kurulum doğrulanamadı',
+  'endpointAdmin.drawer.install.failureReason.FAILED_INTERNAL': 'Ajan iç hatası',
+  'endpointAdmin.drawer.install.failureReason.FAILED_UNSUPPORTED_PLATFORM':
+    'İşletim sistemi desteklenmiyor',
+  'endpointAdmin.drawer.install.failureReason.FAILED_UNSUPPORTED_DETECTION_RULE':
+    'Tespit kuralı desteklenmiyor',
+  'endpointAdmin.drawer.install.failureReason.FAILED_UNSUPPORTED_ARGS_POLICY':
+    'Argüman politikası desteklenmiyor',
+  'endpointAdmin.drawer.install.failureReason.FAILED_PREEXISTING_VERSION_CONFLICT':
+    'Çakışan sürüm zaten kurulu',
   // GAP 1 slice 2 — AG-029 release catalog management.
   'endpointAdmin.releases.page.title': 'Ajan Güncelleme Sürümleri',
   'endpointAdmin.releases.page.newButton': 'Yeni Sürüm',
@@ -2856,6 +2901,53 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.agentUpdate.dispatch': 'Update',
   'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
     'Pick a release and enter a reason to dispatch.',
+  // platform-web#980 — see the Turkish block; codes come from
+  // platform-agent internal/winget.
+  'endpointAdmin.drawer.install.failureReason.egress_not_ready':
+    'Device could not reach the package source (network/proxy)',
+  'endpointAdmin.drawer.install.failureReason.winget_not_installed':
+    'WinGet is not installed on the device',
+  'endpointAdmin.drawer.install.failureReason.locator_unavailable': 'WinGet could not be located',
+  'endpointAdmin.drawer.install.failureReason.install_timeout': 'The install timed out',
+  'endpointAdmin.drawer.install.failureReason.preexisting_version_conflict':
+    'A conflicting version is already installed',
+  'endpointAdmin.drawer.install.failureReason.provider_unsupported':
+    'The package provider is not supported',
+  'endpointAdmin.drawer.install.failureReason.package_id_missing':
+    'The catalog entry has no package id',
+  'endpointAdmin.drawer.install.failureReason.detection_rule_invalid':
+    'The catalog detection rule is invalid',
+  'endpointAdmin.drawer.install.failureReason.detection_rule_package_id_mismatch':
+    'The detection rule does not match the package id',
+  'endpointAdmin.drawer.install.failureReason.args_policy_preset_unknown':
+    'The install argument preset is unknown',
+  'endpointAdmin.drawer.install.failureReason.args_preset_render_failed':
+    'The install arguments could not be rendered',
+  'endpointAdmin.drawer.install.failureReason.detection_probe_unwired':
+    'This agent build has no detection probe',
+  'endpointAdmin.drawer.install.failureReason.install_runner_unwired':
+    'This agent build has no install runner',
+  'endpointAdmin.drawer.install.failureReason.post_verify_inconclusive_version_required':
+    'The installed version could not be verified',
+  'endpointAdmin.drawer.install.failureReason.post_verify_version_predicate_failed':
+    'The installed version did not meet the expected condition',
+  'endpointAdmin.drawer.install.failureReason.wingetExit': 'WinGet exit code {code}',
+  // finalStatus fallbacks — used when the agent reports no finer-grained code.
+  'endpointAdmin.drawer.install.failureReason.FAILED_EGRESS':
+    'Device could not reach the package source',
+  'endpointAdmin.drawer.install.failureReason.FAILED_INSTALL': 'The install failed',
+  'endpointAdmin.drawer.install.failureReason.FAILED_TIMEOUT': 'Timed out',
+  'endpointAdmin.drawer.install.failureReason.FAILED_VERIFICATION':
+    'The install could not be verified',
+  'endpointAdmin.drawer.install.failureReason.FAILED_INTERNAL': 'Agent internal error',
+  'endpointAdmin.drawer.install.failureReason.FAILED_UNSUPPORTED_PLATFORM':
+    'The operating system is not supported',
+  'endpointAdmin.drawer.install.failureReason.FAILED_UNSUPPORTED_DETECTION_RULE':
+    'The detection rule is not supported',
+  'endpointAdmin.drawer.install.failureReason.FAILED_UNSUPPORTED_ARGS_POLICY':
+    'The argument policy is not supported',
+  'endpointAdmin.drawer.install.failureReason.FAILED_PREEXISTING_VERSION_CONFLICT':
+    'A conflicting version is already installed',
   // GAP 1 slice 2 — AG-029 release catalog management.
   'endpointAdmin.releases.page.title': 'Agent Update Releases',
   'endpointAdmin.releases.page.newButton': 'New Release',
