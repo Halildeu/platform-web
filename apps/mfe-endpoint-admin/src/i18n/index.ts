@@ -21,6 +21,18 @@ const DICT_TR = {
   'endpointAdmin.nav.agentUpdates': 'Ajan Güncellemeleri',
   // platform-web#982 — dual-control inbox for destructive endpoint commands.
   'endpointAdmin.nav.commandApprovals': 'Komut Onayları',
+  // platform-web#985 — UPDATE_AGENT'ta SUCCEEDED "yükseltildi" demek DEĞİL.
+  // Ajan sözleşmesi (internal/selfupdate/contract.go) aşamayı ayrı taşır;
+  // STAGED_ACTIVATION_READY "asla bir etkinleştirme durumu değildir" ve
+  // etkinleştirme varsayılan kapalı ayrı bir adımdır.
+  'endpointAdmin.command.updateStage.STAGED_ACTIVATION_READY':
+    'İndirildi ve doğrulandı — etkinleştirme bekliyor (çalışan sürüm henüz değişmedi)',
+  'endpointAdmin.command.updateStage.ACTIVATED': 'Etkinleştirildi — yeni sürüm çalışıyor',
+  'endpointAdmin.command.updateStage.NOOP_ALREADY_CURRENT': 'Cihaz zaten hedef sürümdeydi',
+  'endpointAdmin.command.updateStage.PENDING_REBOOT': 'Etkinleştirildi — yeniden başlatma bekliyor',
+  'endpointAdmin.command.updateStage.ACTIVATION_FAILED': 'Etkinleştirme başarısız oldu',
+  'endpointAdmin.command.updateStage.ROLLED_BACK': 'Geri alındı — önceki sürüme dönüldü',
+  'endpointAdmin.command.updateStage.FAILED_STAGE': 'İndirme/doğrulama aşamasında düştü',
   'endpointAdmin.commandApproval.title': 'Bekleyen Komut Onayları',
   'endpointAdmin.commandApproval.subtitle':
     'Çift onay gerektiren uç birim komutları. Bir komutu gönderen kişi kendi komutunu onaylayamaz.',
@@ -1765,6 +1777,17 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.nav.agentUpdates': 'Agent Updates',
   // platform-web#982 — dual-control inbox for destructive endpoint commands.
   'endpointAdmin.nav.commandApprovals': 'Command Approvals',
+  // platform-web#985 — see the Turkish block; values come from
+  // platform-agent internal/selfupdate/contract.go.
+  'endpointAdmin.command.updateStage.STAGED_ACTIVATION_READY':
+    'Downloaded and verified — awaiting activation (the running version has not changed yet)',
+  'endpointAdmin.command.updateStage.ACTIVATED': 'Activated — the new version is running',
+  'endpointAdmin.command.updateStage.NOOP_ALREADY_CURRENT':
+    'The device was already on the target version',
+  'endpointAdmin.command.updateStage.PENDING_REBOOT': 'Activated — awaiting reboot',
+  'endpointAdmin.command.updateStage.ACTIVATION_FAILED': 'Activation failed',
+  'endpointAdmin.command.updateStage.ROLLED_BACK': 'Rolled back to the previous version',
+  'endpointAdmin.command.updateStage.FAILED_STAGE': 'Failed during download/verification',
   'endpointAdmin.commandApproval.title': 'Pending Command Approvals',
   'endpointAdmin.commandApproval.subtitle':
     'Endpoint commands that require dual control. Whoever raised a command cannot approve it.',
