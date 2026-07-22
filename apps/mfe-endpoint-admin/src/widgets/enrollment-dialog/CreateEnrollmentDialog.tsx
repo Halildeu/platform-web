@@ -9,6 +9,7 @@ const MIN_MINUTES = 1;
 const MAX_MINUTES = 10080;
 const DEFAULT_MINUTES = 60;
 const NOTE_MAX_LENGTH = 512;
+type EnrollmentTarget = 'new-device' | 'existing-device';
 
 export interface CreateEnrollmentDialogProps {
   open: boolean;
@@ -26,14 +27,28 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
   const { t } = useEndpointAdminI18n();
   const [expiresInMinutes, setExpiresInMinutes] = React.useState(DEFAULT_MINUTES);
   const [note, setNote] = React.useState('');
+  const [target, setTarget] = React.useState<EnrollmentTarget>('new-device');
+  const [deviceId, setDeviceId] = React.useState('');
   const [validationError, setValidationError] = React.useState<string | null>(null);
 
   const [createEnrollment, createState] = endpointAdminApi.useCreateEndpointEnrollmentMutation();
+  const devicesState = endpointAdminApi.useListEndpointDevicesQuery(undefined, {
+    skip: !open || !canManage,
+  });
+  const eligibleDevices = React.useMemo(
+    () =>
+      (devicesState.data ?? [])
+        .filter((device) => device.status !== 'DECOMMISSIONED')
+        .sort((left, right) => left.hostname.localeCompare(right.hostname)),
+    [devicesState.data],
+  );
 
   React.useEffect(() => {
     if (!open) {
       setExpiresInMinutes(DEFAULT_MINUTES);
       setNote('');
+      setTarget('new-device');
+      setDeviceId('');
       setValidationError(null);
       createState.reset();
     }
@@ -86,18 +101,31 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
       setValidationError(t('endpointAdmin.enrollments.dialog.errorNoteLength'));
       return;
     }
+    if (target === 'existing-device' && !deviceId) {
+      setValidationError(t('endpointAdmin.enrollments.dialog.errorDeviceRequired'));
+      return;
+    }
 
     try {
       const response = await createEnrollment({
         expiresInMinutes,
         note: note.trim() ? note.trim() : undefined,
+        deviceId: target === 'existing-device' ? deviceId : undefined,
       }).unwrap();
+      const expectedDeviceId = target === 'existing-device' ? deviceId : null;
+      if (response.deviceId !== expectedDeviceId) {
+        setValidationError(t('endpointAdmin.enrollments.dialog.errorDeviceMismatch'));
+        createState.reset();
+        return;
+      }
       onCreated(response);
       // Codex iter-1 reveal-once UX: clear local state immediately and
       // reset the RTK Query mutation cache so the raw token does not
       // linger anywhere outside the modal closure.
       setNote('');
       setExpiresInMinutes(DEFAULT_MINUTES);
+      setTarget('new-device');
+      setDeviceId('');
       createState.reset();
     } catch {
       setValidationError(t('endpointAdmin.enrollments.dialog.errorGeneric'));
@@ -125,6 +153,78 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
         style={{ background: '#fff', padding: 24, borderRadius: 8, maxWidth: 480, width: '90%' }}
       >
         <h2 id="create-enrollment-dialog-title">{t('endpointAdmin.enrollments.dialog.title')}</h2>
+
+        <fieldset style={{ marginTop: 12 }}>
+          <legend>{t('endpointAdmin.enrollments.dialog.targetLabel')}</legend>
+          <label style={{ marginRight: 16 }}>
+            <input
+              type="radio"
+              name="enrollmentTarget"
+              value="new-device"
+              checked={target === 'new-device'}
+              onChange={() => {
+                setTarget('new-device');
+                setDeviceId('');
+                setValidationError(null);
+              }}
+              data-testid="create-enrollment-dialog-target-new"
+            />{' '}
+            {t('endpointAdmin.enrollments.dialog.targetNew')}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="enrollmentTarget"
+              value="existing-device"
+              checked={target === 'existing-device'}
+              onChange={() => {
+                setTarget('existing-device');
+                setValidationError(null);
+              }}
+              data-testid="create-enrollment-dialog-target-existing"
+            />{' '}
+            {t('endpointAdmin.enrollments.dialog.targetExisting')}
+          </label>
+        </fieldset>
+
+        {target === 'existing-device' && (
+          <div style={{ marginTop: 12 }}>
+            <label htmlFor="targetDeviceId" style={{ display: 'block' }}>
+              {t('endpointAdmin.enrollments.dialog.deviceLabel')}
+            </label>
+            {devicesState.isLoading || devicesState.isFetching ? (
+              <p data-testid="create-enrollment-dialog-devices-loading">
+                {t('endpointAdmin.enrollments.dialog.devicesLoading')}
+              </p>
+            ) : devicesState.error ? (
+              <p data-testid="create-enrollment-dialog-devices-error" role="alert">
+                {t('endpointAdmin.enrollments.dialog.devicesError')}
+              </p>
+            ) : eligibleDevices.length === 0 ? (
+              <p data-testid="create-enrollment-dialog-devices-empty">
+                {t('endpointAdmin.enrollments.dialog.devicesEmpty')}
+              </p>
+            ) : (
+              <select
+                id="targetDeviceId"
+                value={deviceId}
+                onChange={(event) => {
+                  setDeviceId(event.target.value);
+                  setValidationError(null);
+                }}
+                data-testid="create-enrollment-dialog-device-select"
+                style={{ width: '100%', padding: 8, marginTop: 4 }}
+              >
+                <option value="">{t('endpointAdmin.enrollments.dialog.devicePlaceholder')}</option>
+                {eligibleDevices.map((device) => (
+                  <option key={device.id} value={device.id}>
+                    {device.hostname} ({device.status})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
 
         <label htmlFor="expiresInMinutes" style={{ display: 'block', marginTop: 12 }}>
           {t('endpointAdmin.enrollments.dialog.expiresLabel')} ({MIN_MINUTES}-{MAX_MINUTES})
@@ -175,7 +275,14 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
           <button
             type="submit"
             data-testid="create-enrollment-dialog-submit"
-            disabled={createState.isLoading}
+            disabled={
+              createState.isLoading ||
+              (target === 'existing-device' &&
+                (devicesState.isLoading ||
+                  devicesState.isFetching ||
+                  Boolean(devicesState.error) ||
+                  eligibleDevices.length === 0))
+            }
           >
             {createState.isLoading
               ? t('endpointAdmin.enrollments.dialog.submitting')

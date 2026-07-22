@@ -39,6 +39,8 @@ import { EnrollmentTokenModal } from '../../widgets/enrollment-dialog/Enrollment
 export interface EnrollmentListPageProps {
   /** Override for tests; production reads from window.__env__. */
   apiUrlOverride?: string;
+  /** Override for tests; production derives the dedicated mTLS device API. */
+  tpmRenewalApiUrlOverride?: string;
 }
 
 /**
@@ -70,6 +72,18 @@ function resolveApiUrl(): string {
 }
 
 /**
+ * TPM renewal must use the dedicated TLS-passthrough SNI, not the browser
+ * gateway. Keeping this mapping explicit prevents a generic token endpoint
+ * from silently downgrading the machine-certificate bootstrap transport.
+ */
+function resolveTpmRenewalApiUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.hostname === 'ai.acik.com') {
+    return 'https://mtls.ai.acik.com/api/v1/endpoint-agent';
+  }
+  return 'https://mtls.testai.acik.com/api/v1/endpoint-agent';
+}
+
+/**
  * Public base for the artifact host (gitops#1434). Mirrors {@link resolveApiUrl}:
  * derived from `window.location.origin` so the modal's release-manifest discovery
  * fetch is SAME-ORIGIN (the artifact host sits behind the same edge at
@@ -83,11 +97,15 @@ function resolveArtifactBaseUrl(): string {
   return 'https://testai.acik.com/artifacts';
 }
 
-const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride }) => {
+const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({
+  apiUrlOverride,
+  tpmRenewalApiUrlOverride,
+}) => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
   const manageHintId = React.useId();
   const apiUrl = apiUrlOverride ?? resolveApiUrl();
+  const tpmRenewalApiUrl = tpmRenewalApiUrlOverride ?? resolveTpmRenewalApiUrl();
   const artifactBaseUrl = resolveArtifactBaseUrl();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -184,6 +202,7 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
       <EnrollmentTokenModal
         response={tokenResponse}
         apiUrl={apiUrl}
+        tpmRenewalApiUrl={tpmRenewalApiUrl}
         artifactBaseUrl={artifactBaseUrl}
         onClose={() => setTokenResponse(null)}
       />
