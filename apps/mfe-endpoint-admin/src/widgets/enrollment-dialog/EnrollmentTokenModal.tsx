@@ -108,13 +108,19 @@ function buildOneCommand(args: {
 }
 
 /** Existing-device TPM/certificate renewal using the already-installed agent. */
-function buildTpmRenewalCommand(token: string, apiUrl: string): string {
+export function buildTpmRenewalCommand(token: string, apiUrl: string): string {
   const q = (value: string): string => `'${powerShellEscape(value)}'`;
   return [
+    `$serviceKey = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EndpointAgent';`,
+    `if (-not (Test-Path -LiteralPath $serviceKey)) { throw 'EndpointAgent service is not installed.' };`,
+    `$serviceCommand = [Environment]::ExpandEnvironmentVariables([string](Get-ItemPropertyValue -LiteralPath $serviceKey -Name ImagePath -ErrorAction Stop)).Trim();`,
+    `$agentExe = $null;`,
+    `if ($serviceCommand -match '^\\s*"([^"]+\\.exe)"(?:\\s|$)') { $agentExe = $Matches[1] } elseif ($serviceCommand -match '^\\s*(.+?\\.exe)(?:\\s|$)') { $agentExe = $Matches[1] } else { throw 'EndpointAgent service ImagePath does not contain a valid executable.' };`,
+    `if (-not (Test-Path -LiteralPath $agentExe -PathType Leaf)) { throw "EndpointAgent executable is missing at the registered service path: $agentExe" };`,
     `$env:ENDPOINT_AGENT_ENROLLMENT_TOKEN = ${q(token)};`,
     `$env:ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX = 'adcomputer:';`,
     `try {`,
-    `& 'C:\\Program Files\\EndpointAgent\\endpoint-agent.exe' --auto-enroll-tpm --api-url ${q(apiUrl)};`,
+    `& $agentExe --auto-enroll-tpm --api-url ${q(apiUrl)};`,
     `if ($LASTEXITCODE -ne 0) { throw 'TPM renewal failed.' };`,
     `Restart-Service EndpointAgent`,
     `} finally {`,
