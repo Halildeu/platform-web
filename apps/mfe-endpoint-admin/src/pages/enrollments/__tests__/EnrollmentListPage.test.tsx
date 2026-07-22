@@ -293,6 +293,16 @@ describe('EnrollmentListPage', () => {
     expect(renewalCommand).not.toContain("--api-url 'https://example/api'");
     expect(renewalCommand).toContain('Restart-Service EndpointAgent');
     expect(renewalCommand).toContain('ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX');
+    expect(renewalCommand).toContain(
+      'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EndpointAgent',
+    );
+    expect(renewalCommand).toContain('Get-ItemPropertyValue');
+    expect(renewalCommand).toContain('ImagePath');
+    expect(renewalCommand).toContain('Test-Path -LiteralPath $agentExe -PathType Leaf');
+    expect(renewalCommand).toContain('& $agentExe --auto-enroll-tpm');
+    expect(renewalCommand).not.toContain(
+      "& 'C:\\Program Files\\EndpointAgent\\endpoint-agent.exe'",
+    );
     expect(renewalCommand).not.toContain('-PackageUrl');
     expect(screen.queryByTestId('enrollment-token-modal-snippet')).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
