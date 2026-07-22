@@ -51,6 +51,38 @@ const DESTRUCTIVE_TYPES: DestructiveType[] = [
 
 const isDestructive = (t: CommandType): t is DestructiveType => isDestructiveCommand(t);
 
+/**
+ * Reads the agent's self-update stage from an UPDATE_AGENT result.
+ *
+ * `SUCCEEDED` on this command type does NOT mean the agent was upgraded. The
+ * agent's own contract is explicit — "STAGED_ACTIVATION_READY … (never an
+ * activation status)" — and activation is a separate `self-update activate`
+ * step gated behind `SelfUpdateAutoActivate`, which defaults to false. So a
+ * staged update reports success while the running version stays put, and the
+ * fleet's agent versions drift away from its command history with nothing on
+ * screen explaining why. See platform-web#985.
+ */
+function readUpdateStageStatus(command: EndpointCommand): string | null {
+  if (command.type !== 'UPDATE_AGENT') return null;
+  const details = command.result?.payload?.details;
+  if (!details || typeof details !== 'object') return null;
+  const update = (details as Record<string, unknown>).update;
+  if (!update || typeof update !== 'object') return null;
+  const stage = (update as Record<string, unknown>).stageStatus;
+  return typeof stage === 'string' && stage.trim() ? stage.trim() : null;
+}
+
+/**
+ * Translates a stage, falling back to the raw value. Fail-open: a newer agent
+ * emitting an unmapped stage must still say something rather than render an
+ * empty line.
+ */
+function describeUpdateStage(stage: string, t: (key: string) => string): string {
+  const key = `endpointAdmin.command.updateStage.${stage}`;
+  const translated = t(key);
+  return translated === key ? stage : translated;
+}
+
 export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   device,
   recentCommands,
@@ -406,6 +438,14 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
               // `break-words` contains the worst-case 512-char line.
               const failureReason =
                 c.lastError && c.lastError.trim() !== '' ? c.lastError.trim() : null;
+              // An UPDATE_AGENT that reports SUCCEEDED has usually only been
+              // downloaded, verified and staged — the agent's own contract says
+              // STAGED_ACTIVATION_READY is "never an activation status", and
+              // activation is a separate step that is off by default
+              // (SelfUpdateAutoActivate). Rendering that as a bare "Başarılı"
+              // tells the operator the fleet moved when it did not, which is
+              // why agent versions and command history stopped agreeing.
+              const stageStatus = readUpdateStageStatus(c);
               return (
                 <li
                   key={c.id}
@@ -425,6 +465,18 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
                       </span>
                     )}
                   </div>
+                  {stageStatus && (
+                    <p
+                      data-testid={`command-update-stage-${c.id}`}
+                      className={
+                        stageStatus === 'STAGED_ACTIVATION_READY'
+                          ? 'text-state-warning-text break-words'
+                          : 'text-text-secondary break-words'
+                      }
+                    >
+                      {describeUpdateStage(stageStatus, t)}
+                    </p>
+                  )}
                   {failureReason && (
                     <p
                       data-testid={`command-last-error-${c.id}`}

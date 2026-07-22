@@ -252,6 +252,92 @@ describe('IslemlerTab — recent-commands lastError visibility (P0-0)', () => {
     expect(screen.queryByTestId('command-last-error-cmd-ok')).not.toBeInTheDocument();
   });
 
+  // platform-web#985 — SUCCEEDED on UPDATE_AGENT does not mean the agent was
+  // upgraded. The agent stages the binary and reports success; activation is a
+  // separate step that is off by default, so the running version can stay put
+  // while the command history says "Başarılı". That is why fleet agent
+  // versions stopped agreeing with the update log.
+  describe('UPDATE_AGENT asamasi', () => {
+    const updateCommand = (stage: string | null, over: Partial<EndpointCommand> = {}) =>
+      makeCommand({
+        id: 'cmd-upd',
+        type: 'UPDATE_AGENT',
+        status: 'SUCCEEDED',
+        lastError: null,
+        result: stage
+          ? ({
+              id: 'res-1',
+              status: 'SUCCEEDED',
+              payload: { details: { update: { stageStatus: stage } } },
+              errorCode: null,
+              errorMessage: null,
+              exitCode: null,
+              reportedAt: '2026-07-17T20:46:00Z',
+              createdAt: '2026-07-17T20:46:00Z',
+            } as EndpointCommand['result'])
+          : null,
+        ...over,
+      });
+
+    it('staged ama etkinlestirilmemis guncelleme boyle soylenir', () => {
+      render(
+        <IslemlerTab
+          {...defaults}
+          device={baseDevice}
+          recentCommands={[updateCommand('STAGED_ACTIVATION_READY')]}
+        />,
+      );
+      const line = screen.getByTestId('command-update-stage-cmd-upd');
+      expect(line.textContent).toContain('awaiting activation');
+      // The whole point: it must NOT read like a completed upgrade.
+      expect(line.textContent).not.toBe('Activated — the new version is running');
+    });
+
+    it('gercekten etkinlestirilmis guncelleme ayirt edilir', () => {
+      render(
+        <IslemlerTab
+          {...defaults}
+          device={baseDevice}
+          recentCommands={[updateCommand('ACTIVATED')]}
+        />,
+      );
+      expect(screen.getByTestId('command-update-stage-cmd-upd').textContent).toBe(
+        'Activated — the new version is running',
+      );
+    });
+
+    it('eslesmeyen asama ham haliyle gosterilir (fail-open)', () => {
+      render(
+        <IslemlerTab
+          {...defaults}
+          device={baseDevice}
+          recentCommands={[updateCommand('BRAND_NEW_STAGE_FROM_A_NEWER_AGENT')]}
+        />,
+      );
+      expect(screen.getByTestId('command-update-stage-cmd-upd').textContent).toBe(
+        'BRAND_NEW_STAGE_FROM_A_NEWER_AGENT',
+      );
+    });
+
+    it('UPDATE_AGENT disi komutlarda asama satiri cikmaz', () => {
+      render(
+        <IslemlerTab
+          {...defaults}
+          device={baseDevice}
+          recentCommands={[updateCommand('STAGED_ACTIVATION_READY', { type: 'COLLECT_INVENTORY' })]}
+        />,
+      );
+      expect(screen.queryByTestId('command-update-stage-cmd-upd')).not.toBeInTheDocument();
+    });
+
+    it('sonuc payload yokken asama satiri cikmaz', () => {
+      render(
+        <IslemlerTab {...defaults} device={baseDevice} recentCommands={[updateCommand(null)]} />,
+      );
+      expect(screen.queryByTestId('command-update-stage-cmd-upd')).not.toBeInTheDocument();
+    });
+  });
+
   it('bos/whitespace lastError icin sebep satiri RENDER ETMEZ (fail-clear)', () => {
     render(
       <IslemlerTab
