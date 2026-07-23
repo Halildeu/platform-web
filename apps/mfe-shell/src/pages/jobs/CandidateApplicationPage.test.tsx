@@ -154,7 +154,8 @@ const renderPage = () =>
 const reachPreview = async () => {
   await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
   fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-  fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
   expect(screen.getByTestId('candidate-application-preview')).toBeVisible();
 };
 
@@ -221,6 +222,22 @@ describe('CandidateApplicationPage', () => {
     vi.unstubAllGlobals();
   });
 
+  it('presents one clear application step at a time and preserves editable values', async () => {
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'CV’nizle başlayın' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Size nasıl ulaşalım?' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+    expect(screen.getByRole('heading', { name: 'Size nasıl ulaşalım?' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'CV’nizle başlayın' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Ad soyad/i), {
+      target: { value: 'Düzenlenmiş Sentetik Aday' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    expect(screen.getByRole('heading', { name: 'Deneyiminizi anlatın' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'İletişim bilgilerime dön' }));
+    expect(screen.getByLabelText(/Ad soyad/i)).toHaveValue('Düzenlenmiş Sentetik Aday');
+  });
+
   it('submits the editable form to the persistent API and stores tracking only after success', async () => {
     renderPage();
     await reachPreview();
@@ -272,7 +289,7 @@ describe('CandidateApplicationPage', () => {
       'web-idempotency-123456',
       'A'.repeat(43),
     );
-    expect(screen.getByTestId('candidate-fullName')).toHaveValue('');
+    expect(screen.queryByTestId('candidate-fullName')).not.toBeInTheDocument();
     expect(screen.getByTestId('candidate-resume-review')).not.toHaveTextContent('ornek-cv.pdf');
 
     fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
@@ -293,9 +310,11 @@ describe('CandidateApplicationPage', () => {
   it('requires an explicit choice instead of overwriting a non-empty manual field', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     fireEvent.change(screen.getByTestId('candidate-fullName'), {
       target: { value: 'Elle Yazılan Aday' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'CV adımına dön' }));
     await selectPdf();
     fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
     await waitFor(() =>
@@ -308,7 +327,6 @@ describe('CandidateApplicationPage', () => {
     expect(await screen.findByTestId('resume-merge-conflicts')).toHaveTextContent(
       'Elle Yazılan Aday',
     );
-    expect(screen.getByTestId('candidate-fullName')).toHaveValue('Elle Yazılan Aday');
     fireEvent.click(screen.getByLabelText(/CV değerini kullan:/i));
     fireEvent.click(screen.getByRole('button', { name: 'Seçimleri forma uygula' }));
     expect(screen.getByTestId('candidate-fullName')).toHaveValue('PDF Demo Adayı');
@@ -317,9 +335,11 @@ describe('CandidateApplicationPage', () => {
   it('lets the candidate combine and edit a manual value with a CV proposal', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     fireEvent.change(screen.getByTestId('candidate-fullName'), {
       target: { value: 'Elle Yazılan Aday' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'CV adımına dön' }));
     await selectPdf();
     fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
     await waitFor(() =>
@@ -366,6 +386,7 @@ describe('CandidateApplicationPage', () => {
     });
 
     expect(await screen.findByTestId('candidate-resume-parsing')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
     fireEvent.change(screen.getByTestId('candidate-fullName'), { target: { value: 'Form Açık' } });
     expect(screen.getByTestId('candidate-fullName')).toHaveValue('Form Açık');
@@ -373,6 +394,7 @@ describe('CandidateApplicationPage', () => {
     await act(async () => {
       resolveUpload({ resumeImport: UPLOADED_IMPORT, inFlight: false });
     });
+    fireEvent.click(screen.getByRole('button', { name: 'CV adımına dön' }));
     expect(await screen.findByTestId('candidate-resume-review')).toBeVisible();
   });
 
@@ -387,6 +409,7 @@ describe('CandidateApplicationPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('UNSUPPORTED_IN_GATE');
     expect(alert).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
   });
 
@@ -419,14 +442,18 @@ describe('CandidateApplicationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Evet, tümünü reddet' }));
     await waitFor(() => expect(apiMocks.terminateResumeImport).toHaveBeenCalled());
     expect(screen.queryByTestId('candidate-resume-review')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
   });
 
   it('blocks preview when required fields are missing', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('yıldızlı alanları doldurun');
+    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'iletişim bilgilerindeki yıldızlı alanları doldurun',
+    );
   });
 
   it('blocks real candidate PII while the test environment G0 gate is active', async () => {
@@ -436,7 +463,8 @@ describe('CandidateApplicationPage', () => {
     fireEvent.change(screen.getByLabelText(/E-posta/i), {
       target: { value: 'gercek.aday@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Yalnız .test uzantılı sentetik e-posta');
     expect(apiMocks.submitApplication).not.toHaveBeenCalled();
   });
@@ -446,7 +474,8 @@ describe('CandidateApplicationPage', () => {
     renderPage();
     expect(await screen.findByRole('alert')).toHaveTextContent('ilan yok');
     fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu önizle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
     screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Başvuruyu gönder' })).toBeDisabled(),

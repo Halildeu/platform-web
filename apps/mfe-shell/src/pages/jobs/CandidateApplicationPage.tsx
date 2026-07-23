@@ -54,6 +54,15 @@ type MergeConflict = {
 };
 
 type View = 'form' | 'preview' | 'receipt';
+type FormStep = 'resume' | 'contact' | 'profile';
+
+const FORM_STEPS: ReadonlyArray<{ id: FormStep | 'preview' | 'receipt'; label: string }> = [
+  { id: 'resume', label: 'CV' },
+  { id: 'contact', label: 'Bilgiler' },
+  { id: 'profile', label: 'Deneyim' },
+  { id: 'preview', label: 'Kontrol' },
+  { id: 'receipt', label: 'Makbuz' },
+];
 
 const EMPTY_VALUES: ApplicationValues = {
   fullName: '',
@@ -149,6 +158,7 @@ const CandidateApplicationPage = () => {
   const [jobError, setJobError] = useState('');
   const [values, setValues] = useState<ApplicationValues>(EMPTY_VALUES);
   const [view, setView] = useState<View>('form');
+  const [formStep, setFormStep] = useState<FormStep>('resume');
   const [fileMeta, setFileMeta] = useState<LocalFileMeta | null>(null);
   const [fileError, setFileError] = useState('');
   const [resumeStatus, setResumeStatus] = useState<ResumeStatus>('idle');
@@ -219,6 +229,8 @@ const CandidateApplicationPage = () => {
   const applySyntheticResume = () => {
     setValues(SYNTHETIC_VALUES);
     setFormError('');
+    setFormStep('contact');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -465,6 +477,7 @@ const CandidateApplicationPage = () => {
     setValues(next);
     setMergeConflicts(conflicts);
     setFileMeta((current) => (current ? { ...current, importedFieldCount: imported } : current));
+    return conflicts.length;
   };
 
   const confirmReviewedResume = async () => {
@@ -478,8 +491,12 @@ const CandidateApplicationPage = () => {
         importId: confirmed.draft.importId,
         draftVersion: confirmed.draft.version,
       });
-      applyDraftToForm(confirmed.draft);
+      const conflictCount = applyDraftToForm(confirmed.draft);
       setResumeStatus('confirmed');
+      if (conflictCount === 0) {
+        setFormStep('contact');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } catch (confirmError) {
       if (confirmError instanceof Error && confirmError.message.includes('VERSION_CONFLICT')) {
         await recoverResumeVersionConflict(
@@ -513,6 +530,33 @@ const CandidateApplicationPage = () => {
       current ? { ...current, importedFieldCount: current.importedFieldCount + imported } : current,
     );
     setMergeConflicts([]);
+    setFormStep('contact');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openProfileStep = () => {
+    const missingContact = (['fullName', 'email', 'phone', 'city'] as const).some(
+      (field) => values[field].trim().length === 0,
+    );
+    if (missingContact) {
+      setFormError('Devam etmek için iletişim bilgilerindeki yıldızlı alanları doldurun.');
+      return;
+    }
+    if (!isValidEmail(values.email)) {
+      setFormError('Geçerli bir e-posta adresi girin.');
+      return;
+    }
+    if (!isValidPhone(values.phone)) {
+      setFormError('Geçerli bir telefon numarası girin.');
+      return;
+    }
+    if (!isValidOptionalHttpUrl(values.linkedIn) || !isValidOptionalHttpUrl(values.portfolio)) {
+      setFormError('LinkedIn ve portföy adresleri http:// veya https:// ile başlamalıdır.');
+      return;
+    }
+    setFormError('');
+    setFormStep('profile');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const openPreview: React.FormEventHandler<HTMLFormElement> = (event) => {
@@ -620,6 +664,8 @@ const CandidateApplicationPage = () => {
     setSubmitError('');
     idempotencyKeyRef.current = createApplicationIdempotencyKey();
     setView('form');
+    setFormStep('profile');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const resetDemo = () => {
@@ -649,6 +695,7 @@ const CandidateApplicationPage = () => {
     resumeCreateKeyRef.current = createApplicationIdempotencyKey();
     candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
+    setFormStep('resume');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -704,7 +751,7 @@ const CandidateApplicationPage = () => {
     </div>
   );
 
-  const previewRows: Array<[keyof ApplicationValues, string, string]> = [
+  const allPreviewRows: Array<[keyof ApplicationValues, string, string]> = [
     ['fullName', 'Ad soyad', values.fullName],
     ['email', 'E-posta', values.email],
     ['phone', 'Telefon', values.phone],
@@ -716,7 +763,8 @@ const CandidateApplicationPage = () => {
     ['education', 'Eğitim', values.education],
     ['skills', 'Beceriler', values.skills],
     ['note', 'Ek not', values.note || 'Eklenmedi'],
-  ].filter(([field]) => isFieldEnabled(field));
+  ];
+  const previewRows = allPreviewRows.filter(([field]) => isFieldEnabled(field));
   const resumeProposals = resumeImport?.proposals ?? [];
   const allResumeProposalsReviewed =
     resumeProposals.length > 0 &&
@@ -726,6 +774,8 @@ const CandidateApplicationPage = () => {
   const selectedResumeFields = resumeProposals.filter((proposal) =>
     ['ACCEPTED', 'EDITED'].includes(proposal.state),
   ).length;
+  const currentStepId: FormStep | 'preview' | 'receipt' = view === 'form' ? formStep : view;
+  const currentStepIndex = FORM_STEPS.findIndex((step) => step.id === currentStepId);
 
   return (
     <main
@@ -761,7 +811,7 @@ const CandidateApplicationPage = () => {
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:py-10">
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:py-10">
         <div className="min-w-0">
           <section className="mb-6 overflow-hidden rounded-3xl bg-text-primary px-5 py-7 text-white shadow-lg sm:px-8 sm:py-9">
             <div className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
@@ -792,554 +842,673 @@ const CandidateApplicationPage = () => {
             </p>
           ) : null}
 
-          <nav aria-label="Başvuru adımları" className="mb-6 grid grid-cols-3 gap-2">
-            {[
-              ['form', '1', 'Bilgiler'],
-              ['preview', '2', 'Önizleme'],
-              ['receipt', '3', 'Makbuz'],
-            ].map(([key, number, label]) => {
-              const order: View[] = ['form', 'preview', 'receipt'];
-              const active = order.indexOf(view) >= order.indexOf(key as View);
-              return (
-                <div
-                  key={key}
-                  className={`rounded-xl border px-3 py-3 text-center text-xs font-semibold sm:text-sm ${
-                    active
-                      ? 'border-action-primary bg-action-primary/5 text-text-primary'
-                      : 'border-border-subtle bg-surface-default text-text-secondary'
-                  }`}
-                  aria-current={view === key ? 'step' : undefined}
-                >
-                  <span className="mr-1">{number}.</span> {label}
-                </div>
-              );
-            })}
+          <nav
+            aria-label="Başvuru adımları"
+            className="mb-6 rounded-2xl border border-border-subtle bg-surface-default p-3 shadow-xs"
+          >
+            <ol className="grid grid-cols-5 gap-1">
+              {FORM_STEPS.map((step, index) => {
+                const completed = currentStepIndex > index;
+                const current = currentStepIndex === index;
+                return (
+                  <li key={step.id} className="min-w-0 text-center">
+                    <div
+                      className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${
+                        completed || current
+                          ? 'border-action-primary bg-action-primary text-action-primary-text'
+                          : 'border-border-subtle bg-surface-muted text-text-secondary'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {completed ? '✓' : index + 1}
+                    </div>
+                    <span
+                      className={`mt-1 block truncate text-[10px] font-semibold sm:text-xs ${
+                        current ? 'text-text-primary' : 'text-text-secondary'
+                      }`}
+                      aria-current={current ? 'step' : undefined}
+                    >
+                      {step.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </nav>
 
           {view === 'form' ? (
             <form className="flex flex-col gap-5" onSubmit={openPreview} noValidate>
-              <section className={sectionClassName} aria-labelledby="resume-heading">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
-                      Hızlı başlangıç
-                    </p>
-                    <h2 id="resume-heading" className="mt-1 text-xl font-bold">
-                      CV’nizle başlayın
-                    </h2>
-                    <p className="mt-2 max-w-xl text-sm leading-6 text-text-secondary">
-                      PDF güvenli serviste geçici olarak işlenir. Hiçbir alan kendiliğinden forma
-                      yazılmaz: her öneriyi kabul eder, düzenler veya reddedersiniz. Ham PDF ve
-                      dosya adı kalıcı kayda alınmaz.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={applySyntheticResume}
-                    data-testid="fill-synthetic-resume"
-                    className="shrink-0 rounded-xl border border-action-primary px-4 py-2.5 text-sm font-semibold text-action-primary hover:bg-action-primary/5"
-                  >
-                    Örnek CV ile doldur
-                  </button>
-                </div>
-
-                <div className="mt-5 rounded-2xl border border-dashed border-border-strong bg-surface-subtle p-4 sm:p-5">
-                  <label
-                    className="flex items-start gap-3 text-sm leading-6"
-                    htmlFor="resume-import-notice"
-                  >
-                    <input
-                      id="resume-import-notice"
-                      type="checkbox"
-                      checked={resumeNoticeAccepted}
-                      disabled={Boolean(resumeImport)}
-                      onChange={(event) => {
-                        setResumeNoticeAccepted(event.target.checked);
-                        setResumeNoticeAcceptedAt(
-                          event.target.checked ? new Date().toISOString() : '',
-                        );
-                        setFileError('');
-                      }}
-                      className="mt-1 h-4 w-4 shrink-0"
-                    />
-                    <span>
-                      CV içe aktarma aydınlatmasını okudum. Test ortamında yalnız sentetik veri
-                      kullanacağımı; PDF’nin güvenlik taraması ve alan çıkarımı için geçici olarak
-                      işleneceğini, ham dosyanın saklanmayacağını ve yalnız seçtiğim alanların
-                      taslağa aktarılacağını anladım.
-                      <span className="sr-only"> Sürüm: candidate-resume-import-v1</span>
-                    </span>
-                  </label>
-
-                  {resumeStatus !== 'confirmed' ? (
-                    <div className="mt-4 border-t border-border-subtle pt-4">
-                      <label
-                        className={`flex flex-col items-center gap-2 text-center ${
-                          resumeNoticeAccepted &&
-                          resumeStatus !== 'uploading' &&
-                          (!resumeImport?.documentVersion || replaceRequested)
-                            ? 'cursor-pointer'
-                            : 'cursor-not-allowed opacity-60'
-                        }`}
-                        htmlFor="candidate-resume"
+              {formStep === 'resume' ? (
+                <>
+                  <section className={sectionClassName} aria-labelledby="resume-heading">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
+                          Hızlı başlangıç
+                        </p>
+                        <h2 id="resume-heading" className="mt-1 text-xl font-bold">
+                          CV’nizle başlayın
+                        </h2>
+                        <p className="mt-2 max-w-xl text-sm leading-6 text-text-secondary">
+                          PDF güvenli serviste geçici olarak işlenir. Hiçbir alan kendiliğinden
+                          forma yazılmaz: her öneriyi kabul eder, düzenler veya reddedersiniz. Ham
+                          PDF ve dosya adı kalıcı kayda alınmaz.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={applySyntheticResume}
+                        data-testid="fill-synthetic-resume"
+                        className="shrink-0 rounded-xl border border-action-primary px-4 py-2.5 text-sm font-semibold text-action-primary hover:bg-action-primary/5"
                       >
-                        <span className="text-sm font-bold">
-                          {replaceRequested ? 'Yeni PDF özgeçmiş seçin' : 'PDF özgeçmiş seçin'}
-                        </span>
-                        <span className="text-xs text-text-secondary">
-                          En fazla 10 MB · yalnız PDF
+                        Örnek CV ile doldur
+                      </button>
+                    </div>
+
+                    <div className="mt-5 rounded-2xl border border-dashed border-border-strong bg-surface-subtle p-4 sm:p-5">
+                      <label
+                        className="flex items-start gap-3 text-sm leading-6"
+                        htmlFor="resume-import-notice"
+                      >
+                        <input
+                          id="resume-import-notice"
+                          type="checkbox"
+                          checked={resumeNoticeAccepted}
+                          disabled={Boolean(resumeImport)}
+                          onChange={(event) => {
+                            setResumeNoticeAccepted(event.target.checked);
+                            setResumeNoticeAcceptedAt(
+                              event.target.checked ? new Date().toISOString() : '',
+                            );
+                            setFileError('');
+                          }}
+                          className="mt-1 h-4 w-4 shrink-0"
+                        />
+                        <span>
+                          CV içe aktarma aydınlatmasını okudum. Test ortamında yalnız sentetik veri
+                          kullanacağımı; PDF’nin güvenlik taraması ve alan çıkarımı için geçici
+                          olarak işleneceğini, ham dosyanın saklanmayacağını ve yalnız seçtiğim
+                          alanların taslağa aktarılacağını anladım.
+                          <span className="sr-only"> Sürüm: candidate-resume-import-v1</span>
                         </span>
                       </label>
-                      <input
-                        ref={fileInputRef}
-                        id="candidate-resume"
-                        data-testid="candidate-resume"
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        onChange={handleFileChange}
-                        disabled={
-                          !resumeNoticeAccepted ||
-                          resumeStatus === 'uploading' ||
-                          Boolean(resumeImport?.documentVersion && !replaceRequested)
-                        }
-                        className="mx-auto mt-3 block max-w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-action-primary file:px-4 file:py-2 file:font-semibold file:text-action-primary-text disabled:opacity-60"
-                        aria-describedby="candidate-resume-boundary candidate-resume-error"
-                      />
-                    </div>
-                  ) : null}
-                  <p
-                    id="candidate-resume-boundary"
-                    className="mt-3 text-center text-xs text-text-secondary"
-                  >
-                    Test ortamında gerçek kişisel veri kullanmayın. Form, PDF işlenirken de elle
-                    doldurulabilir; işleme hatası manuel başvuruyu engellemez.
-                  </p>
-                  {resumeStatus === 'uploading' ? (
-                    <p
-                      role="status"
-                      aria-live="polite"
-                      data-testid="candidate-resume-parsing"
-                      className="mt-4 text-center text-sm font-semibold text-action-primary"
-                    >
-                      PDF güvenlik kontrolünden geçiriliyor ve alan önerileri hazırlanıyor… Formu bu
-                      sırada elle doldurmaya devam edebilirsiniz.
-                    </p>
-                  ) : null}
-                  {fileError ? (
-                    <p
-                      ref={fileErrorRef}
-                      id="candidate-resume-error"
-                      role="alert"
-                      aria-live="assertive"
-                      tabIndex={-1}
-                      className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-3 py-2 text-sm font-medium text-state-danger-text outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                    >
-                      {fileError}
-                    </p>
-                  ) : null}
 
-                  {resumeStatus === 'reviewing' && resumeImport ? (
-                    <div className="mt-5" data-testid="candidate-resume-review">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <h3 className="text-base font-bold">CV alanlarını kontrol edin</h3>
-                          <p className="mt-1 text-xs text-text-secondary">
-                            {resumeProposals.length} öneri · korunan{' '}
-                            {resumeImport.protectedSuppressed} çıktı aktarılmadı · dosya adı ve ham
-                            PDF saklanmadı
-                          </p>
+                      {resumeStatus !== 'confirmed' ? (
+                        <div className="mt-4 border-t border-border-subtle pt-4">
+                          <label
+                            className={`flex flex-col items-center gap-2 text-center ${
+                              resumeNoticeAccepted &&
+                              resumeStatus !== 'uploading' &&
+                              (!resumeImport?.documentVersion || replaceRequested)
+                                ? 'cursor-pointer'
+                                : 'cursor-not-allowed opacity-60'
+                            }`}
+                            htmlFor="candidate-resume"
+                          >
+                            <span className="text-sm font-bold">
+                              {replaceRequested ? 'Yeni PDF özgeçmiş seçin' : 'PDF özgeçmiş seçin'}
+                            </span>
+                            <span className="text-xs text-text-secondary">
+                              En fazla 10 MB · yalnız PDF
+                            </span>
+                          </label>
+                          <input
+                            ref={fileInputRef}
+                            id="candidate-resume"
+                            data-testid="candidate-resume"
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={handleFileChange}
+                            disabled={
+                              !resumeNoticeAccepted ||
+                              resumeStatus === 'uploading' ||
+                              Boolean(resumeImport?.documentVersion && !replaceRequested)
+                            }
+                            className="mx-auto mt-3 block max-w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-action-primary file:px-4 file:py-2 file:font-semibold file:text-action-primary-text disabled:opacity-60"
+                            aria-describedby="candidate-resume-boundary candidate-resume-error"
+                          />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void acceptAllSafeProposals()}
-                          disabled={Boolean(resumeBusyField)}
-                          className="rounded-xl border border-action-primary px-3 py-2 text-xs font-bold text-action-primary disabled:opacity-50"
+                      ) : null}
+                      <p
+                        id="candidate-resume-boundary"
+                        className="mt-3 text-center text-xs text-text-secondary"
+                      >
+                        Test ortamında gerçek kişisel veri kullanmayın. Form, PDF işlenirken de elle
+                        doldurulabilir; işleme hatası manuel başvuruyu engellemez.
+                      </p>
+                      {resumeStatus === 'uploading' ? (
+                        <p
+                          role="status"
+                          aria-live="polite"
+                          data-testid="candidate-resume-parsing"
+                          className="mt-4 text-center text-sm font-semibold text-action-primary"
                         >
-                          Güvenli önerileri kabul et
-                        </button>
-                      </div>
+                          PDF güvenlik kontrolünden geçiriliyor ve alan önerileri hazırlanıyor…
+                          Formu bu sırada elle doldurmaya devam edebilirsiniz.
+                        </p>
+                      ) : null}
+                      {fileError ? (
+                        <p
+                          ref={fileErrorRef}
+                          id="candidate-resume-error"
+                          role="alert"
+                          aria-live="assertive"
+                          tabIndex={-1}
+                          className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-3 py-2 text-sm font-medium text-state-danger-text outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        >
+                          {fileError}
+                        </p>
+                      ) : null}
 
-                      <ul className="mt-4 flex flex-col gap-3" aria-label="CV alan önerileri">
-                        {resumeProposals.map((proposal) => {
-                          const needsControl = proposal.state === 'CONTROL_REQUIRED';
-                          const savedValue = proposal.candidateValue ?? proposal.proposedValue;
-                          const editedValue = resumeEdits[proposal.field] ?? savedValue;
-                          const isBusy =
-                            resumeBusyField === proposal.field || resumeBusyField === 'all';
-                          return (
-                            <li
-                              key={proposal.field}
-                              className="rounded-xl border border-border-subtle bg-surface-default p-4"
-                              data-testid={`resume-proposal-${proposal.field}`}
-                            >
-                              <div className="flex flex-wrap items-start justify-between gap-2">
-                                <div>
-                                  <h4 className="text-sm font-bold">
-                                    {FIELD_LABELS[proposal.field]}
-                                  </h4>
-                                  <p className="mt-1 text-xs text-text-secondary">
-                                    Sayfa {proposal.provenance.page} · güven %
-                                    {Math.round(proposal.provenance.confidence * 100)} · metin
-                                    konumu doğrulandı
-                                  </p>
-                                </div>
-                                <span className="rounded-full border border-border-subtle px-2.5 py-1 text-xs font-bold">
-                                  {proposal.state === 'UNREVIEWED'
-                                    ? 'Karar bekliyor'
-                                    : proposal.state === 'CONTROL_REQUIRED'
-                                      ? 'Elle kontrol gerekli'
-                                      : proposal.state === 'ACCEPTED'
-                                        ? 'Kabul edildi'
-                                        : proposal.state === 'EDITED'
-                                          ? 'Düzenlendi'
-                                          : 'Reddedildi'}
-                                </span>
-                              </div>
-                              <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-3 py-2 text-sm">
-                                {proposal.proposedValue}
+                      {resumeStatus === 'reviewing' && resumeImport ? (
+                        <div className="mt-5" data-testid="candidate-resume-review">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-base font-bold">CV alanlarını kontrol edin</h3>
+                              <p className="mt-1 text-xs text-text-secondary">
+                                {resumeProposals.length} öneri · korunan{' '}
+                                {resumeImport.protectedSuppressed} çıktı aktarılmadı · dosya adı ve
+                                ham PDF saklanmadı
                               </p>
-                              <label
-                                className="mt-3 block text-xs font-bold"
-                                htmlFor={`resume-edit-${proposal.field}`}
-                              >
-                                Aday tarafından düzenlenebilir değer
-                              </label>
-                              <textarea
-                                id={`resume-edit-${proposal.field}`}
-                                value={editedValue}
-                                onChange={(event) =>
-                                  setResumeEdits((current) => ({
-                                    ...current,
-                                    [proposal.field]: event.target.value,
-                                  }))
-                                }
-                                rows={
-                                  proposal.field === 'experience' || proposal.field === 'education'
-                                    ? 3
-                                    : 2
-                                }
-                                disabled={isBusy}
-                                className={`${inputClassName} mt-1`}
-                              />
-                              {needsControl ? (
-                                <p className="mt-2 text-xs font-semibold text-state-warning-text">
-                                  Bu alan düşük güven nedeniyle aynen kabul edilemez; düzenleyin
-                                  veya reddedin.
-                                </p>
-                              ) : null}
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {!needsControl ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void decideResumeField(proposal, 'ACCEPTED')}
-                                    disabled={isBusy}
-                                    className="rounded-lg bg-action-primary px-3 py-2 text-xs font-bold text-action-primary-text disabled:opacity-50"
-                                  >
-                                    Öneriyi kabul et
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => void decideResumeField(proposal, 'EDITED')}
-                                  disabled={isBusy || !editedValue.trim()}
-                                  className="rounded-lg border border-action-primary px-3 py-2 text-xs font-bold text-action-primary disabled:opacity-50"
-                                >
-                                  Düzenlediğimi kaydet
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void decideResumeField(proposal, 'REJECTED')}
-                                  disabled={isBusy}
-                                  className="rounded-lg border border-border-strong px-3 py-2 text-xs font-bold disabled:opacity-50"
-                                >
-                                  Reddet
-                                </button>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void acceptAllSafeProposals()}
+                              disabled={Boolean(resumeBusyField)}
+                              className="rounded-xl border border-action-primary px-3 py-2 text-xs font-bold text-action-primary disabled:opacity-50"
+                            >
+                              Güvenli önerileri kabul et
+                            </button>
+                          </div>
 
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={() => void confirmReviewedResume()}
-                          disabled={
-                            !allResumeProposalsReviewed ||
-                            selectedResumeFields === 0 ||
-                            Boolean(resumeBusyField)
-                          }
-                          className="min-h-11 flex-1 rounded-xl bg-action-primary px-4 py-2 text-sm font-bold text-action-primary-text disabled:cursor-not-allowed disabled:opacity-45"
+                          <ul className="mt-4 flex flex-col gap-3" aria-label="CV alan önerileri">
+                            {resumeProposals.map((proposal) => {
+                              const needsControl = proposal.state === 'CONTROL_REQUIRED';
+                              const savedValue = proposal.candidateValue ?? proposal.proposedValue;
+                              const editedValue = resumeEdits[proposal.field] ?? savedValue;
+                              const isBusy =
+                                resumeBusyField === proposal.field || resumeBusyField === 'all';
+                              return (
+                                <li
+                                  key={proposal.field}
+                                  className="rounded-xl border border-border-subtle bg-surface-default p-4"
+                                  data-testid={`resume-proposal-${proposal.field}`}
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                      <h4 className="text-sm font-bold">
+                                        {FIELD_LABELS[proposal.field]}
+                                      </h4>
+                                      <p className="mt-1 text-xs text-text-secondary">
+                                        Sayfa {proposal.provenance.page} · güven %
+                                        {Math.round(proposal.provenance.confidence * 100)} · metin
+                                        konumu doğrulandı
+                                      </p>
+                                    </div>
+                                    <span className="rounded-full border border-border-subtle px-2.5 py-1 text-xs font-bold">
+                                      {proposal.state === 'UNREVIEWED'
+                                        ? 'Karar bekliyor'
+                                        : proposal.state === 'CONTROL_REQUIRED'
+                                          ? 'Elle kontrol gerekli'
+                                          : proposal.state === 'ACCEPTED'
+                                            ? 'Kabul edildi'
+                                            : proposal.state === 'EDITED'
+                                              ? 'Düzenlendi'
+                                              : 'Reddedildi'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-3 py-2 text-sm">
+                                    {proposal.proposedValue}
+                                  </p>
+                                  <label
+                                    className="mt-3 block text-xs font-bold"
+                                    htmlFor={`resume-edit-${proposal.field}`}
+                                  >
+                                    Aday tarafından düzenlenebilir değer
+                                  </label>
+                                  <textarea
+                                    id={`resume-edit-${proposal.field}`}
+                                    value={editedValue}
+                                    onChange={(event) =>
+                                      setResumeEdits((current) => ({
+                                        ...current,
+                                        [proposal.field]: event.target.value,
+                                      }))
+                                    }
+                                    rows={
+                                      proposal.field === 'experience' ||
+                                      proposal.field === 'education'
+                                        ? 3
+                                        : 2
+                                    }
+                                    disabled={isBusy}
+                                    className={`${inputClassName} mt-1`}
+                                  />
+                                  {needsControl ? (
+                                    <p className="mt-2 text-xs font-semibold text-state-warning-text">
+                                      Bu alan düşük güven nedeniyle aynen kabul edilemez; düzenleyin
+                                      veya reddedin.
+                                    </p>
+                                  ) : null}
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {!needsControl ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void decideResumeField(proposal, 'ACCEPTED')}
+                                        disabled={isBusy}
+                                        className="rounded-lg bg-action-primary px-3 py-2 text-xs font-bold text-action-primary-text disabled:opacity-50"
+                                      >
+                                        Öneriyi kabul et
+                                      </button>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => void decideResumeField(proposal, 'EDITED')}
+                                      disabled={isBusy || !editedValue.trim()}
+                                      className="rounded-lg border border-action-primary px-3 py-2 text-xs font-bold text-action-primary disabled:opacity-50"
+                                    >
+                                      Düzenlediğimi kaydet
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void decideResumeField(proposal, 'REJECTED')}
+                                      disabled={isBusy}
+                                      className="rounded-lg border border-border-strong px-3 py-2 text-xs font-bold disabled:opacity-50"
+                                    >
+                                      Reddet
+                                    </button>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+
+                          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                            <button
+                              type="button"
+                              onClick={() => void confirmReviewedResume()}
+                              disabled={
+                                !allResumeProposalsReviewed ||
+                                selectedResumeFields === 0 ||
+                                Boolean(resumeBusyField)
+                              }
+                              className="min-h-11 flex-1 rounded-xl bg-action-primary px-4 py-2 text-sm font-bold text-action-primary-text disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              Seçtiğim alanları forma aktar ({selectedResumeFields})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReplaceRequested(true)}
+                              disabled={Boolean(resumeBusyField)}
+                              className="rounded-xl border border-border-strong px-4 py-2 text-sm font-bold disabled:opacity-50"
+                            >
+                              PDF’yi değiştir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowRejectAllConfirm(true)}
+                              disabled={Boolean(resumeBusyField)}
+                              className="rounded-xl border border-border-strong px-4 py-2 text-sm font-bold disabled:opacity-50"
+                            >
+                              Tümünü reddet
+                            </button>
+                          </div>
+                          {!allResumeProposalsReviewed ? (
+                            <p className="mt-2 text-xs text-text-secondary">
+                              Forma aktarmadan önce her alan için kabul, düzenleme veya ret kararı
+                              verin.
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {showRejectAllConfirm ? (
+                        <div
+                          role="alertdialog"
+                          aria-labelledby="reject-all-title"
+                          className="mt-4 rounded-xl border border-state-warning-border bg-state-warning-bg p-4"
                         >
-                          Seçtiğim alanları forma aktar ({selectedResumeFields})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setReplaceRequested(true)}
-                          disabled={Boolean(resumeBusyField)}
-                          className="rounded-xl border border-border-strong px-4 py-2 text-sm font-bold disabled:opacity-50"
+                          <h3 id="reject-all-title" className="text-sm font-bold">
+                            Tüm CV önerileri reddedilsin mi?
+                          </h3>
+                          <p className="mt-1 text-sm text-text-secondary">
+                            Geçici öneriler silinir; formu elle doldurmaya devam edebilirsiniz.
+                          </p>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void discardResume('REJECT_ALL')}
+                              className="rounded-lg bg-text-primary px-3 py-2 text-xs font-bold text-white"
+                            >
+                              Evet, tümünü reddet
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowRejectAllConfirm(false)}
+                              className="rounded-lg border border-border-strong px-3 py-2 text-xs font-bold"
+                            >
+                              Vazgeç
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {resumeStatus === 'confirmed' && fileMeta ? (
+                        <div
+                          role="status"
+                          aria-live="polite"
+                          data-testid="candidate-resume-meta"
+                          className="mt-4 rounded-xl border border-state-success-border bg-state-success-bg px-4 py-3 text-sm font-medium text-state-success-text"
                         >
-                          PDF’yi değiştir
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowRejectAllConfirm(true)}
-                          disabled={Boolean(resumeBusyField)}
-                          className="rounded-xl border border-border-strong px-4 py-2 text-sm font-bold disabled:opacity-50"
+                          CV kararları kaydedildi; {fileMeta.importedFieldCount} alan forma
+                          aktarıldı · {formatBytes(fileMeta.size)} geçici işlendi · dosya adı ve ham
+                          PDF tutulmadı.
+                        </div>
+                      ) : null}
+
+                      {mergeConflicts.length > 0 ? (
+                        <div
+                          className="mt-4 rounded-xl border border-state-warning-border bg-state-warning-bg p-4"
+                          data-testid="resume-merge-conflicts"
                         >
-                          Tümünü reddet
-                        </button>
-                      </div>
-                      {!allResumeProposalsReviewed ? (
-                        <p className="mt-2 text-xs text-text-secondary">
-                          Forma aktarmadan önce her alan için kabul, düzenleme veya ret kararı
-                          verin.
+                          <h3 className="text-sm font-bold">
+                            Dolu alanlar için hangi değer kullanılsın?
+                          </h3>
+                          <p className="mt-1 text-xs text-text-secondary">
+                            Mevcut bilgileriniz sessizce değiştirilmez.
+                          </p>
+                          <ul className="mt-3 flex flex-col gap-4">
+                            {mergeConflicts.map((conflict, index) => (
+                              <li
+                                key={conflict.field}
+                                className="rounded-lg bg-surface-default p-3"
+                              >
+                                <p className="text-sm font-bold">{FIELD_LABELS[conflict.field]}</p>
+                                <label className="mt-2 flex items-start gap-2 text-sm">
+                                  <input
+                                    type="radio"
+                                    name={`merge-${conflict.field}`}
+                                    checked={conflict.choice === 'manual'}
+                                    onChange={() =>
+                                      setMergeConflicts((current) =>
+                                        current.map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, choice: 'manual' }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <span>
+                                    <strong>Mevcut değeri koru:</strong> {conflict.manualValue}
+                                  </span>
+                                </label>
+                                <label className="mt-2 flex items-start gap-2 text-sm">
+                                  <input
+                                    type="radio"
+                                    name={`merge-${conflict.field}`}
+                                    checked={conflict.choice === 'resume'}
+                                    onChange={() =>
+                                      setMergeConflicts((current) =>
+                                        current.map((item, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...item, choice: 'resume' }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <span>
+                                    <strong>CV değerini kullan:</strong> {conflict.resumeValue}
+                                  </span>
+                                </label>
+                                <label className="mt-2 flex items-start gap-2 text-sm">
+                                  <input
+                                    type="radio"
+                                    name={`merge-${conflict.field}`}
+                                    checked={conflict.choice === 'edit'}
+                                    onChange={() =>
+                                      setMergeConflicts((current) =>
+                                        current.map((item, itemIndex) =>
+                                          itemIndex === index ? { ...item, choice: 'edit' } : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <span>
+                                    <strong>Birleştirip düzenle</strong>
+                                  </span>
+                                </label>
+                                {conflict.choice === 'edit' ? (
+                                  <div className="mt-2">
+                                    <label
+                                      className="text-xs font-bold"
+                                      htmlFor={`merge-edit-${conflict.field}`}
+                                    >
+                                      Birleşik değer
+                                    </label>
+                                    <textarea
+                                      id={`merge-edit-${conflict.field}`}
+                                      value={conflict.mergedValue}
+                                      onChange={(event) =>
+                                        setMergeConflicts((current) =>
+                                          current.map((item, itemIndex) =>
+                                            itemIndex === index
+                                              ? { ...item, mergedValue: event.target.value }
+                                              : item,
+                                          ),
+                                        )
+                                      }
+                                      rows={3}
+                                      className={`${inputClassName} mt-1`}
+                                    />
+                                  </div>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                          <button
+                            type="button"
+                            onClick={applyMergeChoices}
+                            disabled={mergeConflicts.some((conflict) => conflict.choice === null)}
+                            className="mt-4 rounded-xl bg-action-primary px-4 py-2 text-sm font-bold text-action-primary-text disabled:opacity-45"
+                          >
+                            Seçimleri forma uygula
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <Link
+                      to={jobsBase}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold text-text-primary"
+                    >
+                      İlana geri dön
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormError('');
+                        setFormStep('contact');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-5 text-sm font-bold text-action-primary-text"
+                    >
+                      {resumeBinding ? 'Bilgilerimi kontrol et' : 'CV olmadan devam et'}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
+              {formStep === 'contact' ? (
+                <>
+                  <section className={sectionClassName} aria-labelledby="contact-heading">
+                    <div className="mb-5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
+                        Adım 2 · Aday bilgileri
+                      </p>
+                      <h2 id="contact-heading" className="mt-1 text-xl font-bold">
+                        Size nasıl ulaşalım?
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-text-secondary">
+                        CV’den gelen alanları kontrol edin; her bilgiyi göndermeden önce
+                        değiştirebilirsiniz.
+                      </p>
+                      {resumeBinding && fileMeta ? (
+                        <p
+                          role="status"
+                          data-testid="candidate-resume-meta"
+                          className="mt-3 rounded-xl border border-state-success-border bg-state-success-bg px-4 py-3 text-sm font-semibold text-state-success-text"
+                        >
+                          CV’den dolduruldu: {fileMeta.importedFieldCount} alan forma aktarıldı. Ham
+                          PDF ve dosya adı saklanmadı.
                         </p>
                       ) : null}
                     </div>
-                  ) : null}
-
-                  {showRejectAllConfirm ? (
-                    <div
-                      role="alertdialog"
-                      aria-labelledby="reject-all-title"
-                      className="mt-4 rounded-xl border border-state-warning-border bg-state-warning-bg p-4"
-                    >
-                      <h3 id="reject-all-title" className="text-sm font-bold">
-                        Tüm CV önerileri reddedilsin mi?
-                      </h3>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        Geçici öneriler silinir; formu elle doldurmaya devam edebilirsiniz.
-                      </p>
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void discardResume('REJECT_ALL')}
-                          className="rounded-lg bg-text-primary px-3 py-2 text-xs font-bold text-white"
-                        >
-                          Evet, tümünü reddet
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowRejectAllConfirm(false)}
-                          className="rounded-lg border border-border-strong px-3 py-2 text-xs font-bold"
-                        >
-                          Vazgeç
-                        </button>
-                      </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {renderField('fullName', 'Ad soyad', {
+                        required: true,
+                        autoComplete: 'name',
+                      })}
+                      {renderField('email', 'E-posta', {
+                        type: 'email',
+                        required: true,
+                        autoComplete: 'email',
+                      })}
+                      {renderField('phone', 'Telefon', {
+                        type: 'tel',
+                        required: true,
+                        autoComplete: 'tel',
+                      })}
+                      {renderField('city', 'Şehir', {
+                        required: true,
+                        autoComplete: 'address-level2',
+                      })}
+                      {isFieldEnabled('linkedIn')
+                        ? renderField('linkedIn', 'LinkedIn', {
+                            type: 'url',
+                            placeholder: 'https://linkedin.com/in/...',
+                          })
+                        : null}
+                      {isFieldEnabled('portfolio')
+                        ? renderField('portfolio', 'Portföy / kişisel site', {
+                            type: 'url',
+                            placeholder: 'https://...',
+                          })
+                        : null}
                     </div>
-                  ) : null}
-
-                  {resumeStatus === 'confirmed' && fileMeta ? (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      data-testid="candidate-resume-meta"
-                      className="mt-4 rounded-xl border border-state-success-border bg-state-success-bg px-4 py-3 text-sm font-medium text-state-success-text"
+                  </section>
+                  {formError ? (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
                     >
-                      CV kararları kaydedildi; {fileMeta.importedFieldCount} alan forma aktarıldı ·{' '}
-                      {formatBytes(fileMeta.size)} geçici işlendi · dosya adı ve ham PDF tutulmadı.
-                    </div>
+                      {formError}
+                    </p>
                   ) : null}
-
-                  {mergeConflicts.length > 0 ? (
-                    <div
-                      className="mt-4 rounded-xl border border-state-warning-border bg-state-warning-bg p-4"
-                      data-testid="resume-merge-conflicts"
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormError('');
+                        setFormStep('resume');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold text-text-primary"
                     >
-                      <h3 className="text-sm font-bold">
-                        Dolu alanlar için hangi değer kullanılsın?
-                      </h3>
-                      <p className="mt-1 text-xs text-text-secondary">
-                        Mevcut bilgileriniz sessizce değiştirilmez.
-                      </p>
-                      <ul className="mt-3 flex flex-col gap-4">
-                        {mergeConflicts.map((conflict, index) => (
-                          <li key={conflict.field} className="rounded-lg bg-surface-default p-3">
-                            <p className="text-sm font-bold">{FIELD_LABELS[conflict.field]}</p>
-                            <label className="mt-2 flex items-start gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name={`merge-${conflict.field}`}
-                                checked={conflict.choice === 'manual'}
-                                onChange={() =>
-                                  setMergeConflicts((current) =>
-                                    current.map((item, itemIndex) =>
-                                      itemIndex === index ? { ...item, choice: 'manual' } : item,
-                                    ),
-                                  )
-                                }
-                              />
-                              <span>
-                                <strong>Mevcut değeri koru:</strong> {conflict.manualValue}
-                              </span>
-                            </label>
-                            <label className="mt-2 flex items-start gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name={`merge-${conflict.field}`}
-                                checked={conflict.choice === 'resume'}
-                                onChange={() =>
-                                  setMergeConflicts((current) =>
-                                    current.map((item, itemIndex) =>
-                                      itemIndex === index ? { ...item, choice: 'resume' } : item,
-                                    ),
-                                  )
-                                }
-                              />
-                              <span>
-                                <strong>CV değerini kullan:</strong> {conflict.resumeValue}
-                              </span>
-                            </label>
-                            <label className="mt-2 flex items-start gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name={`merge-${conflict.field}`}
-                                checked={conflict.choice === 'edit'}
-                                onChange={() =>
-                                  setMergeConflicts((current) =>
-                                    current.map((item, itemIndex) =>
-                                      itemIndex === index ? { ...item, choice: 'edit' } : item,
-                                    ),
-                                  )
-                                }
-                              />
-                              <span>
-                                <strong>Birleştirip düzenle</strong>
-                              </span>
-                            </label>
-                            {conflict.choice === 'edit' ? (
-                              <div className="mt-2">
-                                <label
-                                  className="text-xs font-bold"
-                                  htmlFor={`merge-edit-${conflict.field}`}
-                                >
-                                  Birleşik değer
-                                </label>
-                                <textarea
-                                  id={`merge-edit-${conflict.field}`}
-                                  value={conflict.mergedValue}
-                                  onChange={(event) =>
-                                    setMergeConflicts((current) =>
-                                      current.map((item, itemIndex) =>
-                                        itemIndex === index
-                                          ? { ...item, mergedValue: event.target.value }
-                                          : item,
-                                      ),
-                                    )
-                                  }
-                                  rows={3}
-                                  className={`${inputClassName} mt-1`}
-                                />
-                              </div>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        type="button"
-                        onClick={applyMergeChoices}
-                        disabled={mergeConflicts.some((conflict) => conflict.choice === null)}
-                        className="mt-4 rounded-xl bg-action-primary px-4 py-2 text-sm font-bold text-action-primary-text disabled:opacity-45"
-                      >
-                        Seçimleri forma uygula
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-
-              <section className={sectionClassName} aria-labelledby="contact-heading">
-                <div className="mb-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
-                    Aday bilgileri
-                  </p>
-                  <h2 id="contact-heading" className="mt-1 text-xl font-bold">
-                    Size nasıl ulaşalım?
-                  </h2>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {renderField('fullName', 'Ad soyad', { required: true, autoComplete: 'name' })}
-                  {renderField('email', 'E-posta', {
-                    type: 'email',
-                    required: true,
-                    autoComplete: 'email',
-                  })}
-                  {renderField('phone', 'Telefon', {
-                    type: 'tel',
-                    required: true,
-                    autoComplete: 'tel',
-                  })}
-                  {renderField('city', 'Şehir', { required: true, autoComplete: 'address-level2' })}
-                  {isFieldEnabled('linkedIn')
-                    ? renderField('linkedIn', 'LinkedIn', {
-                        type: 'url',
-                        placeholder: 'https://linkedin.com/in/...',
-                      })
-                    : null}
-                  {isFieldEnabled('portfolio')
-                    ? renderField('portfolio', 'Portföy / kişisel site', {
-                        type: 'url',
-                        placeholder: 'https://...',
-                      })
-                    : null}
-                </div>
-              </section>
-
-              <section className={sectionClassName} aria-labelledby="profile-heading">
-                <div className="mb-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
-                    Profil
-                  </p>
-                  <h2 id="profile-heading" className="mt-1 text-xl font-bold">
-                    Deneyiminizi anlatın
-                  </h2>
-                </div>
-                <div className="flex flex-col gap-4">
-                  {renderTextArea(
-                    'summary',
-                    'Profesyonel özet',
-                    'Kendinizi birkaç cümleyle anlatın',
-                    true,
-                    4,
-                  )}
-                  {renderTextArea(
-                    'experience',
-                    'İş deneyimi',
-                    'Rol · Şirket · Tarih aralığı',
-                    true,
-                    5,
-                  )}
-                  {renderTextArea('education', 'Eğitim', 'Okul · Bölüm · Mezuniyet yılı', true, 3)}
-                  {renderTextArea('skills', 'Beceriler', 'Virgülle ayırabilirsiniz', true, 3)}
-                  {isFieldEnabled('note')
-                    ? renderTextArea(
-                        'note',
-                        'Bu role neden başvuruyorsunuz?',
-                        'İsteğe bağlı kısa not',
-                        false,
-                        4,
-                      )
-                    : null}
-                </div>
-              </section>
-
-              {formError ? (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
-                >
-                  {formError}
-                </p>
+                      CV adımına dön
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openProfileStep}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-5 text-sm font-bold text-action-primary-text"
+                    >
+                      Deneyim bilgilerime devam et
+                    </button>
+                  </div>
+                </>
               ) : null}
 
-              <button
-                type="submit"
-                disabled={resumeStatus === 'uploading' || mergeConflicts.length > 0}
-                className="min-h-12 rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text shadow-sm hover:opacity-90 focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                Başvuruyu önizle
-              </button>
+              {formStep === 'profile' ? (
+                <>
+                  <section className={sectionClassName} aria-labelledby="profile-heading">
+                    <div className="mb-5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
+                        Adım 3 · Profil
+                      </p>
+                      <h2 id="profile-heading" className="mt-1 text-xl font-bold">
+                        Deneyiminizi anlatın
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-text-secondary">
+                        Kısa, işle ilgili ve doğrulayabildiğiniz bilgileri girin. Sonraki adımda
+                        başvurunun tamamını göreceksiniz.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      {renderTextArea(
+                        'summary',
+                        'Profesyonel özet',
+                        'Kendinizi birkaç cümleyle anlatın',
+                        true,
+                        4,
+                      )}
+                      {renderTextArea(
+                        'experience',
+                        'İş deneyimi',
+                        'Rol · Şirket · Tarih aralığı',
+                        true,
+                        5,
+                      )}
+                      {renderTextArea(
+                        'education',
+                        'Eğitim',
+                        'Okul · Bölüm · Mezuniyet yılı',
+                        true,
+                        3,
+                      )}
+                      {renderTextArea('skills', 'Beceriler', 'Virgülle ayırabilirsiniz', true, 3)}
+                      {isFieldEnabled('note')
+                        ? renderTextArea(
+                            'note',
+                            'Bu role neden başvuruyorsunuz?',
+                            'İsteğe bağlı kısa not',
+                            false,
+                            4,
+                          )
+                        : null}
+                    </div>
+                  </section>
+                  {formError ? (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+                    >
+                      {formError}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormError('');
+                        setFormStep('contact');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold text-text-primary"
+                    >
+                      İletişim bilgilerime dön
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resumeStatus === 'uploading' || mergeConflicts.length > 0}
+                      className="inline-flex min-h-12 items-center justify-center rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text shadow-sm hover:opacity-90 focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      Başvuruyu kontrol et
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </form>
           ) : null}
 

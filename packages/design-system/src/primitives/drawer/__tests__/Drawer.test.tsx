@@ -65,6 +65,15 @@ describe('Drawer — basic render', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
+  it('uses a caller-provided accessible close label', () => {
+    render(
+      <Drawer open onClose={vi.fn()} closeLabel="Aday detayını kapat">
+        <p>Body</p>
+      </Drawer>,
+    );
+    expect(screen.getByRole('button', { name: 'Aday detayını kapat' })).toBeInTheDocument();
+  });
+
   it('does not render footer section when footer is not provided', () => {
     const { container } = render(
       <Drawer open onClose={vi.fn()}>

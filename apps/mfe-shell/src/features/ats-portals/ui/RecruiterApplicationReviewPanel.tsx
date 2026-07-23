@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createApplicationIdempotencyKey,
+  describeAtsError,
   getRecruiterApplication,
   submitRecruiterApplicationEvaluation,
   updateRecruiterApplicationStatus,
@@ -68,12 +69,14 @@ interface RecruiterApplicationReviewPanelProps {
   publicRef: string | null;
   canManage: boolean;
   onApplicationChanged: (application: RecruiterApplicationDto) => void;
+  embedded?: boolean;
 }
 
 const RecruiterApplicationReviewPanel = ({
   publicRef,
   canManage,
   onApplicationChanged,
+  embedded = false,
 }: RecruiterApplicationReviewPanelProps) => {
   const [detail, setDetail] = useState<RecruiterApplicationDetailDto | null>(null);
   const [loading, setLoading] = useState(false);
@@ -99,7 +102,7 @@ const RecruiterApplicationReviewPanel = ({
       setDetail(await getRecruiterApplication(publicRef));
     } catch (error) {
       setDetail(null);
-      setLoadError(error instanceof Error ? error.message : 'Başvuru detayı yüklenemedi.');
+      setLoadError(describeAtsError(error, 'Başvuru detayı yüklenemedi.'));
     } finally {
       setLoading(false);
     }
@@ -149,7 +152,7 @@ const RecruiterApplicationReviewPanel = ({
       setRejectionConfirmed(false);
       await loadDetail();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Durum güncellenemedi.');
+      setActionError(describeAtsError(error, 'Durum güncellenemedi.'));
       await loadDetail();
     } finally {
       setUpdating(false);
@@ -221,7 +224,7 @@ const RecruiterApplicationReviewPanel = ({
       evaluationMutation.current = null;
       await loadDetail();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Değerlendirme kaydedilemedi.');
+      setActionError(describeAtsError(error, 'Değerlendirme kaydedilemedi.'));
       await loadDetail();
     } finally {
       setUpdating(false);
@@ -656,7 +659,11 @@ const RecruiterApplicationReviewPanel = ({
   return (
     <aside
       id="recruiter-review-panel"
-      className="rounded-3xl border border-border-subtle bg-surface-default p-5 shadow-xs 2xl:sticky 2xl:top-6 2xl:self-start"
+      className={
+        embedded
+          ? 'bg-surface-default'
+          : 'rounded-3xl border border-border-subtle bg-surface-default p-5 shadow-xs 2xl:sticky 2xl:top-6 2xl:self-start'
+      }
       data-testid="recruiter-review-panel"
     >
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-text-primary">

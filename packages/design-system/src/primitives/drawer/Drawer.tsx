@@ -58,6 +58,8 @@ export interface DrawerProps {
   closeOnEscape?: boolean;
   /** Show the backdrop overlay */
   showOverlay?: boolean;
+  /** Accessible label for the close button */
+  closeLabel?: string;
   /**
    * Disable the keyboard focus trap. Default `false` — focus is trapped
    * within the panel (Tab/Shift+Tab wrap, autoFocus on first focusable,
@@ -124,6 +126,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
       closeOnOverlayClick = true,
       closeOnEscape = true,
       showOverlay = true,
+      closeLabel = 'Close',
       disableFocusTrap = false,
       className,
     },
@@ -245,7 +248,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
               type="button"
               onClick={onClose}
               className="shrink-0 rounded-lg p-1.5 text-text-secondary transition hover:bg-surface-muted hover:text-text-primary"
-              aria-label="Close"
+              aria-label={closeLabel}
             >
               <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none">
                 <path

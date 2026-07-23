@@ -765,6 +765,26 @@ export const readCandidateSession = (): CandidateSession | null => {
   }
 };
 
+export const describeAtsError = (error: unknown, fallback: string): string => {
+  const response = (error as { response?: { status?: number } } | null)?.response;
+  if (response?.status === 401) {
+    return 'Oturumunuz sona ermiş olabilir. Yeniden giriş yapıp tekrar deneyin.';
+  }
+  if (response?.status === 403) {
+    return 'Bu işlem için yetkiniz yok. İK rolünüzün ATS başvuru görüntüleme iznini kontrol edin.';
+  }
+  if (response?.status === 409) {
+    return 'Başvuru başka bir işlemde güncellendi. Güncel kayıt yeniden yükleniyor.';
+  }
+  if (response?.status && response.status >= 500) {
+    return 'ATS servisine şu anda ulaşılamıyor. Birkaç dakika sonra yeniden deneyin.';
+  }
+  if (error instanceof Error && !/^Request failed with status code \d+$/u.test(error.message)) {
+    return error.message;
+  }
+  return fallback;
+};
+
 export const listRecruiterApplications = async (params?: {
   jobSlug?: string;
   status?: ApplicationStatus;
