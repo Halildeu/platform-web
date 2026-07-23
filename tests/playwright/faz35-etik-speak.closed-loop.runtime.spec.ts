@@ -142,10 +142,7 @@ const loginManager = async (page: Page, password: string) => {
   await expect(page.getByRole('heading', { name: 'Etik Speak' })).toBeVisible({ timeout: 60_000 });
 };
 
-const publicArtifact = async (
-  request: APIRequestContext,
-  base: string,
-) => {
+const publicArtifact = async (request: APIRequestContext, base: string) => {
   const response = await request.get(base, {
     failOnStatusCode: true,
   });
@@ -216,8 +213,12 @@ const assertPublicBoundaryAndIdempotency = async (
     },
     data: payload,
   });
-  expect(cookieConfusion.status()).toBe(400);
-  expect((await cookieConfusion.json()).error.code).toBe('CREDENTIAL_CONFUSION');
+  // The public host edge must strip every suite credential before proxying.
+  // A successful anonymous create proves the backend did not receive the
+  // synthetic SUITE_SESSION value; if it leaked, the backend would fail closed
+  // with CREDENTIAL_CONFUSION instead.
+  expect(cookieConfusion.status()).toBe(201);
+  expect((await cookieConfusion.json()).idempotentReplay).toBe(false);
   await context.close();
 };
 
@@ -244,11 +245,7 @@ const mintSyntheticManagerToken = async (
   return token;
 };
 
-const findAuthorizedCase = async (
-  request: APIRequestContext,
-  token: string,
-  subject: string,
-) => {
+const findAuthorizedCase = async (request: APIRequestContext, token: string, subject: string) => {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
   const list = await request.get(`${managerRoot}/api/v1/ethics/cases`, { headers });
   expect(list.status()).toBe(200);
