@@ -65,6 +65,13 @@ vi.mock('../api/application-api', () => ({
   updateRecruiterJob: apiMocks.updateRecruiterJob,
   transitionRecruiterJob: apiMocks.transitionRecruiterJob,
   createApplicationIdempotencyKey: apiMocks.createApplicationIdempotencyKey,
+  describeAtsError: (error: unknown, fallback: string) => {
+    const status = (error as { response?: { status?: number } } | null)?.response?.status;
+    if (status === 403) {
+      return 'Bu işlem için yetkiniz yok. İK rolünüzün ATS başvuru görüntüleme iznini kontrol edin.';
+    }
+    return error instanceof Error ? error.message : fallback;
+  },
 }));
 
 const APPLICATION = {
@@ -229,6 +236,28 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText(/Otomatik puanlama, sıralama veya karar/i)).toBeVisible();
   });
 
+  it('keeps the default surface applicant-first and opens job management only on demand', async () => {
+    renderPage();
+    expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Başvurular' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.queryByTestId('recruiter-jobs-panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'İlanlar' }));
+    expect(await screen.findByTestId('recruiter-jobs-panel')).toBeVisible();
+    expect(screen.queryByTestId('recruiter-pipeline')).not.toBeInTheDocument();
+  });
+
+  it('filters the compact applicant list with an explicit stage chip', async () => {
+    renderPage();
+    expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'İncelemede · 0' }));
+    expect(screen.queryByText('Deniz Sentetik')).not.toBeInTheDocument();
+    expect(screen.getByText('Başvuru bulunamadı')).toBeVisible();
+  });
+
   it('opens the application and performs a versioned human status transition', async () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
@@ -241,6 +270,28 @@ describe('RecruiterWorkspacePage', () => {
       'UNDER_REVIEW',
     );
     expect(await screen.findByText('Durum güncellendi: İnsan incelemesinde.')).toBeVisible();
+  });
+
+  it('opens candidate detail in an accessible drawer and restores the compact workspace on close', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    expect(await screen.findByRole('dialog', { name: 'Deniz Sentetik' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Aday detayını kapat' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recruiter-pipeline')).toBeVisible();
+  });
+
+  it('shows a helpful authorization message when the candidate detail is forbidden', async () => {
+    apiMocks.getRecruiterApplication.mockRejectedValue({
+      response: { status: 403 },
+      message: 'Request failed with status code 403',
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'İK rolünüzün ATS başvuru görüntüleme iznini kontrol edin',
+    );
+    expect(screen.queryByText('Request failed with status code 403')).not.toBeInTheDocument();
   });
 
   it('filters the real inbox by candidate or skill', async () => {
@@ -292,7 +343,9 @@ describe('RecruiterWorkspacePage', () => {
     );
     renderPage();
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'İlanlar' }));
     expect(await screen.findByRole('button', { name: 'Yeni ilan oluştur' })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Başvurular' }));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu incele' }));
     expect(await screen.findByRole('button', { name: 'İnsan incelemesini başlat' })).toBeVisible();
   });

@@ -15,6 +15,7 @@ import {
   getCandidateStatus,
   createCandidateAccessToken,
   createRecruiterJob,
+  describeAtsError,
   getRecruiterApplication,
   getPublicJob,
   getResumeImport,
@@ -778,5 +779,17 @@ describe('application-api', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ reason: 'DB hatası: internal' }, 503));
 
     await expect(listPublicJobs()).rejects.toThrow('Servis geçici olarak kullanılamıyor.');
+  });
+
+  it('turns recruiter authorization failures into a helpful role message', () => {
+    expect(
+      describeAtsError(
+        {
+          response: { status: 403 },
+          message: 'Request failed with status code 403',
+        },
+        'Başvuru detayı yüklenemedi.',
+      ),
+    ).toBe('Bu işlem için yetkiniz yok. İK rolünüzün ATS başvuru görüntüleme iznini kontrol edin.');
   });
 });
