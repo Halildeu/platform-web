@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
 import {
   addInternalNote,
+  downloadCaseEvidence,
   getCase,
+  listCaseEvidence,
   listCases,
   replyToReporter,
   updateCase,
   type EthicsCaseDetail,
   type EthicsCaseSummary,
+  type StaffEvidence,
 } from './ethics-api';
 import './ethics.css';
 
@@ -16,6 +19,9 @@ type LoadState = 'loading' | 'ready' | 'error';
 export default function App() {
   const [items, setItems] = useState<EthicsCaseSummary[]>([]);
   const [selected, setSelected] = useState<EthicsCaseDetail | null>(null);
+  const [evidence, setEvidence] = useState<StaffEvidence[]>([]);
+  const [evidenceError, setEvidenceError] = useState('');
+  const [downloadingEvidenceId, setDownloadingEvidenceId] = useState('');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
@@ -29,6 +35,9 @@ export default function App() {
     selectionSequence.current += 1;
     setItems([]);
     setSelected(null);
+    setEvidence([]);
+    setEvidenceError('');
+    setDownloadingEvidenceId('');
     setReply('');
     setInternalNote('');
     setAssignee('');
@@ -50,6 +59,25 @@ export default function App() {
     return { identity, key };
   };
 
+  const loadCaseEvidence = async (caseId: string, requestSequence: number) => {
+    try {
+      const next = await listCaseEvidence(caseId);
+      if (requestSequence !== selectionSequence.current) return;
+      setEvidence(next);
+      setEvidenceError('');
+    } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
+      if (isAuthorizationFailure(requestError)) {
+        showRequestError(requestError);
+        return;
+      }
+      setEvidence([]);
+      setEvidenceError(
+        'Kanıt dosyaları şu anda doğrulanamıyor. Vaka ve mesaj işlemleri kullanılabilir.',
+      );
+    }
+  };
+
   const refresh = async () => {
     const requestSequence = ++selectionSequence.current;
     const selectedId = selected?.id;
@@ -65,6 +93,7 @@ export default function App() {
         if (requestSequence === selectionSequence.current) {
           setSelected(fresh);
           setAssignee(fresh.assignedTo ?? '');
+          await loadCaseEvidence(selectedId, requestSequence);
         }
       }
     } catch (requestError) {
@@ -84,11 +113,14 @@ export default function App() {
     setReply('');
     setInternalNote('');
     setAssignee('');
+    setEvidence([]);
+    setEvidenceError('');
     try {
       const next = await getCase(item.id);
       if (requestSequence === selectionSequence.current) {
         setSelected(next);
         setAssignee(next.assignedTo ?? '');
+        await loadCaseEvidence(item.id, requestSequence);
       }
     } catch (requestError) {
       if (requestSequence === selectionSequence.current) showRequestError(requestError);
@@ -225,6 +257,36 @@ export default function App() {
     }
   };
 
+  const downloadEvidence = async (attachment: StaffEvidence, position: number) => {
+    if (!selected || !attachment.derivativeAvailable) return;
+    const caseId = selected.id;
+    setDownloadingEvidenceId(attachment.attachmentId);
+    setEvidenceError('');
+    try {
+      const body = await downloadCaseEvidence(caseId, attachment.attachmentId);
+      if (selected.id !== caseId) return;
+      const url = URL.createObjectURL(new Blob([body], { type: attachment.mediaType }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `guvenli-kanit-${position + 1}.${evidenceExtension(attachment.mediaType)}`;
+      link.rel = 'noopener';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      if (isAuthorizationFailure(requestError)) {
+        showRequestError(requestError);
+      } else {
+        setEvidenceError(
+          'Güvenli türev indirilemedi. Sonuç doğrulanamadı; listeyi yenileyip yeniden deneyin.',
+        );
+      }
+    } finally {
+      setDownloadingEvidenceId('');
+    }
+  };
+
   return (
     <main className="ethics-manager" aria-labelledby="ethics-title">
       <Stack direction="column" gap={4}>
@@ -308,6 +370,51 @@ export default function App() {
                 <section aria-labelledby="narrative-heading">
                   <h3 id="narrative-heading">Bildirim</h3>
                   <p className="ethics-narrative">{selected.description}</p>
+                </section>
+                <section className="ethics-evidence" aria-labelledby="evidence-heading">
+                  <h3 id="evidence-heading">Kanıt dosyaları</h3>
+                  <p className="ethics-muted">
+                    Orijinal dosya yöneticiye açılmaz. Yalnız taranmış ve metadata’dan arındırılmış
+                    güvenli türev indirilebilir.
+                  </p>
+                  {evidenceError && (
+                    <div className="ethics-evidence-error" role="alert">
+                      {evidenceError}
+                    </div>
+                  )}
+                  <ol className="ethics-evidence-list" aria-label="Vaka kanıt dosyaları">
+                    {evidence.length === 0 && !evidenceError && (
+                      <li className="is-empty">Bu vakada kanıt dosyası yok.</li>
+                    )}
+                    {evidence.map((attachment, index) => (
+                      <li key={attachment.attachmentId}>
+                        <div>
+                          <strong>Kanıt {index + 1}</strong>
+                          <span>
+                            {evidenceMediaLabel(attachment.mediaType)}
+                            {attachment.size === null ? '' : ` · ${formatBytes(attachment.size)}`}
+                          </span>
+                        </div>
+                        <span
+                          className={`ethics-evidence-state is-${attachment.state.toLowerCase().replaceAll('_', '-')}`}
+                        >
+                          {evidenceStateLabel(attachment.state)}
+                        </span>
+                        {attachment.derivativeAvailable && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={downloadingEvidenceId === attachment.attachmentId}
+                            onClick={() => void downloadEvidence(attachment, index)}
+                          >
+                            {downloadingEvidenceId === attachment.attachmentId
+                              ? 'İndiriliyor…'
+                              : 'Güvenli türevi indir'}
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
                 </section>
                 <section aria-labelledby="workflow-heading">
                   <h3 id="workflow-heading">İş akışı</h3>
@@ -464,3 +571,32 @@ function showRequestErrorAfterWrite(
 const shortId = (id: string) => `#${id.slice(0, 8).toUpperCase()}`;
 const statusLabel = (status: string) =>
   ({ NEW: 'Yeni', IN_REVIEW: 'İncelemede', CLOSED: 'Kapalı' })[status] ?? status;
+
+const evidenceStateLabel = (state: StaffEvidence['state']) =>
+  ({
+    DECLARED: 'Yükleme bekliyor',
+    UPLOADING: 'Yükleme bekliyor',
+    QUARANTINED: 'Karantinada',
+    INTEGRITY_VERIFIED: 'Bütünlük doğrulandı',
+    ORIGINAL_SEALED: 'Orijinal mühürlendi',
+    SCANNING: 'Zararlı içerik taranıyor',
+    SANITIZING: 'Metadata temizleniyor',
+    DERIVATIVE_READY: 'Güvenli türev hazırlanıyor',
+    AVAILABLE: 'Güvenli türev hazır',
+    REJECTED: 'Dosya reddedildi',
+    SCAN_PENDING: 'Tarama yeniden denenecek',
+    EXPIRED_UNBOUND: 'Yükleme süresi doldu',
+  })[state];
+
+const evidenceMediaLabel = (mediaType: string) =>
+  ({ 'text/plain': 'Metin', 'image/jpeg': 'JPEG görsel', 'image/png': 'PNG görsel' })[mediaType] ??
+  'Dosya';
+
+const evidenceExtension = (mediaType: string) =>
+  ({ 'text/plain': 'txt', 'image/jpeg': 'jpg', 'image/png': 'png' })[mediaType] ?? 'bin';
+
+const formatBytes = (size: number) => {
+  if (size < 1024) return `${size} bayt`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
+  return `${(size / 1024 / 1024).toFixed(2)} MiB`;
+};

@@ -21,11 +21,29 @@ const detail = {
   description: 'Sentetik anlatım',
   messages: [],
 };
+const scanningEvidence = {
+  attachmentId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  state: 'SCANNING' as const,
+  mediaType: 'image/png',
+  size: null,
+  createdAt: '2026-07-18T12:03:00Z',
+  derivativeAvailable: false,
+};
+const availableEvidence = {
+  attachmentId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+  state: 'AVAILABLE' as const,
+  mediaType: 'image/png',
+  size: 2048,
+  createdAt: '2026-07-18T12:04:00Z',
+  derivativeAvailable: true,
+};
 
 describe('Etik Speak manager MFE', () => {
   beforeEach(() => {
     vi.mocked(api.listCases).mockResolvedValue([summary]);
     vi.mocked(api.getCase).mockResolvedValue(detail);
+    vi.mocked(api.listCaseEvidence).mockResolvedValue([]);
+    vi.mocked(api.downloadCaseEvidence).mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
     vi.mocked(api.updateCase).mockResolvedValue(summary);
     vi.mocked(api.replyToReporter).mockResolvedValue({
       id: 'm1',
@@ -41,6 +59,14 @@ describe('Etik Speak manager MFE', () => {
       body: 'İç not',
       createdAt: '2026-07-18T12:02:00Z',
     });
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn().mockReturnValue('blob:synthetic-derivative'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
   test('authorized case list and detail render', async () => {
     render(<App />);
@@ -48,6 +74,32 @@ describe('Etik Speak manager MFE', () => {
     await userEvent.click(screen.getByRole('button', { name: /#11111111/ }));
     expect(await screen.findByRole('heading', { name: 'Sentetik bildirim' })).toBeInTheDocument();
     expect(screen.getByText('Sentetik anlatım')).toBeInTheDocument();
+    expect(api.listCaseEvidence).toHaveBeenCalledWith(summary.id);
+  });
+  test('only an available sanitized derivative can be downloaded', async () => {
+    vi.mocked(api.listCaseEvidence).mockResolvedValueOnce([scanningEvidence, availableEvidence]);
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    expect(await screen.findByText('Zararlı içerik taranıyor')).toBeInTheDocument();
+    expect(screen.getByText('Güvenli türev hazır')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Güvenli türevi indir' })).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Güvenli türevi indir' }));
+
+    await waitFor(() =>
+      expect(api.downloadCaseEvidence).toHaveBeenCalledWith(
+        summary.id,
+        availableEvidence.attachmentId,
+      ),
+    );
+    expect(URL.createObjectURL).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:synthetic-derivative');
+    expect(anchorClick).toHaveBeenCalledOnce();
   });
   test('staff reply owns a stable operation key in the UI', async () => {
     render(<App />);
@@ -130,6 +182,16 @@ describe('Etik Speak manager MFE', () => {
     vi.mocked(api.listCases).mockRejectedValueOnce({ response: { status: 404 } });
     await userEvent.click(screen.getByRole('button', { name: 'Yenile' }));
     await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent(/bulunamadı.*yetkisi/i);
+  });
+  test('attachment authorization loss also purges the protected case surface', async () => {
+    vi.mocked(api.listCaseEvidence).mockRejectedValueOnce({ response: { status: 404 } });
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    await waitFor(() => expect(screen.queryByText('Sentetik anlatım')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /#11111111/ })).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent(/bulunamadı.*yetkisi/i);
   });
   test('late case response cannot replace the most recently selected case', async () => {

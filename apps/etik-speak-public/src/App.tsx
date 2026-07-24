@@ -2,10 +2,15 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   closeMailbox,
   createReport,
+  declareEvidence,
   getMailbox,
+  listEvidence,
   newAccessSecret,
   openMailbox,
   sendReporterMessage,
+  uploadEvidence,
+  validateEvidenceFile,
+  type EvidenceStatus,
   type Message,
   type ReporterCaseStatus,
   type Receipt,
@@ -33,10 +38,14 @@ export default function App() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [mailboxStatus, setMailboxStatus] = useState<ReporterCaseStatus | null>(null);
+  const [attachments, setAttachments] = useState<EvidenceStatus[]>([]);
+  const [attachmentError, setAttachmentError] = useState('');
   const [mailboxReply, setMailboxReply] = useState('');
   const [receiptSaved, setReceiptSaved] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
   const intakeOperation = useRef({ key: crypto.randomUUID(), secret: newAccessSecret() });
   const replyOperation = useRef<{ body: string; key: string } | null>(null);
+  const attachmentOperation = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     const heading = document.querySelector<HTMLElement>('#main-content h1');
@@ -54,6 +63,37 @@ export default function App() {
     window.addEventListener('beforeunload', guardUnsavedReceipt);
     return () => window.removeEventListener('beforeunload', guardUnsavedReceipt);
   }, [receiptSaved, view]);
+
+  useEffect(() => {
+    if (view !== 'mailbox') return undefined;
+    const refresh = async () => {
+      try {
+        setAttachments(await listEvidence());
+        setAttachmentError('');
+      } catch {
+        setAttachmentError(
+          'Kanıt dosyası durumları şu anda doğrulanamıyor. Mesaj ve takip işlemleri kullanılabilir.',
+        );
+      }
+    };
+    const interval = window.setInterval(() => void refresh(), 3000);
+    return () => window.clearInterval(interval);
+  }, [view]);
+
+  const loadMailbox = async () => {
+    const mailbox = await getMailbox();
+    setMessages(mailbox.messages);
+    setMailboxStatus(mailbox.status);
+    try {
+      setAttachments(await listEvidence());
+      setAttachmentError('');
+    } catch {
+      setAttachments([]);
+      setAttachmentError(
+        'Kanıt dosyası özelliği henüz etkin değil veya durumları doğrulanamıyor. Mesajlarınızı kullanmaya devam edebilirsiniz.',
+      );
+    }
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,14 +130,27 @@ export default function App() {
     const form = new FormData(event.currentTarget);
     try {
       await openMailbox(String(form.get('receiptId')), String(form.get('accessSecret')));
-      const mailbox = await getMailbox();
-      setMessages(mailbox.messages);
-      setMailboxStatus(mailbox.status);
+      await loadMailbox();
       setView('mailbox');
     } catch {
       setError(
         'Erişim bilgileri doğrulanamadı veya geçici olarak kilitlendi. Bilgileri kontrol edip daha sonra yeniden deneyin.',
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const openReceiptMailbox = async () => {
+    if (!receipt || !receiptSaved) return;
+    setBusy(true);
+    setError('');
+    try {
+      await openMailbox(receipt.receiptId, receipt.accessSecret);
+      await loadMailbox();
+      setReceipt(null);
+      setView('mailbox');
+    } catch (e) {
+      setError(message(e));
     } finally {
       setBusy(false);
     }
@@ -113,13 +166,34 @@ export default function App() {
       await sendReporterMessage(body, replyOperation.current.key);
       replyOperation.current = null;
       setMailboxReply('');
-      const mailbox = await getMailbox();
-      setMessages(mailbox.messages);
-      setMailboxStatus(mailbox.status);
+      await loadMailbox();
     } catch (e) {
       setError(message(e));
     } finally {
       setBusy(false);
+    }
+  };
+  const uploadAttachment = async (file: File) => {
+    setUploadBusy(true);
+    setAttachmentError('');
+    try {
+      validateEvidenceFile(file);
+      const fingerprint = `${file.type}\n${file.size}\n${file.lastModified}`;
+      if (!attachmentOperation.current || attachmentOperation.current.fingerprint !== fingerprint)
+        attachmentOperation.current = { fingerprint, key: crypto.randomUUID() };
+      const declaration = await declareEvidence(file, attachmentOperation.current.key);
+      if (declaration.uploadCapability) await uploadEvidence(declaration, file);
+      attachmentOperation.current = null;
+      setAttachments(await listEvidence());
+    } catch (e) {
+      try {
+        setAttachments(await listEvidence());
+      } catch {
+        // The user-facing error below remains authoritative when status read-back also fails.
+      }
+      setAttachmentError(message(e));
+    } finally {
+      setUploadBusy(false);
     }
   };
 
@@ -171,25 +245,39 @@ export default function App() {
           <ReportForm busy={busy} onSubmit={submit} onBack={() => setView('home')} />
         )}{' '}
         {view === 'receipt' && receipt && (
-          <ReceiptView receipt={receipt} saved={receiptSaved} onSaved={setReceiptSaved} />
+          <ReceiptView
+            receipt={receipt}
+            saved={receiptSaved}
+            busy={busy}
+            onSaved={setReceiptSaved}
+            onMailbox={() => void openReceiptMailbox()}
+          />
         )}{' '}
         {view === 'mailbox-login' && <MailboxLogin busy={busy} onSubmit={login} />}{' '}
         {view === 'mailbox' && (
           <Mailbox
             status={mailboxStatus}
             messages={messages}
+            attachments={attachments}
+            attachmentError={attachmentError}
             reply={mailboxReply}
             setReply={setMailboxReply}
             busy={busy}
+            uploadBusy={uploadBusy}
             onSend={reply}
+            onUpload={(file) => void uploadAttachment(file)}
             onClose={async () => {
               try {
                 await closeMailbox();
               } finally {
                 setMessages([]);
                 setMailboxStatus(null);
+                setAttachments([]);
+                setAttachmentError('');
                 setMailboxReply('');
+                setReceipt(null);
                 replyOperation.current = null;
+                attachmentOperation.current = null;
                 setView('home');
               }
             }}
@@ -321,8 +409,8 @@ function ReportForm({
           <legend>Ek dosya durumu</legend>
           <input type="file" disabled aria-label="Ek dosya" />
           <p id="attachment-state" role="status">
-            Güvenli karantina ve zararlı içerik taraması bu test diliminde henüz etkin değil. Dosya
-            sessizce kabul edilmez; bildiriminizi metinle tamamlayın.
+            Önce bildiriminiz kalıcı olarak kaydedilir. Ardından receipt ile açılan güvenli
+            mailbox’ta kanıt dosyanızı karantina ve zararlı içerik taramasına gönderebilirsiniz.
           </p>
         </fieldset>
         <label className="check">
@@ -344,11 +432,15 @@ function ReportForm({
 function ReceiptView({
   receipt,
   saved,
+  busy,
   onSaved,
+  onMailbox,
 }: {
   receipt: Receipt;
   saved: boolean;
+  busy: boolean;
   onSaved: (value: boolean) => void;
+  onMailbox: () => void;
 }) {
   const download = () => {
     const blob = new Blob(
@@ -396,6 +488,9 @@ function ReceiptView({
         />
         <span>Bildirim numarası ile erişim sırrını güvenli bir yere kaydettim.</span>
       </label>
+      <button className="secondary full" disabled={!saved || busy} onClick={onMailbox}>
+        {busy ? 'Güvenli mailbox açılıyor…' : 'Mailbox’a geç ve kanıt dosyası ekle'}
+      </button>
       <p className="help">
         Bu ekranın görüntüsünü ortak cihazda bırakmayın ve bilgileri e-postayla göndermeyin.
       </p>
@@ -435,18 +530,26 @@ function MailboxLogin({
 function Mailbox({
   status,
   messages,
+  attachments,
+  attachmentError,
   reply,
   setReply,
   busy,
+  uploadBusy,
   onSend,
+  onUpload,
   onClose,
 }: {
   status: ReporterCaseStatus | null;
   messages: Message[];
+  attachments: EvidenceStatus[];
+  attachmentError: string;
   reply: string;
   setReply: (v: string) => void;
   busy: boolean;
+  uploadBusy: boolean;
   onSend: () => void;
+  onUpload: (file: File) => void;
   onClose: () => void;
 }) {
   return (
@@ -460,6 +563,46 @@ function Mailbox({
       <p className="help">
         Bu oturum kısa sürelidir. Ortak cihazda işiniz bitince pencereyi kapatın.
       </p>
+      <section className="mailbox-evidence" aria-labelledby="mailbox-evidence-title">
+        <h2 id="mailbox-evidence-title">Kanıt dosyaları</h2>
+        <p className="help">
+          Yalnız sentetik UTF-8 TXT, JPEG veya PNG; en fazla 25 MiB. Dosya adı sunucuya gönderilmez.
+          Yönetici yalnız taranmış ve metadata’dan arındırılmış türevi görebilir.
+        </p>
+        <label className="evidence-picker">
+          Kanıt dosyası seç
+          <input
+            type="file"
+            accept=".txt,text/plain,.jpg,.jpeg,image/jpeg,.png,image/png"
+            disabled={uploadBusy}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) onUpload(file);
+            }}
+          />
+        </label>
+        <div role={attachmentError ? 'alert' : 'status'} className="attachment-feedback">
+          {attachmentError ||
+            (uploadBusy ? 'Dosya özeti hesaplanıyor ve karantinaya alınıyor…' : '')}
+        </div>
+        <ol className="evidence-list" aria-label="Kanıt dosyası durumları">
+          {attachments.length === 0 && <li className="empty">Henüz kanıt dosyası yok.</li>}
+          {attachments.map((attachment, index) => (
+            <li key={attachment.attachmentId}>
+              <strong>Kanıt {index + 1}</strong>
+              <span>
+                {evidenceMediaLabel(attachment.mediaType)} · {formatBytes(attachment.size)}
+              </span>
+              <span
+                className={`evidence-state is-${attachment.state.toLowerCase().replaceAll('_', '-')}`}
+              >
+                {evidenceStateLabel(attachment.state)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
       <ol>
         {messages.length === 0 && <li className="empty">Henüz mesaj yok.</li>}
         {messages.map((m) => (
@@ -489,6 +632,30 @@ function Mailbox({
   );
 }
 
+function evidenceStateLabel(state: EvidenceStatus['state']) {
+  return {
+    DECLARED: 'Yükleme bekliyor',
+    UPLOADING: 'Yükleme bekliyor',
+    QUARANTINED: 'Karantinada',
+    INTEGRITY_VERIFIED: 'Bütünlük doğrulandı',
+    ORIGINAL_SEALED: 'Orijinal mühürlendi',
+    SCANNING: 'Zararlı içerik taranıyor',
+    SANITIZING: 'Metadata temizleniyor',
+    DERIVATIVE_READY: 'Güvenli türev hazırlanıyor',
+    AVAILABLE: 'Güvenli türev hazır',
+    REJECTED: 'Dosya reddedildi',
+    SCAN_PENDING: 'Tarama yeniden denenecek',
+    EXPIRED_UNBOUND: 'Yükleme süresi doldu',
+  }[state];
+}
+
+const evidenceMediaLabel = (mediaType: string) =>
+  ({ 'text/plain': 'Metin', 'image/jpeg': 'JPEG görsel', 'image/png': 'PNG görsel' })[mediaType] ??
+  'Dosya';
+
+const formatBytes = (size: number) =>
+  size < 1024 ? `${size} bayt` : `${(size / 1024 / 1024).toFixed(2)} MiB`;
+
 function reporterStatusLabel(status: ReporterCaseStatus) {
   return {
     NEW: 'Alındı',
@@ -511,6 +678,11 @@ function PrivacyNotice() {
         <li>Kategori, konu, sentetik anlatım ve seçili bildirim modu</li>
         <li>Tek yönlü hash ile korunan erişim sırrı ve kısa süreli mailbox oturumu</li>
         <li>Reporter/staff mesajları ile işlem audit kayıtları</li>
+        <li>
+          İsteğe bağlı sentetik TXT/JPEG/PNG kanıt dosyası; karantina, bütünlük doğrulama ve zararlı
+          içerik taramasından sonra mühürlü orijinal ile metadata’dan arındırılmış güvenli türev
+          ayrı tutulur. Yöneticiye yalnız güvenli türev açılır.
+        </li>
       </ul>
       <p>
         Gerçek kullanıcı açılışı; onaylı KVKK aydınlatma metni, retention/silme politikası ve isimli
