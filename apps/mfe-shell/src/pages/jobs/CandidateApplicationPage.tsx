@@ -580,12 +580,13 @@ const CandidateApplicationPage = () => {
       setFormError('Geçerli bir e-posta adresi girin.');
       return;
     }
-    if (!values.email.trim().toLocaleLowerCase('tr-TR').endsWith('.test')) {
-      setFormError(
-        'Bu test sürümü gerçek aday verisine kapalıdır. Yalnız .test uzantılı sentetik e-posta kullanın.',
-      );
-      return;
-    }
+    // Sentetik-yalnız (.test e-posta) kısıtı BİLEREK burada uygulanmaz.
+    // Aday verisi politikası ortam-parametriktir ve tek otoritesi backend'dir
+    // (ats.candidate-data.mode/environment; prod'da real-allowed boot'u düşürür —
+    // Halildeu/ats#200). Kuralın burada kopyalanması iki-kaynak/drift üretirdi:
+    // frontend "kapalı" derken backend açık olabilir ya da tersi. Backend
+    // reddederse gerekçesi submitApplication hatasıyla aynen kullanıcıya gösterilir.
+    // Client-side kontrol zaten güvenlik sağlamaz (bypass edilebilir); yalnız UX'tir.
     if (!isValidPhone(values.phone)) {
       setFormError('Geçerli bir telefon numarası girin.');
       return;

@@ -456,7 +456,10 @@ describe('CandidateApplicationPage', () => {
     );
   });
 
-  it('blocks real candidate PII while the test environment G0 gate is active', async () => {
+  it('does not duplicate the synthetic-only policy client side (backend is the authority)', async () => {
+    // Aday verisi politikası ortam-parametriktir (Halildeu/ats#200). Kuralın burada
+    // kopyalanması iki-kaynak/drift üretir: test ortamı gerçek veriye açıkken
+    // frontend'in kapatması ürünü yanlış yerde bloke eder.
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
     fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
@@ -465,8 +468,27 @@ describe('CandidateApplicationPage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Yalnız .test uzantılı sentetik e-posta');
-    expect(apiMocks.submitApplication).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Başvuruyu gönder' })).toBeInTheDocument();
+  });
+
+  it('surfaces the backend policy rejection instead of a hardcoded client message', async () => {
+    apiMocks.submitApplication.mockRejectedValueOnce(
+      new Error('Bu ortam yalnız sentetik .test e-posta kabul eder'),
+    );
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+    fireEvent.change(screen.getByLabelText(/E-posta/i), {
+      target: { value: 'gercek.aday@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Bu ortam yalnız sentetik .test e-posta kabul eder',
+    );
   });
 
   it('shows a service error and keeps persistent submission disabled if the job cannot load', async () => {
