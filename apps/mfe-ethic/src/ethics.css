@@ -86,6 +86,83 @@
   border-radius: 0.75rem;
 }
 
+.ethics-evidence {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ethics-evidence h3,
+.ethics-evidence p {
+  margin: 0;
+}
+
+.ethics-evidence-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.ethics-evidence-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 0.75rem;
+  background: var(--ethics-surface-muted);
+}
+
+.ethics-evidence-list li > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.ethics-evidence-list li > div span {
+  color: var(--ethics-muted);
+  font-size: 0.875rem;
+}
+
+.ethics-evidence-list li.is-empty {
+  display: block;
+  color: var(--ethics-muted);
+}
+
+.ethics-evidence-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--ethics-warning);
+  border-radius: 999px;
+  background: var(--ethics-warning-surface);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ethics-evidence-state.is-available {
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
+.ethics-evidence-state.is-rejected,
+.ethics-evidence-state.is-expired-unbound {
+  border-color: var(--ethics-danger);
+  background: var(--ethics-danger-surface);
+  color: var(--ethics-danger-text);
+}
+
+.ethics-evidence-error {
+  border-left: 3px solid var(--ethics-danger);
+  background: var(--ethics-danger-surface);
+  color: var(--ethics-danger-text);
+  padding: 0.7rem 0.8rem;
+}
+
 .ethics-actions {
   display: flex;
   gap: 0.75rem;
@@ -152,5 +229,10 @@
 
   .ethics-manager {
     padding: 1rem;
+  }
+
+  .ethics-evidence-list li {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 }

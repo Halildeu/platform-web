@@ -88,4 +88,34 @@ describe('Etik Speak manager HTTP boundary', () => {
     });
     expect(invalidate).not.toHaveBeenCalled();
   });
+
+  it('returns derivative downloads as binary without exposing the token in the URL', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(bytes, {
+        status: 200,
+        headers: { 'Content-Type': 'application/octet-stream' },
+      }),
+    );
+    registerAccessTokenProvider(vi.fn().mockResolvedValue('fresh-token'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await api.get<ArrayBuffer>(
+      '/v1/ethics/cases/case-1/attachments/attachment-1/derivative',
+      { responseType: 'arraybuffer' },
+    );
+
+    expect(new Uint8Array(result.data)).toEqual(bytes);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/ethics/cases/case-1/attachments/attachment-1/derivative',
+      expect.objectContaining({
+        credentials: 'omit',
+        headers: expect.objectContaining({
+          Accept: 'application/octet-stream',
+          Authorization: 'Bearer fresh-token',
+        }),
+      }),
+    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('fresh-token');
+  });
 });

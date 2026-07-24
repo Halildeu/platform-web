@@ -1,5 +1,8 @@
 type AccessTokenProvider = () => Promise<string>;
-type RequestConfig = { headers?: Record<string, string> };
+type RequestConfig = {
+  headers?: Record<string, string>;
+  responseType?: 'arraybuffer';
+};
 type ApiResponse<T> = { data: T };
 
 let accessTokenProvider: AccessTokenProvider | undefined;
@@ -46,16 +49,20 @@ const request = async <T>(
     credentials: 'omit',
     headers: {
       ...safeCallerHeaders(config?.headers),
-      Accept: 'application/json',
+      Accept:
+        config?.responseType === 'arraybuffer' ? 'application/octet-stream' : 'application/json',
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${token}`,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const contentType = response.headers.get('content-type') ?? '';
-  const data = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text();
+  const data =
+    response.ok && config?.responseType === 'arraybuffer'
+      ? await response.arrayBuffer()
+      : contentType.includes('application/json')
+        ? await response.json()
+        : await response.text();
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       clearAccessTokenProvider();

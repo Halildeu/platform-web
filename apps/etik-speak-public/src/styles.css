@@ -166,7 +166,8 @@ body {
   width: 100%;
 }
 
-.primary:disabled {
+.primary:disabled,
+.secondary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -420,6 +421,63 @@ body {
 .mailbox .empty {
   max-width: 100%;
   text-align: center;
+}
+
+.mailbox-evidence {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid var(--etik-border);
+  border-radius: 14px;
+  background: var(--etik-surface-soft);
+}
+
+.mailbox-evidence h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.evidence-picker {
+  margin-top: 0.75rem !important;
+}
+
+.attachment-feedback {
+  min-height: 1.5rem;
+  margin-top: 0.6rem;
+  color: var(--etik-danger-text);
+  font-size: 0.9rem;
+}
+
+.evidence-list li {
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  border: 1px solid var(--etik-border);
+  background: var(--etik-surface);
+}
+
+.evidence-list li > span:first-of-type {
+  color: var(--etik-ink-subtle);
+  font-size: 0.85rem;
+}
+
+.evidence-state {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: var(--etik-brand-soft);
+  color: var(--etik-brand-hover);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.evidence-state.is-rejected,
+.evidence-state.is-expired-unbound {
+  background: var(--etik-danger-surface);
+  color: var(--etik-danger-text);
 }
 
 .mailbox label {

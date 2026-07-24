@@ -19,6 +19,40 @@ export interface MailboxView {
   status: ReporterCaseStatus;
   messages: Message[];
 }
+export type EvidenceState =
+  | 'DECLARED'
+  | 'UPLOADING'
+  | 'QUARANTINED'
+  | 'INTEGRITY_VERIFIED'
+  | 'ORIGINAL_SEALED'
+  | 'SCANNING'
+  | 'SANITIZING'
+  | 'DERIVATIVE_READY'
+  | 'AVAILABLE'
+  | 'REJECTED'
+  | 'SCAN_PENDING'
+  | 'EXPIRED_UNBOUND';
+export interface EvidenceStatus {
+  attachmentId: string;
+  state: EvidenceState;
+  mediaType: string;
+  size: number;
+  failureCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface EvidenceDeclaration {
+  attachmentId: string;
+  state: EvidenceState;
+  uploadPath: string;
+  uploadCapability: string;
+  uploadExpiresAt: string;
+  idempotentReplay: boolean;
+}
+
+export const MAX_EVIDENCE_BYTES = 26_214_400;
+export const SUPPORTED_EVIDENCE_MEDIA_TYPES = ['text/plain', 'image/jpeg', 'image/png'] as const;
+const FIXED_EVIDENCE_UPLOAD_PATH = `${BASE}/evidence/uploads`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
@@ -99,5 +133,112 @@ export async function sendReporterMessage(body: string, idempotencyKey: string) 
     body: JSON.stringify({ body }),
   });
   if (!validMessage(result)) throw new Error('Mailbox yanıtı doğrulanamadı.');
+  return result;
+}
+
+const EVIDENCE_STATES: EvidenceState[] = [
+  'DECLARED',
+  'UPLOADING',
+  'QUARANTINED',
+  'INTEGRITY_VERIFIED',
+  'ORIGINAL_SEALED',
+  'SCANNING',
+  'SANITIZING',
+  'DERIVATIVE_READY',
+  'AVAILABLE',
+  'REJECTED',
+  'SCAN_PENDING',
+  'EXPIRED_UNBOUND',
+];
+
+const validEvidenceStatus = (value: unknown): value is EvidenceStatus => {
+  const item = value as Partial<EvidenceStatus> | null;
+  return (
+    !!item &&
+    typeof item.attachmentId === 'string' &&
+    EVIDENCE_STATES.includes(item.state as EvidenceState) &&
+    typeof item.mediaType === 'string' &&
+    typeof item.size === 'number' &&
+    (item.failureCode === null || typeof item.failureCode === 'string') &&
+    typeof item.createdAt === 'string' &&
+    typeof item.updatedAt === 'string'
+  );
+};
+
+export const validateEvidenceFile = (file: File) => {
+  if (
+    !SUPPORTED_EVIDENCE_MEDIA_TYPES.includes(
+      file.type as (typeof SUPPORTED_EVIDENCE_MEDIA_TYPES)[number],
+    )
+  )
+    throw new Error('Yalnız UTF-8 TXT, JPEG veya PNG kanıt dosyası yüklenebilir.');
+  if (file.size < 1 || file.size > MAX_EVIDENCE_BYTES)
+    throw new Error('Kanıt dosyası boş olamaz ve 25 MiB sınırını aşamaz.');
+};
+
+export async function evidenceSha256(file: File): Promise<string> {
+  validateEvidenceFile(file);
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function declareEvidence(
+  file: File,
+  idempotencyKey: string,
+): Promise<EvidenceDeclaration> {
+  const sha256 = await evidenceSha256(file);
+  const result = await request<unknown>('/mailbox/attachments', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ mediaType: file.type, size: file.size, sha256 }),
+  });
+  const declaration = result as Partial<EvidenceDeclaration> | null;
+  if (
+    !declaration ||
+    typeof declaration.attachmentId !== 'string' ||
+    !EVIDENCE_STATES.includes(declaration.state as EvidenceState) ||
+    declaration.uploadPath !== FIXED_EVIDENCE_UPLOAD_PATH ||
+    typeof declaration.uploadCapability !== 'string' ||
+    declaration.uploadCapability.length < 32 ||
+    typeof declaration.uploadExpiresAt !== 'string' ||
+    typeof declaration.idempotentReplay !== 'boolean'
+  )
+    throw new Error('Kanıt yükleme yetkisi doğrulanamadı.');
+  return declaration as EvidenceDeclaration;
+}
+
+export async function uploadEvidence(
+  declaration: EvidenceDeclaration,
+  file: File,
+): Promise<EvidenceStatus> {
+  if (declaration.uploadPath !== FIXED_EVIDENCE_UPLOAD_PATH)
+    throw new Error('Kanıt yükleme hedefi güvenli değil.');
+  validateEvidenceFile(file);
+  const response = await fetch(FIXED_EVIDENCE_UPLOAD_PATH, {
+    method: 'PUT',
+    credentials: 'omit',
+    cache: 'no-store',
+    referrerPolicy: 'no-referrer',
+    headers: {
+      Accept: JSON_TYPE,
+      'Content-Type': 'application/octet-stream',
+      'X-Etik-Upload-Capability': declaration.uploadCapability,
+    },
+    body: file,
+  });
+  const contentType = response.headers.get('content-type') ?? '';
+  const data = contentType.toLowerCase().includes('json')
+    ? await response.json().catch(() => null)
+    : null;
+  if (!response.ok) throw new Error(data?.error?.message ?? 'Kanıt dosyası karantinaya alınamadı.');
+  if (!validEvidenceStatus(data) || data.attachmentId !== declaration.attachmentId)
+    throw new Error('Kanıt karantina sonucu doğrulanamadı.');
+  return data;
+}
+
+export async function listEvidence(): Promise<EvidenceStatus[]> {
+  const result = await request<unknown>('/mailbox/attachments');
+  if (!Array.isArray(result) || !result.every(validEvidenceStatus))
+    throw new Error('Kanıt dosyası durumları doğrulanamadı.');
   return result;
 }
