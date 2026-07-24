@@ -119,8 +119,30 @@ const assertManagerTokenContract = (claims: ManagerClaims) => {
   expect(claims.orgId).toBe('00000000-0000-0000-0000-000000000001');
 };
 
-const loginManager = async (page: Page, password: string) => {
-  await page.goto(`${managerRoot}/login?redirect=${encodeURIComponent('/ethic')}`, {
+const waitForFrontendToken = (page: Page) =>
+  page.waitForResponse(
+    (response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === 'POST' &&
+        url.pathname.endsWith('/protocol/openid-connect/token')
+      );
+    },
+    { timeout: 30_000 },
+  );
+
+const readResponseTokenContract = async (
+  responsePromise: ReturnType<typeof waitForFrontendToken>,
+): Promise<ManagerClaims> => {
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+  const token = ((await response.json()) as { access_token?: string }).access_token;
+  if (!token) throw new Error('Keycloak token response did not contain an access token.');
+  return decodeManagerTokenContract(token);
+};
+
+const loginSuiteAndUpgradeManager = async (page: Page, password: string) => {
+  await page.goto(`${managerRoot}/login?redirect=${encodeURIComponent('/home')}`, {
     waitUntil: 'domcontentloaded',
   });
   const login = await firstVisible(page, [
@@ -136,10 +158,41 @@ const loginManager = async (page: Page, password: string) => {
     managerUsername,
   );
   await fillFirst(page, ['#password', 'input[name="password"]'], password);
+  const suiteTokenPromise = waitForFrontendToken(page);
   await clickFirst(page, ['#kc-login', 'button[type="submit"]', 'input[type="submit"]']);
   await page.waitForURL((url) => !url.pathname.includes('/realms/'), { timeout: 60_000 });
+
+  const suiteClaims = await readResponseTokenContract(suiteTokenPromise);
+  expect(
+    (Array.isArray(suiteClaims.audience) ? suiteClaims.audience : [suiteClaims.audience]).includes(
+      'ethics-manager',
+    ),
+  ).toBe(false);
+  expect(suiteClaims.scope.split(' ')).not.toContain('ethics:case:manage');
+
+  const upgradeRequestPromise = page.waitForRequest(
+    (request) => {
+      const url = new URL(request.url());
+      return (
+        url.pathname.endsWith('/protocol/openid-connect/auth') &&
+        url.searchParams.get('prompt') === 'login'
+      );
+    },
+    { timeout: 30_000 },
+  );
   await page.goto(`${managerRoot}/ethic`, { waitUntil: 'domcontentloaded' });
+  const upgradeUrl = new URL((await upgradeRequestPromise).url());
+  expect(upgradeUrl.searchParams.get('client_id')).toBe('frontend');
+  expect((upgradeUrl.searchParams.get('scope') ?? '').split(' ')).toEqual(
+    expect.arrayContaining(['openid', 'ethics-manager-audience', 'ethics:case:manage']),
+  );
+
+  await fillFirst(page, ['#password', 'input[name="password"]'], password);
+  const managerTokenPromise = waitForFrontendToken(page);
+  await clickFirst(page, ['#kc-login', 'button[type="submit"]', 'input[type="submit"]']);
+  await page.waitForURL((url) => !url.pathname.includes('/realms/'), { timeout: 60_000 });
   await expect(page.getByRole('heading', { name: 'Etik Speak' })).toBeVisible({ timeout: 60_000 });
+  assertManagerTokenContract(await readResponseTokenContract(managerTokenPromise));
 };
 
 const publicArtifact = async (request: APIRequestContext, base: string) => {
@@ -490,7 +543,7 @@ test.describe('Faz 35 ES-210 live synthetic closed loop', () => {
 
     const managerContext = await browser.newContext();
     const manager = await managerContext.newPage();
-    await loginManager(manager, password);
+    await loginSuiteAndUpgradeManager(manager, password);
     for (const journey of journeys) {
       await addManagerResponse(manager, request, journey, password);
     }
