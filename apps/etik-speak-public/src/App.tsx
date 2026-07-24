@@ -182,7 +182,7 @@ export default function App() {
       if (!attachmentOperation.current || attachmentOperation.current.fingerprint !== fingerprint)
         attachmentOperation.current = { fingerprint, key: crypto.randomUUID() };
       const declaration = await declareEvidence(file, attachmentOperation.current.key);
-      await uploadEvidence(declaration, file);
+      if (declaration.uploadCapability) await uploadEvidence(declaration, file);
       attachmentOperation.current = null;
       setAttachments(await listEvidence());
     } catch (e) {

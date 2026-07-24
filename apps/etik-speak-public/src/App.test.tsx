@@ -6,6 +6,7 @@ import * as api from './public-api';
 vi.mock('./public-api');
 describe('Etik Speak public reporter', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(api.newAccessSecret).mockReturnValue('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdef');
     vi.mocked(api.createReport).mockResolvedValue({
       receiptId: 'r-1',
@@ -131,5 +132,42 @@ describe('Etik Speak public reporter', () => {
       file,
     );
     expect(await screen.findByText('Karantinada')).toBeInTheDocument();
+  });
+  test('completed declaration replay reads back status without reusing upload capability', async () => {
+    vi.mocked(api.declareEvidence).mockResolvedValueOnce({
+      attachmentId: 'a-1',
+      state: 'AVAILABLE',
+      uploadPath: '/api/v1/public/ethics/evidence/uploads',
+      uploadCapability: null,
+      uploadExpiresAt: '2026-07-18T12:10:00Z',
+      idempotentReplay: true,
+    });
+    vi.mocked(api.listEvidence)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          attachmentId: 'a-1',
+          state: 'AVAILABLE',
+          mediaType: 'text/plain',
+          size: 18,
+          failureCode: null,
+          createdAt: '2026-07-18T12:00:00Z',
+          updatedAt: '2026-07-18T12:01:00Z',
+        },
+      ]);
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Bildirimi takip et' }));
+    await userEvent.type(screen.getByLabelText('Bildirim numarası'), 'r-1');
+    await userEvent.type(screen.getByLabelText('Erişim sırrı'), 'secret-once');
+    await userEvent.click(screen.getByRole('button', { name: 'Güvenli mailbox aç' }));
+    const evidence = new File(['sentetik kanıt'], 'yerel-ad-gonderilmemeli.txt', {
+      type: 'text/plain',
+      lastModified: 1,
+    });
+
+    await userEvent.upload(await screen.findByLabelText('Kanıt dosyası seç'), evidence);
+
+    expect(api.uploadEvidence).not.toHaveBeenCalled();
+    expect(await screen.findByText('Güvenli türev hazır')).toBeInTheDocument();
   });
 });

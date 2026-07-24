@@ -96,6 +96,33 @@ describe('Etik Speak public evidence boundary', () => {
     expect(init.body).toBe(evidence);
   });
 
+  it('accepts a completed idempotent replay without attempting a second upload', async () => {
+    const completedReplay = {
+      ...declaration,
+      state: 'AVAILABLE' as const,
+      uploadCapability: null,
+      idempotentReplay: true,
+    };
+    vi.stubGlobal('crypto', {
+      subtle: {
+        digest: vi.fn().mockResolvedValue(new Uint8Array(32).fill(0xab).buffer),
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(completedReplay), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await declareEvidence(file(), 'stable-operation-key');
+
+    expect(result).toEqual(completedReplay);
+    await expect(uploadEvidence(result, file())).rejects.toThrow('yeniden kullanılamaz');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a server-supplied upload redirect before any network request', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

@@ -45,7 +45,7 @@ export interface EvidenceDeclaration {
   attachmentId: string;
   state: EvidenceState;
   uploadPath: string;
-  uploadCapability: string;
+  uploadCapability: string | null;
   uploadExpiresAt: string;
   idempotentReplay: boolean;
 }
@@ -193,13 +193,18 @@ export async function declareEvidence(
     body: JSON.stringify({ mediaType: file.type, size: file.size, sha256 }),
   });
   const declaration = result as Partial<EvidenceDeclaration> | null;
+  const hasFreshCapability =
+    typeof declaration?.uploadCapability === 'string' && declaration.uploadCapability.length >= 32;
+  const isCompletedReplay =
+    declaration?.idempotentReplay === true &&
+    declaration.uploadCapability === null &&
+    declaration.state !== 'UPLOADING';
   if (
     !declaration ||
     typeof declaration.attachmentId !== 'string' ||
     !EVIDENCE_STATES.includes(declaration.state as EvidenceState) ||
     declaration.uploadPath !== FIXED_EVIDENCE_UPLOAD_PATH ||
-    typeof declaration.uploadCapability !== 'string' ||
-    declaration.uploadCapability.length < 32 ||
+    (!hasFreshCapability && !isCompletedReplay) ||
     typeof declaration.uploadExpiresAt !== 'string' ||
     typeof declaration.idempotentReplay !== 'boolean'
   )
@@ -213,6 +218,7 @@ export async function uploadEvidence(
 ): Promise<EvidenceStatus> {
   if (declaration.uploadPath !== FIXED_EVIDENCE_UPLOAD_PATH)
     throw new Error('Kanıt yükleme hedefi güvenli değil.');
+  if (!declaration.uploadCapability) throw new Error('Kanıt yükleme yetkisi yeniden kullanılamaz.');
   validateEvidenceFile(file);
   const response = await fetch(FIXED_EVIDENCE_UPLOAD_PATH, {
     method: 'PUT',
