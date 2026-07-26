@@ -257,6 +257,9 @@ export const deriveEducationText = (entries: ApplicationEducationEntry[]): strin
 type View = 'form' | 'preview' | 'receipt';
 type FormStep = 'resume' | 'contact' | 'profile';
 
+/** Forma ait adımlar — göstergeden geri dönülebilen küme. `preview`/`receipt` hariç. */
+const FORM_STEP_IDS: ReadonlyArray<FormStep> = ['resume', 'contact', 'profile'];
+
 const FORM_STEPS: ReadonlyArray<{ id: FormStep | 'preview' | 'receipt'; label: string }> = [
   { id: 'resume', label: 'CV' },
   { id: 'contact', label: 'Bilgiler' },
@@ -1121,7 +1124,13 @@ const CandidateApplicationPage = () => {
     }
   };
 
-  const editApplication = () => {
+  /**
+   * Önizlemeden forma dönüş. Onaylar SIFIRLANIR ve idempotency anahtarı yenilenir:
+   * KVKK aydınlatması ve doğruluk beyanı ÖNİZLENEN veriye verilmiştir; aday geri
+   * dönüp veriyi değiştirdikten sonra o beyanı taşımak, onaylanmamış içeriği
+   * onaylanmış gibi göndermek olurdu. Anahtar da yenilenir çünkü gövde değişti.
+   */
+  const editApplication = (target: FormStep = 'profile') => {
     setNoticeAccepted(false);
     setNoticeAcceptedAt('');
     setAccuracyConfirmed(false);
@@ -1129,7 +1138,32 @@ const CandidateApplicationPage = () => {
     setSubmitError('');
     idempotencyKeyRef.current = createApplicationIdempotencyKey();
     setView('form');
-    setFormStep('profile');
+    setFormStep(target);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /**
+   * Üstteki ilerleme göstergesinden doğrudan adım değiştirme (sahip talebi
+   * 2026-07-26: "istediğim adıma direk dönebileyim, üstte gösterdiği ilerleme
+   * alanını bunun için kullanabiliriz").
+   *
+   * Ölçülen sorun: profil adımında sayfa 2763px, ekran 998px ve tek geri düğmesi
+   * y=2317'de — iki ekrandan fazla aşağıda. Çoğaltılabilir kartlar (ats#215 B)
+   * sayfayı uzattığı için bunu ben kötüleştirdim. Gösterge sayfanın en üstünde,
+   * her adımda aynı yerde: doğru yer orası.
+   *
+   * YALNIZ tamamlanmış adımlar tıklanır. İleri atlama açılmadı: sonraki adıma
+   * geçiş zorunlu-alan doğrulamasına tabidir ve tıklanabilir gösterip sessizce
+   * hiçbir şey yapmamak, olmayan bir yol varmış gibi görünmekten daha kötüdür.
+   * Makbuz görünümünde hiçbir adım tıklanmaz — başvuru gönderilmiştir.
+   */
+  const goToStep = (target: FormStep) => {
+    setFormError('');
+    if (view === 'preview') {
+      editApplication(target);
+      return;
+    }
+    setFormStep(target);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1441,26 +1475,53 @@ const CandidateApplicationPage = () => {
               {FORM_STEPS.map((step, index) => {
                 const completed = currentStepIndex > index;
                 const current = currentStepIndex === index;
+                const target = FORM_STEP_IDS.find((id) => id === step.id);
+                const navigable = view !== 'receipt' && completed && target !== undefined;
+                const mark = (
+                  <span
+                    className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${
+                      completed || current
+                        ? 'border-action-primary bg-action-primary text-action-primary-text'
+                        : 'border-border-subtle bg-surface-muted text-text-secondary'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {completed ? '✓' : index + 1}
+                  </span>
+                );
+                const label = (
+                  <span
+                    className={`mt-1 block truncate text-[10px] font-semibold sm:text-xs ${
+                      current ? 'text-text-primary' : 'text-text-secondary'
+                    } ${navigable ? 'underline decoration-dotted underline-offset-2' : ''}`}
+                  >
+                    {step.label}
+                  </span>
+                );
                 return (
                   <li key={step.id} className="min-w-0 text-center">
-                    <div
-                      className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${
-                        completed || current
-                          ? 'border-action-primary bg-action-primary text-action-primary-text'
-                          : 'border-border-subtle bg-surface-muted text-text-secondary'
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {completed ? '✓' : index + 1}
-                    </div>
-                    <span
-                      className={`mt-1 block truncate text-[10px] font-semibold sm:text-xs ${
-                        current ? 'text-text-primary' : 'text-text-secondary'
-                      }`}
-                      aria-current={current ? 'step' : undefined}
-                    >
-                      {step.label}
-                    </span>
+                    {navigable ? (
+                      <button
+                        type="button"
+                        onClick={() => goToStep(target)}
+                        data-testid={`candidate-step-back-${step.id}`}
+                        // Erişilebilir ad açık yazılır: "CV" tek başına nereye
+                        // gittiğini söylemez. Adım numarası da girer — adımın
+                        // altındaki "CV adımına dön" düğmesiyle ADI ÇAKIŞIYORDU ve
+                        // ekran okuyucu kullanıcısı ikisini ayırt edemezdi (mevcut
+                        // üç test bu çakışmayı "Found multiple elements" ile yakaladı).
+                        aria-label={`${index + 1}. adım: ${step.label} — bu adıma dön`}
+                        className="block w-full rounded-lg px-1 py-0.5 hover:bg-surface-subtle focus:outline-hidden focus:ring-2 focus:ring-selection-outline"
+                      >
+                        {mark}
+                        {label}
+                      </button>
+                    ) : (
+                      <div aria-current={current ? 'step' : undefined}>
+                        {mark}
+                        {label}
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -2284,7 +2345,9 @@ const CandidateApplicationPage = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={editApplication}
+                  // Doğrudan `editApplication` verilmez: React tıklama olayını ilk
+                  // argüman olarak geçirir ve hedef adım bir MouseEvent olurdu.
+                  onClick={() => editApplication('profile')}
                   className="rounded-xl border border-border-strong px-4 py-2 text-sm font-semibold hover:bg-surface-subtle"
                 >
                   Bilgileri düzenle
