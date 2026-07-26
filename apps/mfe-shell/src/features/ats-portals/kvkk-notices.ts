@@ -36,11 +36,19 @@ export type KvkkNotice = {
   version: string;
   title: string;
   controller: DataController;
+  /** Şirketin yayımladığı resmi metnin kalıcı adresi — kanonik kaynak. */
+  officialUrl: string;
   /** Toplanan veri kalemleri — formun gerçekten gönderdiği alanlar. */
   collected: string[];
   purposes: string[];
   legalBasis: string[];
   recipients: NoticeRecipient[];
+  /**
+   * Yurt dışına aktarım (KVKK m.9) AYRI bildirilir. Grup iştiraklerini alıcı
+   * yazmak, listedeki yurt dışı şirketleri de kapsadığı için sınır ötesi aktarım
+   * demektir; m.8 ile m.9 farklı rejimlerdir ve tek satırda birleştirilemez.
+   */
+  crossBorderCountries: string[];
   retention: string;
   /** Sistemin fiilen uyguladığı koruma önlemleri. */
   safeguards: string[];
@@ -56,18 +64,44 @@ const ACIK_HOLDING: DataController = {
 };
 
 /**
- * Grup şirketleri alıcı olarak açıkça yazılır. Aday Açık Holding'e başvurup grup
- * içindeki başka bir şirketin açık pozisyonu için değerlendirilebiliyorsa bu bir
- * VERİ AKTARIMIDIR ve KVKK m.10 gereği kime, hangi amaçla aktarıldığı bildirilmek
- * zorundadır. Adayın yararına olan bir uygulama olması bildirim yükümlülüğünü
- * ortadan kaldırmaz.
+ * Alıcı grupları — Şirketin YAYIMLADIĞI resmi "Çalışan Adayı Aydınlatma Metni"
+ * C bendinden alınmıştır (acik.com/calisan-adayi-aydinlatma-metni). Kendi metnimi
+ * yazmak yerine resmi metin esas alınır: aynı işleme için iki farklı beyan, tek
+ * beyandan kötüdür ve aday hangisinin geçerli olduğunu bilemez.
  */
-const GROUP_RECIPIENTS: NoticeRecipient[] = [
+const OFFICIAL_RECIPIENTS: NoticeRecipient[] = [
   {
-    legalName: 'SERBAN İNŞAAT SANAYİ VE TİCARET ANONİM ŞİRKETİ',
-    purpose: 'grup içindeki açık pozisyonlar için değerlendirme',
+    legalName: 'Açık Holding A.Ş. bağlı merkez ve birimleri',
+    purpose: 'işe alım süreçlerinin yürütülmesi',
+  },
+  {
+    legalName: 'Grup iştirakleri',
+    purpose:
+      'grup içindeki açık pozisyonlar için değerlendirme (güncel liste acik.com/sirketler adresinde yayımlanır; Mikrolink, C.E.S., Serban, Boreas, Exagate, Infinity Clinic, Cronos Pharma, Müsellim Tarım ve diğer iştirakler)',
+  },
+  { legalName: 'İş ortakları ve tedarikçiler', purpose: 'hizmetin ifası için gerekli hâller' },
+  {
+    legalName: 'Kanunen yetkili kamu kurum ve kuruluşları, adli ve idari makamlar',
+    purpose: 'yasal ve düzenleyici gereksinimlerin yerine getirilmesi',
   },
 ];
+
+/**
+ * Grup, yayımlanmış şirket listesinde yurt dışında da tüzel kişiliklere sahiptir.
+ * İştirakleri alıcı olarak bildirmek bu ülkelere aktarımı kapsar; m.9 ayrı rejim
+ * olduğu için ülkeler AÇIKÇA sayılır.
+ */
+const CROSS_BORDER_COUNTRIES = [
+  'İngiltere',
+  'Almanya',
+  'Finlandiya',
+  'Katar',
+  'Kazakistan',
+  'Amerika Birleşik Devletleri',
+  'Vietnam',
+];
+
+const OFFICIAL_NOTICE_URL = 'https://acik.com/calisan-adayi-aydinlatma-metni';
 
 /**
  * Başvuru aydınlatma metni. `collected` listesi formun GERÇEKTEN gönderdiği
@@ -75,8 +109,9 @@ const GROUP_RECIPIENTS: NoticeRecipient[] = [
  */
 const APPLICATION_NOTICE: KvkkNotice = {
   version: 'kvkk-application-v1',
-  title: 'Aday Başvurusu Aydınlatma Metni',
+  title: 'Çalışan Adayı Aydınlatma Metni',
   controller: ACIK_HOLDING,
+  officialUrl: OFFICIAL_NOTICE_URL,
   collected: [
     'Ad soyad',
     'E-posta adresi',
@@ -91,18 +126,30 @@ const APPLICATION_NOTICE: KvkkNotice = {
     'Sertifikalar ve eğitimler (isteğe bağlı)',
     'Başvuru notu (isteğe bağlı)',
   ],
+  // Amaçlar resmi metnin B bendinden; sıralaması ve kapsamı korunur.
   purposes: [
-    'Başvurduğunuz pozisyon için değerlendirme yapılması',
-    'İşe alım süreci boyunca sizinle iletişim kurulması',
+    'İş başvurusu ve işe alım süreçlerinin yürütülmesi, aday niteliklerinin açık pozisyonlara uygunluğunun değerlendirilmesi',
+    'İlgili iş birimleri tarafından gerekli mülakat ve doğrulama analiz çalışmalarının yapılması',
+    'İletişim faaliyetlerinin yürütülmesi ve adaylarla irtibata geçilmesi',
+    'Yasal ve düzenleyici gereksinimlerin yerine getirilmesi, kamu kurumlarından gelen bilgi/belge taleplerinin karşılanması',
+    'İnsan Kaynakları politika ve stratejilerinin uygulanması ve geliştirilmesi',
     'Başvurunuzun kaydı ve durumunun tarafınızca takip edilebilmesi',
-    'Grup içindeki diğer açık pozisyonlar için değerlendirme',
   ],
+  // Toplama yöntemi ve hukuki sebep resmi metnin A bendinden.
   legalBasis: [
-    'KVKK m.5/2-c — bir sözleşmenin kurulması veya ifasıyla doğrudan ilgili olması (iş başvurunuzun değerlendirilmesi)',
-    'KVKK m.5/2-f — veri sorumlusunun meşru menfaati (işe alım süreçlerinin yürütülmesi)',
+    'Verileriniz; bu kariyer sayfası, şirket internet siteleri, Kariyer.net platformu, e-posta, fiziksel başvurular veya mülakatlar aracılığıyla sözlü, yazılı ya da elektronik ortamda toplanır.',
+    'İşleme, KVKK m.5 ve m.6’da belirtilen işleme şartları çerçevesinde yapılır.',
   ],
-  recipients: GROUP_RECIPIENTS,
-  retention: 'Başvuru tarihinden itibaren 2 yıl. Süre sonunda kayıtlar silinir.',
+  recipients: OFFICIAL_RECIPIENTS,
+  crossBorderCountries: CROSS_BORDER_COUNTRIES,
+  // ÇALIŞAN ADAYI süresi. VERBİS’teki 4-Özlük = 15 yıl beyanı İŞE ALINAN çalışanın
+  // özlük dosyası içindir (İş Kanunu/SGK kaynaklı); başvuru sahibi için geçerli
+  // değildir. Sicil aday durumunda çelişmiyor, SESSİZ kalıyor — bu yüzden sicilde
+  // 4-Özlük satırının 1-Kimlik/2-İletişim gibi "Diğer:" formatına çevrilip
+  // "Çalışan adayı: 2 yıl" ibaresinin eklenmesi gerekir (VERBİS’e veri girişini
+  // irtibat kişisi yapar; agent portala veri girmez).
+  retention:
+    'İşe alınmayan adayların başvuru kayıtları, başvuru tarihinden itibaren 2 yıl sonunda silinir. İşe alınmanız hâlinde özlük dosyanız çalışan saklama süresine tabi olur.',
   safeguards: [
     'Yüklediğiniz CV dosyası yalnız alan çıkarımı için geçici olarak işlenir; ham PDF ve dosya adı saklanmaz.',
     'CV’den çıkarılan alanların hangisinin forma geçeceğine siz karar verirsiniz; reddettiğiniz alan aktarılmaz.',
@@ -121,7 +168,7 @@ const APPLICATION_NOTICE: KvkkNotice = {
     'Kanuna aykırı işleme sebebiyle zarara uğramanız hâlinde zararın giderilmesini talep etme',
   ],
   rightsChannel:
-    'KVKK m.11 kapsamındaki taleplerinizi veri sorumlusunun yukarıdaki KEP adresine ya da tebligata elverişli adresine iletebilirsiniz. Başvurunuzun durumunu “Aday Alanım” ekranından da takip edebilirsiniz.',
+    'Haklarınızı kullanmak için Şirkete yazılı olarak veya kayıtlı elektronik posta adresi acikholding@hs03.kep.tr (KEP) üzerinden başvurabilirsiniz. Başvurunuzun durumunu “Aday Alanım” ekranından da takip edebilirsiniz.',
 };
 
 /** CV içe aktarma aydınlatma metni — ayrı sürüm, ayrı ve daha dar kapsam. */
@@ -129,6 +176,7 @@ const RESUME_IMPORT_NOTICE: KvkkNotice = {
   version: 'candidate-resume-import-v1',
   title: 'CV İçe Aktarma Aydınlatma Metni',
   controller: ACIK_HOLDING,
+  officialUrl: OFFICIAL_NOTICE_URL,
   collected: [
     'Yüklediğiniz PDF dosyasının içeriği (yalnız alan çıkarımı süresince, geçici olarak)',
     'Çıkarılan alan önerileri ve bunlara verdiğiniz kabul / düzenleme / reddetme kararları',
@@ -141,6 +189,8 @@ const RESUME_IMPORT_NOTICE: KvkkNotice = {
     'KVKK m.5/1 — açık rızanız. Bu adımı atlayıp formu elle doldurabilirsiniz; içe aktarma yalnız bir kolaylıktır.',
   ],
   recipients: [],
+  // İçe aktarma adımı dosyayı DIŞARI göndermez; aktarım yoktur.
+  crossBorderCountries: [],
   retention:
     'Ham PDF ve dosya adı saklanmaz. Alan önerileri, içe aktarma oturumu sona erdiğinde veya başvurunuz gönderildiğinde silinir.',
   safeguards: [

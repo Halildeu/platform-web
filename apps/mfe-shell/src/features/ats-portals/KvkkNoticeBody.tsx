@@ -66,6 +66,20 @@ export const KvkkNoticeBody = ({ notice }: { notice: KvkkNotice }) => (
       )}
     </Section>
 
+    {/* Yurt dışına aktarım AYRI bölüm: KVKK m.8 (yurt içi) ile m.9 (yurt dışı)
+        farklı rejimlerdir. Grup iştiraklerini alıcı yazmak, yayımlanmış şirket
+        listesindeki yurt dışı tüzel kişilikleri de kapsar; tek satırda birleştirmek
+        aktarımın sınır ötesi olduğunu gizlerdi. */}
+    {notice.crossBorderCountries.length > 0 ? (
+      <Section title="Yurt dışına aktarım (KVKK m.9)">
+        <p>
+          Grup iştirakleri arasında yurt dışında kurulu şirketler bulunduğundan,
+          değerlendirme amacıyla verileriniz aşağıdaki ülkelere aktarılabilir:
+        </p>
+        <Bullets items={notice.crossBorderCountries} />
+      </Section>
+    ) : null}
+
     <Section title="Saklama süresi">
       <p>{notice.retention}</p>
     </Section>
@@ -79,7 +93,23 @@ export const KvkkNoticeBody = ({ notice }: { notice: KvkkNotice }) => (
       <p className="mt-2">{notice.rightsChannel}</p>
     </Section>
 
-    <p className="mt-4 text-xs text-text-subtle">Metin sürümü: {notice.version}</p>
+    {/* Kanonik kaynak açıkça gösterilir: bu ekran Şirketin yayımladığı resmi
+        metni taşır, onun yerine geçmez. Aday ikisini karşılaştırabilmeli. */}
+    <p className="mt-4 text-sm">
+      Bu metin, Şirketin yayımladığı{' '}
+      <a
+        href={notice.officialUrl}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="font-semibold text-action-primary underline"
+      >
+        resmi Çalışan Adayı Aydınlatma Metni
+      </a>{' '}
+      esas alınarak hazırlanmıştır; bu başvuru akışına özgü teknik önlemler ayrıca
+      belirtilmiştir.
+    </p>
+
+    <p className="mt-2 text-xs text-text-subtle">Metin sürümü: {notice.version}</p>
   </div>
 );
 

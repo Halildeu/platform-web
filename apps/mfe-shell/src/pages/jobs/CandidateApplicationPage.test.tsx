@@ -707,10 +707,21 @@ describe('CandidateApplicationPage', () => {
     // Veri sorumlusu kimliği metinde YAZILI olmalı — VERBİS sicilinden.
     expect(disclosure).toHaveTextContent('AÇIK HOLDİNG ANONİM ŞİRKETİ');
     expect(disclosure).toHaveTextContent('acikholding@hs03.kep.tr');
-    // Grup şirketine aktarım bildirilmeli: aday Açık'a başvurup grup içinde
-    // değerlendirilebiliyorsa bu bir veri aktarımıdır (KVKK m.10).
-    expect(disclosure).toHaveTextContent('SERBAN İNŞAAT');
-    expect(disclosure).toHaveTextContent('2 yıl');
+    // Grup iştiraklerine aktarım bildirilmeli: aday Açık'a başvurup grup içinde
+    // değerlendirilebiliyorsa bu bir veri aktarımıdır (KVKK m.8/m.10).
+    expect(disclosure).toHaveTextContent('Grup iştirakleri');
+    // YURT DIŞI aktarım AYRI bildirilmeli (m.9 ayrı rejim). Yayımlanmış şirket
+    // listesinde yurt dışı tüzel kişilikler var; iştirakleri alıcı yazmak bunları
+    // kapsar. Tek satırda birleştirmek aktarımın sınır ötesi olduğunu gizlerdi.
+    expect(disclosure).toHaveTextContent('Yurt dışına aktarım');
+    expect(disclosure).toHaveTextContent('Kazakistan');
+    // Çalışan adayı süresi çalışan süresinden AYRI: VERBİS'teki 4-Özlük 15 yıl
+    // beyanı işe ALINAN çalışanın özlük dosyası içindir, başvuran için değil.
+    expect(disclosure).toHaveTextContent('2 yıl sonunda silinir');
+    // Kanonik kaynak gösterilmeli: bu ekran resmi metnin yerine geçmez.
+    expect(
+      within(disclosure).getByRole('link', { name: /resmi Çalışan Adayı Aydınlatma Metni/i }),
+    ).toHaveAttribute('href', 'https://acik.com/calisan-adayi-aydinlatma-metni');
     // KVKK m.11 hakları ve başvuru kanalı.
     expect(disclosure).toHaveTextContent('silinmesini veya yok edilmesini isteme');
     // Kalıcı sayfaya bağlantı da bulunmalı.
