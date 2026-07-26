@@ -26,9 +26,12 @@ import { useEndpointAdminI18n } from '../../i18n';
  */
 export interface EnrollmentTokenModalProps {
   response: CreateEndpointEnrollmentResponse | null;
+  /**
+   * Public token-bootstrap API. Existing-device TPM renewal must use this
+   * channel because the command repairs a missing or expired client
+   * certificate; the dedicated mTLS SNI cannot authenticate that state.
+   */
   apiUrl: string;
-  /** Dedicated mTLS device API used only by existing-device TPM renewal. */
-  tpmRenewalApiUrl: string;
   /**
    * Public base for the artifact host, e.g. `https://testai.acik.com/artifacts`.
    * Mirrors `apiUrl`: derived from `window.location.origin` by the parent so the
@@ -107,8 +110,8 @@ function buildOneCommand(args: {
   ].join(' ');
 }
 
-/** Existing-device TPM/certificate renewal using the already-installed agent. */
-export function buildTpmRenewalCommand(token: string, apiUrl: string): string {
+/** Existing-device TPM/certificate renewal through the token bootstrap channel. */
+export function buildTpmRenewalCommand(token: string, bootstrapApiUrl: string): string {
   const q = (value: string): string => `'${powerShellEscape(value)}'`;
   return [
     `$serviceKey = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EndpointAgent';`,
@@ -120,7 +123,7 @@ export function buildTpmRenewalCommand(token: string, apiUrl: string): string {
     `$env:ENDPOINT_AGENT_ENROLLMENT_TOKEN = ${q(token)};`,
     `$env:ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX = 'adcomputer:';`,
     `try {`,
-    `& $agentExe --auto-enroll-tpm --api-url ${q(apiUrl)};`,
+    `& $agentExe --auto-enroll-tpm --api-url ${q(bootstrapApiUrl)};`,
     `if ($LASTEXITCODE -ne 0) { throw 'TPM renewal failed.' };`,
     `Restart-Service EndpointAgent`,
     `} finally {`,
@@ -144,7 +147,6 @@ type CopyKind = 'token' | 'snippet' | 'onecommand';
 export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   response,
   apiUrl,
-  tpmRenewalApiUrl,
   artifactBaseUrl,
   onClose,
 }) => {
@@ -202,7 +204,7 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   const isRenewal = response.deviceId !== null;
   const snippet = isRenewal ? null : formatManualSnippet(response.token, apiUrl);
   const oneCommand = isRenewal
-    ? buildTpmRenewalCommand(response.token, tpmRenewalApiUrl)
+    ? buildTpmRenewalCommand(response.token, apiUrl)
     : manifestState.status === 'ready'
       ? buildOneCommand({
           token: response.token,

@@ -264,12 +264,7 @@ describe('EnrollmentListPage', () => {
         }),
     });
 
-    render(
-      <EnrollmentListPage
-        apiUrlOverride="https://example/api"
-        tpmRenewalApiUrlOverride="https://mtls.example/api"
-      />,
-    );
+    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
     fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
     fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
 
@@ -289,8 +284,8 @@ describe('EnrollmentListPage', () => {
     expect(await screen.findByTestId('enrollment-token-modal')).toBeInTheDocument();
     const renewalCommand = screen.getByTestId('enrollment-token-modal-onecommand').textContent ?? '';
     expect(renewalCommand).toContain('--auto-enroll-tpm');
-    expect(renewalCommand).toContain("--api-url 'https://mtls.example/api'");
-    expect(renewalCommand).not.toContain("--api-url 'https://example/api'");
+    expect(renewalCommand).toContain("--api-url 'https://example/api'");
+    expect(renewalCommand).not.toContain('mtls.example');
     expect(renewalCommand).toContain('Restart-Service EndpointAgent');
     expect(renewalCommand).toContain('ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX');
     expect(renewalCommand).toContain(
