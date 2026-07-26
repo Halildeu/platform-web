@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RecruiterWorkspacePage from './RecruiterWorkspacePage';
 
@@ -87,6 +87,12 @@ const APPLICATION = {
   summary: 'Sentetik profesyonel özet',
   experience: 'Sentetik deneyim',
   education: 'Sentetik eğitim',
+  // ats#215 C: varsayılan fixture GİRDİSİZ — eski başvuruların görünümünün
+  // bozulmadığını doğrulayan yol bu. Yapısal görünüm ayrı testte kurulur.
+  experienceEntries: [],
+  educationEntries: [],
+  languages: null,
+  certifications: null,
   skills: ['Ürün keşfi', 'Araştırma'],
   note: 'Sentetik not',
   status: 'SUBMITTED',
@@ -270,6 +276,75 @@ describe('RecruiterWorkspacePage', () => {
       'UNDER_REVIEW',
     );
     expect(await screen.findByText('Durum güncellendi: İnsan incelemesinde.')).toBeVisible();
+  });
+
+  // ── ats#215 C: İK yapısal girdileri görür ────────────────────────────────────
+  //
+  // Aday #215 B'den beri deneyimini kayıt kayıt giriyor ve #220 ile bu kayıtlar
+  // okuma yolunda da var. Buraya kadar İK yalnız türetilmiş tek metin görüyordu:
+  // iki pozisyonun nerede başlayıp bittiği tek blokta okunmuyordu.
+
+  it('shows each experience record separately when the candidate entered them', async () => {
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: {
+        ...APPLICATION,
+        experienceEntries: [
+          {
+            title: 'Ürün Uzmanı',
+            company: 'Örnek Teknoloji',
+            startDate: 'Eyl 2022',
+            endDate: 'Devam ediyor',
+            description: 'Keşif ve yol haritası',
+          },
+          { title: 'Analist', company: 'Demo Yazılım', startDate: '2020', endDate: '2022' },
+        ],
+        educationEntries: [
+          { school: 'Örnek Üniversitesi', degree: 'Lisans', field: 'YBS', endYear: '2020' },
+        ],
+        languages: 'Türkçe, İngilizce',
+        certifications: 'ISO 45001',
+      },
+      history: [],
+      evaluations: [],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByRole('dialog', { name: 'Deniz Sentetik' });
+
+    const experience = screen.getByTestId('recruiter-experience');
+    expect(within(experience).getByTestId('recruiter-experience-entry-0')).toHaveTextContent(
+      'Ürün Uzmanı · Örnek Teknoloji',
+    );
+    expect(within(experience).getByTestId('recruiter-experience-entry-0')).toHaveTextContent(
+      'Eyl 2022 – Devam ediyor',
+    );
+    // İkinci kayıt AYRI bir öğe — tek bloğa yığılmıyor.
+    expect(within(experience).getByTestId('recruiter-experience-entry-1')).toHaveTextContent(
+      'Analist · Demo Yazılım',
+    );
+    // Girdiler varken türetilmiş metin BASILMAZ: aynı bilgiyi iki biçimde
+    // göstermek İK'ya hangisinin güncel olduğunu sordurur.
+    expect(experience).not.toHaveTextContent('Sentetik deneyim');
+
+    expect(screen.getByTestId('recruiter-education-entry-0')).toHaveTextContent(
+      'Örnek Üniversitesi · Lisans · YBS',
+    );
+    expect(screen.getByText('Türkçe, İngilizce')).toBeVisible();
+    expect(screen.getByText('ISO 45001')).toBeVisible();
+  });
+
+  it('falls back to the single text field for applications submitted without entries', async () => {
+    // Geri uyum: #215 B öncesi gönderilmiş başvurularda girdi listesi boştur ve
+    // tek-string alan TEK otoritedir. Bu yol bozulursa eski başvurular boş görünür.
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByRole('dialog', { name: 'Deniz Sentetik' });
+
+    expect(screen.getByTestId('recruiter-experience')).toHaveTextContent('Sentetik deneyim');
+    expect(screen.getByTestId('recruiter-education')).toHaveTextContent('Sentetik eğitim');
+    expect(screen.queryByTestId('recruiter-experience-entry-0')).not.toBeInTheDocument();
+    // Boş diller/sertifikalar satır AÇMAZ — boş etiket gürültüdür.
+    expect(screen.queryByText('Diller')).not.toBeInTheDocument();
   });
 
   it('opens candidate detail in an accessible drawer and restores the compact workspace on close', async () => {

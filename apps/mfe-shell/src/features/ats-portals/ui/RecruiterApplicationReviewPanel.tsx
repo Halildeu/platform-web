@@ -302,12 +302,84 @@ const RecruiterApplicationReviewPanel = ({
           </div>
           <div>
             <dt className="text-xs font-semibold text-text-secondary">Deneyim</dt>
-            <dd className="mt-1 whitespace-pre-wrap leading-6">{application.experience}</dd>
+            <dd className="mt-1" data-testid="recruiter-experience">
+              {/* Aday yapısal girdi gönderdiyse kayıt kayıt gösterilir: iki pozisyonun
+                  nerede başlayıp bittiği tek metin bloğunda okunmuyordu. Girdi yoksa
+                  eski tek-string alan tek otoritedir ve aynen basılır — bu, girdisiz
+                  gönderilmiş eski başvuruların ve yalnız metin gönderen istemcilerin
+                  görünümünü bozmaz. */}
+              {application.experienceEntries.length > 0 ? (
+                <ol className="space-y-3">
+                  {application.experienceEntries.map((entry, index) => (
+                    <li
+                      key={`${entry.title ?? ''}-${entry.company ?? ''}-${index}`}
+                      className="rounded-lg border border-border-subtle bg-surface-subtle p-3"
+                      data-testid={`recruiter-experience-entry-${index}`}
+                    >
+                      <p className="font-semibold text-text-primary">
+                        {[entry.title, entry.company].filter(Boolean).join(' · ') || 'Belirtilmedi'}
+                      </p>
+                      {entry.startDate || entry.endDate ? (
+                        <p className="text-xs text-text-secondary">
+                          {[entry.startDate, entry.endDate].filter(Boolean).join(' – ')}
+                        </p>
+                      ) : null}
+                      {entry.description ? (
+                        <p className="mt-1 whitespace-pre-wrap leading-6">{entry.description}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <span className="whitespace-pre-wrap leading-6">{application.experience}</span>
+              )}
+            </dd>
           </div>
           <div>
             <dt className="text-xs font-semibold text-text-secondary">Eğitim</dt>
-            <dd className="mt-1 whitespace-pre-wrap leading-6">{application.education}</dd>
+            <dd className="mt-1" data-testid="recruiter-education">
+              {application.educationEntries.length > 0 ? (
+                <ol className="space-y-3">
+                  {application.educationEntries.map((entry, index) => (
+                    <li
+                      key={`${entry.school ?? ''}-${entry.field ?? ''}-${index}`}
+                      className="rounded-lg border border-border-subtle bg-surface-subtle p-3"
+                      data-testid={`recruiter-education-entry-${index}`}
+                    >
+                      <p className="font-semibold text-text-primary">
+                        {[entry.school, entry.degree, entry.field].filter(Boolean).join(' · ') ||
+                          'Belirtilmedi'}
+                      </p>
+                      {entry.startYear || entry.endYear ? (
+                        <p className="text-xs text-text-secondary">
+                          {[entry.startYear, entry.endYear].filter(Boolean).join(' – ')}
+                        </p>
+                      ) : null}
+                      {entry.description ? (
+                        <p className="mt-1 whitespace-pre-wrap leading-6">{entry.description}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <span className="whitespace-pre-wrap leading-6">{application.education}</span>
+              )}
+            </dd>
           </div>
+          {application.languages ? (
+            <div>
+              <dt className="text-xs font-semibold text-text-secondary">Diller</dt>
+              <dd className="mt-1 whitespace-pre-wrap leading-6">{application.languages}</dd>
+            </div>
+          ) : null}
+          {application.certifications ? (
+            <div>
+              <dt className="text-xs font-semibold text-text-secondary">
+                Sertifikalar ve eğitimler
+              </dt>
+              <dd className="mt-1 whitespace-pre-wrap leading-6">{application.certifications}</dd>
+            </div>
+          ) : null}
           {application.note ? (
             <div>
               <dt className="text-xs font-semibold text-text-secondary">Aday notu</dt>
