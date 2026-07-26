@@ -282,6 +282,16 @@ export type RecruiterApplicationDto = {
   summary: string;
   experience: string;
   education: string;
+  /**
+   * ats#215 C: yapısal girdiler. Aday #215 B'den beri bunları gönderiyor ve
+   * artık İK okuma yolunda da var. BOŞ olabilir — girdisiz gönderilmiş eski
+   * başvurular ya da yalnız metin gönderen istemciler için; o durumda yukarıdaki
+   * tek-string alan tek otoritedir.
+   */
+  experienceEntries: ApplicationExperienceEntry[];
+  educationEntries: ApplicationEducationEntry[];
+  languages: string | null;
+  certifications: string | null;
   skills: string[];
   note: string | null;
   status: ApplicationStatus;
