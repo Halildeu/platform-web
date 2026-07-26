@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   dispatchMock: vi.fn(() => ({ unwrap: () => Promise.resolve({ id: 'command-tpm-1' }) })),
-  state: { isLoading: false, isError: false },
+  state: { isLoading: false, isError: false, error: undefined as unknown },
 }));
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
@@ -22,6 +22,7 @@ afterEach(() => {
   h.dispatchMock.mockClear();
   h.state.isLoading = false;
   h.state.isError = false;
+  h.state.error = undefined;
 });
 
 describe('TpmCertificateRenewalModal', () => {
@@ -80,5 +81,51 @@ describe('TpmCertificateRenewalModal', () => {
     );
 
     expect((screen.getByTestId('tpm-renewal-submit') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('tells the operator to upgrade when the current agent lacks renewal capability', () => {
+    h.state.isError = true;
+    h.state.error = {
+      status: 422,
+      data: {
+        message:
+          "Agent does not advertise the 'RENEW_TPM_CERTIFICATE' capability on the most recent heartbeat.",
+      },
+    };
+
+    render(
+      <TpmCertificateRenewalModal
+        open
+        deviceId="device-1"
+        onCancel={vi.fn()}
+        onDispatched={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'endpointAdmin.modal.tpmRenewal.capabilityMissing',
+    );
+  });
+
+  it('does not expose arbitrary backend error messages', () => {
+    h.state.isError = true;
+    h.state.error = {
+      status: 500,
+      data: { message: 'internal secret-bearing diagnostic' },
+    };
+
+    render(
+      <TpmCertificateRenewalModal
+        open
+        deviceId="device-1"
+        onCancel={vi.fn()}
+        onDispatched={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'endpointAdmin.modal.tpmRenewal.dispatchError',
+    );
+    expect(screen.getByRole('alert')).not.toHaveTextContent('internal secret-bearing diagnostic');
   });
 });

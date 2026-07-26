@@ -1264,6 +1264,8 @@ const DICT_TR = {
   'endpointAdmin.modal.tpmRenewal.reasonLabel': 'Gerekçe',
   'endpointAdmin.modal.tpmRenewal.dispatchError':
     'TPM/sertifika yenileme komutu gönderilemedi.',
+  'endpointAdmin.modal.tpmRenewal.capabilityMissing':
+    'Bu ajan sürümü tarayıcıdan TPM/sertifika yenilemeyi desteklemiyor. Önce onaylı güncel ajan sürümünü yükleyin, yeni heartbeat geldikten sonra tekrar deneyin.',
   'endpointAdmin.modal.tpmRenewal.cancel': 'İptal',
   'endpointAdmin.modal.tpmRenewal.dispatch': 'Yenilemeyi Başlat',
   'endpointAdmin.modal.tpmRenewal.dispatching': 'Gönderiliyor…',
@@ -3038,6 +3040,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.tpmRenewal.reasonLabel': 'Reason',
   'endpointAdmin.modal.tpmRenewal.dispatchError':
     'Could not dispatch the TPM/certificate renewal command.',
+  'endpointAdmin.modal.tpmRenewal.capabilityMissing':
+    'This agent version does not support browser-managed TPM/certificate renewal. Install the latest approved agent release, wait for a new heartbeat, and try again.',
   'endpointAdmin.modal.tpmRenewal.cancel': 'Cancel',
   'endpointAdmin.modal.tpmRenewal.dispatch': 'Start Renewal',
   'endpointAdmin.modal.tpmRenewal.dispatching': 'Dispatching…',

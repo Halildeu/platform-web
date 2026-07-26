@@ -16,6 +16,18 @@ const createIdempotencyKey = (): string => {
   return `browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const isMissingRenewalCapability = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object' || !('status' in error) || !('data' in error)) {
+    return false;
+  }
+  const { status, data } = error as { status: unknown; data: unknown };
+  if (status !== 422 || !data || typeof data !== 'object' || !('message' in data)) {
+    return false;
+  }
+  const message = (data as { message: unknown }).message;
+  return typeof message === 'string' && message.includes('RENEW_TPM_CERTIFICATE');
+};
+
 export const TpmCertificateRenewalModal: React.FC<TpmCertificateRenewalModalProps> = ({
   open,
   deviceId,
@@ -86,7 +98,11 @@ export const TpmCertificateRenewalModal: React.FC<TpmCertificateRenewalModalProp
             data-testid="tpm-renewal-error"
             className="mt-3 rounded-md border border-state-danger-border bg-state-danger-subtle px-3 py-2 text-sm text-state-danger-text"
           >
-            {t('endpointAdmin.modal.tpmRenewal.dispatchError')}
+            {t(
+              isMissingRenewalCapability(dispatchState.error)
+                ? 'endpointAdmin.modal.tpmRenewal.capabilityMissing'
+                : 'endpointAdmin.modal.tpmRenewal.dispatchError',
+            )}
           </div>
         )}
 
