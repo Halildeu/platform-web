@@ -65,6 +65,22 @@ const clearUpgradeAttempt = (): void => {
   }
 };
 
+/**
+ * Faz 35 ES: kullanıcı-tetikli yeniden deneme.
+ *
+ * `denied` tek başına çıkışsız bir kapıydı: dar kapsamlı bir suite oturumuyla
+ * gelen yetkili kullanıcı yükseltme işaretine takılır ve TTL dolana kadar
+ * (5 dk) yalnız hata metni görürdü — ekranda hiçbir aksiyon yoktu. Sol panele
+ * giriş eklendikten sonra bu yol sıradan kullanım hâline geldiği için işareti
+ * temizleyip oturumu baştan kuran açık bir aksiyon gerekiyor. Yetki kapısı
+ * değişmez: yeniden deneme yalnız KC yükseltme akışını serbest bırakır.
+ */
+export const resetManagerSessionForRetry = (): void => {
+  clearUpgradeAttempt();
+  initialization = undefined;
+  keycloak = undefined;
+};
+
 const invalidateManagerSession = (): void => {
   clearAccessTokenProvider();
   invalidationListeners.forEach((listener) => listener());
