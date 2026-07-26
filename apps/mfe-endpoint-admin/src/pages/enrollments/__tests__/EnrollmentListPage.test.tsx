@@ -497,6 +497,10 @@ describe('EnrollmentListPage', () => {
     // canonical agent base + single-quote escape on the token
     expect(cmd).toContain("-ApiUrl 'https://testai.acik.com/api/v1/endpoint-agent'");
     expect(cmd).toContain("-EnrollmentToken 'tok-with-''-quote'");
+    expect(cmd).toContain("-WorkDir (Join-Path $env:ProgramData 'EndpointAgent\\Bootstrap\\Work')");
+    expect(cmd).toContain(
+      "-ZipPath (Join-Path $env:ProgramData 'EndpointAgent\\Bootstrap\\EndpointAgent.zip')",
+    );
     expect(cmd).toContain('Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force');
     expect(cmd).toContain('-SelfUpdateEnabled');
     expect(cmd).toContain(
@@ -565,6 +569,12 @@ describe('EnrollmentListPage', () => {
       (await screen.findByTestId('enrollment-token-modal-onecommand')).textContent ?? '';
     expect(command).toContain('-Force');
     expect(command).toContain('-ResetCredentialStore');
+    expect(command).toContain(
+      "-WorkDir (Join-Path $env:ProgramData 'EndpointAgent\\Bootstrap\\Work')",
+    );
+    expect(command).toContain(
+      "-ZipPath (Join-Path $env:ProgramData 'EndpointAgent\\Bootstrap\\EndpointAgent.zip')",
+    );
     expect(command).toContain('-SelfUpdateEnabled');
     expect(command).toContain(
       "-SelfUpdateAllowedHosts 'github.com,release-assets.githubusercontent.com,objects.githubusercontent.com,testai.acik.com'",

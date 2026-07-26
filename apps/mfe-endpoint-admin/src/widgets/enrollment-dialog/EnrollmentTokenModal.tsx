@@ -123,6 +123,8 @@ function buildOneCommand(args: {
     `-ExpectedZipSha256 ${q(args.zipSha256)}`,
     `-ApiUrl ${q(args.apiUrl)}`,
     `-EnrollmentToken ${q(args.token)}`,
+    `-WorkDir (Join-Path $env:ProgramData ${q('EndpointAgent\\Bootstrap\\Work')})`,
+    `-ZipPath (Join-Path $env:ProgramData ${q('EndpointAgent\\Bootstrap\\EndpointAgent.zip')})`,
     `-SelfUpdateEnabled`,
     `-SelfUpdateAllowedHosts ${q(selfUpdateAllowedHosts)}`,
     `-SelfUpdateAutoActivate`,
