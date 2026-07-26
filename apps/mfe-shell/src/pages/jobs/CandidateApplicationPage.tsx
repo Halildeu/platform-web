@@ -15,6 +15,8 @@ import {
   updateResumeProposal,
   uploadResumePdf,
   type ApplicationFieldKey,
+  type ResumeFieldKey,
+  RESUME_ONLY_FIELDS,
   type ApplicationReceiptDto,
   type PublicJobDto,
   type ResumeDraftDto,
@@ -124,6 +126,70 @@ const FIELD_LABELS: Record<ApplicationFieldKey, string> = {
   note: 'Ek not',
 };
 
+/**
+ * Ayrıştırıcı formun taşıdığından fazlasını çıkarır. Etiketi olmayan alan,
+ * gözden geçirme listesinde BAŞLIKSIZ kart olarak görünüyordu — canlı ölçümde
+ * `languages` ve `certifications` kartları böyle çıktı (bkz. ats#204 v5).
+ */
+const RESUME_FIELD_LABELS: Record<ResumeFieldKey, string> = {
+  ...FIELD_LABELS,
+  languages: 'Diller',
+  certifications: 'Sertifikalar ve eğitimler',
+};
+
+/**
+ * Karar durumunun kendisi görünür olmalı. Önceki yüzeyde beş durum da aynı nötr
+ * rozeti taşıyordu; kabul edilen, düzenlenen ve reddedilen alan birbirinden
+ * ayırt edilemiyordu. Her duruma kendi rengi, simgesi ve kart aksanı verildi.
+ */
+const RESUME_DECISION_STYLES = {
+  UNREVIEWED: {
+    label: 'Karar bekliyor',
+    mark: '○',
+    badge: 'border-border-strong text-text-secondary',
+    accent: 'bg-border-strong',
+    card: 'border-border-subtle bg-surface-default',
+  },
+  CONTROL_REQUIRED: {
+    label: 'Elle kontrol gerekli',
+    mark: '!',
+    badge: 'border-state-warning-border bg-state-warning-bg text-state-warning-text',
+    accent: 'bg-state-warning-border',
+    card: 'border-state-warning-border bg-surface-default',
+  },
+  ACCEPTED: {
+    label: 'Kabul edildi',
+    mark: '✓',
+    badge: 'border-state-success-border bg-state-success-bg text-state-success-text',
+    accent: 'bg-state-success-border',
+    card: 'border-state-success-border bg-state-success-bg/40',
+  },
+  EDITED: {
+    label: 'Düzenlendi',
+    mark: '✎',
+    badge: 'border-state-info-border bg-state-info-bg text-state-info-text',
+    accent: 'bg-state-info-border',
+    card: 'border-state-info-border bg-state-info-bg/40',
+  },
+  REJECTED: {
+    label: 'Reddedildi',
+    mark: '✕',
+    badge: 'border-border-strong bg-surface-muted text-text-secondary',
+    accent: 'bg-border-strong',
+    card: 'border-border-subtle bg-surface-muted',
+  },
+} as const;
+
+const DECIDED_RESUME_STATES: readonly string[] = ['ACCEPTED', 'EDITED', 'REJECTED'];
+
+/** Ham yüzde tek başına eylem çağırmıyor; adayın ne yapması gerektiğini söyle. */
+const confidenceWording = (confidence: number) => {
+  const percent = Math.round(confidence * 100);
+  if (percent >= 85) return { text: `Yüksek güven · %${percent}`, warn: false };
+  if (percent >= 60) return { text: `Orta güven · %${percent} — gözden geçirin`, warn: false };
+  return { text: `Düşük güven · %${percent} — kontrol edin`, warn: true };
+};
+
 const humanizeSlug = (slug: string) =>
   slug
     .split('-')
@@ -166,8 +232,8 @@ const CandidateApplicationPage = () => {
   const [resumeNoticeAcceptedAt, setResumeNoticeAcceptedAt] = useState('');
   const [resumeImport, setResumeImport] = useState<ResumeImportDto | null>(null);
   const [resumeBinding, setResumeBinding] = useState<ResumeBinding | null>(null);
-  const [resumeEdits, setResumeEdits] = useState<Partial<Record<ApplicationFieldKey, string>>>({});
-  const [resumeBusyField, setResumeBusyField] = useState<ApplicationFieldKey | 'all' | null>(null);
+  const [resumeEdits, setResumeEdits] = useState<Partial<Record<ResumeFieldKey, string>>>({});
+  const [resumeBusyField, setResumeBusyField] = useState<ResumeFieldKey | 'all' | null>(null);
   const [replaceRequested, setReplaceRequested] = useState(false);
   const [showRejectAllConfirm, setShowRejectAllConfirm] = useState(false);
   const [mergeConflicts, setMergeConflicts] = useState<MergeConflict[]>([]);
@@ -391,7 +457,7 @@ const CandidateApplicationPage = () => {
     if (!resumeImport || resumeBusyField) return;
     const editedValue = resumeEdits[proposal.field]?.trim();
     if (state === 'EDITED' && !editedValue) {
-      setFileError(`${FIELD_LABELS[proposal.field]} için düzenlenmiş değer boş olamaz.`);
+      setFileError(`${RESUME_FIELD_LABELS[proposal.field]} için düzenlenmiş değer boş olamaz.`);
       return;
     }
     setFileError('');
@@ -775,6 +841,15 @@ const CandidateApplicationPage = () => {
   const selectedResumeFields = resumeProposals.filter((proposal) =>
     ['ACCEPTED', 'EDITED'].includes(proposal.state),
   ).length;
+  const resumeDecidedFields = resumeProposals.filter((proposal) =>
+    DECIDED_RESUME_STATES.includes(proposal.state),
+  ).length;
+  const resumeTally = {
+    ACCEPTED: resumeProposals.filter((proposal) => proposal.state === 'ACCEPTED').length,
+    EDITED: resumeProposals.filter((proposal) => proposal.state === 'EDITED').length,
+    REJECTED: resumeProposals.filter((proposal) => proposal.state === 'REJECTED').length,
+    PENDING: resumeProposals.length - resumeDecidedFields,
+  };
   const currentStepId: FormStep | 'preview' | 'receipt' = view === 'form' ? formStep : view;
   const currentStepIndex = FORM_STEPS.findIndex((step) => step.id === currentStepId);
 
@@ -1022,6 +1097,68 @@ const CandidateApplicationPage = () => {
                             </button>
                           </div>
 
+                          {/* Devam kapısı her alanda karar ister; kaç alanın kaldığı görünmezse
+                              aday pasif "Forma aktar" düğmesinin nedenini anlamıyordu. */}
+                          <div
+                            className="mt-3 rounded-xl border border-border-subtle bg-surface-subtle px-4 py-3"
+                            data-testid="resume-review-progress"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-bold">
+                                {resumeProposals.length} alandan {resumeDecidedFields} tanesi karara
+                                bağlandı
+                              </p>
+                              <p className="text-xs text-text-secondary">
+                                {resumeTally.PENDING > 0
+                                  ? `${resumeTally.PENDING} alan bekliyor`
+                                  : 'Tüm alanlar karara bağlandı'}
+                              </p>
+                            </div>
+                            <div
+                              className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted"
+                              role="progressbar"
+                              aria-valuemin={0}
+                              aria-valuemax={resumeProposals.length}
+                              aria-valuenow={resumeDecidedFields}
+                              aria-label="Karara bağlanan CV alanı sayısı"
+                            >
+                              <div
+                                className="h-full rounded-full bg-action-primary transition-[width]"
+                                style={{
+                                  width: `${
+                                    resumeProposals.length === 0
+                                      ? 0
+                                      : (resumeDecidedFields / resumeProposals.length) * 100
+                                  }%`,
+                                }}
+                              />
+                            </div>
+                            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
+                              <li>
+                                <span aria-hidden="true">
+                                  {RESUME_DECISION_STYLES.ACCEPTED.mark}
+                                </span>{' '}
+                                {resumeTally.ACCEPTED} kabul
+                              </li>
+                              <li>
+                                <span aria-hidden="true">{RESUME_DECISION_STYLES.EDITED.mark}</span>{' '}
+                                {resumeTally.EDITED} düzenlendi
+                              </li>
+                              <li>
+                                <span aria-hidden="true">
+                                  {RESUME_DECISION_STYLES.REJECTED.mark}
+                                </span>{' '}
+                                {resumeTally.REJECTED} reddedildi
+                              </li>
+                              <li>
+                                <span aria-hidden="true">
+                                  {RESUME_DECISION_STYLES.UNREVIEWED.mark}
+                                </span>{' '}
+                                {resumeTally.PENDING} bekliyor
+                              </li>
+                            </ul>
+                          </div>
+
                           <ul className="mt-4 flex flex-col gap-3" aria-label="CV alan önerileri">
                             {resumeProposals.map((proposal) => {
                               const needsControl = proposal.state === 'CONTROL_REQUIRED';
@@ -1029,95 +1166,157 @@ const CandidateApplicationPage = () => {
                               const editedValue = resumeEdits[proposal.field] ?? savedValue;
                               const isBusy =
                                 resumeBusyField === proposal.field || resumeBusyField === 'all';
+                              const style =
+                                RESUME_DECISION_STYLES[
+                                  proposal.state as keyof typeof RESUME_DECISION_STYLES
+                                ] ?? RESUME_DECISION_STYLES.UNREVIEWED;
+                              const isRejected = proposal.state === 'REJECTED';
+                              const isResumeOnly = RESUME_ONLY_FIELDS.includes(proposal.field);
+                              const confidence = confidenceWording(proposal.provenance.confidence);
                               return (
                                 <li
                                   key={proposal.field}
-                                  className="rounded-xl border border-border-subtle bg-surface-default p-4"
+                                  className={`flex overflow-hidden rounded-xl border ${style.card}`}
                                   data-testid={`resume-proposal-${proposal.field}`}
+                                  data-decision={proposal.state}
                                 >
-                                  <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                      <h4 className="text-sm font-bold">
-                                        {FIELD_LABELS[proposal.field]}
-                                      </h4>
-                                      <p className="mt-1 text-xs text-text-secondary">
-                                        Sayfa {proposal.provenance.page} · güven %
-                                        {Math.round(proposal.provenance.confidence * 100)} · metin
-                                        konumu doğrulandı
-                                      </p>
-                                    </div>
-                                    <span className="rounded-full border border-border-subtle px-2.5 py-1 text-xs font-bold">
-                                      {proposal.state === 'UNREVIEWED'
-                                        ? 'Karar bekliyor'
-                                        : proposal.state === 'CONTROL_REQUIRED'
-                                          ? 'Elle kontrol gerekli'
-                                          : proposal.state === 'ACCEPTED'
-                                            ? 'Kabul edildi'
-                                            : proposal.state === 'EDITED'
-                                              ? 'Düzenlendi'
-                                              : 'Reddedildi'}
-                                    </span>
-                                  </div>
-                                  <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-3 py-2 text-sm">
-                                    {proposal.proposedValue}
-                                  </p>
-                                  <label
-                                    className="mt-3 block text-xs font-bold"
-                                    htmlFor={`resume-edit-${proposal.field}`}
-                                  >
-                                    Aday tarafından düzenlenebilir değer
-                                  </label>
-                                  <textarea
-                                    id={`resume-edit-${proposal.field}`}
-                                    value={editedValue}
-                                    onChange={(event) =>
-                                      setResumeEdits((current) => ({
-                                        ...current,
-                                        [proposal.field]: event.target.value,
-                                      }))
-                                    }
-                                    rows={
-                                      proposal.field === 'experience' ||
-                                      proposal.field === 'education'
-                                        ? 3
-                                        : 2
-                                    }
-                                    disabled={isBusy}
-                                    className={`${inputClassName} mt-1`}
+                                  {/* Karar rengi kartın kenarında; listeyi tararken tek bakışta
+                                      hangi alanın ne olduğu görünür. */}
+                                  <span
+                                    aria-hidden="true"
+                                    className={`w-1.5 shrink-0 ${style.accent}`}
                                   />
-                                  {needsControl ? (
-                                    <p className="mt-2 text-xs font-semibold text-state-warning-text">
-                                      Bu alan düşük güven nedeniyle aynen kabul edilemez; düzenleyin
-                                      veya reddedin.
-                                    </p>
-                                  ) : null}
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    {!needsControl ? (
+                                  <div className="min-w-0 flex-1 p-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                      <div>
+                                        <h4 className="text-sm font-bold">
+                                          {RESUME_FIELD_LABELS[proposal.field]}
+                                        </h4>
+                                        <p
+                                          className={`mt-1 text-xs ${
+                                            confidence.warn
+                                              ? 'font-semibold text-state-warning-text'
+                                              : 'text-text-secondary'
+                                          }`}
+                                        >
+                                          Sayfa {proposal.provenance.page} · {confidence.text}
+                                        </p>
+                                        {/* Formda karşılığı olmayan alan kabul edilince sessizce
+                                            düşüyordu; aday aktarıldığını sanıyordu. */}
+                                        {isResumeOnly ? (
+                                          <p className="mt-1 text-xs text-text-secondary">
+                                            Bu bilgi CV’nizde kaldı; başvuru formunda ayrı bir alanı
+                                            yok, bu yüzden forma aktarılmaz.
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                      <span
+                                        className={`rounded-full border px-2.5 py-1 text-xs font-bold ${style.badge}`}
+                                        data-testid={`resume-proposal-state-${proposal.field}`}
+                                      >
+                                        <span aria-hidden="true">{style.mark}</span> {style.label}
+                                      </span>
+                                    </div>
+
+                                    {isRejected ? (
+                                      <p className="mt-3 rounded-lg border border-border-subtle px-3 py-2 text-xs font-semibold text-text-secondary">
+                                        Bu alan forma aktarılmayacak. Fikrinizi değiştirirseniz
+                                        aşağıdan kabul edebilir veya düzenleyebilirsiniz.
+                                      </p>
+                                    ) : null}
+                                    {/* Reddedilen alanda da içerik erişilebilir kalır: kapatmak
+                                        "düzenle"ye geçişi çıkmaza sokuyordu. Kararın kendisi kart
+                                        tonu, rozet ve basılı buton ile zaten okunuyor. */}
+                                    <div className={isRejected ? 'opacity-60' : undefined}>
+                                      <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-3 py-2 text-sm">
+                                        {proposal.proposedValue}
+                                      </p>
+                                      <label
+                                        className="mt-3 block text-xs font-bold"
+                                        htmlFor={`resume-edit-${proposal.field}`}
+                                      >
+                                        Aday tarafından düzenlenebilir değer
+                                      </label>
+                                      <textarea
+                                        id={`resume-edit-${proposal.field}`}
+                                        value={editedValue}
+                                        onChange={(event) =>
+                                          setResumeEdits((current) => ({
+                                            ...current,
+                                            [proposal.field]: event.target.value,
+                                          }))
+                                        }
+                                        rows={
+                                          proposal.field === 'experience' ||
+                                          proposal.field === 'education'
+                                            ? 3
+                                            : 2
+                                        }
+                                        disabled={isBusy}
+                                        className={`${inputClassName} mt-1`}
+                                      />
+                                    </div>
+                                    {needsControl ? (
+                                      <p className="mt-2 text-xs font-semibold text-state-warning-text">
+                                        Bu alan düşük güven nedeniyle aynen kabul edilemez;
+                                        düzenleyin veya reddedin.
+                                      </p>
+                                    ) : null}
+                                    {/* Seçili karar butonun üzerinde kilitli durur (aria-pressed +
+                                        dolu stil); önceki hâlde üç buton karar sonrası da aynı
+                                        görünüyordu. */}
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      {!needsControl ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void decideResumeField(proposal, 'ACCEPTED')
+                                          }
+                                          disabled={isBusy}
+                                          aria-pressed={proposal.state === 'ACCEPTED'}
+                                          className={`rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${
+                                            proposal.state === 'ACCEPTED'
+                                              ? 'bg-action-primary text-action-primary-text ring-2 ring-focus-ring'
+                                              : 'border border-action-primary text-action-primary'
+                                          }`}
+                                        >
+                                          {proposal.state === 'ACCEPTED' ? (
+                                            <span aria-hidden="true">✓ </span>
+                                          ) : null}
+                                          Öneriyi kabul et
+                                        </button>
+                                      ) : null}
                                       <button
                                         type="button"
-                                        onClick={() => void decideResumeField(proposal, 'ACCEPTED')}
-                                        disabled={isBusy}
-                                        className="rounded-lg bg-action-primary px-3 py-2 text-xs font-bold text-action-primary-text disabled:opacity-50"
+                                        onClick={() => void decideResumeField(proposal, 'EDITED')}
+                                        disabled={isBusy || !editedValue.trim()}
+                                        aria-pressed={proposal.state === 'EDITED'}
+                                        className={`rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${
+                                          proposal.state === 'EDITED'
+                                            ? 'bg-action-primary text-action-primary-text ring-2 ring-focus-ring'
+                                            : 'border border-action-primary text-action-primary'
+                                        }`}
                                       >
-                                        Öneriyi kabul et
+                                        {proposal.state === 'EDITED' ? (
+                                          <span aria-hidden="true">✎ </span>
+                                        ) : null}
+                                        Düzenlediğimi kaydet
                                       </button>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      onClick={() => void decideResumeField(proposal, 'EDITED')}
-                                      disabled={isBusy || !editedValue.trim()}
-                                      className="rounded-lg border border-action-primary px-3 py-2 text-xs font-bold text-action-primary disabled:opacity-50"
-                                    >
-                                      Düzenlediğimi kaydet
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => void decideResumeField(proposal, 'REJECTED')}
-                                      disabled={isBusy}
-                                      className="rounded-lg border border-border-strong px-3 py-2 text-xs font-bold disabled:opacity-50"
-                                    >
-                                      Reddet
-                                    </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void decideResumeField(proposal, 'REJECTED')}
+                                        disabled={isBusy}
+                                        aria-pressed={isRejected}
+                                        className={`rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${
+                                          isRejected
+                                            ? 'bg-text-primary text-white ring-2 ring-focus-ring'
+                                            : 'border border-border-strong'
+                                        }`}
+                                      >
+                                        {isRejected ? <span aria-hidden="true">✕ </span> : null}
+                                        Reddet
+                                      </button>
+                                    </div>
                                   </div>
                                 </li>
                               );
@@ -1154,12 +1353,24 @@ const CandidateApplicationPage = () => {
                               Tümünü reddet
                             </button>
                           </div>
+                          {/* Pasif düğmenin nedeni tek cümlede ve sayıyla söylenir; iki ayrı
+                              kapı (karar eksik / hiç alan seçilmemiş) ayrı ayrı açıklanır. */}
                           {!allResumeProposalsReviewed ? (
-                            <p className="mt-2 text-xs text-text-secondary">
-                              Forma aktarmadan önce her alan için kabul, düzenleme veya ret kararı
-                              verin.
+                            <p className="mt-2 text-xs font-semibold text-state-warning-text">
+                              {resumeTally.PENDING} alan için henüz karar vermediniz. Forma
+                              aktarmadan önce her alanı kabul edin, düzenleyin veya reddedin.
                             </p>
-                          ) : null}
+                          ) : selectedResumeFields === 0 ? (
+                            <p className="mt-2 text-xs font-semibold text-state-warning-text">
+                              Tüm alanları reddettiniz; aktarılacak bilgi kalmadı. En az bir alanı
+                              kabul edin veya formu elle doldurmaya devam edin.
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-xs text-text-secondary">
+                              {selectedResumeFields} alan forma aktarılacak,{' '}
+                              {resumeTally.REJECTED} alan aktarılmayacak.
+                            </p>
+                          )}
                         </div>
                       ) : null}
 
