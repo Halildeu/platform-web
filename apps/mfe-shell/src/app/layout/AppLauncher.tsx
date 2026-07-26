@@ -5,6 +5,7 @@ import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
 import { useShellCommonI18n } from '../i18n';
 import { useThemeContext } from '../theme/theme-context.provider';
 import { isEthicRemoteEnabled, isSuggestionsRemoteEnabled } from '../shell-navigation';
+import { resolveStandaloneAppTarget } from '../standalone-apps';
 
 const baseLauncherItems = [
   {
@@ -102,13 +103,10 @@ const AppLauncher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </button>
         </div>
         <div className="flex flex-col gap-2 p-3">
-          {launcherItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              onClick={onClose}
-              className="group block rounded-xl border border-border-subtle bg-surface-default px-3 py-2 text-sm shadow-xs hover:border-action-primary-border hover:bg-surface-muted"
-            >
+          {launcherItems.map((item) => {
+            const itemClassName =
+              'group block rounded-xl border border-border-subtle bg-surface-default px-3 py-2 text-sm shadow-xs hover:border-action-primary-border hover:bg-surface-muted';
+            const body = (
               <div className="flex items-center gap-3">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-lg">
                   {item.icon}
@@ -120,8 +118,25 @@ const AppLauncher: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   <div className="text-xs text-text-subtle">{item.description}</div>
                 </div>
               </div>
-            </Link>
-          ))}
+            );
+            // Kenarda yayınlanan ürün (Etik Speak) kabuk route'u değil: SPA
+            // Link'i onu açamaz, tam sayfa bağlantı gerekir.
+            const standaloneTarget = resolveStandaloneAppTarget(item.to);
+            return standaloneTarget ? (
+              <a
+                key={item.key}
+                href={standaloneTarget}
+                onClick={onClose}
+                className={itemClassName}
+              >
+                {body}
+              </a>
+            ) : (
+              <Link key={item.key} to={item.to} onClick={onClose} className={itemClassName}>
+                {body}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>

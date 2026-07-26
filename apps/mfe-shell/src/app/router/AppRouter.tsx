@@ -15,7 +15,6 @@ import {
 import { useShellCommonI18n } from '../i18n';
 import {
   SuggestionsApp,
-  EthicApp,
   AccessModule,
   AuditModule,
   UsersModule,
@@ -36,7 +35,7 @@ import {
 } from '../../features/ats-product-catalog/model/ats-capability-registry';
 import { RECRUITER_WORKSPACE_ENTRY } from '../../features/ats-portals/model/ats-portal-registry';
 import { EndpointAdminRouteBoundary } from './EndpointAdminRouteBoundary';
-import { EthicsTokenGate } from './EthicsTokenGate';
+import { StandaloneAppRedirect } from './StandaloneAppRedirect';
 const ReportBuilderWizard = React.lazy(() =>
   import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
     default: m.ReportBuilderWizard,
@@ -153,14 +152,21 @@ export const AppRouter: React.FC = () => {
             )
           }
         />
+        {/*
+          Etik Speak kabuk içinde mount EDİLMEZ: ürün kendi imajıyla
+          (etik-speak-manager) yayınlanır ve `/ethic` yolunu ingress ona verir —
+          yani tam sayfa isteği hiçbir zaman buraya gelmez. Kabuk yalnız SPA
+          gezinmesini kenardaki uygulamaya devreder; kapsam/rol kapısı orada.
+          İki kapının aynı yolda yarışması canlıda belirsiz davranış üretiyordu
+          (2026-07-26): aynı bağlantı bir kez ana sayfada kalıyor, bir kez
+          panele gidiyordu.
+        */}
         <Route
           path="/ethic"
           element={
             ethicEnabled ? (
               <ProtectedRoute requiredModule="ETHIC">
-                <EthicsTokenGate>
-                  <EthicApp />
-                </EthicsTokenGate>
+                <StandaloneAppRedirect path="/ethic" />
               </ProtectedRoute>
             ) : (
               <Navigate to={defaultShellPath} replace />

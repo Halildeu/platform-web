@@ -21,6 +21,7 @@ import LoginPopover from "./LoginPopover";
 import AppLauncher from "./AppLauncher";
 import { ThemeRuntimePanelButton } from "./ThemeRuntimePanelButton";
 import { UserMenuPopover } from "./UserMenuPopover";
+import { navigateIfStandaloneApp } from "../standalone-apps";
 
 /* ------------------------------------------------------------------ */
 /*  ShellHeader — Top navigation bar                                   */
@@ -207,7 +208,11 @@ export const ShellHeader: React.FC = () => {
       <ShellHeaderPattern
         navItems={navItems}
         currentPath={location.pathname}
-        onNavigate={(path) => { if (path !== location.pathname) navigate(path); }}
+        onNavigate={(path) => {
+          // Kenarda yayınlanan ürün (Etik Speak) kabuk route'u değil.
+          if (navigateIfStandaloneApp(path)) return;
+          if (path !== location.pathname) navigate(path);
+        }}
         startSlot={startSlot}
         endSlot={endSlot}
         menuUtility={canThemeAdmin ? <DesignLabHeaderMenu /> : undefined}

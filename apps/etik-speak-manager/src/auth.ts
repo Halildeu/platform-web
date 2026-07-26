@@ -32,6 +32,8 @@ export const hasEthicsManagerContract = (
 
 let keycloak: Keycloak | undefined;
 let initialization: Promise<'ready' | 'redirecting' | 'denied'> | undefined;
+/** Yalnız kullanıcı "Yeniden dene" dediğinde true olur — otomatik akış sessizdir. */
+let forceReauth = false;
 const UPGRADE_MARKER = 'etikSpeakManagerAuthUpgrade_v1';
 const UPGRADE_TTL_MS = 5 * 60 * 1000;
 const invalidationListeners = new Set<() => void>();
@@ -66,19 +68,18 @@ const clearUpgradeAttempt = (): void => {
 };
 
 /**
- * Faz 35 ES: kullanıcı-tetikli yeniden deneme.
+ * Kullanıcı-tetikli yeniden deneme, hesap değiştirme yolunu da açar.
  *
- * `denied` tek başına çıkışsız bir kapıydı: dar kapsamlı bir suite oturumuyla
- * gelen yetkili kullanıcı yükseltme işaretine takılır ve TTL dolana kadar
- * (5 dk) yalnız hata metni görürdü — ekranda hiçbir aksiyon yoktu. Sol panele
- * giriş eklendikten sonra bu yol sıradan kullanım hâline geldiği için işareti
- * temizleyip oturumu baştan kuran açık bir aksiyon gerekiyor. Yetki kapısı
- * değişmez: yeniden deneme yalnız KC yükseltme akışını serbest bırakır.
+ * Sıradan açılış sessizdir (aşağıya bakın); bu yüzden yanlış hesapla oturum
+ * açmış bir kullanıcının tek çıkışı bu düğmedir. `forceReauth` yalnız burada
+ * set edilir: otomatik akış asla şifre ekranı zorlamaz, kullanıcı istediğinde
+ * zorlar.
  */
 export const resetManagerSessionForRetry = (): void => {
   clearUpgradeAttempt();
   initialization = undefined;
   keycloak = undefined;
+  forceReauth = true;
 };
 
 const invalidateManagerSession = (): void => {
@@ -111,22 +112,41 @@ const startManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'
       .catch(invalidateManagerSession);
   };
 
+  // Kapsam sessiz SSO kontrolünün KENDİSİNE veriliyor.
+  //
+  // `ethics-manager-audience` + `ethics:case:manage` KC'de opsiyonel client
+  // scope'tur: yalnız istendiğinde token'a girer. Kapsamsız `check-sso`
+  // dönen token sözleşmeyi hiçbir zaman taşıyamaz — bu yüzden panel her
+  // açılışta yükseltme turuna, eski `prompt: 'login'` ile de şifre ekranına
+  // düşüyordu (canlı doğrulama 2026-07-26: suite oturumu açıkken bile).
+  // keycloak-js init `scope`'u check-sso yönlendirmesine taşır
+  // (`createLoginUrl`: `options?.scope || this.scope`), dolayısıyla yetkili
+  // kullanıcı açık suite oturumuyla panele hiç ek adım olmadan girer.
   const authenticated = await keycloak.init({
     onLoad: 'check-sso',
+    scope: ETHICS_MANAGER_SCOPE,
     checkLoginIframe: false,
     pkceMethod: 'S256',
   });
 
   if (!authenticated) {
     if (!claimUpgradeAttempt()) return 'denied';
-    await keycloak.login({ redirectUri: managerRedirectUri(), scope: ETHICS_MANAGER_SCOPE });
+    await keycloak.login({
+      redirectUri: managerRedirectUri(),
+      scope: ETHICS_MANAGER_SCOPE,
+      ...(forceReauth ? { prompt: 'login' as const } : {}),
+    });
+    forceReauth = false;
     return 'redirecting';
   }
   if (!hasEthicsManagerContract(keycloak.tokenParsed)) {
+    // Kapsam yukarıda zaten istendi: aynı oturumla ikinci sessiz tur aynı
+    // token'ı döndürür, sonsuz yönlendirme üretir. Bu noktada eksik olan
+    // rol/yetkidir — ya da oturum başka bir hesaba aittir. İkincisinin çıkışı
+    // kullanıcı-tetikli yeniden denemedir (aşağıdaki prompt=login).
+    if (!forceReauth) return 'denied';
     if (!claimUpgradeAttempt()) return 'denied';
-    // prompt=login: SSO override — canonical suite session'ı ethics-manager
-    // scope taşımıyorsa KC her zaman fresh login sorar. Yoksa auto-SSO aynı
-    // scope-less token'ı geri döndürür + denied cycle'a takılır.
+    forceReauth = false;
     await keycloak.login({
       redirectUri: managerRedirectUri(),
       scope: ETHICS_MANAGER_SCOPE,
@@ -134,6 +154,7 @@ const startManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'
     });
     return 'redirecting';
   }
+  forceReauth = false;
   clearUpgradeAttempt();
 
   registerAuthorizationFailureHandler(invalidateManagerSession);
