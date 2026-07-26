@@ -33,6 +33,10 @@ export type CommandType =
   // surfaced as a recent command in the device drawer, so it is part of the
   // union for type-safe "Son komutlar" rendering.
   | 'UPDATE_AGENT'
+  // Faz 22.6 #2913 — browser-managed device-bound TPM/client-cert renewal.
+  // The browser sends only reason + idempotency key; no enrollment token is
+  // present in the browser request or command DTO.
+  | 'RENEW_TPM_CERTIFICATE'
   // #508 (Faz 22.5) — Endpoint Display Policy. Always maker-checker; dispatched
   // via the dedicated display-policy surface (NOT the generic /commands path),
   // surfaced as a recent command (PENDING until a 2nd admin approves) in the
@@ -158,6 +162,17 @@ export interface CreateLocalPasswordChangeResponse {
    * the browser cannot redisplay an old generated secret.
    */
   oneTimePassword: string | null;
+}
+
+export interface CreateTpmCertificateRenewalBody {
+  idempotencyKey: string;
+  /** Required, max 512 chars. */
+  reason: string;
+}
+
+export interface CreateTpmCertificateRenewalArgs {
+  deviceId: string;
+  body: CreateTpmCertificateRenewalBody;
 }
 
 /** Backend `ApproveEndpointCommandRequest` body. */

@@ -13,6 +13,7 @@ import {
   type DestructiveCommandSubmitBody,
 } from '../components/DestructiveCommandModal';
 import { AgentUpdateModal } from '../components/AgentUpdateModal';
+import { TpmCertificateRenewalModal } from '../components/TpmCertificateRenewalModal';
 import { RolloutRingModal } from '../components/RolloutRingModal';
 import { MaintenanceTokenModal } from '../components/MaintenanceTokenModal';
 import {
@@ -99,6 +100,8 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   // destructive actions; its own modal + dedicated BE-032 endpoint).
   const [agentUpdateOpen, setAgentUpdateOpen] = React.useState(false);
   const [agentUpdateCommandId, setAgentUpdateCommandId] = React.useState<string | null>(null);
+  const [tpmRenewalOpen, setTpmRenewalOpen] = React.useState(false);
+  const [tpmRenewalCommandId, setTpmRenewalCommandId] = React.useState<string | null>(null);
   // BE-026 — per-device rollout-ring + tags assignment (server-side metadata,
   // not an online-device command, so it is not gated by `allowedAtAll`).
   const [rolloutOpen, setRolloutOpen] = React.useState(false);
@@ -310,6 +313,18 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
             )}
           </div>
         )}
+        {tpmRenewalCommandId && (
+          <div
+            role="status"
+            data-testid="tpm-renewal-success-toast"
+            className="rounded-md border border-state-success-border bg-state-success-subtle px-4 py-2 text-sm text-state-success-text mb-2"
+          >
+            {t('endpointAdmin.drawer.islemler.tpmRenewalSuccess').replace(
+              '{commandId}',
+              tpmRenewalCommandId,
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -319,6 +334,15 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
             className="px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('endpointAdmin.drawer.islemler.button.UPDATE_AGENT')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTpmRenewalOpen(true)}
+            disabled={!allowedAtAll || isSubmitting}
+            data-testid="command-button-RENEW_TPM_CERTIFICATE"
+            className="px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t('endpointAdmin.drawer.islemler.button.RENEW_TPM_CERTIFICATE')}
           </button>
         </div>
       </section>
@@ -520,6 +544,18 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           onDispatched={(commandId) => {
             setAgentUpdateOpen(false);
             setAgentUpdateCommandId(commandId);
+          }}
+        />
+      )}
+
+      {tpmRenewalOpen && (
+        <TpmCertificateRenewalModal
+          open
+          deviceId={device.id}
+          onCancel={() => setTpmRenewalOpen(false)}
+          onDispatched={(commandId) => {
+            setTpmRenewalOpen(false);
+            setTpmRenewalCommandId(commandId);
           }}
         />
       )}

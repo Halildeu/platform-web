@@ -21,7 +21,6 @@ import type {
   CreateEndpointEnrollmentResponse,
   EndpointEnrollment,
 } from '../../../entities/endpoint-enrollment/types';
-import type { EndpointDevice } from '../../../entities/endpoint-device/types';
 
 const mockCreate = vi.fn();
 const mockResetCreate = vi.fn();
@@ -46,7 +45,6 @@ vi.mock('../../compliance-policies/useManageGate', () => ({
 import { endpointAdminApi } from '../../../app/services/endpointAdminApi';
 
 const mockedList = endpointAdminApi.useListEndpointEnrollmentsQuery as ReturnType<typeof vi.fn>;
-const mockedDevices = endpointAdminApi.useListEndpointDevicesQuery as ReturnType<typeof vi.fn>;
 const mockedCreateHook = endpointAdminApi.useCreateEndpointEnrollmentMutation as ReturnType<
   typeof vi.fn
 >;
@@ -81,12 +79,6 @@ function stubValidManifest(): void {
 beforeEach(() => {
   vi.clearAllMocks();
   canManageMock = true;
-  mockedDevices.mockReturnValue({
-    data: [],
-    error: undefined,
-    isLoading: false,
-    isFetching: false,
-  });
   mockedCreateHook.mockReturnValue([mockCreate, { isLoading: false, reset: mockResetCreate }]);
   stubValidManifest();
 });
@@ -106,29 +98,6 @@ function row(overrides: Partial<EndpointEnrollment> = {}): EndpointEnrollment {
     expiresAt: '2026-05-29T12:00:00Z',
     consumedAt: null,
     createdAt: '2026-05-29T11:00:00Z',
-    ...overrides,
-  };
-}
-
-function device(overrides: Partial<EndpointDevice> = {}): EndpointDevice {
-  return {
-    id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    tenantId: '22222222-2222-2222-2222-222222222222',
-    hostname: 'AgentPc2',
-    displayName: null,
-    osType: 'WINDOWS',
-    osVersion: '11',
-    agentVersion: 'v0.3.16',
-    activeUser: null,
-    machineFingerprint: null,
-    domainName: 'acik.local',
-    status: 'ONLINE',
-    lastSeenAt: '2026-07-22T18:48:56Z',
-    enrolledAt: '2026-06-30T15:18:22Z',
-    createdAt: '2026-06-30T15:18:22Z',
-    updatedAt: '2026-07-22T18:48:56Z',
-    deploymentRing: 'PILOT',
-    deviceTags: [],
     ...overrides,
   };
 }
@@ -245,118 +214,18 @@ describe('EnrollmentListPage', () => {
     expect(snippet).toContain("'https://example/api'");
   });
 
-  it('binds a renewal token to the selected active device and filters decommissioned devices', async () => {
-    const agentPc2 = device();
-    mockedDevices.mockReturnValue({
-      data: [agentPc2, device({ id: 'dead-device', hostname: 'OldPc', status: 'DECOMMISSIONED' })],
-      error: undefined,
-      isLoading: false,
-      isFetching: false,
-    });
+  it('keeps existing-device lifecycle operations out of the raw-token enrollment flow', () => {
     mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
-    mockCreate.mockReturnValue({
-      unwrap: () =>
-        Promise.resolve({
-          enrollmentId: '44444444-4444-4444-4444-444444444444',
-          token: 'target-bound-token',
-          expiresAt: '2026-07-22T20:00:00Z',
-          deviceId: agentPc2.id,
-        }),
-    });
 
     render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
     fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
-    fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
 
-    const select = screen.getByTestId('create-enrollment-dialog-device-select');
-    expect(select).toHaveTextContent('AgentPc2');
-    expect(select).not.toHaveTextContent('OldPc');
-    fireEvent.change(select, { target: { value: agentPc2.id } });
-    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
-
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith({
-        expiresInMinutes: 60,
-        note: undefined,
-        deviceId: agentPc2.id,
-      });
-    });
-    expect(await screen.findByTestId('enrollment-token-modal')).toBeInTheDocument();
-    const renewalCommand = screen.getByTestId('enrollment-token-modal-onecommand').textContent ?? '';
-    expect(renewalCommand).toContain('--auto-enroll-tpm');
-    expect(renewalCommand).toContain("--api-url 'https://example/api'");
-    expect(renewalCommand).not.toContain('mtls.example');
-    expect(renewalCommand).toContain('Restart-Service EndpointAgent');
-    expect(renewalCommand).toContain('ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX');
-    expect(renewalCommand).toContain(
-      'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EndpointAgent',
-    );
-    expect(renewalCommand).toContain('Get-ItemPropertyValue');
-    expect(renewalCommand).toContain('ImagePath');
-    expect(renewalCommand).toContain('Test-Path -LiteralPath $agentExe -PathType Leaf');
-    expect(renewalCommand).toContain('& $agentExe --auto-enroll-tpm');
-    expect(renewalCommand).not.toContain(
-      "& 'C:\\Program Files\\EndpointAgent\\endpoint-agent.exe'",
-    );
-    expect(renewalCommand).not.toContain('-PackageUrl');
-    expect(screen.queryByTestId('enrollment-token-modal-snippet')).not.toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('create-enrollment-dialog-new-device-only')).toBeInTheDocument();
+    expect(screen.queryByTestId('create-enrollment-dialog-target-existing')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('create-enrollment-dialog-device-select')).not.toBeInTheDocument();
   });
 
-  it('generates an in-place signed-package repair command for a legacy existing agent', async () => {
-    const legacyMkrA1 = device({
-      id: '07330828-a336-4025-8b60-cf2000f8b882',
-      hostname: 'MKR-A1',
-      agentVersion: 'v0.1.1-lab.1',
-      status: 'OFFLINE',
-    });
-    mockedDevices.mockReturnValue({
-      data: [legacyMkrA1],
-      error: undefined,
-      isLoading: false,
-      isFetching: false,
-    });
-    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
-    mockCreate.mockReturnValue({
-      unwrap: () =>
-        Promise.resolve({
-          enrollmentId: '55555555-5555-5555-5555-555555555555',
-          token: 'legacy-device-repair-token',
-          expiresAt: '2026-07-26T14:00:00Z',
-          deviceId: legacyMkrA1.id,
-        }),
-    });
-
-    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
-    fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
-    fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
-    fireEvent.change(screen.getByTestId('create-enrollment-dialog-device-select'), {
-      target: { value: legacyMkrA1.id },
-    });
-    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
-
-    const command = (await screen.findByTestId('enrollment-token-modal-onecommand')).textContent ?? '';
-    expect(command).toContain('/endpoint-agent/current/bootstrap-package.ps1');
-    expect(command).toContain('/endpoint-agent/current/EndpointAgent.zip');
-    expect(command).toContain(`-ExpectedZipSha256 '${ONE_CMD_SHA}'`);
-    expect(command).toContain("-ApiUrl 'https://example/api'");
-    expect(command).toContain("-EnrollmentToken 'legacy-device-repair-token'");
-    expect(command).toContain('-Start -Force -ResetCredentialStore');
-    expect(command).not.toContain('--auto-enroll-tpm');
-    expect(command).not.toContain('ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX');
-    expect(screen.getByText('endpointAdmin.enrollments.modal.repairCommandLabel')).toBeInTheDocument();
-    expect(screen.getByText('endpointAdmin.enrollments.modal.repairCommandHelp')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not reveal a token when the server response is not bound to the selected device', async () => {
-    const agentPc2 = device();
-    mockedDevices.mockReturnValue({
-      data: [agentPc2],
-      error: undefined,
-      isLoading: false,
-      isFetching: false,
-    });
+  it('does not reveal a token when the new-device endpoint returns a device-bound response', async () => {
     mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
     mockCreate.mockReturnValue({
       unwrap: () =>
@@ -364,16 +233,12 @@ describe('EnrollmentListPage', () => {
           enrollmentId: '44444444-4444-4444-4444-444444444444',
           token: 'must-not-be-revealed',
           expiresAt: '2026-07-22T20:00:00Z',
-          deviceId: null,
+          deviceId: '22222222-2222-2222-2222-222222222222',
         }),
     });
 
     render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
     fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
-    fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
-    fireEvent.change(screen.getByTestId('create-enrollment-dialog-device-select'), {
-      target: { value: agentPc2.id },
-    });
     fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
 
     await waitFor(() => {

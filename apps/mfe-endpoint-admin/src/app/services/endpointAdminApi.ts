@@ -40,6 +40,7 @@ import type {
   CreateEndpointCommandBody,
   CreateLocalPasswordChangeBody,
   CreateLocalPasswordChangeResponse,
+  CreateTpmCertificateRenewalArgs,
 } from '../../entities/endpoint-command/types';
 import type {
   DeviceSoftwareInventory,
@@ -1872,6 +1873,24 @@ export const endpointAdminApi = createApi({
       ],
     }),
     /**
+     * Faz 22.6 #2913 — browser-managed TPM/client-certificate renewal.
+     * The request contains no token, API URL or trust material. The backend
+     * creates a device-bound enrollment token, protects it in the encrypted
+     * command-secret channel and reveals it once to the claiming agent.
+     */
+    renewTpmCertificate: builder.mutation<EndpointCommand, CreateTpmCertificateRenewalArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/tpm-renewals`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+        { type: 'EndpointEnrollment' as const, id: 'LIST' },
+      ],
+    }),
+    /**
      * AG-029 (BE-031) — create an agent-update release (status=DRAFT).
      *   gateway POST /api/v1/endpoint-admin/endpoint-agent-update-releases
      * This IS the trust-establishment surface: the body carries the trust
@@ -2168,6 +2187,7 @@ export const {
   // AG-029 signed self-update (BE-031 release list + BE-032 dispatch).
   useListAgentUpdateReleasesQuery,
   useDispatchAgentUpdateMutation,
+  useRenewTpmCertificateMutation,
   // AG-029 BE-031 release catalog management (slice 2).
   useCreateAgentUpdateReleaseMutation,
   useApproveAgentUpdateReleaseMutation,

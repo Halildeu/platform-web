@@ -298,7 +298,7 @@ const DICT_TR = {
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
   'endpointAdmin.enrollments.page.description':
-    'Yeni Windows cihazı kurulumu veya mevcut cihazın TPM/sertifika yenilemesi için tek kullanımlık enrollment token üretin. Token oluşturulduktan sonra yalnızca tek bir kez gösterilir.',
+    'Yeni Windows cihazının ilk kurulum kaydını oluşturun. Mevcut cihaz güncelleme ve TPM/sertifika yenileme işlemleri Tüm Cihazlar ekranından tarayıcıyla yönetilir.',
   'endpointAdmin.enrollments.page.createButton': 'Yeni Enrollment Oluştur',
   'endpointAdmin.enrollments.page.loading': 'Enrollment listesi yükleniyor…',
   'endpointAdmin.enrollments.page.refreshing': 'Liste güncelleniyor…',
@@ -316,6 +316,8 @@ const DICT_TR = {
   'endpointAdmin.enrollments.table.consumedAt': 'Kullanıldı',
   'endpointAdmin.enrollments.table.deviceId': 'Cihaz',
   'endpointAdmin.enrollments.dialog.title': 'Yeni Enrollment Oluştur',
+  'endpointAdmin.enrollments.dialog.newDeviceOnlyHelp':
+    'Bu ekran yalnız yeni cihazın ilk kurulum kaydı içindir. Kayıtlı bir cihazı yenilemek veya güncellemek için Tüm Cihazlar ekranındaki İşlemler sekmesini kullanın.',
   'endpointAdmin.enrollments.dialog.targetLabel': 'Kayıt hedefi',
   'endpointAdmin.enrollments.dialog.targetNew': 'Yeni cihaz',
   'endpointAdmin.enrollments.dialog.targetExisting': 'Mevcut cihazı yenile',
@@ -826,8 +828,11 @@ const DICT_TR = {
   'endpointAdmin.drawer.islemler.button.COLLECT_INVENTORY': 'Envanteri Şimdi Topla',
   'endpointAdmin.drawer.islemler.heading.agentMgmt': 'Ajan Yönetimi',
   'endpointAdmin.drawer.islemler.button.UPDATE_AGENT': 'Ajan Güncelle',
+  'endpointAdmin.drawer.islemler.button.RENEW_TPM_CERTIFICATE': 'TPM Sertifikasını Yenile',
   'endpointAdmin.drawer.islemler.agentUpdateSuccess':
     'Ajan güncelleme komutu sıraya alındı (ID: {commandId}).',
+  'endpointAdmin.drawer.islemler.tpmRenewalSuccess':
+    'TPM/sertifika yenileme komutu gönderildi: {commandId}',
   'endpointAdmin.drawer.islemler.heading.remoteResponse': 'Remote Response',
   'endpointAdmin.drawer.islemler.remoteResponse.open': 'Remote Response Aç',
   'endpointAdmin.drawer.islemler.button.LOCK_USER_LOGIN': 'Kullanıcı Girişi Kilitle',
@@ -1253,6 +1258,15 @@ const DICT_TR = {
   'endpointAdmin.modal.agentUpdate.dispatch': 'Güncelle',
   'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
     'Göndermek için bir sürüm seçin ve gerekçe girin.',
+  'endpointAdmin.modal.tpmRenewal.title': 'TPM Sertifikasını Yenile',
+  'endpointAdmin.modal.tpmRenewal.note':
+    'Yenileme cihazdaki çalışan ajan tarafından LocalSystem bağlamında yapılır. Enrollment tokenı veya PowerShell komutu tarayıcıya gösterilmez.',
+  'endpointAdmin.modal.tpmRenewal.reasonLabel': 'Gerekçe',
+  'endpointAdmin.modal.tpmRenewal.dispatchError':
+    'TPM/sertifika yenileme komutu gönderilemedi.',
+  'endpointAdmin.modal.tpmRenewal.cancel': 'İptal',
+  'endpointAdmin.modal.tpmRenewal.dispatch': 'Yenilemeyi Başlat',
+  'endpointAdmin.modal.tpmRenewal.dispatching': 'Gönderiliyor…',
   // platform-web#980 — the agent reports a structured failure reason that the
   // backend keeps through redaction; these render it instead of a bare
   // "Başarısız". Codes come from platform-agent internal/winget.
@@ -2064,7 +2078,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
   'endpointAdmin.enrollments.page.description':
-    'Mint one-time enrollment tokens for a new Windows installation or an existing device TPM/certificate renewal. The raw token is revealed exactly once.',
+    'Create the initial enrollment for a new Windows device. Manage updates and TPM/certificate renewal for existing devices from the All Devices browser screen.',
   'endpointAdmin.enrollments.page.createButton': 'Create new enrollment',
   'endpointAdmin.enrollments.page.loading': 'Loading enrollments…',
   'endpointAdmin.enrollments.page.refreshing': 'Refreshing…',
@@ -2083,6 +2097,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.table.consumedAt': 'Consumed',
   'endpointAdmin.enrollments.table.deviceId': 'Device',
   'endpointAdmin.enrollments.dialog.title': 'Create new enrollment',
+  'endpointAdmin.enrollments.dialog.newDeviceOnlyHelp':
+    'This screen is only for initial enrollment of a new device. Use the Operations tab on All Devices to renew or update an enrolled device.',
   'endpointAdmin.enrollments.dialog.targetLabel': 'Enrollment target',
   'endpointAdmin.enrollments.dialog.targetNew': 'New device',
   'endpointAdmin.enrollments.dialog.targetExisting': 'Renew existing device',
@@ -2591,8 +2607,11 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.islemler.button.COLLECT_INVENTORY': 'Collect Inventory Now',
   'endpointAdmin.drawer.islemler.heading.agentMgmt': 'Agent Management',
   'endpointAdmin.drawer.islemler.button.UPDATE_AGENT': 'Update Agent',
+  'endpointAdmin.drawer.islemler.button.RENEW_TPM_CERTIFICATE': 'Renew TPM Certificate',
   'endpointAdmin.drawer.islemler.agentUpdateSuccess':
     'Agent update command queued (ID: {commandId}).',
+  'endpointAdmin.drawer.islemler.tpmRenewalSuccess':
+    'TPM/certificate renewal command dispatched: {commandId}',
   'endpointAdmin.drawer.islemler.heading.remoteResponse': 'Remote Response',
   'endpointAdmin.drawer.islemler.remoteResponse.open': 'Open Remote Response',
   'endpointAdmin.drawer.islemler.button.LOCK_USER_LOGIN': 'Lock User Login',
@@ -3013,6 +3032,15 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.agentUpdate.dispatch': 'Update',
   'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
     'Pick a release and enter a reason to dispatch.',
+  'endpointAdmin.modal.tpmRenewal.title': 'Renew TPM Certificate',
+  'endpointAdmin.modal.tpmRenewal.note':
+    'The installed agent performs renewal as LocalSystem. No enrollment token or PowerShell command is exposed to the browser.',
+  'endpointAdmin.modal.tpmRenewal.reasonLabel': 'Reason',
+  'endpointAdmin.modal.tpmRenewal.dispatchError':
+    'Could not dispatch the TPM/certificate renewal command.',
+  'endpointAdmin.modal.tpmRenewal.cancel': 'Cancel',
+  'endpointAdmin.modal.tpmRenewal.dispatch': 'Start Renewal',
+  'endpointAdmin.modal.tpmRenewal.dispatching': 'Dispatching…',
   // platform-web#980 — see the Turkish block; codes come from
   // platform-agent internal/winget.
   'endpointAdmin.drawer.install.failureReason.egress_not_ready':
