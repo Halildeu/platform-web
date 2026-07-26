@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { parseAccessFile } from './App';
 import {
   EVIDENCE_STATES,
   declareEvidence,
@@ -200,5 +201,35 @@ describe('Etik Speak evidence state vocabulary', () => {
       ].sort(),
     );
     expect(EVIDENCE_STATES).not.toContain('REJECTED' as EvidenceState);
+  });
+});
+
+describe('Etik Speak access file round trip', () => {
+  // The success screen writes this exact shape; the follow screen must read it
+  // back. Handing the reporter a file and then asking them to retype it is the
+  // defect this closes.
+  const written = (id: string, secret: string) =>
+    `Etik Speak erişim bilgisi\nReceipt: ${id}\nAccess secret: ${secret}\n`;
+
+  it('reads back the file the success screen produced', () => {
+    // Shaped like the real thing, but not a live value: an access secret is the
+    // only key to a reporter's mailbox and must never enter version control.
+    const id = '00000000-0000-4000-8000-000000000000';
+    const secret = 'ornek-erisim-sirri-yalnizca-test-icin-kullanilir';
+    expect(parseAccessFile(written(id, secret))).toEqual({
+      receiptId: id,
+      accessSecret: secret,
+    });
+  });
+
+  it('tolerates Windows line endings and stray spacing', () => {
+    expect(
+      parseAccessFile('Etik Speak erişim bilgisi\r\n Receipt :  abc \r\nAccess secret:  xyz \r\n'),
+    ).toEqual({ receiptId: 'abc', accessSecret: 'xyz' });
+  });
+
+  it('refuses a file that is not an access file rather than guessing', () => {
+    expect(parseAccessFile('sadece rastgele bir metin')).toBeNull();
+    expect(parseAccessFile('Receipt: yalnizca-numara')).toBeNull();
   });
 });
