@@ -353,7 +353,17 @@ test.describe('Full ATS authorized product access', () => {
 
     const workspace = page.getByTestId('recruiter-workspace-page');
     await expect(workspace).toBeVisible();
-    await expect(workspace.getByRole('heading', { name: 'İK Çalışma Alanı' })).toBeVisible();
+    // Yüzey kimliği iki bağımsız işaretten okunur: sayfanın kendi başlığı ve
+    // "buradasınız" kırıntısı. Tek metne bağlanmak #991'de sessizce koptu —
+    // kahraman başlığı yeniden yazıldı, "İK Çalışma Alanı" ise `heading` değil
+    // kırıntıdaki `span` (aria-current="page"). Bu yüzden ikisi ayrı ayrı
+    // doğrulanıyor: biri kopsa hangisinin koptuğu doğrudan görünür.
+    await expect(
+      workspace.getByRole('heading', { name: 'Başvuruları tek yerden yönetin' }),
+    ).toBeVisible();
+    await expect(
+      workspace.getByRole('navigation', { name: 'ATS konumu' }).getByText('İK Çalışma Alanı'),
+    ).toBeVisible();
     // Initial API access is fulfilled with the bounded synthetic tenant fixture.
     // Filtering and inspection from this point onward must stay browser-local.
     dataRequests.length = 0;
