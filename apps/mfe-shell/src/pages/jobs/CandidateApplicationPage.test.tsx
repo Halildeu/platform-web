@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import CandidateApplicationPage from './CandidateApplicationPage';
+import CandidateApplicationPage, { RESUME_DECISION_STYLES } from './CandidateApplicationPage';
 
 const apiMocks = vi.hoisted(() => ({
   getPublicJob: vi.fn(),
@@ -306,6 +306,50 @@ describe('CandidateApplicationPage', () => {
     );
     expect(screen.getByTestId('candidate-fullName')).toHaveValue('PDF Demo Adayı');
     expect(screen.getByTestId('candidate-email')).toHaveValue('pdf.aday@example.test');
+  });
+
+  it('gives every decision state its own frame, not just its own badge', () => {
+    // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
+    // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve
+    // aksan sinifini tasiyordu (border-border-subtle + bg-border-strong); tek
+    // fark rozetti. Rozet metnine bakarak "durumlar ayrisiyor" demek yetmez.
+    const states = Object.keys(RESUME_DECISION_STYLES) as Array<
+      keyof typeof RESUME_DECISION_STYLES
+    >;
+    const frame = (s: keyof typeof RESUME_DECISION_STYLES) =>
+      `${RESUME_DECISION_STYLES[s].accent}|${RESUME_DECISION_STYLES[s].card}`;
+
+    const collisions: string[] = [];
+    for (let i = 0; i < states.length; i += 1) {
+      for (let j = i + 1; j < states.length; j += 1) {
+        if (frame(states[i]) === frame(states[j])) {
+          collisions.push(`${states[i]} == ${states[j]}`);
+        }
+      }
+    }
+
+    expect(collisions).toEqual([]);
+    // Rozetler de ayri olmali; ayni rozet iki duruma bakildiginda karistirir.
+    const badges = states.map((s) => RESUME_DECISION_STYLES[s].badge);
+    expect(new Set(badges).size).toBe(states.length);
+    // Simgeler de tekil: ekran okuyucu disinda hizli tarama isareti bunlar.
+    const marks = states.map((s) => RESUME_DECISION_STYLES[s].mark);
+    expect(new Set(marks).size).toBe(states.length);
+
+    // Karar BEKLEYEN kart notr kalmali. Onceki hal `border-strong` kullaniyordu
+    // ve olculdugunde bu token notr gri degil doygun marka MAVISI cikti
+    // (oklch(0.5461 0.2152 262.88)) — bekleyen kart hem karar verilmis gibi
+    // goruntuluyor hem EDITED'in mavisiyle (hue 259.81) karisiyordu.
+    const pending = RESUME_DECISION_STYLES.UNREVIEWED;
+    expect(`${pending.accent} ${pending.card} ${pending.badge}`).not.toMatch(/state-/);
+
+    // Karar VERILMIS her durum kendi state ailesini kullanmali; iki durumun
+    // ayni aileyi paylasmasi farkli sinif dizesiyle bile gozle ayrilmaz.
+    const family = (value: string) => value.match(/state-([a-z]+)-/)?.[1];
+    const decided = ['ACCEPTED', 'EDITED', 'REJECTED', 'CONTROL_REQUIRED'] as const;
+    const families = decided.map((s) => family(RESUME_DECISION_STYLES[s].accent));
+    expect(families.every(Boolean)).toBe(true);
+    expect(new Set(families).size).toBe(decided.length);
   });
 
   it('makes each decision state visually distinguishable and latches the chosen action', async () => {
