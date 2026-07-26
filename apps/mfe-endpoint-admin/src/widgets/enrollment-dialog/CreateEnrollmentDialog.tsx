@@ -3,6 +3,7 @@ import React from 'react';
 
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
 import type { CreateEndpointEnrollmentResponse } from '../../entities/endpoint-enrollment/types';
+import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import { useEndpointAdminI18n } from '../../i18n';
 
 const MIN_MINUTES = 1;
@@ -15,7 +16,10 @@ export interface CreateEnrollmentDialogProps {
   open: boolean;
   canManage: boolean;
   onClose: () => void;
-  onCreated: (response: CreateEndpointEnrollmentResponse) => void;
+  onCreated: (
+    response: CreateEndpointEnrollmentResponse,
+    targetDevice: EndpointDevice | null,
+  ) => void;
 }
 
 export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
@@ -107,6 +111,14 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
     }
 
     try {
+      const targetDevice =
+        target === 'existing-device'
+          ? (eligibleDevices.find((device) => device.id === deviceId) ?? null)
+          : null;
+      if (target === 'existing-device' && targetDevice === null) {
+        setValidationError(t('endpointAdmin.enrollments.dialog.errorDeviceRequired'));
+        return;
+      }
       const response = await createEnrollment({
         expiresInMinutes,
         note: note.trim() ? note.trim() : undefined,
@@ -118,7 +130,7 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
         createState.reset();
         return;
       }
-      onCreated(response);
+      onCreated(response, targetDevice);
       // Codex iter-1 reveal-once UX: clear local state immediately and
       // reset the RTK Query mutation cache so the raw token does not
       // linger anywhere outside the modal closure.

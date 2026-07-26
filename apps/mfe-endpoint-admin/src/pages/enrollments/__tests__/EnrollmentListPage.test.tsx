@@ -300,7 +300,53 @@ describe('EnrollmentListPage', () => {
     );
     expect(renewalCommand).not.toContain('-PackageUrl');
     expect(screen.queryByTestId('enrollment-token-modal-snippet')).not.toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('generates an in-place signed-package repair command for a legacy existing agent', async () => {
+    const legacyMkrA1 = device({
+      id: '07330828-a336-4025-8b60-cf2000f8b882',
+      hostname: 'MKR-A1',
+      agentVersion: 'v0.1.1-lab.1',
+      status: 'OFFLINE',
+    });
+    mockedDevices.mockReturnValue({
+      data: [legacyMkrA1],
+      error: undefined,
+      isLoading: false,
+      isFetching: false,
+    });
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    mockCreate.mockReturnValue({
+      unwrap: () =>
+        Promise.resolve({
+          enrollmentId: '55555555-5555-5555-5555-555555555555',
+          token: 'legacy-device-repair-token',
+          expiresAt: '2026-07-26T14:00:00Z',
+          deviceId: legacyMkrA1.id,
+        }),
+    });
+
+    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
+    fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
+    fireEvent.change(screen.getByTestId('create-enrollment-dialog-device-select'), {
+      target: { value: legacyMkrA1.id },
+    });
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
+
+    const command = (await screen.findByTestId('enrollment-token-modal-onecommand')).textContent ?? '';
+    expect(command).toContain('/endpoint-agent/current/bootstrap-package.ps1');
+    expect(command).toContain('/endpoint-agent/current/EndpointAgent.zip');
+    expect(command).toContain(`-ExpectedZipSha256 '${ONE_CMD_SHA}'`);
+    expect(command).toContain("-ApiUrl 'https://example/api'");
+    expect(command).toContain("-EnrollmentToken 'legacy-device-repair-token'");
+    expect(command).toContain('-Start -Force -ResetCredentialStore');
+    expect(command).not.toContain('--auto-enroll-tpm');
+    expect(command).not.toContain('ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX');
+    expect(screen.getByText('endpointAdmin.enrollments.modal.repairCommandLabel')).toBeInTheDocument();
+    expect(screen.getByText('endpointAdmin.enrollments.modal.repairCommandHelp')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not reveal a token when the server response is not bound to the selected device', async () => {

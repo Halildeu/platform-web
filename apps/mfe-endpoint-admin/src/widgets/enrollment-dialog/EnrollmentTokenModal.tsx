@@ -2,6 +2,7 @@
 import React from 'react';
 
 import type { CreateEndpointEnrollmentResponse } from '../../entities/endpoint-enrollment/types';
+import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import { useEndpointAdminI18n } from '../../i18n';
 
 /**
@@ -26,6 +27,8 @@ import { useEndpointAdminI18n } from '../../i18n';
  */
 export interface EnrollmentTokenModalProps {
   response: CreateEndpointEnrollmentResponse | null;
+  /** Immutable snapshot of the selected existing device at token creation. */
+  targetDevice: EndpointDevice | null;
   /**
    * Public token-bootstrap API. Existing-device TPM renewal must use this
    * channel because the command repairs a missing or expired client
@@ -95,6 +98,7 @@ function buildOneCommand(args: {
   apiUrl: string;
   artifactBaseUrl: string;
   zipSha256: string;
+  repairExisting?: boolean;
 }): string {
   const base = `${args.artifactBaseUrl}/endpoint-agent/current`;
   const q = (v: string): string => `'${powerShellEscape(v)}'`;
@@ -107,7 +111,36 @@ function buildOneCommand(args: {
     `-ApiUrl ${q(args.apiUrl)}`,
     `-EnrollmentToken ${q(args.token)}`,
     `-Start`,
+    ...(args.repairExisting ? [`-Force`, `-ResetCredentialStore`] : []),
   ].join(' ');
+}
+
+function parseReleaseVersion(value: string | null | undefined): [number, number, number] | null {
+  if (!value) {
+    return null;
+  }
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function isAgentAtLeastCurrent(
+  installedVersion: string | null,
+  currentReleaseTag: string | undefined,
+): boolean {
+  const installed = parseReleaseVersion(installedVersion);
+  const current = parseReleaseVersion(currentReleaseTag);
+  if (installed === null || current === null) {
+    return false;
+  }
+  for (let index = 0; index < installed.length; index += 1) {
+    if (installed[index] !== current[index]) {
+      return installed[index] > current[index];
+    }
+  }
+  return true;
 }
 
 /** Existing-device TPM/certificate renewal through the token bootstrap channel. */
@@ -146,6 +179,7 @@ type CopyKind = 'token' | 'snippet' | 'onecommand';
 
 export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   response,
+  targetDevice,
   apiUrl,
   artifactBaseUrl,
   onClose,
@@ -153,6 +187,7 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   const { t } = useEndpointAdminI18n();
   const [copied, setCopied] = React.useState<CopyKind | null>(null);
   const [manifestState, setManifestState] = React.useState<ManifestState>({ status: 'loading' });
+  const [manifestEnrollmentId, setManifestEnrollmentId] = React.useState<string | null>(null);
   const [retryNonce, setRetryNonce] = React.useState(0);
 
   // Discover the live package hash from the stable /current/ alias when the
@@ -162,14 +197,13 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
     if (!response) {
       return undefined;
     }
-    if (response.deviceId !== null) {
-      return undefined;
-    }
     if (typeof fetch !== 'function') {
+      setManifestEnrollmentId(response.enrollmentId);
       setManifestState({ status: 'error' });
       return undefined;
     }
     let cancelled = false;
+    setManifestEnrollmentId(response.enrollmentId);
     setManifestState({ status: 'loading' });
     const url = `${artifactBaseUrl}/endpoint-agent/current/release-manifest.json`;
     fetch(url, { cache: 'no-store' })
@@ -202,15 +236,27 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
   }
 
   const isRenewal = response.deviceId !== null;
+  const manifestMatchesResponse = manifestEnrollmentId === response.enrollmentId;
+  const manifestReady = manifestMatchesResponse && manifestState.status === 'ready';
+  const canUseInstalledAgent =
+    isRenewal &&
+    targetDevice?.id === response.deviceId &&
+    manifestReady &&
+    isAgentAtLeastCurrent(
+      targetDevice.agentVersion,
+      manifestState.manifest.release_tag,
+    );
+  const requiresRepair = isRenewal && manifestReady && !canUseInstalledAgent;
   const snippet = isRenewal ? null : formatManualSnippet(response.token, apiUrl);
-  const oneCommand = isRenewal
+  const oneCommand = canUseInstalledAgent
     ? buildTpmRenewalCommand(response.token, apiUrl)
-    : manifestState.status === 'ready'
+    : manifestReady
       ? buildOneCommand({
           token: response.token,
           apiUrl,
           artifactBaseUrl,
           zipSha256: manifestState.manifest.endpoint_agent_zip_sha256,
+          repairExisting: requiresRepair,
         })
       : null;
 
@@ -287,26 +333,30 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
         <section style={{ marginTop: 16 }}>
           <h3>
             {t(
-              isRenewal
+              canUseInstalledAgent
                 ? 'endpointAdmin.enrollments.modal.renewalCommandLabel'
+                : requiresRepair
+                  ? 'endpointAdmin.enrollments.modal.repairCommandLabel'
                 : 'endpointAdmin.enrollments.modal.oneCommandLabel',
             )}
           </h3>
           <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
             {t(
-              isRenewal
+              canUseInstalledAgent
                 ? 'endpointAdmin.enrollments.modal.renewalCommandHelp'
+                : requiresRepair
+                  ? 'endpointAdmin.enrollments.modal.repairCommandHelp'
                 : 'endpointAdmin.enrollments.modal.oneCommandHelp',
             )}
           </p>
 
-          {!isRenewal && manifestState.status === 'loading' && (
+          {(!manifestMatchesResponse || manifestState.status === 'loading') && (
             <p data-testid="enrollment-token-modal-onecommand-loading" style={{ opacity: 0.7 }}>
               {t('endpointAdmin.enrollments.modal.oneCommandLoading')}
             </p>
           )}
 
-          {!isRenewal && manifestState.status === 'error' && (
+          {manifestMatchesResponse && manifestState.status === 'error' && (
             <div data-testid="enrollment-token-modal-onecommand-error">
               <p style={{ color: '#b00020' }}>
                 {t('endpointAdmin.enrollments.modal.oneCommandError')}
