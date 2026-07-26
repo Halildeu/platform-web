@@ -12,6 +12,7 @@ import {
   Settings,
   Database,
   FileText,
+  Scale,
 } from 'lucide-react';
 // PERF-INIT-V2 PR-B5a: consumer-side subpath migration. Sidebar is on
 // every authenticated route's critical render path. ShellSidebar + its
@@ -30,7 +31,11 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
-import { isInterviewEvidenceRemoteEnabled, isMeetingRemoteEnabled } from '../shell-navigation';
+import {
+  isEthicRemoteEnabled,
+  isInterviewEvidenceRemoteEnabled,
+  isMeetingRemoteEnabled,
+} from '../shell-navigation';
 import { Badge } from '@mfe/design-system/primitives';
 import {
   ATS_PRODUCT_HUB_ENTRY,
@@ -57,6 +62,7 @@ export const buildSidebarNavItems = (
   hasModule: (moduleKey: string) => boolean,
   meetingEnabled = true,
   interviewEvidenceEnabled = false,
+  ethicEnabled = true,
 ): ShellSidebarNavItem[] => {
   const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
   const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
@@ -68,6 +74,11 @@ export const buildSidebarNavItems = (
   // Authorized users keep a stable product destination when the remote is OFF;
   // the guarded route renders a shell-owned safe catalog instead of a dead nav.
   const canUseAtsProductHub = sa || hasModule(ATS_PRODUCT_HUB_ENTRY.requiredModule);
+  // Faz 35 ES: Etik Speak, header launcher'da zaten vardı ama sol panelde
+  // yoktu — yetkili kullanıcı ürünü ancak menüyü açıp arayarak buluyordu.
+  // Meetings ile simetrik: modül yetkisi VE remote hazır olmalı.
+  const canEthic = sa || hasModule(MODULE_KEYS.ETHIC);
+  const canUseEthic = ethicEnabled && canEthic;
   const homePath = '/home';
 
   return [
@@ -109,6 +120,14 @@ export const buildSidebarNavItems = (
       icon: <MessagesSquare aria-hidden />,
       dataTestId: 'nav-meetings',
       disabled: !canUseMeeting,
+    },
+    {
+      key: 'ethic',
+      label: 'Etik Speak',
+      href: canUseEthic ? '/ethic' : undefined,
+      icon: <Scale aria-hidden />,
+      dataTestId: 'nav-ethic',
+      disabled: !canUseEthic,
     },
     {
       key: ATS_PRODUCT_HUB_ENTRY.id,
@@ -173,6 +192,7 @@ export const Sidebar: React.FC = () => {
         hasModule,
         isMeetingRemoteEnabled(),
         isInterviewEvidenceRemoteEnabled(),
+        isEthicRemoteEnabled(),
       ),
     [hasModule, sa],
   );
