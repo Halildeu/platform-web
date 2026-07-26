@@ -25,6 +25,17 @@ export type ApplicationFieldKey =
   | 'skills'
   | 'note';
 
+/**
+ * CV ayrıştırıcı, başvuru formunun taşıdığı alanlardan fazlasını çıkarabilir:
+ * backend `ResumeField` enum'ı `languages` ve `certifications` da yayar. Öneri
+ * DTO'su `ApplicationFieldKey` ile tiplendiği sürece bu ikisi tipte yok sayılıyor
+ * ve arayüzde başlıksız kart olarak görünüyordu.
+ */
+export type ResumeFieldKey = ApplicationFieldKey | 'languages' | 'certifications';
+
+/** Ayrıştırıcının çıkardığı ama başvuru formunda karşılığı olmayan alanlar. */
+export const RESUME_ONLY_FIELDS: readonly ResumeFieldKey[] = ['languages', 'certifications'];
+
 export const REQUIRED_APPLICATION_FIELDS: ApplicationFieldKey[] = [
   'fullName',
   'email',
@@ -90,7 +101,7 @@ export type ResumeProposalState =
   | 'CONTROL_REQUIRED';
 
 export type ResumeProposalDto = {
-  field: ApplicationFieldKey;
+  field: ResumeFieldKey;
   proposedValue: string;
   candidateValue: string | null;
   state: ResumeProposalState;
@@ -626,7 +637,7 @@ export const replaceResumePdf = async (
 
 export const updateResumeProposal = async (
   resumeImport: ResumeImportDto,
-  field: ApplicationFieldKey,
+  field: ResumeFieldKey,
   state: 'ACCEPTED' | 'EDITED' | 'REJECTED',
   candidateAccessToken: string,
   editedValue?: string,

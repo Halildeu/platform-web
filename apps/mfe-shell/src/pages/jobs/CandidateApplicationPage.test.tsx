@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CandidateApplicationPage from './CandidateApplicationPage';
 
@@ -35,6 +35,7 @@ vi.mock('../../features/ats-portals/api/application-api', () => ({
     'skills',
     'note',
   ],
+  RESUME_ONLY_FIELDS: ['languages', 'certifications'],
   getPublicJob: apiMocks.getPublicJob,
   submitApplication: apiMocks.submitApplication,
   saveCandidateSession: apiMocks.saveCandidateSession,
@@ -305,6 +306,107 @@ describe('CandidateApplicationPage', () => {
     );
     expect(screen.getByTestId('candidate-fullName')).toHaveValue('PDF Demo Adayı');
     expect(screen.getByTestId('candidate-email')).toHaveValue('pdf.aday@example.test');
+  });
+
+  it('makes each decision state visually distinguishable and latches the chosen action', async () => {
+    // Canlı geri bildirim: "kabul edilen, düzenlenen, ret olan çok anlaşılır değil".
+    // Beş durum da aynı nötr rozeti taşıyordu ve karar sonrası üç buton aynı
+    // kalıyordu; hangi kararın verildiği okunmuyordu.
+    renderPage();
+    await selectPdf();
+
+    const card = () => screen.getByTestId('resume-proposal-fullName');
+    const badge = () => screen.getByTestId('resume-proposal-state-fullName');
+    const acceptButton = () =>
+      within(card()).getByRole('button', { name: 'Öneriyi kabul et' });
+    const rejectButton = () => within(card()).getByRole('button', { name: 'Reddet' });
+
+    expect(card()).toHaveAttribute('data-decision', 'UNREVIEWED');
+    expect(badge()).toHaveTextContent('Karar bekliyor');
+    expect(acceptButton()).toHaveAttribute('aria-pressed', 'false');
+    expect(rejectButton()).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(acceptButton());
+    await waitFor(() => expect(card()).toHaveAttribute('data-decision', 'ACCEPTED'));
+    expect(badge()).toHaveTextContent('Kabul edildi');
+    // Asıl regresyon: seçilen karar butonun üzerinde kilitli görünmeli.
+    expect(acceptButton()).toHaveAttribute('aria-pressed', 'true');
+    expect(rejectButton()).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(rejectButton());
+    await waitFor(() => expect(card()).toHaveAttribute('data-decision', 'REJECTED'));
+    expect(badge()).toHaveTextContent('Reddedildi');
+    expect(rejectButton()).toHaveAttribute('aria-pressed', 'true');
+    expect(acceptButton()).toHaveAttribute('aria-pressed', 'false');
+    // Reddedilen alan çıkmaz olmamalı: kabul/düzenleme yolu açık kalır.
+    expect(acceptButton()).toBeEnabled();
+  });
+
+  it('labels resume-only fields the application form does not carry', async () => {
+    // Canlı bulgu (parser v5): backend `languages` ve `certifications` da yayıyor
+    // ama frontend etiket haritasında yoktu; iki kart BAŞLIKSIZ render oluyordu.
+    apiMocks.uploadResumePdf.mockResolvedValueOnce({
+      resumeImport: {
+        ...UPLOADED_IMPORT,
+        proposals: [
+          ...UPLOADED_IMPORT.proposals,
+          {
+            field: 'certifications',
+            proposedValue: 'ISO 45001 Lead Auditor',
+            candidateValue: null,
+            state: 'UNREVIEWED',
+            version: 0,
+            provenance,
+          },
+        ],
+      },
+      inFlight: false,
+    });
+    renderPage();
+    await selectPdf();
+
+    const card = screen.getByTestId('resume-proposal-certifications');
+    expect(within(card).getByRole('heading', { level: 4 })).toHaveTextContent(
+      'Sertifikalar ve eğitimler',
+    );
+    // Formda karşılığı yok; kabul edilirse sessizce düşmesin diye açıkça söylenir.
+    expect(card).toHaveTextContent(/başvuru formunda ayrı bir alanı\s+yok/);
+    // Form alanı olan bir kartta bu uyarı görünmemeli.
+    expect(screen.getByTestId('resume-proposal-email')).not.toHaveTextContent(
+      /başvuru formunda ayrı bir alanı/,
+    );
+  });
+
+  it('shows review progress and names the exact reason the transfer gate is closed', async () => {
+    // Pasif "Forma aktar" düğmesinin nedeni görünmüyordu; aday kaç alanın
+    // beklediğini bilmeden düğmeye basmaya çalışıyordu.
+    renderPage();
+    await selectPdf();
+
+    const progress = screen.getByTestId('resume-review-progress');
+    expect(progress).toHaveTextContent('8 alandan 0 tanesi karara bağlandı');
+    expect(progress).toHaveTextContent('8 alan bekliyor');
+    expect(screen.getByRole('progressbar', { name: 'Karara bağlanan CV alanı sayısı' })).toHaveAttribute(
+      'aria-valuenow',
+      '0',
+    );
+    expect(
+      screen.getByText(/8 alan için henüz karar vermediniz/),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('resume-review-progress')).toHaveTextContent(
+        '8 alandan 8 tanesi karara bağlandı',
+      ),
+    );
+    expect(screen.getByRole('progressbar', { name: 'Karara bağlanan CV alanı sayısı' })).toHaveAttribute(
+      'aria-valuenow',
+      '8',
+    );
+    expect(screen.queryByText(/henüz karar vermediniz/)).not.toBeInTheDocument();
+    expect(screen.getByText(/8 alan forma aktarılacak/)).toBeVisible();
   });
 
   it('requires an explicit choice instead of overwriting a non-empty manual field', async () => {
