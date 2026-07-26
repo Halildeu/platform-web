@@ -90,16 +90,21 @@ describe('AgentUpdateReleasesPage', () => {
     expect(h.approveMock.mock.calls[0][0]).toEqual({ releaseId: 'rel-draft' });
   });
 
-  it('maker-checker 403 → makerCheckerError mesajı render eder', async () => {
-    h.approveMock.mockImplementationOnce(() => ({
-      unwrap: () => Promise.reject({ status: 403 }),
-    }));
-    render(<AgentUpdateReleasesPage />);
-    fireEvent.click(screen.getByTestId('releases-approve-rel-draft'));
-    await waitFor(() => {
-      expect(screen.getByTestId('releases-action-error')).toBeInTheDocument();
-    });
-  });
+  it.each([403, 409, 422])(
+    'maker-checker %s → actionable makerCheckerError mesajı render eder',
+    async (status) => {
+      h.approveMock.mockImplementationOnce(() => ({
+        unwrap: () => Promise.reject({ status }),
+      }));
+      render(<AgentUpdateReleasesPage />);
+      fireEvent.click(screen.getByTestId('releases-approve-rel-draft'));
+      await waitFor(() => {
+        expect(screen.getByTestId('releases-action-error')).toHaveTextContent(
+          'The release creator cannot approve their own release (dual control).',
+        );
+      });
+    },
+  );
 
   it('revoke modal: boş reason disabled, valid reason → revoke({releaseId, body:{revocationReason}})', async () => {
     render(<AgentUpdateReleasesPage />);
