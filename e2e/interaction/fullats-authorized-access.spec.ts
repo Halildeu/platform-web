@@ -353,7 +353,17 @@ test.describe('Full ATS authorized product access', () => {
 
     const workspace = page.getByTestId('recruiter-workspace-page');
     await expect(workspace).toBeVisible();
-    await expect(workspace.getByRole('heading', { name: 'İK Çalışma Alanı' })).toBeVisible();
+    // Yüzey kimliği iki bağımsız işaretten okunur: sayfanın kendi başlığı ve
+    // "buradasınız" kırıntısı. Tek metne bağlanmak #991'de sessizce koptu —
+    // kahraman başlığı yeniden yazıldı, "İK Çalışma Alanı" ise `heading` değil
+    // kırıntıdaki `span` (aria-current="page"). Bu yüzden ikisi ayrı ayrı
+    // doğrulanıyor: biri kopsa hangisinin koptuğu doğrudan görünür.
+    await expect(
+      workspace.getByRole('heading', { name: 'Başvuruları tek yerden yönetin' }),
+    ).toBeVisible();
+    await expect(
+      workspace.getByRole('navigation', { name: 'ATS konumu' }).getByText('İK Çalışma Alanı'),
+    ).toBeVisible();
     // Initial API access is fulfilled with the bounded synthetic tenant fixture.
     // Filtering and inspection from this point onward must stay browser-local.
     dataRequests.length = 0;
@@ -361,10 +371,19 @@ test.describe('Full ATS authorized product access', () => {
     await workspace.getByLabel('Aday, e-posta veya beceri ara').fill('erişilebilirlik');
     await expect(workspace.getByText('Aday DEMO-207')).toBeVisible();
     await workspace.getByRole('button', { name: 'Başvuruyu incele' }).click();
-    await expect(workspace.getByRole('heading', { name: 'Aday bilgileri' })).toBeFocused();
-    await expect(workspace.getByText('Sentetik erişilebilirlik deneyimi.')).toBeVisible();
+    // #991 sonrası dar ekranda detay, çalışma alanı kapsayıcısının DIŞINDA bir
+    // diyalogda açılıyor. Detay iddialarını `workspace` altında aramak yalnız
+    // odak kontrolünü kırmakla kalmaz; "geri alınamaz eylem YOK" iddiasını da
+    // sahte-yeşile çevirir (aranan düğmeler zaten o ağaçta olmaz). Bu yüzden
+    // detay, iki yerleşimde de var olan kendi test kimliğinden alınıyor.
+    const reviewPanel = page.getByTestId('recruiter-review-panel');
+    await expect(reviewPanel).toBeVisible();
+    await expect(
+      reviewPanel.getByRole('heading', { name: 'Aday bilgileri ve insan kararı' }),
+    ).toBeFocused();
+    await expect(reviewPanel.getByText('Sentetik erişilebilirlik deneyimi.')).toBeVisible();
     for (const action of ['Adaya mesaj gönder', 'Adayı reddet', 'Teklif gönder']) {
-      await expect(workspace.getByRole('button', { name: new RegExp(action) })).toHaveCount(0);
+      await expect(reviewPanel.getByRole('button', { name: new RegExp(action) })).toHaveCount(0);
     }
     expect(dataRequests).toEqual([
       `GET /api/ats/v1/recruiter/applications/${SYNTHETIC_RECRUITER_APPLICATION.publicRef}`,
@@ -378,8 +397,11 @@ test.describe('Full ATS authorized product access', () => {
     }));
     expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth);
 
+    // Detay artık ayrı bir diyalogda; taramaya dahil edilmezse açık yüzeyin
+    // yarısı denetimsiz kalırdı.
     const accessibility = await new AxeBuilder({ page })
       .include('[data-testid="recruiter-workspace-page"]')
+      .include('[data-testid="recruiter-review-panel"]')
       .analyze();
     expect(seriousOrCriticalViolationSummary(accessibility.violations)).toEqual([]);
 
