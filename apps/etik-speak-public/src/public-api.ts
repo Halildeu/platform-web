@@ -19,18 +19,28 @@ export interface MailboxView {
   status: ReporterCaseStatus;
   messages: Message[];
 }
+// The complete custody vocabulary as the service emits it. `REJECTED` was
+// never one of them, while every terminal *failure* state was missing — and an
+// unrecognized state does not merely render oddly here, it fails validation and
+// the whole attachment is dropped from the response. A reporter whose file was
+// caught as malware therefore saw "no evidence files yet", as if the upload had
+// never happened.
 export type EvidenceState =
   | 'DECLARED'
   | 'UPLOADING'
+  | 'UPLOAD_CAPABILITY_EXPIRED'
   | 'QUARANTINED'
   | 'INTEGRITY_VERIFIED'
   | 'ORIGINAL_SEALED'
+  | 'SCAN_PENDING'
   | 'SCANNING'
   | 'SANITIZING'
   | 'DERIVATIVE_READY'
   | 'AVAILABLE'
-  | 'REJECTED'
-  | 'SCAN_PENDING'
+  | 'MALICIOUS_QUARANTINED'
+  | 'REJECTED_INTEGRITY'
+  | 'REJECTED_POLICY'
+  | 'SANITIZE_FAILED'
   | 'EXPIRED_UNBOUND';
 export interface EvidenceStatus {
   attachmentId: string;
@@ -136,18 +146,22 @@ export async function sendReporterMessage(body: string, idempotencyKey: string) 
   return result;
 }
 
-const EVIDENCE_STATES: EvidenceState[] = [
+export const EVIDENCE_STATES: EvidenceState[] = [
   'DECLARED',
   'UPLOADING',
+  'UPLOAD_CAPABILITY_EXPIRED',
   'QUARANTINED',
   'INTEGRITY_VERIFIED',
   'ORIGINAL_SEALED',
+  'SCAN_PENDING',
   'SCANNING',
   'SANITIZING',
   'DERIVATIVE_READY',
   'AVAILABLE',
-  'REJECTED',
-  'SCAN_PENDING',
+  'MALICIOUS_QUARANTINED',
+  'REJECTED_INTEGRITY',
+  'REJECTED_POLICY',
+  'SANITIZE_FAILED',
   'EXPIRED_UNBOUND',
 ];
 

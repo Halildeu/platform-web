@@ -79,7 +79,12 @@ describe('Etik Speak public reporter', () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Yeni bildirim yap' }));
     expect(screen.getByRole('radio', { name: /Gizli/ })).toBeDisabled();
-    expect(screen.getByLabelText('Ek dosya')).toBeDisabled();
+    // The intake form must not present a file control at all. A disabled one is
+    // still announced as a file picker, so it reads as a broken feature rather
+    // than a later step — and uploading is genuinely impossible until a receipt
+    // exists to bind the evidence to.
+    expect(screen.queryByLabelText('Ek dosya')).toBeNull();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Önce bildiriminiz kalıcı');
   });
   test('saved receipt opens mailbox without putting the access secret in the URL', async () => {

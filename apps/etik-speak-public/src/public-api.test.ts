@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  EVIDENCE_STATES,
   declareEvidence,
+  listEvidence,
   uploadEvidence,
   type EvidenceDeclaration,
+  type EvidenceState,
   type EvidenceStatus,
 } from './public-api';
 
@@ -131,5 +134,71 @@ describe('Etik Speak public evidence boundary', () => {
       uploadEvidence({ ...declaration, uploadPath: 'https://attacker.invalid/upload' }, file()),
     ).rejects.toThrow('yükleme hedefi güvenli değil');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('Etik Speak evidence state vocabulary', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // An unknown state is not a cosmetic problem here: validation rejects the
+  // record and the whole attachment disappears from the reporter's list. The
+  // states most likely to be missing are exactly the terminal failures — the
+  // ones a reporter most needs to see.
+  const terminalFailures: EvidenceState[] = [
+    'MALICIOUS_QUARANTINED',
+    'REJECTED_INTEGRITY',
+    'REJECTED_POLICY',
+    'SANITIZE_FAILED',
+    'UPLOAD_CAPABILITY_EXPIRED',
+  ];
+
+  it.each(terminalFailures)('keeps a %s attachment in the reporter list', async (state) => {
+    const payload: EvidenceStatus = {
+      attachmentId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      state,
+      mediaType: 'text/plain',
+      size: 68,
+      failureCode: 'EVIDENCE_MALWARE_DETECTED',
+      createdAt: '2026-07-26T14:35:41Z',
+      updatedAt: '2026-07-26T14:37:58Z',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify([payload]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+    await expect(listEvidence()).resolves.toEqual([payload]);
+  });
+
+  it('recognizes every state the custody service can emit', () => {
+    // Kept in lockstep with EvidenceAttachment in ethics-service. Narrowing
+    // this list silently hides attachments rather than failing loudly.
+    expect([...EVIDENCE_STATES].sort()).toEqual(
+      [
+        'AVAILABLE',
+        'DECLARED',
+        'DERIVATIVE_READY',
+        'EXPIRED_UNBOUND',
+        'INTEGRITY_VERIFIED',
+        'MALICIOUS_QUARANTINED',
+        'ORIGINAL_SEALED',
+        'QUARANTINED',
+        'REJECTED_INTEGRITY',
+        'REJECTED_POLICY',
+        'SANITIZE_FAILED',
+        'SANITIZING',
+        'SCANNING',
+        'SCAN_PENDING',
+        'UPLOADING',
+        'UPLOAD_CAPABILITY_EXPIRED',
+      ].sort(),
+    );
+    expect(EVIDENCE_STATES).not.toContain('REJECTED' as EvidenceState);
   });
 });
