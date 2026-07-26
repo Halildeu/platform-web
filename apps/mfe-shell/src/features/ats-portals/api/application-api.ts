@@ -33,8 +33,55 @@ export type ApplicationFieldKey =
  */
 export type ResumeFieldKey = ApplicationFieldKey | 'languages' | 'certifications';
 
-/** Ayrıştırıcının çıkardığı ama başvuru formunda karşılığı olmayan alanlar. */
-export const RESUME_ONLY_FIELDS: readonly ResumeFieldKey[] = ['languages', 'certifications'];
+/**
+ * Ayrıştırıcının çıkardığı ama başvuru formunda karşılığı olmayan alanlar.
+ *
+ * ats#215 B ile BOŞ: form artık `languages` ve `certifications` alanlarını da
+ * taşıyor, dolayısıyla kabul edilen öneri sessizce düşmüyor. Liste kaldırılmadı
+ * çünkü sözleşme asimetrisi kalıcı bir olasılık: backend `ResumeField` enum'ı
+ * forma eklenmemiş yeni bir alan yayarsa, o alanın adı buraya yazılır ve arayüz
+ * adaya "bu bilgi CV'nizde kaldı" uyarısını gösterir. Boş liste, uyarı yolunun
+ * ölü kod olmadığını ama şu an tetiklenmediğini anlatır.
+ */
+export const RESUME_ONLY_FIELDS: readonly ResumeFieldKey[] = [];
+
+/**
+ * ats#215: tek bir iş deneyimi girdisi. Tarihler serbest metin — aday "2022",
+ * "Eyl 2018", "Devam ediyor" yazabilir; ISO tarihe zorlamak gerçek CV'lerdeki
+ * yazımı reddederdi. Uzunluk sınırları backend `ExperienceEntryBody` şemasıyla
+ * birebir aynıdır (title/company 160, tarih 40, açıklama 4000).
+ */
+export type ApplicationExperienceEntry = {
+  title?: string;
+  company?: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+};
+
+/** ats#215: tek bir eğitim girdisi; sınırlar backend `EducationEntryBody` ile aynı. */
+export type ApplicationEducationEntry = {
+  school?: string;
+  degree?: string;
+  field?: string;
+  startYear?: string;
+  endYear?: string;
+  description?: string;
+};
+
+/**
+ * Girdi başına alan uzunlukları ve satır sayısı üst sınırı — backend şemasının
+ * aynadaki karşılığı. Burada tutulur ki arayüz sınırı aşan metni sunucuya
+ * gönderip 400 almak yerine yazarken kısıtlayabilsin. Otorite yine backend'dir.
+ */
+export const APPLICATION_ENTRY_LIMITS = {
+  maxEntries: 30,
+  shortText: 160,
+  dateText: 40,
+  longText: 4000,
+  languages: 2000,
+  certifications: 4000,
+} as const;
 
 export const REQUIRED_APPLICATION_FIELDS: ApplicationFieldKey[] = [
   'fullName',
@@ -82,9 +129,19 @@ export type ApplicationSubmissionDto = {
   linkedIn?: string;
   portfolio?: string;
   summary: string;
-  experience: string;
-  education: string;
+  /**
+   * ats#215 genişlet/daralt: eski tek-string biçim artık ZORUNLU DEĞİL. Yapısal
+   * girdi gönderen istemci bunu atlar, backend `experience`i girdilerden türetir
+   * (İK görünümü, export ve DSAR yüzeyleri değişmez). İki temsilden en az biri
+   * gerekir; hangisinin geldiğini backend doğrular.
+   */
+  experience?: string;
+  education?: string;
   skills: string[];
+  experienceEntries?: ApplicationExperienceEntry[];
+  educationEntries?: ApplicationEducationEntry[];
+  languages?: string;
+  certifications?: string;
   note?: string;
   noticeVersion: typeof APPLICATION_NOTICE_VERSION;
   noticeAcceptedAt: string;
@@ -141,7 +198,13 @@ export type ResumeDraftDto = {
   draftId: string;
   importId: string;
   version: number;
-  fields: Partial<Record<ApplicationFieldKey, string>>;
+  /**
+   * Onaylanan taslak, kabul edilen her öneriyi taşır — ve backend `ResumeField`
+   * enum'ı `languages`/`certifications` da yayar. Tip burada `ApplicationFieldKey`
+   * ile daraltılmıştı; bu, gelen iki alanı derleme zamanında görünmez yapıyordu
+   * (aday alanı kabul ediyor, taslakta geliyor, forma hiç düşmüyordu). ats#215 B.
+   */
+  fields: Partial<Record<ResumeFieldKey, string>>;
   createdAt: string;
 };
 
