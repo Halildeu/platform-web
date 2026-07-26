@@ -93,9 +93,21 @@ describe('AgentUpdateReleaseCreateModal', () => {
       sha256: VALID_SHA256,
       signerThumbprint: 'ABCDEF0123456789',
       signingTier: 'TRUSTED_SIGNED',
+      maxBytes: 25_000_000,
     });
     // optional empty fields are omitted, not sent as ''
     expect(arg.body).not.toHaveProperty('sha512');
     expect(arg.body).not.toHaveProperty('manifestUrl');
+  });
+
+  it('maxBytes backend sınırının dışında ise submit edilmez', () => {
+    renderModal();
+    fillValid();
+    fireEvent.change(screen.getByTestId('release-field-maxBytes'), {
+      target: { value: '0' },
+    });
+    fireEvent.submit(screen.getByTestId('release-create-form'));
+    expect(h.createMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('release-create-validation')).toBeInTheDocument();
   });
 });

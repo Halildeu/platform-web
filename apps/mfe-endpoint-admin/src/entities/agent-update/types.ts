@@ -103,6 +103,7 @@ export interface AgentUpdateReleaseRequest {
   sha512?: string;
   signerThumbprint: string;
   signingTier: AgentUpdateSigningTier;
+  maxBytes: number;
   releaseNotes?: string;
 }
 

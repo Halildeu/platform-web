@@ -49,6 +49,7 @@ type Fields = {
   sha512: string;
   signerThumbprint: string;
   signingTier: AgentUpdateSigningTier;
+  maxBytes: string;
   releaseNotes: string;
 };
 
@@ -62,6 +63,7 @@ const EMPTY: Fields = {
   sha512: '',
   signerThumbprint: '',
   signingTier: 'TRUSTED_SIGNED',
+  maxBytes: '25000000',
   releaseNotes: '',
 };
 
@@ -111,6 +113,10 @@ export const AgentUpdateReleaseCreateModal: React.FC<AgentUpdateReleaseCreateMod
     sha512: f.sha512.trim().length > 0 && !SHA512_RE.test(f.sha512.trim()),
     signerThumbprint:
       !THUMBPRINT_RE.test(f.signerThumbprint.trim()) || f.signerThumbprint.trim().length > 96,
+    maxBytes:
+      !Number.isSafeInteger(Number(f.maxBytes)) ||
+      Number(f.maxBytes) < 1 ||
+      Number(f.maxBytes) > 524_288_000,
     releaseNotes: f.releaseNotes.length > 2048,
   };
   const hasErrors = Object.values(errors).some(Boolean);
@@ -128,6 +134,7 @@ export const AgentUpdateReleaseCreateModal: React.FC<AgentUpdateReleaseCreateMod
       sha256: f.sha256.trim(),
       signerThumbprint: f.signerThumbprint.trim(),
       signingTier: f.signingTier,
+      maxBytes: Number(f.maxBytes),
       ...(f.manifestUrl.trim() ? { manifestUrl: f.manifestUrl.trim() } : {}),
       ...(f.sha512.trim() ? { sha512: f.sha512.trim() } : {}),
       ...(f.releaseNotes.trim() ? { releaseNotes: f.releaseNotes.trim() } : {}),
@@ -283,6 +290,23 @@ export const AgentUpdateReleaseCreateModal: React.FC<AgentUpdateReleaseCreateMod
             data-testid="release-field-signerThumbprint"
             aria-invalid={!!fieldErr('signerThumbprint')}
             className={`font-mono ${inputCls('signerThumbprint')}`}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-text-secondary block mb-1">
+            {t('endpointAdmin.releases.field.maxBytes')}
+          </span>
+          <input
+            type="number"
+            min={1}
+            max={524_288_000}
+            step={1}
+            value={f.maxBytes}
+            onChange={(e) => set('maxBytes', e.target.value)}
+            data-testid="release-field-maxBytes"
+            aria-invalid={!!fieldErr('maxBytes')}
+            className={`font-mono ${inputCls('maxBytes')}`}
           />
         </label>
 
