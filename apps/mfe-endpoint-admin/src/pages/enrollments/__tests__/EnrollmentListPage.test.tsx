@@ -47,6 +47,7 @@ vi.mock('../../compliance-policies/useManageGate', () => ({
 import { endpointAdminApi } from '../../../app/services/endpointAdminApi';
 
 const mockedList = endpointAdminApi.useListEndpointEnrollmentsQuery as ReturnType<typeof vi.fn>;
+const mockedDevices = endpointAdminApi.useListEndpointDevicesQuery as ReturnType<typeof vi.fn>;
 const mockedCreateHook = endpointAdminApi.useCreateEndpointEnrollmentMutation as ReturnType<
   typeof vi.fn
 >;
@@ -81,6 +82,12 @@ function stubValidManifest(): void {
 beforeEach(() => {
   vi.clearAllMocks();
   canManageMock = true;
+  mockedDevices.mockReturnValue({
+    data: [],
+    error: undefined,
+    isLoading: false,
+    isFetching: false,
+  });
   mockedCreateHook.mockReturnValue([mockCreate, { isLoading: false, reset: mockResetCreate }]);
   stubValidManifest();
 });
@@ -100,6 +107,29 @@ function row(overrides: Partial<EndpointEnrollment> = {}): EndpointEnrollment {
     expiresAt: '2026-05-29T12:00:00Z',
     consumedAt: null,
     createdAt: '2026-05-29T11:00:00Z',
+    ...overrides,
+  };
+}
+
+function device(overrides: Partial<EndpointDevice> = {}): EndpointDevice {
+  return {
+    id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    tenantId: '22222222-2222-2222-2222-222222222222',
+    hostname: 'AgentPc2',
+    displayName: null,
+    osType: 'WINDOWS',
+    osVersion: '11',
+    agentVersion: 'v0.3.17',
+    activeUser: null,
+    machineFingerprint: null,
+    domainName: 'acik.local',
+    status: 'ONLINE',
+    lastSeenAt: '2026-07-26T20:48:56Z',
+    enrolledAt: '2026-06-30T15:18:22Z',
+    createdAt: '2026-06-30T15:18:22Z',
+    updatedAt: '2026-07-26T20:48:56Z',
+    deploymentRing: 'PILOT',
+    deviceTags: [],
     ...overrides,
   };
 }
@@ -216,17 +246,71 @@ describe('EnrollmentListPage', () => {
     expect(snippet).toContain("'https://example/api'");
   });
 
-  it('keeps existing-device lifecycle operations out of the raw-token enrollment flow', () => {
+  it('restores target-device selection for a bounded existing-device recovery enrollment', async () => {
+    const targetDevice = device();
+    mockedDevices.mockReturnValue({
+      data: [
+        targetDevice,
+        device({ id: 'dead-device', hostname: 'OldPc', status: 'DECOMMISSIONED' }),
+      ],
+      error: undefined,
+      isLoading: false,
+      isFetching: false,
+    });
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    mockCreate.mockReturnValue({
+      unwrap: () =>
+        Promise.resolve({
+          enrollmentId: '44444444-4444-4444-4444-444444444444',
+          token: 'target-bound-token',
+          expiresAt: '2026-07-27T20:00:00Z',
+          deviceId: targetDevice.id,
+        }),
+    });
+
+    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
+    fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
+
+    const select = screen.getByTestId('create-enrollment-dialog-device-select');
+    expect(select).toHaveTextContent('AgentPc2');
+    expect(select).not.toHaveTextContent('OldPc');
+    fireEvent.change(select, { target: { value: targetDevice.id } });
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        expiresInMinutes: 60,
+        note: undefined,
+        deviceId: targetDevice.id,
+      });
+    });
+    expect(await screen.findByTestId('enrollment-token-modal')).toBeInTheDocument();
+    expect(await screen.findByTestId('enrollment-token-modal-onecommand')).toBeInTheDocument();
+    expect(screen.queryByTestId('enrollment-token-modal-raw')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('enrollment-token-modal-copy-token')).not.toBeInTheDocument();
+  });
+
+  it('requires a target device before submitting an existing-device recovery enrollment', async () => {
+    mockedDevices.mockReturnValue({
+      data: [device()],
+      error: undefined,
+      isLoading: false,
+      isFetching: false,
+    });
     mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
 
     render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
     fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-target-existing'));
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
 
-    expect(screen.getByTestId('create-enrollment-dialog-new-device-only')).toBeInTheDocument();
-    expect(
-      screen.queryByTestId('create-enrollment-dialog-target-existing'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTestId('create-enrollment-dialog-device-select')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('create-enrollment-dialog-error')).toHaveTextContent(
+        'endpointAdmin.enrollments.dialog.errorDeviceRequired',
+      );
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('does not reveal a token when the new-device endpoint returns a device-bound response', async () => {

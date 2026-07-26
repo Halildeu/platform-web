@@ -325,30 +325,32 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
           )}
         </p>
 
-        <section style={{ marginTop: 16 }}>
-          <h3>{t('endpointAdmin.enrollments.modal.tokenLabel')}</h3>
-          <code
-            data-testid="enrollment-token-modal-raw"
-            style={{
-              display: 'block',
-              padding: 8,
-              background: '#f5f5f5',
-              wordBreak: 'break-all',
-              fontFamily: 'monospace',
-            }}
-          >
-            {response.token}
-          </code>
-          <button
-            type="button"
-            data-testid="enrollment-token-modal-copy-token"
-            onClick={() => handleCopy(response.token, 'token')}
-          >
-            {copied === 'token'
-              ? t('endpointAdmin.enrollments.modal.copied')
-              : t('endpointAdmin.enrollments.modal.copy')}
-          </button>
-        </section>
+        {!isRenewal && (
+          <section style={{ marginTop: 16 }}>
+            <h3>{t('endpointAdmin.enrollments.modal.tokenLabel')}</h3>
+            <code
+              data-testid="enrollment-token-modal-raw"
+              style={{
+                display: 'block',
+                padding: 8,
+                background: '#f5f5f5',
+                wordBreak: 'break-all',
+                fontFamily: 'monospace',
+              }}
+            >
+              {response.token}
+            </code>
+            <button
+              type="button"
+              data-testid="enrollment-token-modal-copy-token"
+              onClick={() => handleCopy(response.token, 'token')}
+            >
+              {copied === 'token'
+                ? t('endpointAdmin.enrollments.modal.copied')
+                : t('endpointAdmin.enrollments.modal.copy')}
+            </button>
+          </section>
+        )}
 
         <section style={{ marginTop: 16 }}>
           <h3>
