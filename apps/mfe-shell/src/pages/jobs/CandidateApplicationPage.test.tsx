@@ -4,7 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import CandidateApplicationPage, { RESUME_DECISION_STYLES } from './CandidateApplicationPage';
+import CandidateApplicationPage, {
+  RESUME_DECISION_STYLES,
+  deriveEducationText,
+  deriveExperienceText,
+  submittableEntries,
+} from './CandidateApplicationPage';
+
+/** Bir deneyim kartındaki tüm alanlar — boşaltma testinde tek tek temizlenir. */
+const EXPERIENCE_KEYS = ['title', 'company', 'startDate', 'endDate', 'description'] as const;
+
+/** `proposals` fixture'ındaki deneyim önerisi; CV aktarım testi bunu arar. */
+const EXPERIENCE_PROPOSAL_VALUE = 'PDF içinden gelen deneyim';
 
 const apiMocks = vi.hoisted(() => ({
   getPublicJob: vi.fn(),
@@ -21,21 +32,12 @@ const apiMocks = vi.hoisted(() => ({
   terminateResumeImport: vi.fn(),
 }));
 
-vi.mock('../../features/ats-portals/api/application-api', () => ({
-  DEFAULT_APPLICATION_FIELDS: [
-    'fullName',
-    'email',
-    'phone',
-    'city',
-    'linkedIn',
-    'portfolio',
-    'summary',
-    'experience',
-    'education',
-    'skills',
-    'note',
-  ],
-  RESUME_ONLY_FIELDS: ['languages', 'certifications'],
+// Kısmi mock: yalnız AĞ ÇAĞRILARI ikame edilir, sabitler gerçek modülden gelir.
+// Modülün tamamı elle ikame edildiğinde (eski hâl) api'ye eklenen her yeni sabit
+// bu süiti "export tanımlı değil" hatasıyla düşürüyordu — testin kırılma sebebi
+// davranış değil mock'un eskimesiydi. `importOriginal` ile sabitler tek kaynakta kalır.
+vi.mock('../../features/ats-portals/api/application-api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../features/ats-portals/api/application-api')>()),
   getPublicJob: apiMocks.getPublicJob,
   submitApplication: apiMocks.submitApplication,
   saveCandidateSession: apiMocks.saveCandidateSession,
@@ -386,9 +388,14 @@ describe('CandidateApplicationPage', () => {
     expect(acceptButton()).toBeEnabled();
   });
 
-  it('labels resume-only fields the application form does not carry', async () => {
-    // Canlı bulgu (parser v5): backend `languages` ve `certifications` da yayıyor
-    // ama frontend etiket haritasında yoktu; iki kart BAŞLIKSIZ render oluyordu.
+  it('labels every parser field and no longer warns that the form cannot carry it', async () => {
+    // İki katmanlı geçmiş. (1) Canlı bulgu (parser v5): backend `languages` ve
+    // `certifications` da yayıyor ama frontend etiket haritasında yoktu; iki kart
+    // BAŞLIKSIZ render oluyordu — etiket hâlâ zorunlu. (2) ats#215 B: form artık bu
+    // iki alanı da taşıyor, dolayısıyla "başvuru formunda ayrı bir alanı yok"
+    // uyarısı ARTIK GÖRÜNMEMELİ; görünürse aday kabul ettiği veriyi kaybettiğini
+    // sanır. Uyarı yolu kaldırılmadı: `RESUME_ONLY_FIELDS` boşaldı, yani sözleşme
+    // yine ayrışırsa (backend forma eklenmemiş yeni bir alan yayarsa) uyarı geri gelir.
     apiMocks.uploadResumePdf.mockResolvedValueOnce({
       resumeImport: {
         ...UPLOADED_IMPORT,
@@ -413,12 +420,14 @@ describe('CandidateApplicationPage', () => {
     expect(within(card).getByRole('heading', { level: 4 })).toHaveTextContent(
       'Sertifikalar ve eğitimler',
     );
-    // Formda karşılığı yok; kabul edilirse sessizce düşmesin diye açıkça söylenir.
-    expect(card).toHaveTextContent(/başvuru formunda ayrı bir alanı\s+yok/);
-    // Form alanı olan bir kartta bu uyarı görünmemeli.
+    // Artık formda karşılığı VAR: uyarı hiçbir kartta çıkmamalı.
+    expect(card).not.toHaveTextContent(/başvuru formunda ayrı bir alanı/);
     expect(screen.getByTestId('resume-proposal-email')).not.toHaveTextContent(
       /başvuru formunda ayrı bir alanı/,
     );
+    // Uyarının kalkması "kayıp" değil "taşınmış" demek olmalı; alanların formda
+    // gerçekten durduğu ve gönderime girdiği ayrı testte kanıtlanır
+    // ("carries languages and certifications all the way into the request body").
   });
 
   it('shows review progress and names the exact reason the transfer gate is closed', async () => {
@@ -647,6 +656,224 @@ describe('CandidateApplicationPage', () => {
     screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Başvuruyu gönder' })).toBeDisabled(),
+    );
+  });
+
+  // ── ats#215 B: çoğaltılabilir deneyim/eğitim girdileri ────────────────────────
+  //
+  // Sahip talebi (2026-07-26): "çoklu doldurulabilen alanlar için formun ilgili
+  // alanının çoklanması" — LinkedIn ve kariyer.net'teki gibi. Backend tarafı ats#216
+  // ile canlıda kanıtlandı (yapısal gönderim 201 + eski kolonlar türetildi);
+  // aşağıdaki testler arayüz ucunun o sözleşmeye gerçekten bağlandığını gösterir.
+
+  const reachProfileStep = async () => {
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    expect(screen.getByRole('heading', { name: 'Deneyiminizi anlatın' })).toBeVisible();
+  };
+
+  it('derives the legacy single-string field exactly like the backend does', () => {
+    // Bu ayna önizlemede kullanılıyor: aday "Başvuruyu kontrol et" dediğinde İK'nın
+    // göreceği metni görür. Biçim backend `Submission.effectiveExperience()` ile
+    // birebir aynı olmalı — kaymışsa önizleme adaya yalan söyler. Beklenen değerler
+    // backend kodundan okundu: segmentler " - " ile, açıklama "\n" ile, girdiler "\n\n" ile.
+    expect(
+      deriveExperienceText([
+        {
+          title: 'Ürün Uzmanı',
+          company: 'Örnek Teknoloji',
+          startDate: 'Eyl 2022',
+          endDate: 'Devam ediyor',
+          description: 'Keşif ve yol haritası',
+        },
+        { title: 'Analist', company: 'Demo' },
+      ]),
+    ).toBe(
+      'Ürün Uzmanı - Örnek Teknoloji - Eyl 2022 - Devam ediyor\nKeşif ve yol haritası\n\nAnalist - Demo',
+    );
+    // Tek taraflı tarih: backend dateSpan boş tarafı atlar, tire eklemez.
+    expect(deriveExperienceText([{ title: 'Analist', startDate: '2020' }])).toBe('Analist - 2020');
+    expect(deriveExperienceText([{ description: 'Yalnız açıklama' }])).toBe('Yalnız açıklama');
+    // Boş girdi çıktıya hiç girmez; iki boş satır "\n\n" bırakmaz.
+    expect(deriveExperienceText([{}, { title: 'A' }, {}])).toBe('A');
+    expect(
+      deriveEducationText([
+        {
+          school: 'Örnek Üniversitesi',
+          degree: 'Lisans',
+          field: 'YBS',
+          startYear: '2016',
+          endYear: '2020',
+        },
+      ]),
+    ).toBe('Örnek Üniversitesi - Lisans - YBS - 2016 - 2020');
+  });
+
+  it('drops blank rows and trims values before submitting them', () => {
+    // Aday "ekle"ye basıp doldurmadan gönderebilir. Backend de boş satırı atar;
+    // burada süzmek gövdeyi küçültür ve gönderilen şeyi okunur tutar.
+    expect(
+      submittableEntries([
+        { title: '  Ürün Uzmanı  ', company: '' },
+        {},
+        { title: '   ' },
+        { company: 'Demo' },
+      ]),
+    ).toEqual([{ title: 'Ürün Uzmanı' }, { company: 'Demo' }]);
+  });
+
+  it('repeats the experience group: add appends a card, remove deletes that exact card', async () => {
+    renderPage();
+    await reachProfileStep();
+
+    // Sentetik doldurma iki pozisyon bırakır.
+    expect(screen.getByTestId('candidate-experience-entry-0')).toBeInTheDocument();
+    expect(screen.getByTestId('candidate-experience-entry-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('candidate-experience-entry-2')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('candidate-experience-add'));
+    expect(screen.getByTestId('candidate-experience-entry-2')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('candidate-experience-2-title'), {
+      target: { value: 'Stajyer' },
+    });
+    expect(screen.getByTestId('candidate-experience-2-title')).toHaveValue('Stajyer');
+
+    // ORTADAKİ kartı sil: kalan iki kart 1. ve 3. girilenler olmalı.
+    fireEvent.click(screen.getByTestId('candidate-experience-remove-1'));
+    expect(screen.queryByTestId('candidate-experience-entry-2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('candidate-experience-0-title')).toHaveValue('Ürün Uzmanı');
+    expect(screen.getByTestId('candidate-experience-1-title')).toHaveValue('Stajyer');
+  });
+
+  it('keeps the caret in the row the candidate was typing in when an earlier row is removed', async () => {
+    // Satır kimliği neden index DEĞİL: kontrollü input'ta değerler state'ten geldiği
+    // için index key değerleri bozmaz — bunu ölçtüm, `key={index}` ile yukarıdaki
+    // test de geçiyor. Gözlemlenebilir fark ODAK: index key'de silinen satırın DOM
+    // düğümü hayatta kalır, yazdığı satırın düğümü sökülür ve adayın imleci düşer.
+    renderPage();
+    await reachProfileStep();
+
+    const secondTitle = screen.getByTestId('candidate-experience-1-title');
+    secondTitle.focus();
+    expect(document.activeElement).toBe(secondTitle);
+
+    fireEvent.click(screen.getByTestId('candidate-experience-remove-0'));
+
+    // Aynı DOM düğümü hâlâ odakta ve hâlâ aynı satırı gösteriyor.
+    expect(document.activeElement).toBe(secondTitle);
+    expect(secondTitle).toHaveValue('Ürün Analisti');
+    expect(screen.getByTestId('candidate-experience-0-title')).toBe(secondTitle);
+  });
+
+  it('keeps a single empty card instead of leaving the candidate with nowhere to type', async () => {
+    renderPage();
+    await reachProfileStep();
+
+    fireEvent.click(screen.getByTestId('candidate-education-remove-0'));
+    // Liste boşalmaz: tek kart kalır ve boşalır.
+    expect(screen.getByTestId('candidate-education-entry-0')).toBeInTheDocument();
+    expect(screen.getByTestId('candidate-education-0-school')).toHaveValue('');
+  });
+
+  it('sends structured entries and omits the legacy single-string fields', async () => {
+    renderPage();
+    await reachProfileStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+
+    await waitFor(() => expect(apiMocks.submitApplication).toHaveBeenCalled());
+    const body = apiMocks.submitApplication.mock.calls[0][3];
+
+    expect(body.experienceEntries).toEqual([
+      {
+        title: 'Ürün Uzmanı',
+        company: 'Örnek Teknoloji',
+        startDate: 'Eyl 2022',
+        endDate: 'Devam ediyor',
+        description: 'Keşif görüşmeleri, yol haritası ve erişilebilirlik iyileştirmeleri.',
+      },
+      {
+        title: 'Ürün Analisti',
+        company: 'Demo Yazılım',
+        startDate: '2020',
+        endDate: '2022',
+        description: 'Kullanım verisi analizi ve raporlama.',
+      },
+    ]);
+    expect(body.educationEntries).toHaveLength(1);
+    // Eski tek-string alanlar GÖNDERİLMEZ: ikisini birlikte yollamak hangisinin
+    // kazandığını belirsiz bırakır. Backend bunları girdilerden türetir (ats#216).
+    expect(body.experience).toBeUndefined();
+    expect(body.education).toBeUndefined();
+  });
+
+  it('carries languages and certifications all the way into the request body', async () => {
+    // Bunlar ats#212 (parser v7) ile çıkarılıyordu ama formda karşılığı yoktu:
+    // aday öneriyi kabul ediyor, veri sessizce düşüyordu. Artık uçtan uca gitmeli.
+    renderPage();
+    await reachProfileStep();
+    expect(screen.getByTestId('candidate-languages')).toHaveValue(
+      'Türkçe — ana dil, İngilizce — ileri seviye',
+    );
+    fireEvent.change(screen.getByTestId('candidate-certifications'), {
+      target: { value: 'ISO 45001 Lead Auditor · 2025' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+
+    await waitFor(() => expect(apiMocks.submitApplication).toHaveBeenCalled());
+    const body = apiMocks.submitApplication.mock.calls[0][3];
+    expect(body.languages).toBe('Türkçe — ana dil, İngilizce — ileri seviye');
+    expect(body.certifications).toBe('ISO 45001 Lead Auditor · 2025');
+  });
+
+  it('refuses the preview until at least one entry actually has content', async () => {
+    renderPage();
+    await reachProfileStep();
+
+    // Deneyim kartlarını boşalt: satır sayısı 1'de kalır ama içerik yok.
+    fireEvent.click(screen.getByTestId('candidate-experience-remove-1'));
+    EXPERIENCE_KEYS.forEach((key) => {
+      fireEvent.change(screen.getByTestId(`candidate-experience-0-${key}`), {
+        target: { value: '' },
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+
+    // Satır VAR ama boş: doğrulama satır sayısına değil türetilmiş metne bakmalı,
+    // tıpkı backend'in `between(effectiveExperience(), 1, 8000)` denetimi gibi.
+    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('En az bir iş deneyimi girdisi doldurun.');
+
+    fireEvent.change(screen.getByTestId('candidate-experience-0-title'), {
+      target: { value: 'Ürün Uzmanı' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    expect(screen.getByTestId('candidate-application-preview')).toBeVisible();
+  });
+
+  it('lands an imported resume blob in the first entry instead of dropping it', async () => {
+    // Ayrıştırıcı hâlâ tek parça metin döndürüyor (unvan/şirket/tarih ayrıştırması
+    // ats#213 üstüne binen ayrı iş). Deneyim artık metin kutusu olmadığı için, o
+    // metnin ilk girdinin açıklamasına düşmesi gerekir; düşmezse CV aktarımı
+    // adayın en önemli alanını sessizce kaybeder.
+    renderPage();
+    await selectPdf();
+    fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+
+    await waitFor(() => expect(screen.getByTestId('candidate-fullName')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    expect(screen.getByTestId('candidate-experience-0-description')).toHaveValue(
+      EXPERIENCE_PROPOSAL_VALUE,
     );
   });
 });

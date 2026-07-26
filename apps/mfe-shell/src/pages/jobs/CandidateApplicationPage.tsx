@@ -17,6 +17,9 @@ import {
   type ApplicationFieldKey,
   type ResumeFieldKey,
   RESUME_ONLY_FIELDS,
+  APPLICATION_ENTRY_LIMITS,
+  type ApplicationEducationEntry,
+  type ApplicationExperienceEntry,
   type ApplicationReceiptDto,
   type PublicJobDto,
   type ResumeDraftDto,
@@ -24,6 +27,13 @@ import {
   type ResumeProposalDto,
 } from '../../features/ats-portals/api/application-api';
 
+/**
+ * Tek satırlık metin alanları. `experience` ve `education` BİLİNÇLİ olarak yok:
+ * ats#215 ile bu ikisi çoğaltılabilir girdi listesine taşındı (aşağıdaki
+ * `experienceEntries`/`educationEntries` state'i). Burada da bırakılsalardı
+ * aynı bilginin iki kaynağı olurdu ve hangisinin gönderildiği sessizce
+ * ayrışabilirdi. Backend'e giden tek-string alan artık girdilerden türetilir.
+ */
 type ApplicationValues = {
   fullName: string;
   email: string;
@@ -32,9 +42,9 @@ type ApplicationValues = {
   linkedIn: string;
   portfolio: string;
   summary: string;
-  experience: string;
-  education: string;
   skills: string;
+  languages: string;
+  certifications: string;
   note: string;
 };
 
@@ -47,13 +57,202 @@ type ResumeStatus = 'idle' | 'uploading' | 'reviewing' | 'confirmed';
 
 type ResumeBinding = { importId: string; draftVersion: number };
 
+/**
+ * Çatışma alanı `ResumeFieldKey`'dir, `keyof ApplicationValues` değil: CV
+ * `experience`/`education` önerebilir, ama bu ikisinin formdaki karşılığı artık
+ * bir metin kutusu değil girdi listesidir. Çözüm uygulanırken bu iki alan
+ * girdi listesine yazılır (bkz. `applyMergeChoices`).
+ */
 type MergeConflict = {
-  field: keyof ApplicationValues;
+  field: ResumeFieldKey;
   manualValue: string;
   resumeValue: string;
   mergedValue: string;
   choice: 'manual' | 'resume' | 'edit' | null;
 };
+
+/**
+ * Girdi satırı. `rowId` yalnız React listesi ve test seçicileri içindir;
+ * gönderim gövdesine ASLA girmez — backend şeması `additionalProperties: false`
+ * ve bilinmeyen alan isteği reddettirir. Satır silinebildiği için index'i key
+ * olarak kullanmak yanlış satırın DOM düğümünü yeniden kullandırırdı.
+ */
+type EntryRow<T> = { rowId: string; value: T };
+
+type EntryFieldSpec<T> = {
+  key: keyof T & string;
+  label: string;
+  placeholder: string;
+  maxLength: number;
+  span?: 'full' | 'half';
+  rows?: number;
+};
+
+const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperienceEntry>> = [
+  {
+    key: 'title',
+    label: 'Pozisyon',
+    placeholder: 'Ürün Uzmanı',
+    maxLength: APPLICATION_ENTRY_LIMITS.shortText,
+    span: 'half',
+  },
+  {
+    key: 'company',
+    label: 'Şirket',
+    placeholder: 'Örnek Teknoloji',
+    maxLength: APPLICATION_ENTRY_LIMITS.shortText,
+    span: 'half',
+  },
+  {
+    key: 'startDate',
+    label: 'Başlangıç',
+    placeholder: 'Eyl 2022',
+    maxLength: APPLICATION_ENTRY_LIMITS.dateText,
+    span: 'half',
+  },
+  {
+    key: 'endDate',
+    label: 'Bitiş',
+    placeholder: 'Devam ediyor',
+    maxLength: APPLICATION_ENTRY_LIMITS.dateText,
+    span: 'half',
+  },
+  {
+    key: 'description',
+    label: 'Neler yaptınız?',
+    placeholder: 'Sorumluluklarınız ve ölçülebilir sonuçlar',
+    maxLength: APPLICATION_ENTRY_LIMITS.longText,
+    span: 'full',
+    rows: 4,
+  },
+];
+
+const EDUCATION_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationEducationEntry>> = [
+  {
+    key: 'school',
+    label: 'Okul',
+    placeholder: 'Örnek Üniversitesi',
+    maxLength: APPLICATION_ENTRY_LIMITS.shortText,
+    span: 'half',
+  },
+  {
+    key: 'degree',
+    label: 'Derece',
+    placeholder: 'Lisans',
+    maxLength: APPLICATION_ENTRY_LIMITS.shortText,
+    span: 'half',
+  },
+  {
+    key: 'field',
+    label: 'Bölüm',
+    placeholder: 'Yönetim Bilişim Sistemleri',
+    maxLength: APPLICATION_ENTRY_LIMITS.shortText,
+    span: 'half',
+  },
+  {
+    key: 'startYear',
+    label: 'Başlangıç yılı',
+    placeholder: '2016',
+    maxLength: APPLICATION_ENTRY_LIMITS.dateText,
+    span: 'half',
+  },
+  {
+    key: 'endYear',
+    label: 'Bitiş yılı',
+    placeholder: '2020',
+    maxLength: APPLICATION_ENTRY_LIMITS.dateText,
+    span: 'half',
+  },
+  {
+    key: 'description',
+    label: 'Eklemek istediğiniz not',
+    placeholder: 'Tez, ortalama, burs — isteğe bağlı',
+    maxLength: APPLICATION_ENTRY_LIMITS.longText,
+    span: 'full',
+    rows: 3,
+  },
+];
+
+const entryHasContent = (entry: Record<string, string | undefined>): boolean =>
+  Object.values(entry).some((value) => (value ?? '').trim().length > 0);
+
+const joinDateSpan = (from?: string, to?: string): string => {
+  const start = (from ?? '').trim();
+  const end = (to ?? '').trim();
+  if (!start && !end) return '';
+  if (!start) return end;
+  if (!end) return start;
+  return `${start} - ${end}`;
+};
+
+const joinSegments = (parts: Array<string | undefined>): string =>
+  parts
+    .map((part) => (part ?? '').trim())
+    .filter(Boolean)
+    .join(' - ');
+
+const withDescription = (head: string, description?: string): string => {
+  const tail = (description ?? '').trim();
+  if (!head) return tail;
+  if (!tail) return head;
+  return `${head}\n${tail}`;
+};
+
+/**
+ * Girdileri backend'in ürettiği tek-string biçime çevirir.
+ *
+ * Bu bir AYNA: otorite backend `Submission.effectiveExperience()`'tır ve kaydedilen
+ * değer oradan gelir. Burada tekrar edilmesinin tek sebebi ÖNİZLEME: aday
+ * "Başvuruyu kontrol et" dediğinde İK'nın göreceği metni görmesi gerekir, ve o metin
+ * için sunucuya bir tur atmak formu ağırlaştırırdı. Ayna kaydığında önizleme yalan
+ * söyler; bu yüzden biçimin ikisinde de aynı olduğunu doğrulayan test var
+ * (`derives the legacy string exactly like the backend does`).
+ */
+export const deriveExperienceText = (entries: ApplicationExperienceEntry[]): string =>
+  entries
+    .filter(entryHasContent)
+    .map((entry) =>
+      withDescription(
+        joinSegments([entry.title, entry.company, joinDateSpan(entry.startDate, entry.endDate)]),
+        entry.description,
+      ),
+    )
+    .join('\n\n');
+
+/**
+ * Gönderilecek girdiler: boş satırlar atılır, değerler kırpılır, boşalan alanlar
+ * gövdeden çıkarılır. Aday "satır ekle"ye basıp doldurmadan gönderebilir; o satırı
+ * sunucuya taşımak gereksiz. Backend de boş satırı atar — bu süzme onun yerine
+ * geçmez, yalnız gövdeyi küçültür ve gönderilen şeyi okunur tutar.
+ */
+export const submittableEntries = <T extends Record<string, string | undefined>>(
+  entries: T[],
+): T[] =>
+  entries.filter(entryHasContent).map((entry) => {
+    const trimmed: Record<string, string> = {};
+    Object.entries(entry).forEach(([key, value]) => {
+      const text = (value ?? '').trim();
+      if (text) trimmed[key] = text;
+    });
+    return trimmed as T;
+  });
+
+/** {@link deriveExperienceText} ile aynı ayna gerekçesi. */
+export const deriveEducationText = (entries: ApplicationEducationEntry[]): string =>
+  entries
+    .filter(entryHasContent)
+    .map((entry) =>
+      withDescription(
+        joinSegments([
+          entry.school,
+          entry.degree,
+          entry.field,
+          joinDateSpan(entry.startYear, entry.endYear),
+        ]),
+        entry.description,
+      ),
+    )
+    .join('\n\n');
 
 type View = 'form' | 'preview' | 'receipt';
 type FormStep = 'resume' | 'contact' | 'profile';
@@ -74,9 +273,9 @@ const EMPTY_VALUES: ApplicationValues = {
   linkedIn: '',
   portfolio: '',
   summary: '',
-  experience: '',
-  education: '',
   skills: '',
+  languages: '',
+  certifications: '',
   note: '',
 };
 
@@ -89,20 +288,51 @@ const SYNTHETIC_VALUES: ApplicationValues = {
   portfolio: 'https://portfolio.example.test/deniz',
   summary:
     'Kullanıcı ihtiyaçlarını erişilebilir ve ölçülebilir ürün deneyimlerine dönüştüren, ekipler arası çalışmaya odaklı ürün profesyoneli.',
-  experience: 'Ürün Uzmanı · Örnek Teknoloji · 2022–2026\nÜrün Analisti · Demo Yazılım · 2020–2022',
-  education: 'Yönetim Bilişim Sistemleri · Örnek Üniversitesi · 2020',
   skills: 'Ürün keşfi, kullanıcı araştırması, analitik, yol haritası, erişilebilirlik',
+  languages: 'Türkçe — ana dil, İngilizce — ileri seviye',
+  certifications: 'Ürün Yönetimi Sertifikası · Örnek Enstitü · 2024',
   note: 'İlanın kullanıcı odaklı ürün geliştirme yaklaşımıyla özellikle ilgileniyorum.',
 };
 
+const SYNTHETIC_EXPERIENCE: ApplicationExperienceEntry[] = [
+  {
+    title: 'Ürün Uzmanı',
+    company: 'Örnek Teknoloji',
+    startDate: 'Eyl 2022',
+    endDate: 'Devam ediyor',
+    description: 'Keşif görüşmeleri, yol haritası ve erişilebilirlik iyileştirmeleri.',
+  },
+  {
+    title: 'Ürün Analisti',
+    company: 'Demo Yazılım',
+    startDate: '2020',
+    endDate: '2022',
+    description: 'Kullanım verisi analizi ve raporlama.',
+  },
+];
+
+const SYNTHETIC_EDUCATION: ApplicationEducationEntry[] = [
+  {
+    school: 'Örnek Üniversitesi',
+    degree: 'Lisans',
+    field: 'Yönetim Bilişim Sistemleri',
+    startYear: '2016',
+    endYear: '2020',
+  },
+];
+
+/**
+ * Metin kutusu olarak doldurulan zorunlu alanlar. `experience`/`education`
+ * BURADA DEĞİL: onların zorunluluğu "en az bir dolu girdi" olarak ayrıca
+ * denetlenir (bkz. `openPreview`), çünkü backend doğrulaması da tek-string
+ * alanın kendisinde değil girdilerden TÜRETİLEN metinde koşar.
+ */
 const REQUIRED_FIELDS: Array<keyof ApplicationValues> = [
   'fullName',
   'email',
   'phone',
   'city',
   'summary',
-  'experience',
-  'education',
   'skills',
 ];
 
@@ -231,6 +461,25 @@ const CandidateApplicationPage = () => {
   const [job, setJob] = useState<PublicJobDto | null>(null);
   const [jobError, setJobError] = useState('');
   const [values, setValues] = useState<ApplicationValues>(EMPTY_VALUES);
+  const rowIdRef = useRef(0);
+  const nextRowId = () => {
+    rowIdRef.current += 1;
+    return `r${rowIdRef.current}`;
+  };
+  const toRows = <T,>(entries: T[]): Array<EntryRow<T>> =>
+    entries.map((value) => ({ rowId: nextRowId(), value }));
+  // Form ilk açıldığında birer boş satır durur: aday "ekle"ye basmadan yazmaya
+  // başlayabilsin. Boş satır gönderilmez (hem burada süzülür hem backend atar).
+  const [experienceRows, setExperienceRows] = useState<Array<EntryRow<ApplicationExperienceEntry>>>(
+    () => [{ rowId: 'r0', value: {} }],
+  );
+  const [educationRows, setEducationRows] = useState<Array<EntryRow<ApplicationEducationEntry>>>(
+    () => [{ rowId: 'r0e', value: {} }],
+  );
+  const experienceEntries = experienceRows.map((row) => row.value);
+  const educationEntries = educationRows.map((row) => row.value);
+  const derivedExperience = deriveExperienceText(experienceEntries);
+  const derivedEducation = deriveEducationText(educationEntries);
   const [view, setView] = useState<View>('form');
   const [formStep, setFormStep] = useState<FormStep>('resume');
   const [fileMeta, setFileMeta] = useState<LocalFileMeta | null>(null);
@@ -263,7 +512,18 @@ const CandidateApplicationPage = () => {
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const receiptHeadingRef = useRef<HTMLHeadingElement>(null);
   const enabledFields = job?.applicationFields ?? DEFAULT_APPLICATION_FIELDS;
-  const isFieldEnabled = (field: keyof ApplicationValues) => enabledFields.includes(field);
+  /**
+   * İlan bazlı alan açma/kapatma yalnız backend `applicationFields` listesinin
+   * ifade edebildiği alanlar için işler. `languages`/`certifications` o listede
+   * yok: ats#215 ile forma eklendiler ama ilan DTO'sunun alan kümesi (backend
+   * `ApplicationField` enum'ı) onları taşımıyor. Bu yüzden her ilanda görünürler
+   * — ikisi de isteğe bağlı olduğu için kapalı bir ilanda aday zorlanmaz. İlan
+   * bazlı kapatma istenirse backend enum'ının genişletilmesi gerekir (ayrı iş).
+   */
+  const isFieldEnabled = (field: keyof ApplicationValues): boolean =>
+    field === 'languages' ||
+    field === 'certifications' ||
+    enabledFields.some((enabled) => enabled === field);
 
   useEffect(() => {
     const heading = view === 'preview' ? previewHeadingRef.current : receiptHeadingRef.current;
@@ -300,8 +560,58 @@ const CandidateApplicationPage = () => {
       setSubmitError('');
     };
 
+  /**
+   * Girdi listesi düzenleyicileri. Üçü de aynı kalıbı izler ve state'i kopyalayarak
+   * değiştirir; satır kimliği korunur, yalnız değeri değişir.
+   */
+  const updateEntryField =
+    <T,>(
+      setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
+      index: number,
+      key: keyof T & string,
+    ): React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement> =>
+    (event) => {
+      const nextValue = event.target.value;
+      setRows((current) =>
+        current.map((row, rowIndex) =>
+          rowIndex === index ? { ...row, value: { ...row.value, [key]: nextValue } } : row,
+        ),
+      );
+      setFormError('');
+      setSubmitError('');
+    };
+
+  const addEntryRow = <T,>(
+    setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
+  ): void => {
+    setRows((current) =>
+      // Üst sınır backend ile aynı: aşan satır sunucuda 400 döndürürdü, o yüzden
+      // düğme burada sessizce çalışmak yerine hiç eklemez (düğme de gizlenir).
+      current.length >= APPLICATION_ENTRY_LIMITS.maxEntries
+        ? current
+        : [...current, { rowId: nextRowId(), value: {} as T }],
+    );
+    setFormError('');
+  };
+
+  const removeEntryRow = <T,>(
+    setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
+    index: number,
+  ): void => {
+    setRows((current) =>
+      // Son satır silinmez, boşaltılır: liste tamamen boşalırsa aday yazacak yer
+      // bulamaz ve "satır ekle"yi bulmak zorunda kalır.
+      current.length <= 1
+        ? [{ rowId: nextRowId(), value: {} as T }]
+        : current.filter((_, rowIndex) => rowIndex !== index),
+    );
+    setFormError('');
+  };
+
   const applySyntheticResume = () => {
     setValues(SYNTHETIC_VALUES);
+    setExperienceRows(toRows(SYNTHETIC_EXPERIENCE));
+    setEducationRows(toRows(SYNTHETIC_EDUCATION));
     setFormError('');
     setFormStep('contact');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -531,24 +841,58 @@ const CandidateApplicationPage = () => {
     let imported = 0;
     const conflicts: MergeConflict[] = [];
     const next = { ...values };
+    let nextExperience: Array<EntryRow<ApplicationExperienceEntry>> | null = null;
+    let nextEducation: Array<EntryRow<ApplicationEducationEntry>> | null = null;
+
     Object.entries(draft.fields).forEach(([rawField, rawValue]) => {
-      const field = rawField as keyof ApplicationValues;
+      const field = rawField as ResumeFieldKey;
       const resumeValue = rawValue?.trim() ?? '';
-      if (!resumeValue || !(field in next)) return;
-      if (!values[field].trim() || values[field] === resumeValue) {
-        next[field] = resumeValue;
+      if (!resumeValue) return;
+
+      // Deneyim ve eğitim artık metin kutusu değil girdi listesi. Ayrıştırıcı hâlâ
+      // tek parça metin döndürüyor (unvan/şirket/tarih ayrıştırması ayrı iş: ats#213
+      // üstüne binen yapısal çıkarım), o yüzden gelen metin İLK GİRDİNİN açıklaması
+      // olur. Aday oradan bölüp satır ekleyerek düzenler — bilgi kaybolmaz.
+      if (field === 'experience' || field === 'education') {
+        const current = field === 'experience' ? derivedExperience : derivedEducation;
+        if (!current.trim() || current === resumeValue) {
+          if (field === 'experience') {
+            nextExperience = [{ rowId: nextRowId(), value: { description: resumeValue } }];
+          } else {
+            nextEducation = [{ rowId: nextRowId(), value: { description: resumeValue } }];
+          }
+          imported += 1;
+        } else {
+          conflicts.push({
+            field,
+            manualValue: current,
+            resumeValue,
+            mergedValue: `${current}\n${resumeValue}`,
+            choice: null,
+          });
+        }
+        return;
+      }
+
+      if (!(field in next)) return;
+      const formField = field as keyof ApplicationValues;
+      if (!values[formField].trim() || values[formField] === resumeValue) {
+        next[formField] = resumeValue;
         imported += 1;
       } else {
         conflicts.push({
-          field,
-          manualValue: values[field],
+          field: formField,
+          manualValue: values[formField],
           resumeValue,
-          mergedValue: `${values[field]}\n${resumeValue}`,
+          mergedValue: `${values[formField]}\n${resumeValue}`,
           choice: null,
         });
       }
     });
+
     setValues(next);
+    if (nextExperience) setExperienceRows(nextExperience);
+    if (nextEducation) setEducationRows(nextEducation);
     setMergeConflicts(conflicts);
     setFileMeta((current) => (current ? { ...current, importedFieldCount: imported } : current));
     return conflicts.length;
@@ -592,10 +936,40 @@ const CandidateApplicationPage = () => {
     setValues((current) => {
       const next = { ...current };
       mergeConflicts.forEach((conflict) => {
-        if (conflict.choice === 'resume') next[conflict.field] = conflict.resumeValue;
-        if (conflict.choice === 'edit') next[conflict.field] = conflict.mergedValue;
+        // Girdi listesine bağlı iki alan aşağıda ayrıca uygulanır.
+        if (conflict.field === 'experience' || conflict.field === 'education') return;
+        const field = conflict.field as keyof ApplicationValues;
+        if (!(field in next)) return;
+        if (conflict.choice === 'resume') next[field] = conflict.resumeValue;
+        if (conflict.choice === 'edit') next[field] = conflict.mergedValue;
       });
       return next;
+    });
+
+    // Deneyim/eğitim çatışmasında "CV'yi kullan" tek girdiye iner; "ikisini birleştir"
+    // adayın yazdığı satırları KORUR ve CV metnini yeni bir satır olarak ekler —
+    // birleştirilmiş metni tek satıra ezmek adayın yapılandırdığı bilgiyi düzleştirirdi.
+    mergeConflicts.forEach((conflict) => {
+      if (conflict.field === 'experience') {
+        if (conflict.choice === 'resume') {
+          setExperienceRows([{ rowId: nextRowId(), value: { description: conflict.resumeValue } }]);
+        } else if (conflict.choice === 'edit') {
+          setExperienceRows((current) => [
+            ...current,
+            { rowId: nextRowId(), value: { description: conflict.resumeValue } },
+          ]);
+        }
+      }
+      if (conflict.field === 'education') {
+        if (conflict.choice === 'resume') {
+          setEducationRows([{ rowId: nextRowId(), value: { description: conflict.resumeValue } }]);
+        } else if (conflict.choice === 'edit') {
+          setEducationRows((current) => [
+            ...current,
+            { rowId: nextRowId(), value: { description: conflict.resumeValue } },
+          ]);
+        }
+      }
     });
     const imported = mergeConflicts.filter((conflict) =>
       ['resume', 'edit'].includes(conflict.choice ?? ''),
@@ -650,6 +1024,17 @@ const CandidateApplicationPage = () => {
       setFormError('Önizlemeye geçmek için yıldızlı alanları doldurun.');
       return;
     }
+    // Deneyim/eğitim zorunluluğu TÜRETİLMİŞ metin üzerinde denetlenir; backend
+    // doğrulaması da (`between(effectiveExperience(), 1, 8000)`) aynı değere bakar.
+    // Satır sayısına bakmak yanıltıcı olurdu: boş satır sayılırdı.
+    if (!derivedExperience.trim()) {
+      setFormError('En az bir iş deneyimi girdisi doldurun.');
+      return;
+    }
+    if (!derivedEducation.trim()) {
+      setFormError('En az bir eğitim girdisi doldurun.');
+      return;
+    }
     if (!isValidEmail(values.email)) {
       setFormError('Geçerli bir e-posta adresi girin.');
       return;
@@ -699,12 +1084,17 @@ const CandidateApplicationPage = () => {
           linkedIn: isFieldEnabled('linkedIn') ? values.linkedIn || undefined : undefined,
           portfolio: isFieldEnabled('portfolio') ? values.portfolio || undefined : undefined,
           summary: values.summary,
-          experience: values.experience,
-          education: values.education,
+          // #215 B: eski tek-string alanlar GÖNDERİLMEZ. Backend bunları
+          // girdilerden türetir; ikisini birlikte göndermek hangisinin
+          // kazandığını belirsiz bırakır ve iki kaynak yaratırdı.
+          experienceEntries: submittableEntries(experienceEntries),
+          educationEntries: submittableEntries(educationEntries),
           skills: values.skills
             .split(',')
             .map((skill) => skill.trim())
             .filter(Boolean),
+          languages: values.languages.trim() || undefined,
+          certifications: values.certifications.trim() || undefined,
           note: isFieldEnabled('note') ? values.note || undefined : undefined,
           noticeVersion: job.noticeVersion,
           noticeAcceptedAt,
@@ -746,6 +1136,8 @@ const CandidateApplicationPage = () => {
   const resetDemo = () => {
     resumeRequestIdRef.current += 1;
     setValues(EMPTY_VALUES);
+    setExperienceRows([{ rowId: nextRowId(), value: {} }]);
+    setEducationRows([{ rowId: nextRowId(), value: {} }]);
     setFileMeta(null);
     setFileError('');
     setResumeStatus('idle');
@@ -826,20 +1218,135 @@ const CandidateApplicationPage = () => {
     </div>
   );
 
-  const allPreviewRows: Array<[keyof ApplicationValues, string, string]> = [
-    ['fullName', 'Ad soyad', values.fullName],
-    ['email', 'E-posta', values.email],
-    ['phone', 'Telefon', values.phone],
-    ['city', 'Şehir', values.city],
-    ['linkedIn', 'LinkedIn', values.linkedIn || 'Eklenmedi'],
-    ['portfolio', 'Portföy', values.portfolio || 'Eklenmedi'],
-    ['summary', 'Profesyonel özet', values.summary],
-    ['experience', 'Deneyim', values.experience],
-    ['education', 'Eğitim', values.education],
-    ['skills', 'Beceriler', values.skills],
-    ['note', 'Ek not', values.note || 'Eklenmedi'],
-  ];
-  const previewRows = allPreviewRows.filter(([field]) => isFieldEnabled(field));
+  /**
+   * Önizleme, İK'nın göreceği metni gösterir. Deneyim/eğitim satırları girdilerden
+   * TÜRETİLMİŞ metni basar — çünkü kaydedilecek olan o. Girdileri tek tek listelemek
+   * daha şık görünürdü ama adaya kaydedilenden farklı bir şey göstermiş olurduk.
+   */
+  /**
+   * Çoğaltılabilir girdi listesi. LinkedIn ve kariyer.net'te olduğu gibi her kayıt
+   * kendi kartında durur; "ekle" yeni boş kart açar, "kaldır" o kartı siler.
+   *
+   * `packages/x-form-builder`'daki `RepeatableFieldGroup` BİLİNÇLİ olarak kullanılmadı:
+   * o bileşen `FieldRegistryContext` içinde çalışır ve kendi input bileşenlerini
+   * getirir — bu herkese açık başvuru sayfasında hem sağlayıcı zincirini hem paket
+   * ağırlığını taşımak gerekirdi, hem de görsel dili sayfanın geri kalanından ayrışırdı.
+   * Burada sayfanın kendi `inputClassName`'i kullanılıyor.
+   */
+  const renderEntryList = <T extends Record<string, string | undefined>>(
+    name: 'experience' | 'education',
+    legend: string,
+    hint: string,
+    addLabel: string,
+    itemNoun: string,
+    specs: ReadonlyArray<EntryFieldSpec<T>>,
+    rows: Array<EntryRow<T>>,
+    setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
+  ) => (
+    <fieldset className="flex flex-col gap-3" data-testid={`candidate-${name}-entries`}>
+      <legend className={labelClassName}>
+        {legend} <span className="text-danger">*</span>
+      </legend>
+      <p className="text-xs leading-5 text-text-secondary">{hint}</p>
+      <ol className="flex flex-col gap-3">
+        {rows.map((row, index) => (
+          <li
+            key={row.rowId}
+            className="rounded-xl border border-border-subtle bg-surface-subtle p-4"
+            data-testid={`candidate-${name}-entry-${index}`}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+                {index + 1}. {itemNoun}
+              </p>
+              <button
+                type="button"
+                onClick={() => removeEntryRow(setRows, index)}
+                data-testid={`candidate-${name}-remove-${index}`}
+                className="inline-flex min-h-9 items-center rounded-lg border border-border-subtle bg-surface-default px-3 text-xs font-bold text-text-secondary hover:text-state-danger-text focus:outline-hidden focus:ring-2 focus:ring-selection-outline"
+              >
+                Kaldır
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {specs.map((spec) => {
+                const inputId = `candidate-${name}-${index}-${spec.key}`;
+                const currentValue = row.value[spec.key] ?? '';
+                return (
+                  <div
+                    key={spec.key}
+                    className={`flex flex-col gap-1.5 ${spec.span === 'full' ? 'sm:col-span-2' : ''}`}
+                  >
+                    <label className="text-xs font-semibold text-text-secondary" htmlFor={inputId}>
+                      {spec.label}
+                    </label>
+                    {spec.rows ? (
+                      <textarea
+                        id={inputId}
+                        data-testid={inputId}
+                        className={inputClassName}
+                        value={currentValue}
+                        onChange={updateEntryField(setRows, index, spec.key)}
+                        placeholder={spec.placeholder}
+                        maxLength={spec.maxLength}
+                        rows={spec.rows}
+                      />
+                    ) : (
+                      <input
+                        id={inputId}
+                        data-testid={inputId}
+                        className={inputClassName}
+                        value={currentValue}
+                        onChange={updateEntryField(setRows, index, spec.key)}
+                        placeholder={spec.placeholder}
+                        maxLength={spec.maxLength}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </li>
+        ))}
+      </ol>
+      {rows.length < APPLICATION_ENTRY_LIMITS.maxEntries ? (
+        <button
+          type="button"
+          onClick={() => addEntryRow(setRows)}
+          data-testid={`candidate-${name}-add`}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border-subtle bg-surface-default px-4 text-sm font-bold text-action-primary hover:bg-surface-subtle focus:outline-hidden focus:ring-2 focus:ring-selection-outline sm:w-auto"
+        >
+          <span aria-hidden="true">+</span> {addLabel}
+        </button>
+      ) : (
+        <p className="text-xs font-semibold text-text-secondary">
+          En fazla {APPLICATION_ENTRY_LIMITS.maxEntries} girdi ekleyebilirsiniz.
+        </p>
+      )}
+    </fieldset>
+  );
+
+  const allPreviewRows: Array<[keyof ApplicationValues | 'experience' | 'education', string, string]> =
+    [
+      ['fullName', 'Ad soyad', values.fullName],
+      ['email', 'E-posta', values.email],
+      ['phone', 'Telefon', values.phone],
+      ['city', 'Şehir', values.city],
+      ['linkedIn', 'LinkedIn', values.linkedIn || 'Eklenmedi'],
+      ['portfolio', 'Portföy', values.portfolio || 'Eklenmedi'],
+      ['summary', 'Profesyonel özet', values.summary],
+      ['experience', 'Deneyim', derivedExperience],
+      ['education', 'Eğitim', derivedEducation],
+      ['skills', 'Beceriler', values.skills],
+      ['languages', 'Diller', values.languages || 'Eklenmedi'],
+      ['certifications', 'Sertifikalar ve eğitimler', values.certifications || 'Eklenmedi'],
+      ['note', 'Ek not', values.note || 'Eklenmedi'],
+    ];
+  const previewRows = allPreviewRows.filter(([field]) =>
+    // Deneyim/eğitim ilan alan listesinde her zaman var ve artık forma girdi olarak
+    // giriyor; ikisi de `ApplicationValues` anahtarı olmadığı için ayrıca geçirilir.
+    field === 'experience' || field === 'education' ? true : isFieldEnabled(field),
+  );
   const resumeProposals = resumeImport?.proposals ?? [];
   const allResumeProposalsReviewed =
     resumeProposals.length > 0 &&
@@ -1673,21 +2180,41 @@ const CandidateApplicationPage = () => {
                         true,
                         4,
                       )}
-                      {renderTextArea(
+                      {renderEntryList<ApplicationExperienceEntry>(
                         'experience',
                         'İş deneyimi',
-                        'Rol · Şirket · Tarih aralığı',
-                        true,
-                        5,
+                        'Her pozisyon için bir kart. En yeniden başlayarak ekleyin; boş bıraktığınız kartlar gönderilmez.',
+                        'Deneyim ekle',
+                        'pozisyon',
+                        EXPERIENCE_FIELDS,
+                        experienceRows,
+                        setExperienceRows,
                       )}
-                      {renderTextArea(
+                      {renderEntryList<ApplicationEducationEntry>(
                         'education',
                         'Eğitim',
-                        'Okul · Bölüm · Mezuniyet yılı',
-                        true,
-                        3,
+                        'Her okul için bir kart.',
+                        'Eğitim ekle',
+                        'okul',
+                        EDUCATION_FIELDS,
+                        educationRows,
+                        setEducationRows,
                       )}
                       {renderTextArea('skills', 'Beceriler', 'Virgülle ayırabilirsiniz', true, 3)}
+                      {renderTextArea(
+                        'languages',
+                        'Diller',
+                        'Türkçe — ana dil, İngilizce — ileri seviye',
+                        false,
+                        2,
+                      )}
+                      {renderTextArea(
+                        'certifications',
+                        'Sertifikalar ve eğitimler',
+                        'Sertifika · Kurum · Yıl',
+                        false,
+                        3,
+                      )}
                       {isFieldEnabled('note')
                         ? renderTextArea(
                             'note',
