@@ -21,6 +21,8 @@ import type {
   CreateEndpointEnrollmentResponse,
   EndpointEnrollment,
 } from '../../../entities/endpoint-enrollment/types';
+import type { EndpointDevice } from '../../../entities/endpoint-device/types';
+import { EnrollmentTokenModal } from '../../../widgets/enrollment-dialog/EnrollmentTokenModal';
 
 const mockCreate = vi.fn();
 const mockResetCreate = vi.fn();
@@ -221,7 +223,9 @@ describe('EnrollmentListPage', () => {
     fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
 
     expect(screen.getByTestId('create-enrollment-dialog-new-device-only')).toBeInTheDocument();
-    expect(screen.queryByTestId('create-enrollment-dialog-target-existing')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('create-enrollment-dialog-target-existing'),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId('create-enrollment-dialog-device-select')).not.toBeInTheDocument();
   });
 
@@ -409,12 +413,79 @@ describe('EnrollmentListPage', () => {
     // canonical agent base + single-quote escape on the token
     expect(cmd).toContain("-ApiUrl 'https://testai.acik.com/api/v1/endpoint-agent'");
     expect(cmd).toContain("-EnrollmentToken 'tok-with-''-quote'");
+    expect(cmd).toContain('Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force');
+    expect(cmd).toContain('-SelfUpdateEnabled');
+    expect(cmd).toContain(
+      "-SelfUpdateAllowedHosts 'github.com,release-assets.githubusercontent.com,objects.githubusercontent.com,localhost'",
+    );
+    expect(cmd).toContain('-SelfUpdateAutoActivate');
+    expect(cmd).not.toContain('-SelfUpdateSignerThumbprints');
     expect(cmd).toContain('-Start');
     // discovery fetch was SAME-ORIGIN /current/ manifest, no-store
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/artifacts/endpoint-agent/current/release-manifest.json'),
       expect.objectContaining({ cache: 'no-store' }),
     );
+  });
+
+  it('keeps the manual install fallback on the same managed self-update policy', async () => {
+    openModalWith('manual-policy-token');
+
+    const snippet = (await screen.findByTestId('enrollment-token-modal-snippet')).textContent ?? '';
+    expect(snippet).toContain(
+      "$SelfUpdateAllowedHosts = 'github.com,release-assets.githubusercontent.com,objects.githubusercontent.com,localhost'",
+    );
+    expect(snippet).toContain('-SelfUpdateEnabled');
+    expect(snippet).toContain('-SelfUpdateAllowedHosts $SelfUpdateAllowedHosts');
+    expect(snippet).toContain('-SelfUpdateAutoActivate');
+  });
+
+  it('adds managed self-update policy to an existing-device repair command', async () => {
+    const response: CreateEndpointEnrollmentResponse = {
+      enrollmentId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      token: 'repair-token',
+      expiresAt: '2026-07-27T13:00:00Z',
+      deviceId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    };
+    const targetDevice: EndpointDevice = {
+      id: response.deviceId,
+      tenantId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      hostname: 'MKR-A1',
+      displayName: null,
+      osType: 'WINDOWS',
+      osVersion: 'Windows 11',
+      agentVersion: 'v0.2.2',
+      activeUser: null,
+      machineFingerprint: null,
+      domainName: 'ACIK',
+      status: 'ONLINE',
+      lastSeenAt: '2026-07-26T20:00:00Z',
+      enrolledAt: '2026-07-20T20:00:00Z',
+      createdAt: '2026-07-20T20:00:00Z',
+      updatedAt: '2026-07-26T20:00:00Z',
+      deploymentRing: 'PILOT',
+      deviceTags: [],
+    };
+
+    render(
+      <EnrollmentTokenModal
+        response={response}
+        targetDevice={targetDevice}
+        apiUrl="https://testai.acik.com/api/v1/endpoint-agent"
+        artifactBaseUrl="https://testai.acik.com/artifacts"
+        onClose={() => undefined}
+      />,
+    );
+
+    const command =
+      (await screen.findByTestId('enrollment-token-modal-onecommand')).textContent ?? '';
+    expect(command).toContain('-Force');
+    expect(command).toContain('-ResetCredentialStore');
+    expect(command).toContain('-SelfUpdateEnabled');
+    expect(command).toContain(
+      "-SelfUpdateAllowedHosts 'github.com,release-assets.githubusercontent.com,objects.githubusercontent.com,testai.acik.com'",
+    );
+    expect(command).toContain('-SelfUpdateAutoActivate');
   });
 
   it('renders error + retry and NO one-command when the manifest fetch fails', async () => {
