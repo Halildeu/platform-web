@@ -83,7 +83,7 @@ export const AgentUpdateReleasesPage: React.FC = () => {
     } catch (e) {
       const status = (e as { status?: number })?.status;
       setActionError(
-        status === 403 || status === 409
+        status === 403 || status === 409 || status === 422
           ? t('endpointAdmin.releases.approve.makerCheckerError')
           : t('endpointAdmin.releases.approve.error'),
       );
