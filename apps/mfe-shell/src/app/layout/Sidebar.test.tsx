@@ -150,6 +150,33 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(item?.href).toBe('/admin/schema-explorer');
   });
 
+  it('gates the ethic item by ETHIC and the ethic remote flag', () => {
+    // Faz 35 ES: Etik Speak sol panelde görünür oldu; erişim kapısı header
+    // launcher ile aynı kalmalı — modül yetkisi VE remote hazır olmalı.
+    const denied = pick(buildSidebarNavItems(false, denyAll), 'ethic');
+    expect(denied?.disabled).toBe(true);
+    expect(denied?.href).toBeUndefined();
+
+    const otherModuleOnly = pick(buildSidebarNavItems(false, allow('REPORT')), 'ethic');
+    expect(otherModuleOnly?.disabled).toBe(true);
+    expect(otherModuleOnly?.href).toBeUndefined();
+
+    const remoteDisabled = pick(
+      buildSidebarNavItems(false, allow('ETHIC'), true, false, false),
+      'ethic',
+    );
+    expect(remoteDisabled?.disabled).toBe(true);
+    expect(remoteDisabled?.href).toBeUndefined();
+
+    const granted = pick(buildSidebarNavItems(false, allow('ETHIC')), 'ethic');
+    expect(granted?.disabled).toBe(false);
+    expect(granted?.href).toBe('/ethic');
+
+    const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'ethic');
+    expect(superAdmin?.disabled).toBe(false);
+    expect(superAdmin?.href).toBe('/ethic');
+  });
+
   it('gates the meetings item by MEETING or TRANSCRIPT and the meeting remote flag', () => {
     const denied = pick(buildSidebarNavItems(false, denyAll), 'meetings');
     expect(denied?.disabled).toBe(true);
