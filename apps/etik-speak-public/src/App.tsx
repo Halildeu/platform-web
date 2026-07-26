@@ -10,6 +10,7 @@ import {
   sendReporterMessage,
   uploadEvidence,
   validateEvidenceFile,
+  type EvidenceState,
   type EvidenceStatus,
   type Message,
   type ReporterCaseStatus,
@@ -406,8 +407,7 @@ function ReportForm({
           hale gelir.
         </p>
         <fieldset className="attachment-state" aria-describedby="attachment-state">
-          <legend>Ek dosya durumu</legend>
-          <input type="file" disabled aria-label="Ek dosya" />
+          <legend>Ek dosya</legend>
           <p id="attachment-state" role="status">
             Önce bildiriminiz kalıcı olarak kaydedilir. Ardından receipt ile açılan güvenli
             mailbox’ta kanıt dosyanızı karantina ve zararlı içerik taramasına gönderebilirsiniz.
@@ -632,21 +632,32 @@ function Mailbox({
   );
 }
 
+// Every state the service can emit needs a sentence a reporter can act on. A
+// missing entry is not a cosmetic gap: the badge renders empty, and the reader
+// is left unable to tell "still working" from "refused".
+const EVIDENCE_STATE_LABELS: Record<EvidenceState, string> = {
+  DECLARED: 'Yükleme bekliyor',
+  UPLOADING: 'Yükleme bekliyor',
+  UPLOAD_CAPABILITY_EXPIRED: 'Yükleme süresi doldu, yeniden deneyin',
+  QUARANTINED: 'Karantinada',
+  INTEGRITY_VERIFIED: 'Bütünlük doğrulandı, işleniyor',
+  ORIGINAL_SEALED: 'Orijinal mühürlendi, işleniyor',
+  SCAN_PENDING: 'Tarama yeniden denenecek',
+  SCANNING: 'Zararlı içerik taranıyor',
+  SANITIZING: 'Metadata temizleniyor',
+  DERIVATIVE_READY: 'Güvenli türev hazırlanıyor',
+  AVAILABLE: 'Güvenli türev hazır',
+  MALICIOUS_QUARANTINED: 'Zararlı içerik bulundu, dosya paylaşılmadı',
+  REJECTED_INTEGRITY: 'Dosya bildirilen içerikle uyuşmuyor, reddedildi',
+  REJECTED_POLICY: 'Dosya türü veya boyutu kabul edilmiyor',
+  SANITIZE_FAILED: 'Dosya güvenli hale getirilemedi, reddedildi',
+  EXPIRED_UNBOUND: 'Yükleme süresi doldu',
+};
+
 function evidenceStateLabel(state: EvidenceStatus['state']) {
-  return {
-    DECLARED: 'Yükleme bekliyor',
-    UPLOADING: 'Yükleme bekliyor',
-    QUARANTINED: 'Karantinada',
-    INTEGRITY_VERIFIED: 'Bütünlük doğrulandı',
-    ORIGINAL_SEALED: 'Orijinal mühürlendi',
-    SCANNING: 'Zararlı içerik taranıyor',
-    SANITIZING: 'Metadata temizleniyor',
-    DERIVATIVE_READY: 'Güvenli türev hazırlanıyor',
-    AVAILABLE: 'Güvenli türev hazır',
-    REJECTED: 'Dosya reddedildi',
-    SCAN_PENDING: 'Tarama yeniden denenecek',
-    EXPIRED_UNBOUND: 'Yükleme süresi doldu',
-  }[state];
+  // Total by construction, but a service that ships a new state before this UI
+  // does must not produce a blank badge.
+  return EVIDENCE_STATE_LABELS[state] ?? 'Durum güncelleniyor';
 }
 
 const evidenceMediaLabel = (mediaType: string) =>
