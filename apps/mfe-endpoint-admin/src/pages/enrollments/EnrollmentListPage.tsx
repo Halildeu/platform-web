@@ -5,6 +5,7 @@ import type {
   CreateEndpointEnrollmentResponse,
   EndpointEnrollment,
 } from '../../entities/endpoint-enrollment/types';
+import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import { useEndpointAdminI18n } from '../../i18n';
 import {
   CapabilityState,
@@ -91,9 +92,10 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
   const artifactBaseUrl = resolveArtifactBaseUrl();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [tokenResponse, setTokenResponse] = React.useState<CreateEndpointEnrollmentResponse | null>(
-    null,
-  );
+  const [createdEnrollment, setCreatedEnrollment] = React.useState<{
+    response: CreateEndpointEnrollmentResponse;
+    targetDevice: EndpointDevice | null;
+  } | null>(null);
 
   const { data, error, isLoading, isFetching, refetch } =
     endpointAdminApi.useListEndpointEnrollmentsQuery();
@@ -175,17 +177,18 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
         open={dialogOpen}
         canManage={canManage}
         onClose={() => setDialogOpen(false)}
-        onCreated={(response) => {
+        onCreated={(response, targetDevice) => {
           setDialogOpen(false);
-          setTokenResponse(response);
+          setCreatedEnrollment({ response, targetDevice });
         }}
       />
 
       <EnrollmentTokenModal
-        response={tokenResponse}
+        response={createdEnrollment?.response ?? null}
+        targetDevice={createdEnrollment?.targetDevice ?? null}
         apiUrl={apiUrl}
         artifactBaseUrl={artifactBaseUrl}
-        onClose={() => setTokenResponse(null)}
+        onClose={() => setCreatedEnrollment(null)}
       />
     </div>
   );

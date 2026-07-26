@@ -353,6 +353,10 @@ const DICT_TR = {
     'TPM / Sertifika Yenileme (Administrator PowerShell)',
   'endpointAdmin.enrollments.modal.renewalCommandHelp':
     'Yüklü ajanla TPM kimliğini seçilen cihaza yeniler, hizmeti yeniden başlatır ve işlem sonunda hassas ortam değişkenlerini temizler.',
+  'endpointAdmin.enrollments.modal.repairCommandLabel':
+    'Ajanı Onar / Güncelle (Administrator PowerShell)',
+  'endpointAdmin.enrollments.modal.repairCommandHelp':
+    'Seçilen cihazdaki eski veya sürümü doğrulanamayan ajanı güncel imzalı paketle yerinde onarır. İşlem başarıyla tamamlandıktan sonra TPM/sertifika yenilemesi için bu sayfadan yeni bir token oluşturun.',
   'endpointAdmin.enrollments.modal.oneCommandLoading': 'Kurulum komutu hazırlanıyor…',
   'endpointAdmin.enrollments.modal.oneCommandError':
     'Güncel paket bilgisi alınamadı; güvenilir tek-komut şu an üretilemiyor. Tekrar deneyin veya aşağıdaki manuel adımları kullanın.',
@@ -2116,6 +2120,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
     'TPM / certificate renewal (Administrator PowerShell)',
   'endpointAdmin.enrollments.modal.renewalCommandHelp':
     'Uses the installed agent to renew TPM identity for the selected device, restarts the service, and clears sensitive process environment variables afterward.',
+  'endpointAdmin.enrollments.modal.repairCommandLabel':
+    'Repair / update agent (Administrator PowerShell)',
+  'endpointAdmin.enrollments.modal.repairCommandHelp':
+    'Repairs an old or unverified agent in place with the current signed package. After it succeeds, create a new token on this page for TPM/certificate renewal.',
   'endpointAdmin.enrollments.modal.oneCommandLoading': 'Preparing install command…',
   'endpointAdmin.enrollments.modal.oneCommandError':
     'Couldn’t fetch current package info; the trusted one-command can’t be generated now. Retry, or use the manual steps below.',
