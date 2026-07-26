@@ -1337,6 +1337,7 @@ const DICT_TR = {
   'endpointAdmin.releases.field.sha512': 'SHA-512 (128 hex, opsiyonel)',
   'endpointAdmin.releases.field.signerThumbprint': 'İmzalayan parmak izi',
   'endpointAdmin.releases.field.signingTier': 'İmza Katmanı',
+  'endpointAdmin.releases.field.maxBytes': 'Maksimum ikili boyutu (bayt)',
   'endpointAdmin.releases.field.releaseNotes': 'Sürüm notları',
   // GAP 1 slice 3 — BE-029 approved software bundles.
   'endpointAdmin.bundles.page.title': 'Yazılım Paketleri',
@@ -3098,6 +3099,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.releases.field.sha512': 'SHA-512 (128 hex, optional)',
   'endpointAdmin.releases.field.signerThumbprint': 'Signer thumbprint',
   'endpointAdmin.releases.field.signingTier': 'Signing Tier',
+  'endpointAdmin.releases.field.maxBytes': 'Maximum binary size (bytes)',
   'endpointAdmin.releases.field.releaseNotes': 'Release notes',
   // GAP 1 slice 3 — BE-029 approved software bundles.
   'endpointAdmin.bundles.page.title': 'Software Bundles',
