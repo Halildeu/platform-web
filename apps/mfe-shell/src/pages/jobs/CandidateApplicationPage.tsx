@@ -142,12 +142,16 @@ const RESUME_FIELD_LABELS: Record<ResumeFieldKey, string> = {
  * rozeti taşıyordu; kabul edilen, düzenlenen ve reddedilen alan birbirinden
  * ayırt edilemiyordu. Her duruma kendi rengi, simgesi ve kart aksanı verildi.
  */
-const RESUME_DECISION_STYLES = {
+export const RESUME_DECISION_STYLES = {
   UNREVIEWED: {
     label: 'Karar bekliyor',
     mark: '○',
-    badge: 'border-border-strong text-text-secondary',
-    accent: 'bg-border-strong',
+    // Nötr KALMALI. Ölçüm: `border-strong` = oklch(0.5461 0.2152 262.88), yani
+    // doygun marka MAVİSİ — bekleyen kartı hem karar verilmiş gibi gösteriyor
+    // hem EDITED'in mavisiyle (hue 259.81) neredeyse aynı okunuyordu.
+    // `text-secondary` = oklch(0.4461 0.0263 256.8): gerçek nötr gri.
+    badge: 'border-border-subtle text-text-secondary',
+    accent: 'bg-text-secondary',
     card: 'border-border-subtle bg-surface-default',
   },
   CONTROL_REQUIRED: {
@@ -174,9 +178,13 @@ const RESUME_DECISION_STYLES = {
   REJECTED: {
     label: 'Reddedildi',
     mark: '✕',
-    badge: 'border-border-strong bg-surface-muted text-text-secondary',
-    accent: 'bg-border-strong',
-    card: 'border-border-subtle bg-surface-muted',
+    // Reddedilen kart, karar BEKLEYEN karttan ayırt edilebilir olmak zorunda.
+    // İlk sürümde ikisi de border-border-subtle + bg-border-strong taşıyordu:
+    // rozet dışında hiçbir görsel fark yoktu (canlı geri bildirim: "çerçeve
+    // rengi değişmiyor"). Dışlama sinyali için danger ailesi kullanılıyor.
+    badge: 'border-state-danger-border bg-state-danger-bg text-state-danger-text',
+    accent: 'bg-state-danger-border',
+    card: 'border-state-danger-border bg-state-danger-bg/40',
   },
 } as const;
 
