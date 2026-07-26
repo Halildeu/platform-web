@@ -274,6 +274,18 @@ const RecruiterApplicationReviewPanel = ({
     }
 
     const application = detail.application;
+    /**
+     * Girdi alanları YOK olabilir, boş olmakla aynı şey değil: bu alanları
+     * `ats#220` ekledi ve ondan ÖNCEKİ backend sürümü yanıtta hiç göndermiyor.
+     * `application.experienceEntries.length` doğrudan okunduğunda panelin tamamı
+     * `undefined.length` ile çöküyordu — tarayıcı kabul testi bunu yakaladı.
+     *
+     * Bu yalnız test sorunu değildi: frontend backend promosyonundan ÖNCE
+     * inerse İK paneli canlıda çökerdi. Yokluğa tolerans, dağıtım sırasını
+     * önemsiz kılar — aday formunda uygulanan genişlet/daralt disiplininin aynısı.
+     */
+    const experienceEntries = application.experienceEntries ?? [];
+    const educationEntries = application.educationEntries ?? [];
     return (
       <div className="mt-5 space-y-5">
         <section className="rounded-2xl border border-border-subtle bg-surface-muted p-4">
@@ -308,9 +320,9 @@ const RecruiterApplicationReviewPanel = ({
                   eski tek-string alan tek otoritedir ve aynen basılır — bu, girdisiz
                   gönderilmiş eski başvuruların ve yalnız metin gönderen istemcilerin
                   görünümünü bozmaz. */}
-              {application.experienceEntries.length > 0 ? (
+              {experienceEntries.length > 0 ? (
                 <ol className="space-y-3">
-                  {application.experienceEntries.map((entry, index) => (
+                  {experienceEntries.map((entry, index) => (
                     <li
                       key={`${entry.title ?? ''}-${entry.company ?? ''}-${index}`}
                       className="rounded-lg border border-border-subtle bg-surface-subtle p-3"
@@ -338,9 +350,9 @@ const RecruiterApplicationReviewPanel = ({
           <div>
             <dt className="text-xs font-semibold text-text-secondary">Eğitim</dt>
             <dd className="mt-1" data-testid="recruiter-education">
-              {application.educationEntries.length > 0 ? (
+              {educationEntries.length > 0 ? (
                 <ol className="space-y-3">
-                  {application.educationEntries.map((entry, index) => (
+                  {educationEntries.map((entry, index) => (
                     <li
                       key={`${entry.school ?? ''}-${entry.field ?? ''}-${index}`}
                       className="rounded-lg border border-border-subtle bg-surface-subtle p-3"

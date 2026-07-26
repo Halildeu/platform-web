@@ -333,6 +333,30 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText('ISO 45001')).toBeVisible();
   });
 
+  it('still renders when the backend predates the entry fields entirely', async () => {
+    // ats#220 bu alanları EKLEDİ; ondan önceki backend sürümü yanıtta hiç
+    // göndermiyor. `experienceEntries.length` doğrudan okunduğunda panelin tamamı
+    // `undefined.length` ile çöküyordu — tarayıcı kabul testi yakaladı.
+    // Bu yalnız test sorunu değil: frontend backend promosyonundan ÖNCE inerse
+    // İK paneli CANLIDA çökerdi. Alanların yokluğu tolere edilmeli.
+    const legacy = { ...APPLICATION };
+    delete (legacy as { experienceEntries?: unknown }).experienceEntries;
+    delete (legacy as { educationEntries?: unknown }).educationEntries;
+    delete (legacy as { languages?: unknown }).languages;
+    delete (legacy as { certifications?: unknown }).certifications;
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: legacy,
+      history: [],
+      evaluations: [],
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    // Panel açılmalı — çökmemeli.
+    expect(await screen.findByTestId('recruiter-review-panel')).toBeVisible();
+    expect(screen.getByTestId('recruiter-experience')).toHaveTextContent('Sentetik deneyim');
+  });
+
   it('falls back to the single text field for applications submitted without entries', async () => {
     // Geri uyum: #215 B öncesi gönderilmiş başvurularda girdi listesi boştur ve
     // tek-string alan TEK otoritedir. Bu yol bozulursa eski başvurular boş görünür.
