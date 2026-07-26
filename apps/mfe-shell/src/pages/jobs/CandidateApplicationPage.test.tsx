@@ -692,6 +692,72 @@ describe('CandidateApplicationPage', () => {
   // y=2317'de — iki ekrandan fazla aşağıda. Çoğaltılabilir kartlar sayfayı
   // uzattığı için bunu #215 B kötüleştirdi.
 
+  // ── KVKK aydınlatma metni ────────────────────────────────────────────────────
+  //
+  // Sahip bildirimi (2026-07-26): "kvkk metni denen yok, okunacak bir metin yok."
+  // Ölçüm: sistemde yalnız sürüm kimliği vardı (`kvkk-application-v1`); metni sunan
+  // uç da, frontend içeriği de yoktu. İki onay noktası da "aydınlatma metnini
+  // okudum" beyanı alıyor ve bu beyan `noticeAcceptedAt` ile KALICI kaydediliyordu.
+
+  it('shows the readable notice next to the consent it is given for', async () => {
+    renderPage();
+    await reachPreview();
+
+    const disclosure = screen.getByTestId('kvkk-notice-disclosure-kvkk-application-v1');
+    // Veri sorumlusu kimliği metinde YAZILI olmalı — VERBİS sicilinden.
+    expect(disclosure).toHaveTextContent('AÇIK HOLDİNG ANONİM ŞİRKETİ');
+    expect(disclosure).toHaveTextContent('acikholding@hs03.kep.tr');
+    // Grup iştiraklerine aktarım bildirilmeli: aday Açık'a başvurup grup içinde
+    // değerlendirilebiliyorsa bu bir veri aktarımıdır (KVKK m.8/m.10).
+    expect(disclosure).toHaveTextContent('Grup iştirakleri');
+    // YURT DIŞI aktarım AYRI bildirilmeli (m.9 ayrı rejim). Yayımlanmış şirket
+    // listesinde yurt dışı tüzel kişilikler var; iştirakleri alıcı yazmak bunları
+    // kapsar. Tek satırda birleştirmek aktarımın sınır ötesi olduğunu gizlerdi.
+    expect(disclosure).toHaveTextContent('Yurt dışına aktarım');
+    expect(disclosure).toHaveTextContent('Kazakistan');
+    // Çalışan adayı süresi çalışan süresinden AYRI: VERBİS'teki 4-Özlük 15 yıl
+    // beyanı işe ALINAN çalışanın özlük dosyası içindir, başvuran için değil.
+    expect(disclosure).toHaveTextContent('2 yıl sonunda silinir');
+    // Kanonik kaynak gösterilmeli: bu ekran resmi metnin yerine geçmez.
+    expect(
+      within(disclosure).getByRole('link', { name: /resmi Çalışan Adayı Aydınlatma Metni/i }),
+    ).toHaveAttribute('href', 'https://acik.com/calisan-adayi-aydinlatma-metni');
+    // KVKK m.11 hakları ve başvuru kanalı.
+    expect(disclosure).toHaveTextContent('silinmesini veya yok edilmesini isteme');
+    // Kalıcı sayfaya bağlantı da bulunmalı.
+    expect(
+      within(disclosure).getByRole('link', { name: /kalıcı sayfada aç/i }),
+    ).toHaveAttribute('href', '/jobs/aydinlatma');
+  });
+
+  it('does not collect consent when the notice text is missing', async () => {
+    // Fail-closed. Kusurun kendisi "metin yok ama onay var" durumuydu; bir daha
+    // oluşamamalı. Bilinmeyen kiracı = yayımlanmış metni olmayan kiracı.
+    render(
+      <MemoryRouter initialEntries={['/careers/metni-olmayan/jobs/urun-yoneticisi/apply']}>
+        <Routes>
+          <Route
+            path="/careers/:publicHandle/jobs/:jobSlug/apply"
+            element={<CandidateApplicationPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+
+    // Metin yok → açılır bölüm de, KVKK onay kutusu da yok.
+    expect(
+      screen.queryByTestId('kvkk-notice-disclosure-kvkk-application-v1'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/aydınlatma metnini okudum/i)).not.toBeInTheDocument();
+    // Ve gönderim kapalı kalır.
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    expect(screen.getByRole('button', { name: 'Başvuruyu gönder' })).toBeDisabled();
+  });
+
   it('keeps sequential fields on the same grid row', () => {
     // Sahip bildirimi (2026-07-26): "eğitimde başlangıç yılı ile bitiş yılı farklı
     // satıra gelmiş; birbirini takip eden bilgiler aynı satırda olmalı."

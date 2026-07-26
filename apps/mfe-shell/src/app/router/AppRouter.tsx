@@ -96,6 +96,7 @@ const UnsubscribeLandingPage = React.lazy(
 const CandidateApplicationPage = React.lazy(
   () => import('../../pages/jobs/CandidateApplicationPage'),
 );
+const CandidateNoticePage = React.lazy(() => import('../../pages/jobs/CandidateNoticePage'));
 const PublicJobsPage = React.lazy(() => import('../../pages/jobs/PublicJobsPage'));
 const PublicJobDetailPage = React.lazy(() => import('../../pages/jobs/PublicJobDetailPage'));
 const CandidatePortalPage = React.lazy(() => import('../../pages/candidate/CandidatePortalPage'));
@@ -419,6 +420,8 @@ export const AppRouter: React.FC = () => {
         <Route path="/jobs" element={<PublicJobsPage />} />
         <Route path="/jobs/" element={<PublicJobsPage />} />
         <Route path="/jobs/:jobSlug" element={<PublicJobDetailPage />} />
+        <Route path="/jobs/aydinlatma" element={<CandidateNoticePage />} />
+        <Route path="/careers/:publicHandle/jobs/aydinlatma" element={<CandidateNoticePage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
         <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
         <Route path="/careers/:publicHandle/jobs" element={<PublicJobsPage />} />

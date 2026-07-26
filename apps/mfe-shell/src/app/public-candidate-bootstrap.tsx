@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import CandidateApplicationPage from '../pages/jobs/CandidateApplicationPage';
+import CandidateNoticePage from '../pages/jobs/CandidateNoticePage';
 import PublicJobDetailPage from '../pages/jobs/PublicJobDetailPage';
 import PublicJobsPage from '../pages/jobs/PublicJobsPage';
 import CandidatePortalPage from '../pages/candidate/CandidatePortalPage';
@@ -27,6 +28,8 @@ createRoot(container).render(
         <Route path="/jobs/" element={<PublicJobsPage />} />
         <Route path="/jobs/:jobSlug" element={<PublicJobDetailPage />} />
         <Route path="/jobs/:jobSlug/" element={<PublicJobDetailPage />} />
+        <Route path="/jobs/aydinlatma" element={<CandidateNoticePage />} />
+        <Route path="/careers/:publicHandle/jobs/aydinlatma" element={<CandidateNoticePage />} />
         <Route path="/jobs/:jobSlug/apply" element={<CandidateApplicationPage />} />
         <Route path="/jobs/:jobSlug/apply/" element={<CandidateApplicationPage />} />
         <Route path="/careers/:publicHandle/jobs" element={<PublicJobsPage />} />
