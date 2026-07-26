@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { KvkkNoticeDisclosure } from '../../features/ats-portals/KvkkNoticeBody';
+import { noticeFor } from '../../features/ats-portals/kvkk-notices';
 import {
   confirmResumeImport,
   createResumeImport,
@@ -14,6 +16,8 @@ import {
   terminateResumeImport,
   updateResumeProposal,
   uploadResumePdf,
+  APPLICATION_NOTICE_VERSION,
+  RESUME_IMPORT_NOTICE_VERSION,
   type ApplicationFieldKey,
   type ResumeFieldKey,
   RESUME_ONLY_FIELDS,
@@ -521,6 +525,19 @@ const CandidateApplicationPage = () => {
   const fileErrorRef = useRef<HTMLParagraphElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const receiptHeadingRef = useRef<HTMLHeadingElement>(null);
+  /**
+   * Aydınlatma metinleri. Kiracı, kariyer sayfasının yol parametresidir.
+   *
+   * FAIL-CLOSED: metin yoksa `null` döner ve o onay kutusu GÖSTERİLMEZ (gönderim de
+   * kapalı kalır, çünkü `noticeAccepted` hiç true olamaz). Kusurun kendisi buydu:
+   * sistem yalnız sürüm kimliği taşıyor, "okudum" beyanı alıyor ve o beyanı kalıcı
+   * kaydediyordu. Metni olmayan bir sürüm için onay toplanamaz.
+   */
+  const applicationNotice = noticeFor(job?.noticeVersion ?? APPLICATION_NOTICE_VERSION, publicHandle);
+  const resumeNotice = noticeFor(RESUME_IMPORT_NOTICE_VERSION, publicHandle);
+  const noticeHref = publicHandle
+    ? `/careers/${encodeURIComponent(publicHandle)}/jobs/aydinlatma`
+    : '/jobs/aydinlatma';
   const enabledFields = job?.applicationFields ?? DEFAULT_APPLICATION_FIELDS;
   /**
    * İlan bazlı alan açma/kapatma yalnız backend `applicationFields` listesinin
@@ -1584,13 +1601,18 @@ const CandidateApplicationPage = () => {
                           className="mt-1 h-4 w-4 shrink-0"
                         />
                         <span>
+                          {/* Beyan metni aynen korunur — gerekçe başvuru onayındaki
+                              yorumda. Okunabilir metin aşağıya eklenir. */}
                           CV içe aktarma aydınlatmasını okudum. Test ortamında yalnız sentetik veri
                           kullanacağımı; PDF’nin güvenlik taraması ve alan çıkarımı için geçici
                           olarak işleneceğini, ham dosyanın saklanmayacağını ve yalnız seçtiğim
                           alanların taslağa aktarılacağını anladım.
-                          <span className="sr-only"> Sürüm: candidate-resume-import-v1</span>
+                          <span className="sr-only"> Sürüm: {RESUME_IMPORT_NOTICE_VERSION}</span>
                         </span>
                       </label>
+                      {resumeNotice ? (
+                        <KvkkNoticeDisclosure notice={resumeNotice} permanentHref={noticeHref} />
+                      ) : null}
 
                       {resumeStatus !== 'confirmed' ? (
                         <div className="mt-4 border-t border-border-subtle pt-4">
@@ -2388,6 +2410,19 @@ const CandidateApplicationPage = () => {
               </dl>
 
               <div className="mt-6 flex flex-col gap-3 rounded-2xl bg-surface-subtle p-4">
+                {/* FAIL-CLOSED: metin yayımlanmadıysa onay kutusu HİÇ RENDER EDİLMEZ.
+                    Yalnız açılır bölümü gizlemek yetmiyordu — kutu duruyor, aday
+                    işaretliyor ve beyan kaydediliyordu; kusurun kendisi buydu.
+                    `noticeAccepted` hiç true olamadığı için gönderim de kapalı kalır. */}
+                {!applicationNotice ? (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+                  >
+                    Bu kariyer sayfası için yayımlanmış bir aydınlatma metni bulunmuyor. Metin
+                    yayımlanmadan başvuru onayı toplanamaz ve başvuru gönderilemez.
+                  </p>
+                ) : (
                 <label
                   className="flex items-start gap-3 text-sm leading-6"
                   htmlFor="candidate-notice-accepted"
@@ -2408,11 +2443,22 @@ const CandidateApplicationPage = () => {
                     className="mt-1 h-4 w-4"
                   />
                   <span>
+                    {/* BEYAN METNİ AYNEN KORUNUR. Bu cümle `kvkk-application-v1`
+                        sürümü altında kaydedilen beyandır; sözcüklerini değiştirip
+                        sürümü aynı bırakmak, tek sürüm altında iki farklı beyan
+                        kaydetmek olurdu (parserVersion ile aynı provenance kuralı).
+                        Metnin okunabilir hâli aşağıya EKLENİR, beyan değişmez. */}
                     KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
                     kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla kaydedileceğini
                     anladım. <span className="sr-only">Sürüm: {job?.noticeVersion}</span>
                   </span>
                 </label>
+                )}
+                {/* Metin onayın YANINDA durur: "okudum" beyanı ancak okunabilir bir
+                    metnin yanında anlam taşır. Daha önce yalnız sürüm kimliği vardı. */}
+                {applicationNotice ? (
+                  <KvkkNoticeDisclosure notice={applicationNotice} permanentHref={noticeHref} />
+                ) : null}
                 <label
                   className="flex items-start gap-3 text-sm leading-6"
                   htmlFor="candidate-accuracy-confirmed"
