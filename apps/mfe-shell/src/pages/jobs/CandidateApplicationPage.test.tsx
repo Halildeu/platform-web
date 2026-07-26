@@ -1102,4 +1102,121 @@ describe('CandidateApplicationPage', () => {
       EXPERIENCE_PROPOSAL_VALUE,
     );
   });
+
+  /** #218: ayrıştırıcının gruplayıp yayınladığı kayıtlarla taslak. */
+  const withGroupedEntries = () => {
+    const base = apiMocks.confirmResumeImport.mock.results;
+    apiMocks.confirmResumeImport.mockResolvedValue({
+      resumeImport: { ...UPLOADED_IMPORT, state: 'CONFIRMED', version: 10, proposals: [] },
+      draft: {
+        draftId: '11111111-1111-1111-1111-111111111111',
+        importId: CREATED_IMPORT.importId,
+        version: 0,
+        fields: Object.fromEntries(
+          proposals.map((proposal) => [proposal.field, proposal.proposedValue]),
+        ),
+        createdAt: '2026-07-18T08:02:00Z',
+        entries: {
+          experience: [
+            {
+              title: 'Kıdemli Kalite Mühendisi',
+              subtitle: '',
+              dateText: '2019 - 2023',
+              description: 'Kalite sistemini kurdu',
+            },
+            {
+              title: 'Kalite Uzmanı',
+              subtitle: '',
+              dateText: 'Eyl 2015 – Ağu 2019',
+              description: 'Denetimleri yürüttü',
+            },
+          ],
+          education: [
+            {
+              title: 'Örnek Üniversitesi',
+              subtitle: '',
+              dateText: '2011 - 2015',
+              description: 'Çevre Mühendisliği',
+            },
+            { title: 'Örnek Lisesi', subtitle: '', dateText: 'belirsiz tarih', description: '' },
+          ],
+        },
+      },
+    });
+    return base;
+  };
+
+  const importResumeIntoForm = async () => {
+    renderPage();
+    await selectPdf();
+    fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+    await waitFor(() => expect(screen.getByTestId('candidate-fullName')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
+  };
+
+  it('spreads grouped resume records across separate cards', async () => {
+    // SAHİP RAPORU: "birden fazla deneyim olunca tek deneyim gibi atıyor".
+    // Ayrıştırıcı artık kayıtları gruplayıp yayınlıyor (ats#218); form onları
+    // AYRI kartlara dağıtmazsa rapor kapanmaz — kayıtlar yine tek kartta kalır.
+    withGroupedEntries();
+    await importResumeIntoForm();
+
+    expect(screen.getByTestId('candidate-experience-entry-0')).toBeInTheDocument();
+    expect(screen.getByTestId('candidate-experience-entry-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('candidate-experience-entry-2')).not.toBeInTheDocument();
+
+    expect(screen.getByTestId('candidate-experience-0-title')).toHaveValue(
+      'Kıdemli Kalite Mühendisi',
+    );
+    expect(screen.getByTestId('candidate-experience-1-title')).toHaveValue('Kalite Uzmanı');
+    // Tarih METNİ formun iki alanına bölünmeli; tek parça göstermek adaya iş bırakır.
+    expect(screen.getByTestId('candidate-experience-0-startDate')).toHaveValue('2019');
+    expect(screen.getByTestId('candidate-experience-0-endDate')).toHaveValue('2023');
+    // En-tire de ayırıcı: gerçek CV'ler "–" kullanıyor, yalnız "-" beklemek kaçırırdı.
+    expect(screen.getByTestId('candidate-experience-1-startDate')).toHaveValue('Eyl 2015');
+    expect(screen.getByTestId('candidate-experience-1-endDate')).toHaveValue('Ağu 2019');
+    expect(screen.getByTestId('candidate-experience-0-description')).toHaveValue(
+      'Kalite sistemini kurdu',
+    );
+    // İkinci kaydın başlığı birinci kayda sızmamalı.
+    expect(screen.getByTestId('candidate-experience-0-description')).not.toHaveValue(
+      expect.stringContaining('Kalite Uzmanı') as unknown as string,
+    );
+  });
+
+  it('spreads grouped education records too, and never loses an unsplittable date', async () => {
+    withGroupedEntries();
+    // Eğitim, deneyimle AYNI adımda render ediliyor — ayrı bir ilerleme tıklaması yok.
+    await importResumeIntoForm();
+
+    expect(screen.getByTestId('candidate-education-0-school')).toHaveValue('Örnek Üniversitesi');
+    expect(screen.getByTestId('candidate-education-1-school')).toHaveValue('Örnek Lisesi');
+    expect(screen.getByTestId('candidate-education-0-startYear')).toHaveValue('2011');
+    expect(screen.getByTestId('candidate-education-0-endYear')).toHaveValue('2015');
+    // Bölünemeyen tarih "başlangıç" alanına YAZILMAZ — tek parça tarihi başlangıç
+    // diye göstermek yanlış veri olur. Açıklamaya düşer: aday görür, düzeltir,
+    // ama bilgi KAYBOLMAZ. Sessizce atmak en kötüsü olurdu.
+    expect(screen.getByTestId('candidate-education-1-startYear')).toHaveValue('');
+    expect(screen.getByTestId('candidate-education-1-endYear')).toHaveValue('');
+    expect(screen.getByTestId('candidate-education-1-description')).toHaveValue('belirsiz tarih');
+  });
+
+  it('falls back to one card when the backend predates grouping', async () => {
+    // `entries` alanini ats#224 EKLEDI; ondan onceki backend surumu hic gondermiyor.
+    // Zorunlu okuma canlida cokerdi — ayni hata #1019'da IK panelini cokertecekti.
+    // Gruplama yoksa bugunun tek-kart davranisi KALIR, bilgi kaybolmaz.
+    await importResumeIntoForm();
+
+    expect(screen.getByTestId('candidate-experience-entry-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('candidate-experience-entry-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('candidate-experience-0-description')).toHaveValue(
+      EXPERIENCE_PROPOSAL_VALUE,
+    );
+  });
 });

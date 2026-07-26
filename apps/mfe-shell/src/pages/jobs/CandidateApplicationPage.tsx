@@ -865,6 +865,23 @@ const CandidateApplicationPage = () => {
     }
   };
 
+  /**
+   * #218: ayrıştırıcının verdiği tarih METNİ ("2019 - 2023", "Eyl 2022 - Devam
+   * ediyor") formun iki ayrı alanına bölünür. Ayırıcı yoksa bölmek yerine metin
+   * OLDUĞU GİBİ başlangıç alanına yazılmaz — tek parça tarihi "başlangıç" diye
+   * göstermek yanlış veri olur. O durumda açıklamaya eklenir: aday görür ve
+   * düzeltir, ama hiçbir bilgi kaybolmaz.
+   */
+  const splitDateRange = (dateText: string): { start: string; end: string; leftover: string } => {
+    const raw = dateText.trim();
+    if (!raw) return { start: '', end: '', leftover: '' };
+    const parts = raw.split(/\s*[-–—]\s*/u);
+    if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+      return { start: parts[0].trim(), end: parts[1].trim(), leftover: '' };
+    }
+    return { start: '', end: '', leftover: raw };
+  };
+
   const applyDraftToForm = (draft: ResumeDraftDto) => {
     let imported = 0;
     const conflicts: MergeConflict[] = [];
@@ -877,13 +894,53 @@ const CandidateApplicationPage = () => {
       const resumeValue = rawValue?.trim() ?? '';
       if (!resumeValue) return;
 
-      // Deneyim ve eğitim artık metin kutusu değil girdi listesi. Ayrıştırıcı hâlâ
-      // tek parça metin döndürüyor (unvan/şirket/tarih ayrıştırması ayrı iş: ats#213
-      // üstüne binen yapısal çıkarım), o yüzden gelen metin İLK GİRDİNİN açıklaması
-      // olur. Aday oradan bölüp satır ekleyerek düzenler — bilgi kaybolmaz.
+      // Deneyim ve eğitim girdi listesi. #218'den beri ayrıştırıcı bölümü KAYITLARA
+      // gruplayıp yayınlıyor; varsa her kayıt AYRI KART olur. Yoksa (eski backend,
+      // ya da gruplama güvenilir değil) gelen metin ilk kaydın açıklaması olur —
+      // bugünkü davranış fallback kalır, bilgi kaybolmaz.
       if (field === 'experience' || field === 'education') {
         const current = field === 'experience' ? derivedExperience : derivedEducation;
         if (!current.trim() || current === resumeValue) {
+          const grouped = draft.entries?.[field] ?? [];
+          if (grouped.length > 0) {
+            if (field === 'experience') {
+              nextExperience = grouped.map((entry) => {
+                const { start, end, leftover } = splitDateRange(entry.dateText);
+                const description = [leftover, entry.description]
+                  .filter((part) => part.trim())
+                  .join('\n');
+                return {
+                  rowId: nextRowId(),
+                  value: {
+                    ...(entry.title.trim() ? { title: entry.title.trim() } : {}),
+                    ...(entry.subtitle.trim() ? { company: entry.subtitle.trim() } : {}),
+                    ...(start ? { startDate: start } : {}),
+                    ...(end ? { endDate: end } : {}),
+                    ...(description ? { description } : {}),
+                  },
+                };
+              });
+            } else {
+              nextEducation = grouped.map((entry) => {
+                const { start, end, leftover } = splitDateRange(entry.dateText);
+                const description = [leftover, entry.description]
+                  .filter((part) => part.trim())
+                  .join('\n');
+                return {
+                  rowId: nextRowId(),
+                  value: {
+                    ...(entry.title.trim() ? { school: entry.title.trim() } : {}),
+                    ...(entry.subtitle.trim() ? { field: entry.subtitle.trim() } : {}),
+                    ...(start ? { startYear: start } : {}),
+                    ...(end ? { endYear: end } : {}),
+                    ...(description ? { description } : {}),
+                  },
+                };
+              });
+            }
+            imported += 1;
+            return;
+          }
           if (field === 'experience') {
             nextExperience = [{ rowId: nextRowId(), value: { description: resumeValue } }];
           } else {

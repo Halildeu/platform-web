@@ -206,6 +206,29 @@ export type ResumeDraftDto = {
    */
   fields: Partial<Record<ResumeFieldKey, string>>;
   createdAt: string;
+  /**
+   * #218: alan başına YAPISAL kayıtlar. Anahtar YOKSA o alan için gruplama yok
+   * ve tüketici `fields`'a (tek blob) düşer — anahtarın yokluğu ile boş dizi
+   * AYNI ŞEY DEĞİL, backend bu ayrımı `NULL` ile taşıyor.
+   *
+   * OPSİYONEL olmak zorunda: bu alanı `ats#224` ekledi ve ondan ÖNCEKİ backend
+   * sürümü yanıtta hiç göndermiyor. Frontend backend promosyonundan önce inerse
+   * zorunlu okuma çökerdi — aynı hata `#1019`'da İK panelini canlıda çökertecekti.
+   */
+  entries?: Partial<Record<ResumeFieldKey, ResumeProposedEntryDto[]>>;
+};
+
+/**
+ * #218: bir bölümden gruplanan TEK kayıt. Alan adları jenerik — aynı şekil hem
+ * deneyimi (unvan) hem eğitimi (okul) taşır. `subtitle` (şirket/bölüm) ölçümde
+ * ayırt edici sinyal bulunamadığı için boş gelir; tahmin edilmiş veri yerine
+ * boş bırakılıyor.
+ */
+export type ResumeProposedEntryDto = {
+  title: string;
+  subtitle: string;
+  dateText: string;
+  description: string;
 };
 
 export type ResumeImportConfirmDto = {
