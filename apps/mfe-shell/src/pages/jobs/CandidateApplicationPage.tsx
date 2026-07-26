@@ -517,6 +517,7 @@ const CandidateApplicationPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [candidateSessionSaved, setCandidateSessionSaved] = useState(false);
+  const [credentialCopied, setCredentialCopied] = useState(false);
   const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
   const resumeCreateKeyRef = useRef(createApplicationIdempotencyKey());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
@@ -1216,12 +1217,34 @@ const CandidateApplicationPage = () => {
     setReceipt(null);
     setSubmitError('');
     setCandidateSessionSaved(false);
+    setCredentialCopied(false);
     idempotencyKeyRef.current = createApplicationIdempotencyKey();
     resumeCreateKeyRef.current = createApplicationIdempotencyKey();
     candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
     setFormStep('resume');
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  /**
+   * Pano API'si her ortamda yok (güvenli olmayan köken, izin reddi, eski
+   * tarayıcı). Düğme yalnız API varsa çizilir; yoksa aday iki alanı elle
+   * seçip kopyalayabilir — kopyalama KOLAYLIK, tek teslim yolu değil.
+   */
+  const copySupported =
+    typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function';
+
+  const copyTrackingCredential = async () => {
+    if (!receipt?.candidateAccessToken) return;
+    try {
+      await navigator.clipboard.writeText(
+        `Başvuru referansı: ${receipt.publicRef}\nTakip anahtarı: ${receipt.candidateAccessToken}`,
+      );
+      setCredentialCopied(true);
+    } catch {
+      // Kopyalama başarısızsa değerler ekranda duruyor; sessiz kal.
+      setCredentialCopied(false);
+    }
   };
 
   const renderField = (
@@ -2544,13 +2567,56 @@ const CandidateApplicationPage = () => {
                   formda doğruladığınız alanlar kaydedildi.
                 </p>
               ) : null}
-              <div className="mx-auto mt-5 max-w-md rounded-xl border border-border-subtle bg-surface-subtle p-4">
-                <span className="block text-xs font-semibold text-text-secondary">
-                  Başvuru referansı
-                </span>
-                <strong className="mt-1 block font-mono text-lg" data-testid="candidate-receipt-id">
-                  {receipt?.publicRef}
-                </strong>
+              {/* Erişim kimliği İKİ parçadır ve ikisi de adaya verilmek ZORUNDA.
+                  Referans tek başına yetmez — durum sorgusu hem referansı hem
+                  anahtar digest'ini ister (yanlış referans ile yanlış anahtar
+                  ayırt edilemez; numara deneyerek başvuru avlamayı engeller).
+                  Anahtar daha önce üretilip kullanılıp adaya HİÇ gösterilmeden
+                  atılıyordu: sekme kapanınca başvuru kalıcı olarak erişilemez
+                  hâle geliyordu. Teslim etmek boşluğun asıl çözümü. */}
+              <div className="mx-auto mt-5 max-w-xl space-y-3 text-left">
+                <div className="rounded-xl border border-border-subtle bg-surface-subtle p-4">
+                  <span className="block text-xs font-semibold text-text-secondary">
+                    Başvuru referansı
+                  </span>
+                  <strong
+                    className="mt-1 block break-all font-mono text-lg"
+                    data-testid="candidate-receipt-id"
+                  >
+                    {receipt?.publicRef}
+                  </strong>
+                </div>
+                <div className="rounded-xl border border-state-warning-border bg-state-warning-bg p-4">
+                  <span className="block text-xs font-semibold text-text-primary">
+                    Takip anahtarı — bu ekranda bir kez gösterilir
+                  </span>
+                  <strong
+                    className="mt-1 block break-all font-mono text-sm"
+                    data-testid="candidate-receipt-access-token"
+                  >
+                    {receipt?.candidateAccessToken}
+                  </strong>
+                  <p className="mt-2 text-sm leading-6 text-text-primary">
+                    Bu iki bilgiyi saklayın. Sekmeyi kapattıktan sonra, başka bir cihazdan veya
+                    tarayıcıdan başvurunuzu izlemek için ikisi birlikte gerekir. Anahtarınızı
+                    kimseyle paylaşmayın; başvurunuza erişim sağlar.
+                  </p>
+                  {copySupported ? (
+                    <button
+                      type="button"
+                      onClick={() => void copyTrackingCredential()}
+                      data-testid="candidate-receipt-copy"
+                      className="mt-3 min-h-11 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
+                    >
+                      Referans ve anahtarı kopyala
+                    </button>
+                  ) : null}
+                  {credentialCopied ? (
+                    <p role="status" className="mt-2 text-sm font-semibold text-text-primary">
+                      Referans ve takip anahtarı panoya kopyalandı.
+                    </p>
+                  ) : null}
+                </div>
               </div>
               <div
                 className={`mt-6 rounded-xl border p-4 text-left text-sm leading-6 text-text-primary ${
@@ -2560,8 +2626,8 @@ const CandidateApplicationPage = () => {
                 }`}
               >
                 {candidateSessionSaved
-                  ? 'Takip anahtarı yalnız bu tarayıcı sekmesinin güvenli oturumunda tutuldu. Aday Alanım ekranından durumu izleyebilirsiniz.'
-                  : 'Başvuru kaydedildi ancak tarayıcı takip anahtarını oturumda saklayamadı. Referansınızı not edin.'}
+                  ? 'Bu sekmede oturum açık kaldığı sürece Aday Alanım’dan doğrudan izleyebilirsiniz. Sekme kapanırsa yukarıdaki referans ve anahtarla yeniden girebilirsiniz.'
+                  : 'Başvuru kaydedildi ancak tarayıcı takip anahtarını oturumda saklayamadı. Yukarıdaki referans ve anahtarı not edin; Aday Alanım’dan onlarla girebilirsiniz.'}
               </div>
               <Link
                 to="/candidate"

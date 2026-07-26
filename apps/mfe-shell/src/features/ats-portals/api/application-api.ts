@@ -832,6 +832,52 @@ export const saveCandidateSession = (receipt: ApplicationReceiptDto): boolean =>
   }
 };
 
+/**
+ * Adayın elle girdiği referans + takip anahtarı çiftinden oturum kurar.
+ *
+ * Doğrulama BURADA yapılır, çağıran ekranda değil: aynı biçim kuralı hem
+ * makbuzdan gelen otomatik yolda hem elle girişte tek yerden geçer, böylece
+ * iki yol birbirinden ayrışamaz. Biçimi bozuk girdi ağ isteği ÜRETMEDEN
+ * reddedilir — sunucuya asla tahmin edilebilir çöp gönderilmez.
+ *
+ * Depolama bilinçli olarak `sessionStorage`: `localStorage` cihaz değişimini
+ * ZATEN çözmez (bu boşluğun asıl çözümü anahtarın adaya teslim edilmesidir),
+ * ama kimliği kalıcı depoya yazmak mevcut güvenlik duruşunu geriletirdi.
+ */
+export const establishCandidateSession = (
+  publicRef: string,
+  candidateAccessToken: string,
+): CandidateSession | null => {
+  const ref = publicRef.trim();
+  const token = candidateAccessToken.trim();
+  if (
+    typeof window === 'undefined' ||
+    !PUBLIC_REF_PATTERN.test(ref) ||
+    !CANDIDATE_ACCESS_PATTERN.test(token)
+  ) {
+    return null;
+  }
+  const session: CandidateSession = { publicRef: ref, candidateAccessToken: token };
+  try {
+    window.sessionStorage.setItem(CANDIDATE_SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Depolama reddedilse bile oturum bu sekmede geçerlidir: durum sorgusu
+    // yalnız bellekteki çiftle çalışır. Sessizce başarısız olup adayı
+    // erişimsiz bırakmak, boşluğun ta kendisiydi.
+  }
+  return session;
+};
+
+/** Anahtarı bu sekmeden siler; paylaşılan cihazda oturumu bırakma yolu. */
+export const clearCandidateSession = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(CANDIDATE_SESSION_KEY);
+  } catch {
+    // Depolama erişilemezse silinecek bir şey de yoktur.
+  }
+};
+
 export const readCandidateSession = (): CandidateSession | null => {
   if (typeof window === 'undefined') return null;
   try {

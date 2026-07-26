@@ -5,8 +5,10 @@ const httpMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() 
 vi.mock('@mfe/shared-http', () => ({ api: httpMocks }));
 
 import {
+  clearCandidateSession,
   confirmResumeImport,
   createApplicationIdempotencyKey,
+  establishCandidateSession,
   createRecruiterInterview,
   createRecruiterOffer,
   createResumeImport,
@@ -198,6 +200,52 @@ describe('application-api', () => {
       candidateAccessToken: 'A'.repeat(43),
     });
     expect(window.localStorage.length).toBe(0);
+  });
+
+  it('establishes a session from a hand-typed reference and tracking key', () => {
+    // Boşluk buydu: anahtar YALNIZ gönderim sekmesinde vardı, adaya hiç
+    // gösterilmiyordu ve elle girilebileceği bir yol yoktu — sekme kapanınca
+    // başvuru kalıcı olarak erişilemez hâle geliyordu.
+    expect(establishCandidateSession('app_abcdefghijklmnopqrstuvwx', 'B'.repeat(43))).toEqual({
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'B'.repeat(43),
+    });
+    // Kurulan oturum bu sekmede okunabilir olmalı, yoksa yenileme koparır.
+    expect(readCandidateSession()).toEqual({
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'B'.repeat(43),
+    });
+    // Anahtar KALICI depoya yazılmaz: cihaz değişimini zaten çözmez, ama
+    // kalıcı depoya kimlik yazmak mevcut duruşu geriletirdi.
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('trims surrounding whitespace so a pasted credential still works', () => {
+    // Makbuzdan kopyalayan aday satır sonu veya boşluk taşır; bunun yüzünden
+    // geçerli anahtarı reddetmek boşluğu kullanıcı hatası gibi gösterirdi.
+    expect(
+      establishCandidateSession('  app_abcdefghijklmnopqrstuvwx\n', ` ${'C'.repeat(43)} `),
+    ).toEqual({
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'C'.repeat(43),
+    });
+  });
+
+  it('refuses a malformed pair without writing anything or making a request', () => {
+    expect(establishCandidateSession('app_too-short', 'D'.repeat(43))).toBeNull();
+    expect(establishCandidateSession('app_abcdefghijklmnopqrstuvwx', 'too-short')).toBeNull();
+    // 44 karakter de reddedilmeli: uzunluk sınırı üstten de kapalı olmalı.
+    expect(establishCandidateSession('app_abcdefghijklmnopqrstuvwx', 'E'.repeat(44))).toBeNull();
+    expect(window.sessionStorage.getItem('ats.candidate.latest.v1')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('clears the tracking credential from the tab on sign-out', () => {
+    establishCandidateSession('app_abcdefghijklmnopqrstuvwx', 'F'.repeat(43));
+    expect(readCandidateSession()).not.toBeNull();
+    clearCandidateSession();
+    expect(readCandidateSession()).toBeNull();
+    expect(window.sessionStorage.getItem('ats.candidate.latest.v1')).toBeNull();
   });
 
   it('creates a 256-bit base64url candidate credential with Web Crypto', () => {

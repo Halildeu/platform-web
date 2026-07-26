@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  clearCandidateSession,
   createApplicationIdempotencyKey,
+  establishCandidateSession,
   getCandidateInterviews,
   getCandidateOffers,
   getCandidateStatus,
@@ -127,7 +129,16 @@ const formatMoney = (amount: number, currency: string) => {
 };
 
 const CandidatePortalPage = () => {
-  const [session] = useState<CandidateSession | null>(() => readCandidateSession());
+  /**
+   * Oturum artık DEĞİŞEBİLİR. Önceden yalnız mount'ta `sessionStorage`'dan
+   * okunuyordu: sekme kapanınca anahtar uçuyor, başka giriş yolu olmadığı için
+   * başvuru kalıcı olarak erişilemez hâle geliyordu. Aday referans + anahtar
+   * çiftiyle oturumu buradan kurabilir.
+   */
+  const [session, setSession] = useState<CandidateSession | null>(() => readCandidateSession());
+  const [signInRef, setSignInRef] = useState('');
+  const [signInToken, setSignInToken] = useState('');
+  const [signInError, setSignInError] = useState('');
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
   const [interviews, setInterviews] = useState<CandidateInterviewDto[]>([]);
   const [offers, setOffers] = useState<CandidateOfferDto[]>([]);
@@ -204,6 +215,44 @@ const CandidatePortalPage = () => {
       document.title = previousTitle;
     };
   }, [refresh]);
+
+  /**
+   * Biçim doğrulaması `establishCandidateSession` içinde — bozuk girdi ağ
+   * isteği ÜRETMEDEN reddedilir. Doğru biçimli ama yanlış çift ise sunucu
+   * yanıtı "bulunamadı" olur ve yanlış referans ile yanlış anahtar ayırt
+   * edilemez; bu, numara deneyerek başvuru avlamayı engelleyen mevcut
+   * tasarımın gereği.
+   */
+  const signIn = () => {
+    const next = establishCandidateSession(signInRef, signInToken);
+    if (!next) {
+      setSignInError(
+        'Referans veya takip anahtarı beklenen biçimde değil. Referans "app_" ile başlar; ' +
+          'takip anahtarı 43 karakterdir. Makbuzdaki değerleri olduğu gibi kopyalayın.',
+      );
+      return;
+    }
+    setSignInError('');
+    setSignInToken('');
+    setError('');
+    setSession(next);
+  };
+
+  /** Yanlış çiftle girildiğinde adayın forma dönebilmesi gerekir. */
+  const signOut = () => {
+    clearCandidateSession();
+    setSession(null);
+    setStatus(null);
+    setInterviews([]);
+    setOffers([]);
+    setError('');
+    setInterviewError('');
+    setOfferError('');
+    setActionError('');
+    setSuccessMessage('');
+    setSignInError('');
+    setSignInToken('');
+  };
 
   const withdraw = async () => {
     if (!session || !status?.withdrawalAllowed || !withdrawalConfirmed || withdrawing) return;
@@ -315,22 +364,104 @@ const CandidatePortalPage = () => {
               Başvurunuzun durumunu izleyin
             </h1>
             <p className="mt-5 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
-              Bu sekmede yaptığınız son başvurunun kalıcı durumunu görürsünüz. Takip anahtarı URL’ye
-              veya kalıcı tarayıcı depolamasına yazılmaz.
+              Başvuru referansınız ve takip anahtarınızla, hangi cihazdan girerseniz girin
+              başvurunuzun kalıcı durumunu görürsünüz. Anahtar adres satırına veya kalıcı tarayıcı
+              depolamasına yazılmaz.
             </p>
           </div>
         </section>
 
         {!session ? (
-          <section className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 text-center shadow-xs sm:p-10">
-            <h2 className="text-2xl font-bold">Bu sekmede takip edilen başvuru yok</h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-text-secondary">
-              Güvenlik nedeniyle takip anahtarı yalnız başvuruyu gönderdiğiniz tarayıcı sekmesinde
-              tutulur. Yeni bir sentetik başvuru göndererek akışı uçtan uca deneyebilirsiniz.
+          <section
+            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs sm:p-10"
+            aria-labelledby="candidate-sign-in-heading"
+            data-testid="candidate-sign-in"
+          >
+            <h2 id="candidate-sign-in-heading" className="text-2xl font-bold">
+              Başvurunuzu görüntüleyin
+            </h2>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
+              Başvuru makbuzunuzdaki <strong>başvuru referansı</strong> ve{' '}
+              <strong>takip anahtarı</strong> ile girin. Şifre veya hesap oluşturmanız gerekmez.
+              İkisi birlikte gerekir: referans tek başına başvurunuzu açmaz.
+            </p>
+            <form
+              className="mt-6 max-w-xl space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                signIn();
+              }}
+            >
+              <div>
+                <label
+                  htmlFor="candidate-sign-in-ref"
+                  className="block text-sm font-semibold text-text-primary"
+                >
+                  Başvuru referansı
+                </label>
+                <input
+                  id="candidate-sign-in-ref"
+                  data-testid="candidate-sign-in-ref"
+                  value={signInRef}
+                  onChange={(event) => setSignInRef(event.target.value)}
+                  placeholder="app_..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3 font-mono text-sm"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="candidate-sign-in-token"
+                  className="block text-sm font-semibold text-text-primary"
+                >
+                  Takip anahtarı
+                </label>
+                <input
+                  id="candidate-sign-in-token"
+                  data-testid="candidate-sign-in-token"
+                  value={signInToken}
+                  onChange={(event) => setSignInToken(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="candidate-sign-in-token-help"
+                  className="mt-1 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3 font-mono text-sm"
+                />
+                <p id="candidate-sign-in-token-help" className="mt-1 text-xs text-text-secondary">
+                  43 karakterlik anahtar. Yalnız bu sekmede tutulur; adres satırına veya kalıcı
+                  tarayıcı depolamasına yazılmaz.
+                </p>
+              </div>
+              {/* Metin rengi `text-text-primary`: ölçülen değerle
+                  `text-state-danger-text` (#ef4444) bu zeminde (#fce8e8) 3.19
+                  kontrast veriyor, WCAG AA 4.5 istiyor (axe serious). Tehlike
+                  sinyali kenarlık + zeminle korunur; aynı dosyadaki geri çekme
+                  onayı bloğu da bu deseni kullanıyor. Token çiftinin kendisi
+                  sistemik olarak kusurlu (mfe-shell'de 67 kullanım) — ayrı iş. */}
+              {signInError ? (
+                <p
+                  role="alert"
+                  data-testid="candidate-sign-in-error"
+                  className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
+                >
+                  {signInError}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                data-testid="candidate-sign-in-submit"
+                className="min-h-12 w-full rounded-xl bg-action-primary px-5 text-sm font-bold text-action-primary-text sm:w-auto"
+              >
+                Başvurumu göster
+              </button>
+            </form>
+            <p className="mt-6 text-sm leading-6 text-text-secondary">
+              Makbuzunuz elinizde değil mi? Anahtar güvenlik gereği yeniden gösterilemez; yeni bir
+              başvuru gönderebilirsiniz.
             </p>
             <Link
               to="/jobs"
-              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-xl bg-action-primary px-5 py-3 text-sm font-bold text-action-primary-text"
+              className="mt-3 inline-flex min-h-12 items-center justify-center rounded-xl border border-border-strong bg-surface-default px-5 py-3 text-sm font-bold text-text-primary"
             >
               Açık pozisyonlara git
             </Link>
@@ -353,13 +484,25 @@ const CandidatePortalPage = () => {
           >
             <p className="font-semibold text-state-danger-text">Durum alınamadı.</p>
             <p className="mt-1 text-sm text-text-secondary">{error}</p>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="mt-4 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold"
-            >
-              Yeniden dene
-            </button>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className="min-h-11 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold"
+              >
+                Yeniden dene
+              </button>
+              {/* Yanlış çiftle girildiğinde çıkış YOLU olmalı: aksi hâlde aday
+                  hatalı oturumda kilitli kalır ve doğru anahtarı giremez. */}
+              <button
+                type="button"
+                onClick={signOut}
+                data-testid="candidate-sign-in-again"
+                className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 py-2 text-sm font-bold"
+              >
+                Başka referans ve anahtarla gir
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -782,6 +925,15 @@ const CandidatePortalPage = () => {
                 Bu ekran ad, e-posta, telefon veya CV içeriğini geri döndürmez; yalnız minimal
                 başvuru durumunu gösterir.
               </div>
+              {/* Paylaşılan cihazda anahtarı sekmede bırakmamak için açık çıkış. */}
+              <button
+                type="button"
+                onClick={signOut}
+                data-testid="candidate-sign-out"
+                className="mt-4 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold text-text-primary"
+              >
+                Bu cihazda oturumu kapat
+              </button>
             </aside>
           </div>
         ) : null}
