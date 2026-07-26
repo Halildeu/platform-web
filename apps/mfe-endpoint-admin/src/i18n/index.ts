@@ -298,7 +298,7 @@ const DICT_TR = {
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
   'endpointAdmin.enrollments.page.description':
-    'Yeni Windows cihazının ilk kurulum kaydını oluşturun. Mevcut cihaz güncelleme ve TPM/sertifika yenileme işlemleri Tüm Cihazlar ekranından tarayıcıyla yönetilir.',
+    'Yeni Windows cihazı kaydı oluşturun veya komut alamayan kayıtlı bir cihaz için onarım/yeniden kayıt hedefi seçin. Sağlıklı cihazların normal güncelleme ve TPM/sertifika yenileme işlemleri Tüm Cihazlar ekranından yönetilir.',
   'endpointAdmin.enrollments.page.createButton': 'Yeni Enrollment Oluştur',
   'endpointAdmin.enrollments.page.loading': 'Enrollment listesi yükleniyor…',
   'endpointAdmin.enrollments.page.refreshing': 'Liste güncelleniyor…',
@@ -317,15 +317,17 @@ const DICT_TR = {
   'endpointAdmin.enrollments.table.deviceId': 'Cihaz',
   'endpointAdmin.enrollments.dialog.title': 'Yeni Enrollment Oluştur',
   'endpointAdmin.enrollments.dialog.newDeviceOnlyHelp':
-    'Bu ekran yalnız yeni cihazın ilk kurulum kaydı içindir. Kayıtlı bir cihazı yenilemek veya güncellemek için Tüm Cihazlar ekranındaki İşlemler sekmesini kullanın.',
+    'Yeni cihazın ilk kurulumunda kullanılacak tek kullanımlık kayıt oluşturulur.',
+  'endpointAdmin.enrollments.dialog.existingDeviceRecoveryHelp':
+    'Bu yol yalnız komut alamayan eski veya bozuk bir ajanı onarmak ve aynı cihaz kimliğiyle yeniden kaydetmek içindir. Sağlıklı cihazlarda Tüm Cihazlar > İşlemler yolunu kullanın.',
   'endpointAdmin.enrollments.dialog.targetLabel': 'Kayıt hedefi',
   'endpointAdmin.enrollments.dialog.targetNew': 'Yeni cihaz',
-  'endpointAdmin.enrollments.dialog.targetExisting': 'Mevcut cihazı yenile',
+  'endpointAdmin.enrollments.dialog.targetExisting': 'Kayıtlı cihazı onar / yeniden kaydet',
   'endpointAdmin.enrollments.dialog.deviceLabel': 'Hedef cihaz',
   'endpointAdmin.enrollments.dialog.devicePlaceholder': 'Cihaz seçin',
   'endpointAdmin.enrollments.dialog.devicesLoading': 'Cihazlar yükleniyor…',
   'endpointAdmin.enrollments.dialog.devicesError': 'Cihaz listesi alınamadı.',
-  'endpointAdmin.enrollments.dialog.devicesEmpty': 'Yenilenebilir aktif cihaz bulunamadı.',
+  'endpointAdmin.enrollments.dialog.devicesEmpty': 'Onarılabilir kayıtlı cihaz bulunamadı.',
   'endpointAdmin.enrollments.dialog.expiresLabel': 'Geçerlilik (dakika)',
   'endpointAdmin.enrollments.dialog.noteLabel': 'Açıklama (opsiyonel)',
   'endpointAdmin.enrollments.dialog.cancel': 'İptal',
@@ -346,7 +348,7 @@ const DICT_TR = {
   'endpointAdmin.enrollments.modal.warning':
     'Bu token yalnızca şimdi gösterilir. Kapattıktan sonra tekrar görüntülenemez. Hemen güvenli bir yere kopyalayın veya aşağıdaki komutu hedef cihaza yapıştırın.',
   'endpointAdmin.enrollments.modal.renewalWarning':
-    'Bu token seçilen mevcut cihaza bağlıdır ve yalnızca şimdi gösterilir. Aşağıdaki yenileme komutunu aynı cihazda Administrator PowerShell ile çalıştırın.',
+    'Bu tek kullanımlık onarım işlemi seçilen mevcut cihaza bağlıdır. Token ayrı gösterilmez; yalnız aşağıdaki cihaz-bağlı komut aynı cihazda Administrator PowerShell ile çalıştırılabilir.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
   'endpointAdmin.enrollments.modal.oneCommandLabel': 'Tek Komut Kurulum (Administrator PowerShell)',
   'endpointAdmin.enrollments.modal.oneCommandHelp':
@@ -1262,8 +1264,7 @@ const DICT_TR = {
   'endpointAdmin.modal.tpmRenewal.note':
     'Yenileme cihazdaki çalışan ajan tarafından LocalSystem bağlamında yapılır. Enrollment tokenı veya PowerShell komutu tarayıcıya gösterilmez.',
   'endpointAdmin.modal.tpmRenewal.reasonLabel': 'Gerekçe',
-  'endpointAdmin.modal.tpmRenewal.dispatchError':
-    'TPM/sertifika yenileme komutu gönderilemedi.',
+  'endpointAdmin.modal.tpmRenewal.dispatchError': 'TPM/sertifika yenileme komutu gönderilemedi.',
   'endpointAdmin.modal.tpmRenewal.capabilityMissing':
     'Bu ajan sürümü tarayıcıdan TPM/sertifika yenilemeyi desteklemiyor. Önce onaylı güncel ajan sürümünü yükleyin, yeni heartbeat geldikten sonra tekrar deneyin.',
   'endpointAdmin.modal.tpmRenewal.cancel': 'İptal',
@@ -2080,7 +2081,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
   'endpointAdmin.enrollments.page.description':
-    'Create the initial enrollment for a new Windows device. Manage updates and TPM/certificate renewal for existing devices from the All Devices browser screen.',
+    'Create a new Windows device enrollment or select a recovery/re-enrollment target for an enrolled device that cannot receive commands. Manage routine updates and TPM/certificate renewal for healthy devices from All Devices.',
   'endpointAdmin.enrollments.page.createButton': 'Create new enrollment',
   'endpointAdmin.enrollments.page.loading': 'Loading enrollments…',
   'endpointAdmin.enrollments.page.refreshing': 'Refreshing…',
@@ -2100,15 +2101,17 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.table.deviceId': 'Device',
   'endpointAdmin.enrollments.dialog.title': 'Create new enrollment',
   'endpointAdmin.enrollments.dialog.newDeviceOnlyHelp':
-    'This screen is only for initial enrollment of a new device. Use the Operations tab on All Devices to renew or update an enrolled device.',
+    'Creates a one-time enrollment for the initial setup of a new device.',
+  'endpointAdmin.enrollments.dialog.existingDeviceRecoveryHelp':
+    'Use this only to repair an old or broken agent that cannot receive commands and re-enroll it under the same device identity. Use All Devices > Operations for healthy devices.',
   'endpointAdmin.enrollments.dialog.targetLabel': 'Enrollment target',
   'endpointAdmin.enrollments.dialog.targetNew': 'New device',
-  'endpointAdmin.enrollments.dialog.targetExisting': 'Renew existing device',
+  'endpointAdmin.enrollments.dialog.targetExisting': 'Repair / re-enroll existing device',
   'endpointAdmin.enrollments.dialog.deviceLabel': 'Target device',
   'endpointAdmin.enrollments.dialog.devicePlaceholder': 'Select a device',
   'endpointAdmin.enrollments.dialog.devicesLoading': 'Loading devices…',
   'endpointAdmin.enrollments.dialog.devicesError': 'Could not load devices.',
-  'endpointAdmin.enrollments.dialog.devicesEmpty': 'No active device is eligible for renewal.',
+  'endpointAdmin.enrollments.dialog.devicesEmpty': 'No enrolled device is eligible for repair.',
   'endpointAdmin.enrollments.dialog.expiresLabel': 'Expires in (minutes)',
   'endpointAdmin.enrollments.dialog.noteLabel': 'Note (optional)',
   'endpointAdmin.enrollments.dialog.cancel': 'Cancel',
@@ -2129,7 +2132,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.modal.warning':
     'This token is shown only now. After closing this dialog it cannot be retrieved. Copy it to a secure place or paste the install snippet on the target host now.',
   'endpointAdmin.enrollments.modal.renewalWarning':
-    'This token is bound to the selected existing device and is shown only now. Run the renewal command below in Administrator PowerShell on that same device.',
+    'This one-time recovery is bound to the selected existing device. The token is not shown separately; only the device-bound command below may be run in Administrator PowerShell on that same device.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
   'endpointAdmin.enrollments.modal.oneCommandLabel':
     'One-command install (Administrator PowerShell)',

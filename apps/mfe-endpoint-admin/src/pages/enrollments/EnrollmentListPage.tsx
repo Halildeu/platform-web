@@ -177,9 +177,9 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
         open={dialogOpen}
         canManage={canManage}
         onClose={() => setDialogOpen(false)}
-        onCreated={(response) => {
+        onCreated={(response, targetDevice) => {
           setDialogOpen(false);
-          setCreatedEnrollment({ response, targetDevice: null });
+          setCreatedEnrollment({ response, targetDevice });
         }}
       />
 
