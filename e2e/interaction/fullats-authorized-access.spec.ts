@@ -241,21 +241,28 @@ test.describe('Full ATS authorized product access', () => {
     await expect(
       candidatePortal.getByRole('heading', { name: 'Başvurunuzun durumunu izleyin' }),
     ).toBeVisible();
+    // Sekme oturumu boşken ekran ÇIKMAZ olmamalı: aday makbuzundaki referans +
+    // takip anahtarı ile girebilir. Önceden yalnız "bu sekmede başvuru yok"
+    // yazıp adayı yeni başvuru göndermeye yönlendiriyordu — başvuru sekme
+    // kapanınca kalıcı olarak erişilemez hâle geliyordu.
     await expect(
-      candidatePortal.getByRole('heading', { name: 'Bu sekmede takip edilen başvuru yok' }),
+      candidatePortal.getByRole('heading', { name: 'Başvurunuzu görüntüleyin' }),
     ).toBeVisible();
-    await expect(
-      candidatePortal.getByText(
-        'takip anahtarı yalnız başvuruyu gönderdiğiniz tarayıcı sekmesinde',
-        {
-          exact: false,
-        },
-      ),
-    ).toBeVisible();
+    await expect(candidatePortal.getByTestId('candidate-sign-in-ref')).toBeVisible();
+    await expect(candidatePortal.getByTestId('candidate-sign-in-token')).toBeVisible();
     await expect(
       candidatePortal.getByRole('link', { name: 'Açık pozisyonlara git' }),
     ).toHaveAttribute('href', '/jobs');
     expect(dataRequests).toEqual([]);
+
+    // Biçimi bozuk çift ağ isteği ÜRETMEDEN reddedilir.
+    await candidatePortal.getByTestId('candidate-sign-in-ref').fill('app_kisa');
+    await candidatePortal.getByTestId('candidate-sign-in-token').fill('bozuk');
+    await candidatePortal.getByTestId('candidate-sign-in-submit').click();
+    await expect(candidatePortal.getByTestId('candidate-sign-in-error')).toBeVisible();
+    expect(dataRequests).toEqual([]);
+    await candidatePortal.getByTestId('candidate-sign-in-ref').fill('');
+    await candidatePortal.getByTestId('candidate-sign-in-token').fill('');
 
     const overflow = await page.evaluate(() => ({
       viewportWidth: window.innerWidth,

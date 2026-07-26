@@ -273,6 +273,45 @@ describe('CandidateApplicationPage', () => {
     expect(apiMocks.saveCandidateSession).toHaveBeenCalledWith(RECEIPT);
   });
 
+  it('hands the candidate both halves of the credential on the receipt', async () => {
+    // Anahtar üretiliyor, kullanılıyor ve adaya HİÇ gösterilmeden atılıyordu:
+    // sekme kapanınca başvuru kalıcı olarak erişilemez hâle geliyordu. Durum
+    // sorgusu hem referansı hem anahtarı ister; referans tek başına yetmez.
+    // Bu yüzden ikisi de ekranda olmak ZORUNDA.
+    renderPage();
+    await reachPreview();
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+
+    expect(await screen.findByRole('heading', { name: 'Başvurunuz kaydedildi' })).toBeVisible();
+    expect(screen.getByTestId('candidate-receipt-id')).toHaveTextContent(RECEIPT.publicRef);
+    expect(screen.getByTestId('candidate-receipt-access-token')).toHaveTextContent(
+      RECEIPT.candidateAccessToken,
+    );
+    // Saklama uyarısı olmadan gösterim işe yaramaz: aday değeri kopyalamaz.
+    expect(screen.getByText(/bu ekranda bir kez gösterilir/i)).toBeVisible();
+    expect(screen.getByText(/Bu iki bilgiyi saklayın/i)).toBeVisible();
+  });
+
+  it('copies both halves together so the reference alone is never kept', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    renderPage();
+    await reachPreview();
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+    await screen.findByRole('heading', { name: 'Başvurunuz kaydedildi' });
+
+    fireEvent.click(screen.getByTestId('candidate-receipt-copy'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain(RECEIPT.publicRef);
+    expect(copied).toContain(RECEIPT.candidateAccessToken);
+  });
+
   it('does not show a receipt when the backend rejects submission', async () => {
     apiMocks.submitApplication.mockRejectedValueOnce(new Error('rate limited'));
     renderPage();

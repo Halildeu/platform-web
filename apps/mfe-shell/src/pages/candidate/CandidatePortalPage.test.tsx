@@ -8,6 +8,8 @@ import CandidatePortalPage from './CandidatePortalPage';
 
 const apiMocks = vi.hoisted(() => ({
   readCandidateSession: vi.fn(),
+  establishCandidateSession: vi.fn(),
+  clearCandidateSession: vi.fn(),
   getCandidateStatus: vi.fn(),
   getCandidateInterviews: vi.fn(),
   getCandidateOffers: vi.fn(),
@@ -17,6 +19,8 @@ const apiMocks = vi.hoisted(() => ({
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
   readCandidateSession: apiMocks.readCandidateSession,
+  establishCandidateSession: apiMocks.establishCandidateSession,
+  clearCandidateSession: apiMocks.clearCandidateSession,
   getCandidateStatus: apiMocks.getCandidateStatus,
   getCandidateInterviews: apiMocks.getCandidateInterviews,
   getCandidateOffers: apiMocks.getCandidateOffers,
@@ -95,10 +99,76 @@ describe('CandidatePortalPage', () => {
   it('shows no fake journey when this browser session has no tracking token', () => {
     apiMocks.readCandidateSession.mockReturnValue(null);
     renderPage();
-    expect(
-      screen.getByRole('heading', { name: 'Bu sekmede takip edilen başvuru yok' }),
-    ).toBeVisible();
+    // Sekme oturumu boşken uydurma bir yolculuk gösterilmez; ama artık ÇIKMAZ
+    // da değil: aday referans + anahtarla girebilir.
+    expect(screen.getByRole('heading', { name: 'Başvurunuzu görüntüleyin' })).toBeVisible();
     expect(apiMocks.getCandidateStatus).not.toHaveBeenCalled();
+  });
+
+  it('lets the candidate open their application from any device with the receipt pair', async () => {
+    // ASIL BOŞLUK: anahtar yalnız `sessionStorage`'daydı ve elle girilebileceği
+    // bir yol yoktu. Sekme kapanınca aday başvurusuna kalıcı olarak erişemiyordu
+    // — farklı cihaz, farklı tarayıcı, hatta aynı tarayıcıyı kapat-aç bile.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    apiMocks.establishCandidateSession.mockReturnValue(SESSION);
+    renderPage();
+
+    fireEvent.change(screen.getByTestId('candidate-sign-in-ref'), {
+      target: { value: SESSION.publicRef },
+    });
+    fireEvent.change(screen.getByTestId('candidate-sign-in-token'), {
+      target: { value: SESSION.candidateAccessToken },
+    });
+    fireEvent.click(screen.getByTestId('candidate-sign-in-submit'));
+
+    expect(apiMocks.establishCandidateSession).toHaveBeenCalledWith(
+      SESSION.publicRef,
+      SESSION.candidateAccessToken,
+    );
+    expect((await screen.findAllByText('İnsan incelemesinde')).length).toBeGreaterThan(0);
+    expect(apiMocks.getCandidateStatus).toHaveBeenCalledWith(SESSION);
+    expect(screen.queryByTestId('candidate-sign-in')).not.toBeInTheDocument();
+  });
+
+  it('refuses a malformed pair without making a request', () => {
+    // Biçim doğrulaması API katmanında; sayfa `null` dönüşünü hata olarak
+    // göstermek ZORUNDA, yoksa aday sessiz bir hiçlikle karşılaşır.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    apiMocks.establishCandidateSession.mockReturnValue(null);
+    renderPage();
+
+    fireEvent.change(screen.getByTestId('candidate-sign-in-ref'), { target: { value: 'app_kisa' } });
+    fireEvent.change(screen.getByTestId('candidate-sign-in-token'), { target: { value: 'bozuk' } });
+    fireEvent.click(screen.getByTestId('candidate-sign-in-submit'));
+
+    expect(screen.getByTestId('candidate-sign-in-error')).toHaveTextContent(
+      /beklenen biçimde değil/i,
+    );
+    expect(apiMocks.getCandidateStatus).not.toHaveBeenCalled();
+    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+  });
+
+  it('offers a way back to the form when the pair does not resolve', async () => {
+    // Yanlış çiftle girildiğinde çıkış yolu olmazsa aday hatalı oturumda
+    // kilitli kalır ve doğru anahtarı hiç giremez.
+    apiMocks.getCandidateStatus.mockRejectedValue(new Error('başvuru bulunamadı'));
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('başvuru bulunamadı');
+    fireEvent.click(screen.getByTestId('candidate-sign-in-again'));
+
+    expect(apiMocks.clearCandidateSession).toHaveBeenCalled();
+    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+  });
+
+  it('clears the tracking credential from a shared device on sign-out', async () => {
+    renderPage();
+    await screen.findAllByText('İnsan incelemesinde');
+    fireEvent.click(screen.getByTestId('candidate-sign-out'));
+
+    expect(apiMocks.clearCandidateSession).toHaveBeenCalled();
+    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+    expect(screen.queryByText(SESSION.publicRef)).not.toBeInTheDocument();
   });
 
   it('requires explicit confirmation and renders the terminal withdrawal result', async () => {
