@@ -36,6 +36,7 @@ import {
   isInterviewEvidenceRemoteEnabled,
   isMeetingRemoteEnabled,
 } from '../shell-navigation';
+import { navigateIfStandaloneApp } from '../standalone-apps';
 import { Badge } from '@mfe/design-system/primitives';
 import {
   ATS_PRODUCT_HUB_ENTRY,
@@ -272,7 +273,11 @@ export const Sidebar: React.FC = () => {
       navItems={navItems}
       activeKey={activeKey}
       onNavigate={(key, item) => {
-        if (item.href && item.href !== location.pathname) {
+        if (!item.href) return;
+        // Kenarda yayınlanan ürünler (ör. Etik Speak) kabuk route'u değildir;
+        // SPA gezinmesi onları açamaz — tam sayfa gerekir.
+        if (navigateIfStandaloneApp(item.href)) return;
+        if (item.href !== location.pathname) {
           navigate(item.href);
         }
       }}

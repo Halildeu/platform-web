@@ -56,10 +56,50 @@ describe('Etik Speak Keycloak lifecycle', () => {
       clientId: 'frontend',
     });
     expect(keycloakMock.init).toHaveBeenCalledOnce();
+    // Kapsam sessiz SSO kontrolünün kendisine verilir: KC opsiyonel scope'u
+    // yalnız istendiğinde token'a koyar, aksi hâlde her açılış şifre ekranına
+    // düşer. Bu beklenti o gerilemeyi makine düzeyinde kapatır.
     expect(keycloakMock.init).toHaveBeenCalledWith({
       onLoad: 'check-sso',
+      scope: 'openid ethics-manager-audience ethics:case:manage',
       checkLoginIframe: false,
       pkceMethod: 'S256',
+    });
+  });
+
+  it('opens silently for an authorized suite session — no password prompt', async () => {
+    keycloakMock.init.mockResolvedValue(true);
+    const { initializeManagerSession } = await import('./auth');
+
+    await expect(initializeManagerSession()).resolves.toBe('ready');
+    expect(keycloakMock.login).not.toHaveBeenCalled();
+  });
+
+  it('denies without a second silent round trip when the session lacks the contract', async () => {
+    keycloakMock.init.mockResolvedValue(true);
+    keycloakMock.tokenParsed = { ...validClaims(), realm_access: { roles: [] } };
+    const { initializeManagerSession } = await import('./auth');
+
+    await expect(initializeManagerSession()).resolves.toBe('denied');
+    expect(keycloakMock.login).not.toHaveBeenCalled();
+  });
+
+  it('forces re-authentication only when the user asks to retry (account switch path)', async () => {
+    keycloakMock.init.mockResolvedValue(true);
+    keycloakMock.login.mockResolvedValue(undefined);
+    keycloakMock.tokenParsed = { ...validClaims(), realm_access: { roles: [] } };
+    const { ETHICS_MANAGER_SCOPE, initializeManagerSession, resetManagerSessionForRetry } =
+      await import('./auth');
+
+    await expect(initializeManagerSession()).resolves.toBe('denied');
+    resetManagerSessionForRetry();
+    await expect(initializeManagerSession()).resolves.toBe('redirecting');
+
+    expect(keycloakMock.login).toHaveBeenCalledOnce();
+    expect(keycloakMock.login).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/ethic/cases/demo?tab=messages',
+      scope: ETHICS_MANAGER_SCOPE,
+      prompt: 'login',
     });
   });
 
