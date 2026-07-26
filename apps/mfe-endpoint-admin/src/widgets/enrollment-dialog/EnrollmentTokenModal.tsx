@@ -60,8 +60,19 @@ type ManifestState =
   | { status: 'ready'; manifest: ReleaseManifest }
   | { status: 'error' };
 
+const SELF_UPDATE_REDIRECT_HOSTS = [
+  'github.com',
+  'release-assets.githubusercontent.com',
+  'objects.githubusercontent.com',
+] as const;
+
 function powerShellEscape(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+function buildSelfUpdateAllowedHosts(artifactBaseUrl: string): string {
+  const artifactHost = new URL(artifactBaseUrl).hostname.toLowerCase();
+  return Array.from(new Set([...SELF_UPDATE_REDIRECT_HOSTS, artifactHost])).join(',');
 }
 
 function isValidManifest(value: unknown): value is ReleaseManifest {
@@ -102,7 +113,9 @@ function buildOneCommand(args: {
 }): string {
   const base = `${args.artifactBaseUrl}/endpoint-agent/current`;
   const q = (v: string): string => `'${powerShellEscape(v)}'`;
+  const selfUpdateAllowedHosts = buildSelfUpdateAllowedHosts(args.artifactBaseUrl);
   return [
+    `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force;`,
     `$s = (Invoke-WebRequest -UseBasicParsing ${q(`${base}/bootstrap-package.ps1`)}).Content;`,
     `if ($s -is [byte[]]) { $s = [System.Text.Encoding]::UTF8.GetString($s) };`,
     `& ([scriptblock]::Create($s))`,
@@ -110,6 +123,9 @@ function buildOneCommand(args: {
     `-ExpectedZipSha256 ${q(args.zipSha256)}`,
     `-ApiUrl ${q(args.apiUrl)}`,
     `-EnrollmentToken ${q(args.token)}`,
+    `-SelfUpdateEnabled`,
+    `-SelfUpdateAllowedHosts ${q(selfUpdateAllowedHosts)}`,
+    `-SelfUpdateAutoActivate`,
     `-Start`,
     ...(args.repairExisting ? [`-Force`, `-ResetCredentialStore`] : []),
   ].join(' ');
@@ -166,12 +182,19 @@ export function buildTpmRenewalCommand(token: string, bootstrapApiUrl: string): 
   ].join(' ');
 }
 
-/** Always-visible manual (advanced) fallback — operator already has the zip. */
-function formatManualSnippet(token: string, apiUrl: string): string {
+/**
+ * Always-visible manual (advanced) fallback — operator already has the zip.
+ * Keep its self-update policy identical to the primary browser command so a
+ * fallback install does not create a device that can never receive the next
+ * managed update.
+ */
+function formatManualSnippet(token: string, apiUrl: string, artifactBaseUrl: string): string {
+  const selfUpdateAllowedHosts = buildSelfUpdateAllowedHosts(artifactBaseUrl);
   return [
     `$EnrollmentToken = '${powerShellEscape(token)}'`,
     `$ApiUrl = '${powerShellEscape(apiUrl)}'`,
-    `.\\install.ps1 -EnrollmentToken $EnrollmentToken -ApiUrl $ApiUrl -Start`,
+    `$SelfUpdateAllowedHosts = '${powerShellEscape(selfUpdateAllowedHosts)}'`,
+    `.\\install.ps1 -EnrollmentToken $EnrollmentToken -ApiUrl $ApiUrl -SelfUpdateEnabled -SelfUpdateAllowedHosts $SelfUpdateAllowedHosts -SelfUpdateAutoActivate -Start`,
   ].join('\n');
 }
 
@@ -242,12 +265,9 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
     isRenewal &&
     targetDevice?.id === response.deviceId &&
     manifestReady &&
-    isAgentAtLeastCurrent(
-      targetDevice.agentVersion,
-      manifestState.manifest.release_tag,
-    );
+    isAgentAtLeastCurrent(targetDevice.agentVersion, manifestState.manifest.release_tag);
   const requiresRepair = isRenewal && manifestReady && !canUseInstalledAgent;
-  const snippet = isRenewal ? null : formatManualSnippet(response.token, apiUrl);
+  const snippet = isRenewal ? null : formatManualSnippet(response.token, apiUrl, artifactBaseUrl);
   const oneCommand = canUseInstalledAgent
     ? buildTpmRenewalCommand(response.token, apiUrl)
     : manifestReady
@@ -337,7 +357,7 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
                 ? 'endpointAdmin.enrollments.modal.renewalCommandLabel'
                 : requiresRepair
                   ? 'endpointAdmin.enrollments.modal.repairCommandLabel'
-                : 'endpointAdmin.enrollments.modal.oneCommandLabel',
+                  : 'endpointAdmin.enrollments.modal.oneCommandLabel',
             )}
           </h3>
           <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
@@ -346,7 +366,7 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
                 ? 'endpointAdmin.enrollments.modal.renewalCommandHelp'
                 : requiresRepair
                   ? 'endpointAdmin.enrollments.modal.repairCommandHelp'
-                : 'endpointAdmin.enrollments.modal.oneCommandHelp',
+                  : 'endpointAdmin.enrollments.modal.oneCommandHelp',
             )}
           </p>
 
