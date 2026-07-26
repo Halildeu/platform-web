@@ -88,7 +88,7 @@ type EntryFieldSpec<T> = {
   rows?: number;
 };
 
-const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperienceEntry>> = [
+export const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperienceEntry>> = [
   {
     key: 'title',
     label: 'Pozisyon',
@@ -127,7 +127,7 @@ const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperienceEntry
   },
 ];
 
-const EDUCATION_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationEducationEntry>> = [
+export const EDUCATION_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationEducationEntry>> = [
   {
     key: 'school',
     label: 'Okul',
@@ -147,7 +147,14 @@ const EDUCATION_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationEducationEntry>>
     label: 'Bölüm',
     placeholder: 'Yönetim Bilişim Sistemleri',
     maxLength: APPLICATION_ENTRY_LIMITS.shortText,
-    span: 'half',
+    // Tam genişlik — hem uzun bölüm adı sığsın diye hem de ızgarayı hizalamak için.
+    // Beş yarım alan 2 kolonlu ızgarada tek sayı kalır ve eşleşme kayar; canlı
+    // ölçüm satırları şöyle veriyordu:
+    //   y=1377 Okul + Derece | y=1455 Bölüm + Başlangıç yılı | y=1533 Bitiş yılı
+    // Yani başlangıç yılı Bölüm ile eşleşiyor, bitiş yılı yanı boş kalıyordu.
+    // Bölüm tam genişliğe alınınca iki yıl aynı satıra gelir (sahip bildirimi
+    // 2026-07-26: birbirini takip eden bilgiler aynı satırda olmalı).
+    span: 'full',
   },
   {
     key: 'startYear',

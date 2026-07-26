@@ -5,6 +5,8 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CandidateApplicationPage, {
+  EDUCATION_FIELDS,
+  EXPERIENCE_FIELDS,
   RESUME_DECISION_STYLES,
   deriveEducationText,
   deriveExperienceText,
@@ -689,6 +691,60 @@ describe('CandidateApplicationPage', () => {
   // Canlı ölçüm: profil adımında sayfa 2763px, ekran 998px, tek geri düğmesi
   // y=2317'de — iki ekrandan fazla aşağıda. Çoğaltılabilir kartlar sayfayı
   // uzattığı için bunu #215 B kötüleştirdi.
+
+  it('keeps sequential fields on the same grid row', () => {
+    // Sahip bildirimi (2026-07-26): "eğitimde başlangıç yılı ile bitiş yılı farklı
+    // satıra gelmiş; birbirini takip eden bilgiler aynı satırda olmalı."
+    //
+    // Canlı ölçüm (2 kolonlu ızgara, 5 yarım alan) satırları şöyle veriyordu:
+    //   y=1377 Okul + Derece | y=1455 Bölüm + Başlangıç yılı | y=1533 Bitiş yılı
+    // Yarım alan sayısı tek olduğu için eşleşme kayıyor ve son alan yalnız kalıyor.
+    //
+    // jsdom'da getBoundingClientRect sıfır döner, o yüzden satırı SPEC'ten hesaplarız:
+    // otorite zaten spec, ızgara ondan üretiliyor. Böylece ileride altıncı bir yarım
+    // alan eklenip eşleşme yeniden kaydığında bu test düşer.
+    const rowOf = (specs: ReadonlyArray<{ key: string; span?: 'full' | 'half' }>) => {
+      const rows: Record<string, number> = {};
+      let row = 0;
+      let usedInRow = 0;
+      specs.forEach((spec) => {
+        const full = spec.span === 'full';
+        if (full) {
+          if (usedInRow > 0) row += 1;
+          rows[spec.key] = row;
+          row += 1;
+          usedInRow = 0;
+          return;
+        }
+        if (usedInRow === 2) {
+          row += 1;
+          usedInRow = 0;
+        }
+        rows[spec.key] = row;
+        usedInRow += 1;
+      });
+      return rows;
+    };
+
+    const edu = rowOf(EDUCATION_FIELDS);
+    expect(edu.startYear).toBe(edu.endYear);
+    expect(edu.school).toBe(edu.degree);
+
+    const exp = rowOf(EXPERIENCE_FIELDS);
+    expect(exp.startDate).toBe(exp.endDate);
+    expect(exp.title).toBe(exp.company);
+  });
+
+  it('gives every entry field a placeholder and a length cap', () => {
+    // Izgara düzeltmesini yazarken `field` spec'inden placeholder ve maxLength'i
+    // kazara düşürdüm; hiçbir test bunu yakalamadı ve Bölüm alanı 160 karakter
+    // sınırını sessizce kaybetti. Sınır backend şemasının aynası — kaybı burada
+    // yakala, sunucudan 400 dönerek değil.
+    [...EXPERIENCE_FIELDS, ...EDUCATION_FIELDS].forEach((spec) => {
+      expect(spec.placeholder, `${spec.key} placeholder`).toBeTruthy();
+      expect(spec.maxLength, `${spec.key} maxLength`).toBeGreaterThan(0);
+    });
+  });
 
   it('turns completed steps in the progress indicator into back links', async () => {
     renderPage();
