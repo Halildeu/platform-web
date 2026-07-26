@@ -174,9 +174,20 @@ export default function App() {
       setBusy(false);
     }
   };
-  const uploadAttachment = async (file: File) => {
+  const uploadAttachments = async (files: File[]) => {
+    // Strictly sequential. The idempotency key lives in a single ref, so
+    // concurrent uploads would hand two files the same key; and a reporter
+    // adding five pages should see them settle one by one, not all at once.
     setUploadBusy(true);
     setAttachmentError('');
+    for (const file of files) {
+      // eslint-disable-next-line no-await-in-loop
+      await uploadOne(file);
+    }
+    setUploadBusy(false);
+  };
+
+  const uploadOne = async (file: File) => {
     try {
       validateEvidenceFile(file);
       const fingerprint = `${file.type}\n${file.size}\n${file.lastModified}`;
@@ -193,8 +204,6 @@ export default function App() {
         // The user-facing error below remains authoritative when status read-back also fails.
       }
       setAttachmentError(message(e));
-    } finally {
-      setUploadBusy(false);
     }
   };
 
@@ -266,7 +275,7 @@ export default function App() {
             busy={busy}
             uploadBusy={uploadBusy}
             onSend={reply}
-            onUpload={(file) => void uploadAttachment(file)}
+            onUpload={(files) => void uploadAttachments(files)}
             onClose={async () => {
               try {
                 await closeMailbox();
@@ -497,6 +506,28 @@ function ReceiptView({
     </section>
   );
 }
+/**
+ * Reads back the file the success screen offered.
+ *
+ * We hand the reporter a file and then used to ask them to retype both values
+ * out of it — two long opaque strings, often on a shared device, at the most
+ * stressful point in the flow. Accepting the file we ourselves produced closes
+ * that loop.
+ *
+ * Deliberately lenient about line endings and spacing, and deliberately strict
+ * about nothing else: the file is parsed in the browser and never uploaded.
+ */
+export const parseAccessFile = (text: string): { receiptId: string; accessSecret: string } | null => {
+  const read = (label: string) => {
+    const match = text.match(new RegExp(`^\\s*${label}\\s*:\\s*(.+?)\\s*$`, 'im'));
+    return match ? match[1] : '';
+  };
+  const receiptId = read('Receipt');
+  const accessSecret = read('Access secret');
+  if (!receiptId || !accessSecret) return null;
+  return { receiptId, accessSecret };
+};
+
 function MailboxLogin({
   busy,
   onSubmit,
@@ -504,14 +535,51 @@ function MailboxLogin({
   busy: boolean;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
 }) {
+  const [fileError, setFileError] = useState('');
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const readAccessFile = async (file: File) => {
+    setFileError('');
+    // The access file is tiny; anything larger is not the file we produced.
+    if (file.size > 4096) {
+      setFileError('Bu dosya erişim bilgisi dosyasına benzemiyor.');
+      return;
+    }
+    const parsed = parseAccessFile(await file.text());
+    if (!parsed) {
+      setFileError('Dosyada bildirim numarası ve erişim sırrı bulunamadı.');
+      return;
+    }
+    const form = formRef.current;
+    if (!form) return;
+    (form.elements.namedItem('receiptId') as HTMLInputElement).value = parsed.receiptId;
+    (form.elements.namedItem('accessSecret') as HTMLInputElement).value = parsed.accessSecret;
+  };
+
   return (
     <section className="panel" aria-labelledby="mailbox-login-title">
       <h1 id="mailbox-login-title">Bildirimi takip et</h1>
       <p>
-        Başarı ekranında sakladığınız iki bilgiyi girin. Bilgiler URL'ye veya tarayıcı depolamasına
-        yazılmaz.
+        Başarı ekranında indirdiğiniz dosyayı seçin ya da iki bilgiyi elle girin. Bilgiler URL'ye
+        veya tarayıcı depolamasına yazılmaz; dosya yalnız bu cihazda okunur, sunucuya gönderilmez.
       </p>
-      <form onSubmit={onSubmit}>
+      <label className="access-file-picker">
+        Erişim bilgisi dosyasını seç
+        <input
+          type="file"
+          accept=".txt,text/plain"
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void readAccessFile(file);
+          }}
+        />
+      </label>
+      <div role={fileError ? 'alert' : 'status'} className="access-file-feedback">
+        {fileError}
+      </div>
+      <form ref={formRef} onSubmit={onSubmit}>
         <label>
           Bildirim numarası
           <input name="receiptId" autoComplete="off" required />
@@ -549,7 +617,7 @@ function Mailbox({
   busy: boolean;
   uploadBusy: boolean;
   onSend: () => void;
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
   onClose: () => void;
 }) {
   return (
@@ -570,21 +638,29 @@ function Mailbox({
           Yönetici yalnız taranmış ve metadata’dan arındırılmış türevi görebilir.
         </p>
         <label className="evidence-picker">
-          Kanıt dosyası seç
+          {attachments.length === 0 ? 'Kanıt dosyası seç' : 'Başka bir kanıt dosyası ekle'}
           <input
             type="file"
             accept=".txt,text/plain,.jpg,.jpeg,image/jpeg,.png,image/png"
+            // Several files at once, and the picker stays open afterwards: a
+            // reporter usually has more than one page of evidence, and deciding
+            // when the set is complete belongs to them, not to the first upload.
+            multiple
             disabled={uploadBusy}
             onChange={(event) => {
-              const file = event.target.files?.[0];
+              const chosen = Array.from(event.target.files ?? []);
               event.target.value = '';
-              if (file) onUpload(file);
+              if (chosen.length) onUpload(chosen);
             }}
           />
         </label>
         <div role={attachmentError ? 'alert' : 'status'} className="attachment-feedback">
           {attachmentError ||
-            (uploadBusy ? 'Dosya özeti hesaplanıyor ve karantinaya alınıyor…' : '')}
+            (uploadBusy
+              ? 'Dosya özeti hesaplanıyor ve karantinaya alınıyor…'
+              : attachments.length > 0
+                ? 'İstediğiniz kadar dosya ekleyebilirsiniz. Bitirdiğinizde oturumu kapatın; ekler kaydınızda kalır.'
+                : '')}
         </div>
         <ol className="evidence-list" aria-label="Kanıt dosyası durumları">
           {attachments.length === 0 && <li className="empty">Henüz kanıt dosyası yok.</li>}
