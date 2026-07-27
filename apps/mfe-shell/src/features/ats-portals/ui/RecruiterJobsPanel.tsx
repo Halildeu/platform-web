@@ -104,7 +104,8 @@ type JobBreakdownStage = { id: string; label: string };
 const JOB_BREAKDOWN_STAGES: readonly JobBreakdownStage[] = [
   { id: 'SUBMITTED', label: 'Yeni' },
   { id: 'UNDER_REVIEW', label: 'İncelemede' },
-  { id: 'INTERVIEW_PENDING', label: 'Mülakat' },
+  // #227 B: recruiter dilinde bu asama KISA LISTE (bkz. RecruiterWorkspacePage).
+  { id: 'INTERVIEW_PENDING', label: 'Kısa liste' },
   { id: 'REJECTED', label: 'Reddedildi' },
 ];
 

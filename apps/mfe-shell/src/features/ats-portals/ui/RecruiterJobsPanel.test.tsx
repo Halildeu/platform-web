@@ -100,7 +100,7 @@ describe('RecruiterJobsPanel', () => {
     ).toHaveTextContent('İncelemede · 1');
     expect(
       screen.getByTestId(`recruiter-job-stage-${JOB.slug}-INTERVIEW_PENDING`),
-    ).toHaveTextContent('Mülakat · 0');
+    ).toHaveTextContent('Kısa liste · 0');
     expect(
       screen.getByTestId(`recruiter-job-stage-${JOB.slug}-REJECTED`),
     ).toHaveTextContent('Reddedildi · 1');
