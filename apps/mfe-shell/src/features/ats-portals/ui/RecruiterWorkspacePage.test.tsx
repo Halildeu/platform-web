@@ -230,6 +230,73 @@ describe('RecruiterWorkspacePage', () => {
     vi.clearAllMocks();
   });
 
+  it('drills from a job count straight into those applications, same page', async () => {
+    // Kopru testi: sayi ile "hangileri" arasindaki bag. Panel sayiyi gosterse de
+    // tiklama filtreyi UYGULAMAZSA sayi cikmaz sokaktir.
+    //
+    // Iki basvuru sart: ilk yazimimda tek basvuru vardi ve filtre hic
+    // uygulanmasa bile o basvuru goruntulendigi icin test SAHTE GECIYORDU
+    // (negatif dogrulama yakaladi). Filtrenin fark ettigi kurulum, BASKA ilana
+    // ait ikinci bir basvurunun ELENMESIYLE olculur.
+    const otherApplication = {
+      ...APPLICATION,
+      publicRef: 'app_zyxwvutsrqponmlkjihgfe',
+      jobSlug: 'baska-ilan',
+      jobTitle: 'Başka İlan',
+      fullName: 'Baska Sentetik Aday',
+    };
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [APPLICATION, otherApplication],
+      page: 0,
+      size: 50,
+      total: 2,
+    });
+    apiMocks.listRecruiterJobs.mockResolvedValue([
+      {
+        jobId: `job_${'A'.repeat(24)}`,
+        publicHandle: 'acik',
+        slug: APPLICATION.jobSlug,
+        title: APPLICATION.jobTitle,
+        team: 'Ürün',
+        location: 'İstanbul',
+        mode: 'Hibrit',
+        employmentType: 'Tam zamanlı',
+        summary: 'Sentetik ilan özeti.',
+        highlights: [],
+        applicationFields: apiMocks.DEFAULT_APPLICATION_FIELDS,
+        noticeVersion: 'kvkk-application-v1',
+        status: 'PUBLISHED',
+        applyEnabled: true,
+        version: 1,
+        createdAt: '2026-07-17T10:00:00Z',
+        updatedAt: '2026-07-17T10:00:00Z',
+      },
+    ]);
+
+    renderPage();
+    // Baslangicta IKISI de listede.
+    expect(await screen.findByText(APPLICATION.fullName)).toBeVisible();
+    expect(screen.getByText(otherApplication.fullName)).toBeVisible();
+
+    fireEvent.click(screen.getByRole('tab', { name: /İlanlar/ }));
+    const stageButton = await screen.findByTestId(
+      `recruiter-job-stage-${APPLICATION.jobSlug}-${APPLICATION.status}`,
+    );
+    // Sayac yalniz BU ilani sayar, digerini degil.
+    expect(stageButton).toHaveTextContent('· 1');
+    fireEvent.click(stageButton);
+
+    // Ayni sayfada basvuru gorunumune donmeli VE yalniz bu ilanin adayini
+    // gostermeli: digeri filtreyle ELENMELI. Bu, filtrenin gercekten
+    // uygulandiginin tek kaniti.
+    expect(await screen.findByText(APPLICATION.fullName)).toBeVisible();
+    expect(screen.queryByText(otherApplication.fullName)).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Başvurular/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
   it('renders the authenticated persistent inbox instead of synthetic cards', async () => {
     renderPage();
     expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
