@@ -42,6 +42,7 @@ export default function App() {
   // before the request rather than sent empty and refused by the server.
   const [pendingMove, setPendingMove] = useState<CaseStatus | null>(null);
   const [outcome, setOutcome] = useState<CaseOutcome>('UNSUBSTANTIATED');
+  const [closingMessage, setClosingMessage] = useState('');
   const [reopenReason, setReopenReason] = useState('');
   const selectionSequence = useRef(0);
   const operationKeys = useRef(new Map<string, string>());
@@ -147,6 +148,7 @@ export default function App() {
     const closing = status === 'CLOSED';
     const reopening = selected.status === 'CLOSED' && status !== 'CLOSED';
     if (reopening && !reopenReason.trim()) return;
+    if (closing && !closingMessage.trim()) return;
     const requestSequence = ++selectionSequence.current;
     const caseId = selected.id;
     const version = selected.version;
@@ -155,7 +157,7 @@ export default function App() {
     try {
       await updateCase(caseId, version, {
         status,
-        ...(closing ? { outcome } : {}),
+        ...(closing ? { outcome, closingMessage: closingMessage.trim() } : {}),
         ...(reopening ? { reason: reopenReason.trim() } : {}),
       });
       if (requestSequence !== selectionSequence.current) return;
@@ -167,6 +169,7 @@ export default function App() {
         setItems(next);
         setPendingMove(null);
         setReopenReason('');
+        setClosingMessage('');
       } catch (refreshError) {
         if (requestSequence === selectionSequence.current) {
           showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
@@ -519,7 +522,28 @@ export default function App() {
                         Sonuç kalıcı olarak kaydedilir. Dava yeniden açılırsa sonuç silinir ve
                         gerekçe denetim kaydına yazılır.
                       </p>
-                      <Button disabled={busy} onClick={() => void changeStatus('CLOSED')}>
+                      {/* The finding above is internal; this is what the reporter reads. They are
+                          separate on purpose — a workflow value is not an explanation, and what a
+                          person should be told about their own report is a judgement, not a
+                          translation of an enum. */}
+                      <label htmlFor="closing-message">İhbarcıya iletilecek kapanış mesajı</label>
+                      <textarea
+                        id="closing-message"
+                        rows={3}
+                        maxLength={16000}
+                        value={closingMessage}
+                        disabled={busy}
+                        onChange={(event) => setClosingMessage(event.target.value)}
+                      />
+                      <p className="ethics-muted">
+                        Bu metin ihbarcının posta kutusunda görünür. Üçüncü kişilerin haklarını ve
+                        disiplin ayrıntısını paylaşmayın; ihbarcıya bildirimin nasıl sonuçlandığını
+                        anlatın.
+                      </p>
+                      <Button
+                        disabled={busy || !closingMessage.trim()}
+                        onClick={() => void changeStatus('CLOSED')}
+                      >
                         Sonucu kaydet ve kapat
                       </Button>
                     </div>

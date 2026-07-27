@@ -117,7 +117,13 @@ export async function downloadCaseEvidence(
 export async function updateCase(
   id: string,
   version: number,
-  body: { status?: string; assignedTo?: string | null; outcome?: string; reason?: string },
+  body: {
+    status?: string;
+    assignedTo?: string | null;
+    outcome?: string;
+    reason?: string;
+    closingMessage?: string;
+  },
 ): Promise<EthicsCaseSummary> {
   const response = await api.patch<EthicsCaseSummary>(
     `/v1/ethics/cases/${encodeURIComponent(id)}`,
