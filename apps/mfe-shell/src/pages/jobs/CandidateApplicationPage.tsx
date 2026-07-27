@@ -276,7 +276,9 @@ const FORM_STEPS: ReadonlyArray<{ id: FormStep | 'preview' | 'receipt'; label: s
   { id: 'contact', label: 'Bilgiler' },
   { id: 'profile', label: 'Deneyim' },
   { id: 'preview', label: 'Kontrol' },
-  { id: 'receipt', label: 'Makbuz' },
+  // "Makbuz" Turkcede para alindi belgesidir; basvuru onayi icin yanlis cagrisim.
+  // Adim gonderim SONRASI durumu gosteriyor, o yuzden eylem degil DURUM adlandirmasi.
+  { id: 'receipt', label: 'Tamamlandı' },
 ];
 
 const EMPTY_VALUES: ApplicationValues = {
@@ -518,6 +520,7 @@ const CandidateApplicationPage = () => {
   const [submitError, setSubmitError] = useState('');
   const [candidateSessionSaved, setCandidateSessionSaved] = useState(false);
   const [credentialCopied, setCredentialCopied] = useState(false);
+  const [credentialDownloaded, setCredentialDownloaded] = useState(false);
   const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
   const resumeCreateKeyRef = useRef(createApplicationIdempotencyKey());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
@@ -1275,6 +1278,7 @@ const CandidateApplicationPage = () => {
     setSubmitError('');
     setCandidateSessionSaved(false);
     setCredentialCopied(false);
+    setCredentialDownloaded(false);
     idempotencyKeyRef.current = createApplicationIdempotencyKey();
     resumeCreateKeyRef.current = createApplicationIdempotencyKey();
     candidateAccessTokenRef.current = createCandidateAccessToken();
@@ -1302,6 +1306,47 @@ const CandidateApplicationPage = () => {
       // Kopyalama başarısızsa değerler ekranda duruyor; sessiz kal.
       setCredentialCopied(false);
     }
+  };
+
+  /**
+   * #228: adaya SAKLANABİLİR bir nesne verir. Pano uçucudur — sonraki kopyalama
+   * üzerine yazar, pano API'si her ortamda yok, ve sekme kapanınca
+   * `sessionStorage` uçtuğu için aday panoya aldığını bir yere yapıştırmamışsa
+   * erişimi kalıcı olarak gider. Dosya, adayın kendi bilgisayarında kalır.
+   *
+   * Sunucuya HİÇ gitmez: `Blob` + object URL tamamen istemcide üretilir, yani
+   * anahtar ağa çıkmaz. Dosya adı referansı taşır — aday birden fazla başvuru
+   * yapabildiği için (bkz. #226) hangisi olduğu ayırt edilebilmeli.
+   */
+  const downloadTrackingCredential = () => {
+    if (!receipt?.candidateAccessToken) return;
+    const lines = [
+      'Açık Kariyer — başvuru takip bilgileri',
+      '',
+      `İlan: ${job?.title ?? jobSlug}`,
+      `Başvuru referansı: ${receipt.publicRef}`,
+      `Takip anahtarı: ${receipt.candidateAccessToken}`,
+      `Gönderim: ${receipt.submittedAt}`,
+      '',
+      'Bu iki bilgiyi birlikte girerek başvurunuzun durumunu izleyebilirsiniz:',
+      `${window.location.origin}/candidate`,
+      '',
+      'Takip anahtarı başvurunuza erişim sağlar; kimseyle paylaşmayın.',
+      'Anahtar güvenlik gereği yeniden gösterilemez.',
+      '',
+    ];
+    const url = URL.createObjectURL(
+      new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }),
+    );
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `basvuru-${receipt.publicRef}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    // Object URL serbest bırakılmazsa sekme kapanana kadar bellekte kalır.
+    URL.revokeObjectURL(url);
+    setCredentialDownloaded(true);
   };
 
   const renderField = (
@@ -2658,15 +2703,33 @@ const CandidateApplicationPage = () => {
                     tarayıcıdan başvurunuzu izlemek için ikisi birlikte gerekir. Anahtarınızı
                     kimseyle paylaşmayın; başvurunuza erişim sağlar.
                   </p>
-                  {copySupported ? (
+                  {/* İndirme ÖNCE gelir: kalıcı olan o. Pano uçucudur ve pano
+                      API'si yoksa hiç çizilmez; indirme her ortamda çalışır. */}
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <button
                       type="button"
-                      onClick={() => void copyTrackingCredential()}
-                      data-testid="candidate-receipt-copy"
-                      className="mt-3 min-h-11 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
+                      onClick={downloadTrackingCredential}
+                      data-testid="candidate-receipt-download"
+                      className="min-h-11 rounded-xl bg-action-primary px-4 py-2 text-sm font-bold text-action-primary-text"
                     >
-                      Referans ve anahtarı kopyala
+                      Takip bilgilerini indir
                     </button>
+                    {copySupported ? (
+                      <button
+                        type="button"
+                        onClick={() => void copyTrackingCredential()}
+                        data-testid="candidate-receipt-copy"
+                        className="min-h-11 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
+                      >
+                        Referans ve anahtarı kopyala
+                      </button>
+                    ) : null}
+                  </div>
+                  {credentialDownloaded ? (
+                    <p role="status" className="mt-2 text-sm font-semibold text-text-primary">
+                      Takip bilgileri <strong>basvuru-{receipt?.publicRef}.txt</strong> olarak
+                      indirildi.
+                    </p>
                   ) : null}
                   {credentialCopied ? (
                     <p role="status" className="mt-2 text-sm font-semibold text-text-primary">

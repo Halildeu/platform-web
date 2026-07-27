@@ -293,6 +293,74 @@ describe('CandidateApplicationPage', () => {
     expect(screen.getByText(/Bu iki bilgiyi saklayın/i)).toBeVisible();
   });
 
+  it('gives the candidate a file to keep, without any network request', async () => {
+    // #228: pano UCUCUDUR — sonraki kopyalama uzerine yazar, pano API'si her
+    // ortamda yok, ve sekme kapaninca sessionStorage uctugu icin aday panoya
+    // aldigini bir yere yapistirmamissa erisimi KALICI olarak gider. Dosya
+    // adayin kendi bilgisayarinda kalir.
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const clicked: Array<{ download: string; href: string }> = [];
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      const u = `blob:mock-${created.length}`;
+      created.push(u);
+      void blob;
+      return u;
+    }) as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = vi.fn((u: string) => revoked.push(u)) as unknown as typeof URL.revokeObjectURL;
+    const origClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function patched(this: HTMLAnchorElement) {
+      clicked.push({ download: this.download, href: this.href });
+    };
+    const fetchCallsBefore = (globalThis.fetch as ReturnType<typeof vi.fn>)?.mock?.calls?.length ?? 0;
+
+    try {
+      renderPage();
+      await reachPreview();
+      screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+      await screen.findByRole('heading', { name: 'Başvurunuz kaydedildi' });
+
+      fireEvent.click(screen.getByTestId('candidate-receipt-download'));
+
+      expect(clicked).toHaveLength(1);
+      // Dosya adi referansi tasimali: aday birden fazla basvuru yapabilir (#226).
+      expect(clicked[0].download).toBe(`basvuru-${RECEIPT.publicRef}.txt`);
+      // Object URL serbest birakilmali, yoksa sekme kapanana kadar bellekte kalir.
+      expect(revoked).toEqual(created);
+      // Anahtar aga CIKMAMALI: indirme tamamen istemcide uretilir.
+      const fetchCallsAfter =
+        (globalThis.fetch as ReturnType<typeof vi.fn>)?.mock?.calls?.length ?? 0;
+      expect(fetchCallsAfter).toBe(fetchCallsBefore);
+      expect(screen.getByRole('status')).toHaveTextContent(/olarak\s+indirildi/);
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+      HTMLAnchorElement.prototype.click = origClick;
+    }
+  });
+
+  it('offers the download even when the clipboard API is unavailable', async () => {
+    // Pano API'si yoksa kopyala dugmesi HIC cizilmiyor. Indirme o durumda tek
+    // teslim yolu; ikisi bagimsiz olmali.
+    const orig = navigator.clipboard;
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    try {
+      renderPage();
+      await reachPreview();
+      screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+      await screen.findByRole('heading', { name: 'Başvurunuz kaydedildi' });
+
+      expect(screen.queryByTestId('candidate-receipt-copy')).not.toBeInTheDocument();
+      expect(screen.getByTestId('candidate-receipt-download')).toBeVisible();
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', { value: orig, configurable: true });
+    }
+  });
+
   it('copies both halves together so the reference alone is never kept', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {

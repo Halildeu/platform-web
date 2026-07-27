@@ -228,7 +228,8 @@ const CandidatePortalPage = () => {
     if (!next) {
       setSignInError(
         'Referans veya takip anahtarı beklenen biçimde değil. Referans "app_" ile başlar; ' +
-          'takip anahtarı 43 karakterdir. Makbuzdaki değerleri olduğu gibi kopyalayın.',
+          'takip anahtarı 43 karakterdir. Başvurunuz alındığında verilen değerleri '+
+          'olduğu gibi kopyalayın.',
       );
       return;
     }
@@ -381,7 +382,7 @@ const CandidatePortalPage = () => {
               Başvurunuzu görüntüleyin
             </h2>
             <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
-              Başvuru makbuzunuzdaki <strong>başvuru referansı</strong> ve{' '}
+              Başvurunuz alındığında verilen <strong>başvuru referansı</strong> ve{' '}
               <strong>takip anahtarı</strong> ile girin. Şifre veya hesap oluşturmanız gerekmez.
               İkisi birlikte gerekir: referans tek başına başvurunuzu açmaz.
             </p>
@@ -456,7 +457,7 @@ const CandidatePortalPage = () => {
               </button>
             </form>
             <p className="mt-6 text-sm leading-6 text-text-secondary">
-              Makbuzunuz elinizde değil mi? Anahtar güvenlik gereği yeniden gösterilemez; yeni bir
+              Takip bilgileriniz elinizde değil mi? Anahtar güvenlik gereği yeniden gösterilemez; yeni bir
               başvuru gönderebilirsiniz.
             </p>
             <Link
