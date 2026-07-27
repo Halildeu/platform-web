@@ -10,7 +10,14 @@ import type { ParticipantRole } from './case-lifecycle';
 export interface EthicsCaseSummary {
   id: string;
   status: string;
-  assignedTo: string | null;
+  /**
+   * ES-203 slice 2 — what `assignedTo` became. Free text that once held
+   * `team:ethics-test` and `jbjb`; it names nobody and grants nothing, and the
+   * server suppresses it entirely once the case has participants. Nothing
+   * renders it today: it stays on the type so a future reader sees that the
+   * field exists, is legacy, and is not the answer to "who is on this case".
+   */
+  legacyAssignmentLabel: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -120,7 +127,6 @@ export async function updateCase(
   version: number,
   body: {
     status?: string;
-    assignedTo?: string | null;
     outcome?: string;
     reason?: string;
     closingMessage?: string;

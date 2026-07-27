@@ -44,9 +44,9 @@ export default function App() {
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
   const [internalNote, setInternalNote] = useState('');
-  // ES-203/C — participants are handle-named; the free-text `assignedTo` label
-  // is gone from this surface so the case cannot grow a second, rival answer
-  // to "who is on this" (backend retirement is #945's remaining half).
+  // ES-203 — participants are handle-named. The free-text assignment label is
+  // gone from this surface and refused by the server (slice 2), so the case
+  // cannot grow a second, rival answer to "who is on this".
   const [participants, setParticipants] = useState<CaseParticipant[]>([]);
   const [participantsError, setParticipantsError] = useState('');
   const [staffOptions, setStaffOptions] = useState<AssignableStaffEntry[]>([]);
