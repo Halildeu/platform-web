@@ -1,17 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  clearCandidateEmailSession,
   clearCandidateSession,
   createApplicationIdempotencyKey,
   establishCandidateSession,
   getCandidateInterviews,
   getCandidateOffers,
   getCandidateStatus,
+  listCandidateLoginApplications,
+  readCandidateEmailSession,
   readCandidateSession,
+  requestCandidateLoginCode,
   respondCandidateOffer,
+  verifyCandidateLoginCode,
   withdrawCandidateApplication,
   type ApplicationStatus,
+  type CandidateEmailSession,
   type CandidateInterviewDto,
+  type CandidateLoginApplicationDto,
   type CandidateOfferDto,
   type CandidateSession,
   type CandidateStatusDto,
@@ -139,6 +146,22 @@ const CandidatePortalPage = () => {
   const [signInRef, setSignInRef] = useState('');
   const [signInToken, setSignInToken] = useState('');
   const [signInError, setSignInError] = useState('');
+  /**
+   * #235 e-posta girişi. Anahtar yolundan AYRI state: anahtar tek başvuruyu
+   * açar, e-posta o adresin tümünü. İkisini tek state'e katlamak, birinden
+   * çıkmayı diğerinden de çıkmak yapardı.
+   */
+  const [emailSession, setEmailSession] = useState<CandidateEmailSession | null>(
+    () => readCandidateEmailSession(),
+  );
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginCode, setLoginCode] = useState('');
+  const [loginStage, setLoginStage] = useState<'email' | 'code'>('email');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [loginNotice, setLoginNotice] = useState('');
+  const [myApplications, setMyApplications] = useState<CandidateLoginApplicationDto[]>([]);
+  const [myApplicationsError, setMyApplicationsError] = useState('');
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
   const [interviews, setInterviews] = useState<CandidateInterviewDto[]>([]);
   const [offers, setOffers] = useState<CandidateOfferDto[]>([]);
@@ -223,6 +246,75 @@ const CandidatePortalPage = () => {
    * edilemez; bu, numara deneyerek başvuru avlamayı engelleyen mevcut
    * tasarımın gereği.
    */
+  /** Oturum varsa adresin tüm başvurularını çeker. */
+  const refreshMyApplications = useCallback(async (active: CandidateEmailSession) => {
+    setMyApplicationsError('');
+    try {
+      setMyApplications(await listCandidateLoginApplications(active));
+    } catch (listError) {
+      setMyApplications([]);
+      setMyApplicationsError(
+        listError instanceof Error ? listError.message : 'Başvurularınız alınamadı.',
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (emailSession) void refreshMyApplications(emailSession);
+  }, [emailSession, refreshMyApplications]);
+
+  const requestLoginCode = async () => {
+    if (loginBusy) return;
+    setLoginBusy(true);
+    setLoginError('');
+    setLoginNotice('');
+    try {
+      await requestCandidateLoginCode(loginEmail);
+      setLoginStage('code');
+      /**
+       * Metin bilerek "gönderildi" DEMİYOR. Sunucu adresin kayıtlı olup
+       * olmadığını ayırt ettirmiyor (kayıtsız adres de 202 alır); arayüz
+       * "gönderdik" derse sunucunun gizlediği bilgiyi sızdırırdı.
+       */
+      setLoginNotice(
+        'Bu adrese ait başvuru varsa 6 haneli bir kod gönderildi. Kod 10 dakika geçerlidir.',
+      );
+    } catch (requestError) {
+      setLoginError(
+        requestError instanceof Error ? requestError.message : 'Kod isteği tamamlanamadı.',
+      );
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const verifyLoginCode = async () => {
+    if (loginBusy) return;
+    setLoginBusy(true);
+    setLoginError('');
+    try {
+      const next = await verifyCandidateLoginCode(loginEmail, loginCode);
+      setEmailSession(next);
+      setLoginCode('');
+      setLoginNotice('');
+    } catch (verifyError) {
+      setLoginError(verifyError instanceof Error ? verifyError.message : 'Kod doğrulanamadı.');
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const emailSignOut = () => {
+    clearCandidateEmailSession();
+    setEmailSession(null);
+    setMyApplications([]);
+    setMyApplicationsError('');
+    setLoginStage('email');
+    setLoginCode('');
+    setLoginError('');
+    setLoginNotice('');
+  };
+
   const signIn = () => {
     const next = establishCandidateSession(signInRef, signInToken);
     if (!next) {
@@ -371,6 +463,184 @@ const CandidatePortalPage = () => {
             </p>
           </div>
         </section>
+
+        {/* #235: e-posta ile giriş. Anahtar yolunun YERİNE geçmez — anahtar tek
+            başvuruyu açar, e-posta o adresin tümünü. Anahtarı olan aday tek
+            adımda girmeye devam eder; e-postasına erişebilen aday anahtarını
+            kaybetse de başvurularına ulaşır (#226'nın kökü). */}
+        {!emailSession ? (
+          <section
+            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs sm:p-10"
+            aria-labelledby="candidate-email-login-heading"
+            data-testid="candidate-email-login"
+          >
+            <h2 id="candidate-email-login-heading" className="text-2xl font-bold">
+              E-posta ile giriş
+            </h2>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
+              Başvuruda kullandığınız e-posta adresine tek kullanımlık bir kod gönderiyoruz.
+              Kodu girdiğinizde <strong>bu adrese ait tüm başvurularınız</strong> tek listede
+              görünür. Şifre veya hesap oluşturmanız gerekmez.
+            </p>
+            <form
+              className="mt-6 max-w-xl space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (loginStage === 'email') void requestLoginCode();
+                else void verifyLoginCode();
+              }}
+            >
+              <div>
+                <label
+                  htmlFor="candidate-login-email"
+                  className="block text-sm font-semibold text-text-primary"
+                >
+                  E-posta adresi
+                </label>
+                <input
+                  id="candidate-login-email"
+                  data-testid="candidate-login-email"
+                  type="email"
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  autoComplete="email"
+                  spellCheck={false}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3 text-sm"
+                />
+              </div>
+              {loginStage === 'code' ? (
+                <div>
+                  <label
+                    htmlFor="candidate-login-code"
+                    className="block text-sm font-semibold text-text-primary"
+                  >
+                    Gelen kod
+                  </label>
+                  <input
+                    id="candidate-login-code"
+                    data-testid="candidate-login-code"
+                    value={loginCode}
+                    onChange={(event) => setLoginCode(event.target.value)}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    aria-describedby="candidate-login-code-help"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3 font-mono text-lg tracking-[0.3em]"
+                  />
+                  <p id="candidate-login-code-help" className="mt-1 text-xs text-text-secondary">
+                    6 hane. Kod 10 dakika geçerlidir ve bir kez kullanılır. Yanlış kodu birkaç kez
+                    denerseniz yeni kod istemeniz gerekir.
+                  </p>
+                </div>
+              ) : null}
+              {loginNotice ? (
+                <p
+                  role="status"
+                  data-testid="candidate-login-notice"
+                  className="rounded-xl border border-border-subtle bg-surface-muted p-3 text-sm text-text-primary"
+                >
+                  {loginNotice}
+                </p>
+              ) : null}
+              {/* Metin rengi `text-text-primary`: `state-danger-text` bu zeminde
+                  3.19 kontrast veriyor (WCAG AA 4.5 ister) — aynı dosyadaki
+                  diğer hata blokları da bu deseni kullanıyor; token çifti
+                  sistemik olarak kusurlu (platform-web#1021). */}
+              {loginError ? (
+                <p
+                  role="alert"
+                  data-testid="candidate-login-error"
+                  className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
+                >
+                  {loginError}
+                </p>
+              ) : null}
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="submit"
+                  data-testid="candidate-login-submit"
+                  disabled={loginBusy}
+                  className="min-h-12 rounded-xl bg-action-primary px-5 text-sm font-bold text-action-primary-text disabled:opacity-60"
+                >
+                  {loginStage === 'email' ? 'Kod gönder' : 'Kodu doğrula'}
+                </button>
+                {loginStage === 'code' ? (
+                  <button
+                    type="button"
+                    data-testid="candidate-login-resend"
+                    disabled={loginBusy}
+                    onClick={() => void requestLoginCode()}
+                    className="min-h-12 rounded-xl border border-border-strong bg-surface-default px-5 text-sm font-bold text-text-primary disabled:opacity-60"
+                  >
+                    Yeni kod iste
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          </section>
+        ) : (
+          <section
+            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs sm:p-10"
+            aria-labelledby="candidate-my-applications-heading"
+            data-testid="candidate-my-applications"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="candidate-my-applications-heading" className="text-2xl font-bold">
+                  Başvurularım
+                </h2>
+                <p className="mt-2 text-sm text-text-secondary">
+                  {emailSession.email} adresine ait {myApplications.length} başvuru
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="candidate-email-sign-out"
+                onClick={emailSignOut}
+                className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
+              >
+                Çıkış yap
+              </button>
+            </div>
+            {myApplicationsError ? (
+              <p
+                role="alert"
+                data-testid="candidate-my-applications-error"
+                className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
+              >
+                {myApplicationsError}
+              </p>
+            ) : null}
+            {myApplications.length === 0 && !myApplicationsError ? (
+              <p className="mt-4 text-sm text-text-secondary">
+                Bu adrese ait başvuru görünmüyor.
+              </p>
+            ) : null}
+            <ul className="mt-4 space-y-3">
+              {myApplications.map((item) => (
+                <li
+                  key={item.publicRef}
+                  data-testid={`candidate-my-application-${item.publicRef}`}
+                  className="rounded-2xl border border-border-subtle bg-surface-subtle p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-text-primary">{item.jobTitle}</p>
+                    <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-bold">
+                      {STATUS_COPY[item.status].label}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {formatDate(item.createdAt)} · <span className="font-mono">{item.publicRef}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {/* Ayrıntı (görüşme, teklif, geri çekme) hâlâ başvuru anahtarına
+                bağlı: e-posta sahipliği kimliği kanıtlar ama tek bir başvurunun
+                mutasyon yetkisini vermez. Liste, adayın hangi anahtarı
+                kullanacağını bulmasını sağlar. */}
+          </section>
+        )}
 
         {!session ? (
           <section
