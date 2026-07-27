@@ -1,5 +1,11 @@
 import { api } from '@mfe/shared-http';
 
+/**
+ * ES-301A. `acknowledgedAt` is stamped by the service when the reporter is first
+ * written to — it is not settable from here, and there is deliberately no field for
+ * it on {@link updateCase}. `outcome` and `closedAt` appear only on a closed case;
+ * the server refuses a closure without a finding, and a finding without a closure.
+ */
 export interface EthicsCaseSummary {
   id: string;
   status: string;
@@ -7,7 +13,15 @@ export interface EthicsCaseSummary {
   version: number;
   createdAt: string;
   updatedAt: string;
+  acknowledgedAt: string | null;
+  outcome: string | null;
+  closedAt: string | null;
 }
+
+// The status vocabulary, transition table and labels live in `case-lifecycle.ts`.
+// They are domain rules rather than transport, and anything that mocks this module
+// would otherwise take them down with it.
+
 export interface EthicsMessage {
   id: string;
   authorType: string;
@@ -103,7 +117,7 @@ export async function downloadCaseEvidence(
 export async function updateCase(
   id: string,
   version: number,
-  body: { status?: string; assignedTo?: string | null },
+  body: { status?: string; assignedTo?: string | null; outcome?: string; reason?: string },
 ): Promise<EthicsCaseSummary> {
   const response = await api.patch<EthicsCaseSummary>(
     `/v1/ethics/cases/${encodeURIComponent(id)}`,

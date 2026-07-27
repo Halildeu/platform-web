@@ -5,15 +5,18 @@ import App from './App';
 import * as api from './ethics-api';
 
 vi.mock('./ethics-api');
-const summary = {
+const summary: api.EthicsCaseSummary = {
   id: '11111111-1111-1111-1111-111111111111',
   status: 'NEW',
   assignedTo: null,
   version: 0,
   createdAt: '2026-07-18T12:00:00Z',
   updatedAt: '2026-07-18T12:00:00Z',
+  acknowledgedAt: null,
+  outcome: null,
+  closedAt: null,
 };
-const detail = {
+const detail: api.EthicsCaseDetail = {
   ...summary,
   mode: 'ANONYMOUS',
   category: 'WORKPLACE_CONDUCT',
@@ -219,5 +222,113 @@ describe('Etik Speak manager MFE', () => {
     await waitFor(() =>
       expect(screen.queryByRole('heading', { name: 'Sentetik bildirim' })).not.toBeInTheDocument(),
     );
+  });
+
+  // ES-301A — lifecycle. The server enumerates which moves exist and refuses the rest;
+  // these check the UI does not offer what would come back as a conflict, and does not
+  // send a closure the server will reject for having no finding.
+
+  test('yalnız sunucunun kabul edeceği geçişler sunulur', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    expect(await screen.findByRole('button', { name: 'Değerlendirmeye al' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sonuçlandır' })).toBeInTheDocument();
+    // NEW -> INVESTIGATING is not a legal move, so there must be no button for it.
+    expect(screen.queryByRole('button', { name: 'Soruşturmaya al' })).not.toBeInTheDocument();
+  });
+
+  test('kapanış sonuç seçimi ister ve sonucu gönderir', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Sonuçlandır' }));
+
+    await userEvent.selectOptions(screen.getByLabelText('Sonuç'), 'OUT_OF_SCOPE');
+    await userEvent.click(screen.getByRole('button', { name: 'Sonucu kaydet ve kapat' }));
+
+    await waitFor(() =>
+      expect(api.updateCase).toHaveBeenCalledWith(summary.id, 0, {
+        status: 'CLOSED',
+        outcome: 'OUT_OF_SCOPE',
+      }),
+    );
+  });
+
+  test('yeniden açma gerekçesiz gönderilemez', async () => {
+    const closed = {
+      ...detail,
+      status: 'CLOSED',
+      outcome: 'UNSUBSTANTIATED',
+      closedAt: '2026-07-19T09:00:00Z',
+      acknowledgedAt: '2026-07-18T18:00:00Z',
+    };
+    vi.mocked(api.listCases).mockResolvedValue([closed]);
+    vi.mocked(api.getCase).mockResolvedValue(closed);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Yeniden aç' }));
+
+    expect(screen.getByRole('button', { name: 'Davayı yeniden aç' })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Yeniden açma gerekçesi'), 'Yeni tanık beyanı');
+    await userEvent.click(screen.getByRole('button', { name: 'Davayı yeniden aç' }));
+
+    await waitFor(() =>
+      expect(api.updateCase).toHaveBeenCalledWith(closed.id, 0, {
+        status: 'ASSESSING',
+        reason: 'Yeni tanık beyanı',
+      }),
+    );
+  });
+
+  /**
+   * The seven-day acknowledgement deadline is the one a manager can still act on. A case
+   * nobody has replied to for longer than that has to say so where the case is read, not
+   * in a report someone runs monthly.
+   */
+  test('teyit edilmemiş ve süresi geçmiş dava uyarı olarak görünür', async () => {
+    const stale = {
+      ...detail,
+      createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+      acknowledgedAt: null,
+    };
+    vi.mocked(api.listCases).mockResolvedValue([stale]);
+    vi.mocked(api.getCase).mockResolvedValue(stale);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const state = await screen.findByTestId('acknowledgement-state');
+    expect(state).toHaveAttribute('data-overdue', 'true');
+    expect(state).toHaveTextContent('9 gün geçti');
+    expect(state).toHaveAttribute('role', 'alert');
+  });
+
+  /** A frontend deployed ahead of the service must not print a deadline it cannot compute. */
+  test('sunucu teyit alanını göndermiyorsa süre uydurulmaz', async () => {
+    const legacy = { ...detail };
+    delete (legacy as { acknowledgedAt?: string | null }).acknowledgedAt;
+    vi.mocked(api.listCases).mockResolvedValue([legacy as api.EthicsCaseSummary]);
+    vi.mocked(api.getCase).mockResolvedValue(legacy as api.EthicsCaseDetail);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const state = await screen.findByTestId('acknowledgement-state');
+    expect(state).toHaveTextContent('okunamadı');
+    expect(state).not.toHaveTextContent('NaN');
+    expect(state).toHaveAttribute('data-overdue', 'false');
+  });
+
+  test('teyit verilmişse geçen süre gösterilir, uyarı verilmez', async () => {
+    const acknowledged = {
+      ...detail,
+      createdAt: '2026-07-18T12:00:00Z',
+      acknowledgedAt: '2026-07-20T12:00:00Z',
+    };
+    vi.mocked(api.listCases).mockResolvedValue([acknowledged]);
+    vi.mocked(api.getCase).mockResolvedValue(acknowledged);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const state = await screen.findByTestId('acknowledgement-state');
+    expect(state).toHaveAttribute('data-overdue', 'false');
+    expect(state).toHaveTextContent('2 gün içinde verildi');
   });
 });

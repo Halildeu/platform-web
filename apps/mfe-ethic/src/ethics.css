@@ -169,6 +169,33 @@
   flex-wrap: wrap;
 }
 
+/* Closing and reopening both ask for something first — a finding, or a reason. The inset
+   marks this as a step being completed, not another action sitting next to the others. */
+.ethics-closure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-left: 3px solid var(--ethics-border);
+}
+
+.ethics-closure select,
+.ethics-closure textarea {
+  width: 100%;
+  max-width: 24rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+/* An acknowledgement past its seven-day deadline is a compliance fact, not decoration. */
+[data-testid='acknowledgement-state'][data-overdue='true'] {
+  color: var(--ethics-danger, #b3261e);
+  font-weight: 600;
+}
+
 .ethics-messages li {
   border-left: 3px solid var(--ethics-border);
   padding: 0.5rem 0.8rem;
