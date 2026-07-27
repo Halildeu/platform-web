@@ -400,6 +400,25 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText('ISO 45001')).toBeVisible();
   });
 
+  it('calls the interview-track stage "Kısa liste" for the recruiter', async () => {
+    // #227 B: sahip sordu "kaci kisa listeye alinmis" — cevabi olan asama ZATEN
+    // vardi (`INTERVIEW_PENDING` = inceleme gecildi, mulakat hattinda), ama adi
+    // soruyu cevaplamiyordu. Sektor kalibi kisa liste'yi ayri etiket degil ASAMA
+    // olarak modeller; bizde asama var, isim eksikti. Yeni asama EKLENMEDI.
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [{ ...APPLICATION, status: 'INTERVIEW_PENDING' }],
+      page: 0,
+      size: 50,
+      total: 1,
+    });
+    renderPage();
+    await screen.findByText(APPLICATION.fullName);
+
+    // Asama filtresi ve sayaci recruiter dilinde konusur.
+    expect(screen.getByRole('button', { name: /Kısa liste · 1/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^Mülakat · / })).not.toBeInTheDocument();
+  });
+
   it('shows the same candidate other applications in the same panel', async () => {
     // #226: canli olculdu — ayni e-postayla ayni ilana SINIRSIZ basvurulabiliyor
     // ve IK bunu hicbir yerde goremiyordu. Sahip ilkesi: adaya tiklayinca ONA

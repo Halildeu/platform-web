@@ -17,7 +17,8 @@ import RecruiterOfferPanel from './RecruiterOfferPanel';
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SUBMITTED: 'Başvuru alındı',
   UNDER_REVIEW: 'İnsan incelemesinde',
-  INTERVIEW_PENDING: 'Mülakat planlaması bekliyor',
+  // #227 B: recruiter dilinde kisa liste; aday tarafi 'Mulakat planlamasi' kalir.
+  INTERVIEW_PENDING: 'Kısa listede',
   OFFER_PENDING: 'Aday teklif yanıtı bekleniyor',
   OFFER_ACCEPTED: 'Aday teklifi kabul etti',
   OFFER_DECLINED: 'Aday teklifi reddetti',
@@ -481,7 +482,7 @@ const RecruiterApplicationReviewPanel = ({
                   disabled={updating || !latestEvaluation}
                   className="min-h-11 w-full rounded-xl bg-action-primary px-4 py-2.5 text-sm font-bold text-action-primary-text disabled:opacity-50"
                 >
-                  Mülakat planlamasına al
+                  Kısa listeye al
                 </button>
               ) : null}
               {application.status === 'UNDER_REVIEW' && !latestEvaluation ? (

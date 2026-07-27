@@ -19,7 +19,20 @@ import RecruiterApplicationReviewPanel from './RecruiterApplicationReviewPanel';
 const STAGES: ReadonlyArray<{ id: ApplicationStatus; label: string }> = [
   { id: 'SUBMITTED', label: 'Yeni' },
   { id: 'UNDER_REVIEW', label: 'İncelemede' },
-  { id: 'INTERVIEW_PENDING', label: 'Mülakat' },
+  // #227 B: bu asama "inceleme gecildi, mulakat hattinda" demek — recruiter
+  // dilinde KISA LISTE. Sektor kalibi kisa liste'yi ayri bir etiket degil bir
+  // ASAMA olarak modeller (funnel donusumu + denetim izi asamadan gelir), ve
+  // bizde o asama ZATEN var; yalnizca adi soruyu cevaplamiyordu.
+  //
+  // Yeni asama EKLENMEDI: en iyi uygulama hattin kisa kalmasini soyler (4-6),
+  // ve `SHORTLISTED` ile `UNDER_REVIEW` neredeyse ayni seyi anlatirdi. Gercek
+  // ayrim gerektiginde eklenecek asama `INTERVIEW_SCHEDULED` olur ve mulakat
+  // domain'inden beslenir — 46 kullanim + migration o zaman hak edilir.
+  //
+  // ADAY tarafi bilincli olarak "Mulakat planlamasi" KALIR: aday "kisa liste"
+  // terimini sormuyor, kendi durumunu soruyor. Ayni asamanin iki kitleye iki
+  // farkli adi tutarsizlik degil, kitleye uygun dil.
+  { id: 'INTERVIEW_PENDING', label: 'Kısa liste' },
   { id: 'OFFER_PENDING', label: 'Teklif yanıtı' },
   { id: 'OFFER_ACCEPTED', label: 'Teklif kabulü' },
   { id: 'HIRED', label: 'İşe alındı' },

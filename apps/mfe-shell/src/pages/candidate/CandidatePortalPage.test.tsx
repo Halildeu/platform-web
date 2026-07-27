@@ -89,6 +89,19 @@ describe('CandidatePortalPage', () => {
     expect(screen.queryByText(/user:|reviewer|scorecard|rationale/i)).not.toBeInTheDocument();
   });
 
+  it('keeps the candidate wording as "Mülakat planlaması", not the recruiter word', async () => {
+    // #227 B: recruiter tarafinda ayni asamanin adi "Kısa liste" oldu, cunku IK
+    // "kaci kisa listeye alinmis" diye soruyor. ADAY o terimi sormuyor; kendi
+    // durumunu soruyor. Ayni asamanin iki kitleye iki farkli adi TUTARSIZLIK
+    // DEGIL, kitleye uygun dil — bu test olmadan biri iki metni "hizalamak"
+    // isteyip adayin ekranina ic jargon tasir.
+    apiMocks.getCandidateStatus.mockResolvedValue({ ...STATUS, status: 'INTERVIEW_PENDING' });
+    renderPage();
+
+    expect((await screen.findAllByText('Mülakat planlaması')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Kısa liste/)).not.toBeInTheDocument();
+  });
+
   it('refreshes status from the backend', async () => {
     renderPage();
     await screen.findAllByText('İnsan incelemesinde');
