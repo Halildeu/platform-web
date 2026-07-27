@@ -174,7 +174,7 @@ export function buildTpmRenewalCommand(token: string, bootstrapApiUrl: string): 
     `$env:ENDPOINT_AGENT_ENROLLMENT_TOKEN = ${q(token)};`,
     `$env:ENDPOINT_AGENT_AUTO_ENROLL_CERT_SAN_URI_PREFIX = 'adcomputer:';`,
     `try {`,
-    `& $agentExe --auto-enroll-tpm --api-url ${q(bootstrapApiUrl)};`,
+    `& $agentExe --auto-enroll-tpm --tpm-bootstrap-server-tls --api-url ${q(bootstrapApiUrl)};`,
     `if ($LASTEXITCODE -ne 0) { throw 'TPM renewal failed.' };`,
     `Restart-Service EndpointAgent`,
     `} finally {`,

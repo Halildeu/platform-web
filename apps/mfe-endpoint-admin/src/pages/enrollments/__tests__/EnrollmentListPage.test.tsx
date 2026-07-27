@@ -22,7 +22,10 @@ import type {
   EndpointEnrollment,
 } from '../../../entities/endpoint-enrollment/types';
 import type { EndpointDevice } from '../../../entities/endpoint-device/types';
-import { EnrollmentTokenModal } from '../../../widgets/enrollment-dialog/EnrollmentTokenModal';
+import {
+  buildTpmRenewalCommand,
+  EnrollmentTokenModal,
+} from '../../../widgets/enrollment-dialog/EnrollmentTokenModal';
 
 const mockCreate = vi.fn();
 const mockResetCreate = vi.fn();
@@ -609,6 +612,19 @@ describe('EnrollmentListPage', () => {
       "-SelfUpdateAllowedHosts 'github.com,release-assets.githubusercontent.com,objects.githubusercontent.com,testai.acik.com'",
     );
     expect(command).toContain('-SelfUpdateAutoActivate');
+  });
+
+  it('uses the explicit certificate-less TPM bootstrap mode for existing-device renewal', () => {
+    const command = buildTpmRenewalCommand(
+      'renewal-token',
+      'https://testai.acik.com/api/v1/endpoint-agent',
+    );
+
+    expect(command).toContain(
+      "& $agentExe --auto-enroll-tpm --tpm-bootstrap-server-tls --api-url 'https://testai.acik.com/api/v1/endpoint-agent'",
+    );
+    expect(command).not.toContain('mtls.testai.acik.com');
+    expect(command).toContain('Restart-Service EndpointAgent');
   });
 
   it('renders error + retry and NO one-command when the manifest fetch fails', async () => {
