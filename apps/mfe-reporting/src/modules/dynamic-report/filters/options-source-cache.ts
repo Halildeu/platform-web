@@ -222,6 +222,7 @@ async function loadFromEndpoint(endpoint: string): Promise<FilterOptionEntry[]> 
  *  - `null` / `undefined`    → dropped
  *  - `{value:'A', label:'Alpha'}` → pass-through
  *  - `{value:7, ...}`        → `{value:'7', ...}` (stringify value field; preserve other props)
+ *  - `{id:7, code:'P7', name:'Project'}` → `{value:'7', label:'P7 — Project'}`
  *  - invalid entry           → dropped
  */
 function normalizeEndpointPayload(payload: unknown): FilterOptionEntry[] {
@@ -262,6 +263,21 @@ function normalizeOptionEntry(entry: unknown): FilterOptionEntry[] {
           value: String(rawValue),
           label: typeof e.label === 'string' ? e.label : undefined,
           labelKey: typeof e.labelKey === 'string' ? e.labelKey : undefined,
+        },
+      ];
+    }
+    // Canonical entity-picker payload. Project/company lookup endpoints
+    // expose stable numeric `id` plus optional `code` and `name` rather
+    // than leaking UI-specific `{value,label}` concerns into repositories.
+    if (typeof e.id === 'number' || (typeof e.id === 'string' && e.id.trim())) {
+      const code = typeof e.code === 'string' ? e.code.trim() : '';
+      const name = typeof e.name === 'string' ? e.name.trim() : '';
+      const inactive = e.active === false ? ' (pasif)' : '';
+      const label = code && name ? `${code} — ${name}${inactive}` : `${name || code}${inactive}`;
+      return [
+        {
+          value: String(e.id),
+          label: label || String(e.id),
         },
       ];
     }

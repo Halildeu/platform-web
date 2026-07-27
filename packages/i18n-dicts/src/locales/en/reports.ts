@@ -114,6 +114,8 @@ const reports = {
   'reports.hrCompensation.filters.collarType': 'Collar Type',
   'reports.hrCompensation.filters.gender': 'Gender',
   'reports.hrCompensation.filters.education': 'Education',
+  'reports.budgetActual.filters.project': 'Project',
+  'reports.budgetActual.filters.dateRange': 'Date range',
   'reports.hrCompensation.collarType.white': 'White Collar',
   'reports.hrCompensation.collarType.blue': 'Blue Collar',
   'reports.hrCompensation.gender.female': 'Female',

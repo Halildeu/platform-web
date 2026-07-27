@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
   ready: vi.fn(),
 }));
 
@@ -11,8 +9,6 @@ vi.mock('../../app/services/shell-services', () => ({
   getShellServices: () => ({
     http: {
       get: mocks.get,
-      post: mocks.post,
-      put: mocks.put,
     },
     auth: {
       ready: mocks.ready,
@@ -22,77 +18,39 @@ vi.mock('../../app/services/shell-services', () => ({
 
 import {
   BudgetApiError,
-  createBudget,
-  fetchBudgetControl,
-  replaceBudgetLines,
+  fetchCompanies,
+  fetchProjects,
 } from './api';
 
-describe('budget workspace API contract', () => {
+describe('project actuals API contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.ready.mockResolvedValue({ ok: true });
   });
 
-  it('creates a budget with matching payload and fail-closed company header', async () => {
-    mocks.post.mockResolvedValue({ data: { planId: 'plan-1' } });
+  it('reads company names and company-scoped project codes', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ data: [{ id: 35, nickname: 'SER', name: 'Serban' }] })
+      .mockResolvedValueOnce({
+        data: [{ id: 91, code: 'IL05', name: 'Equinix IL05.1', companyId: 35, active: true }],
+      });
 
-    await createBudget(35, 2026, 'TRY');
+    await fetchCompanies();
+    await fetchProjects(35);
 
-    expect(mocks.post).toHaveBeenCalledWith(
-      '/api/v1/budgets',
-      { companyId: 35, fiscalYear: 2026, baseCurrency: 'TRY' },
-      { headers: { 'X-Company-Id': '35' } },
-    );
-  });
-
-  it('sends company scope on line writes and control reads', async () => {
-    mocks.put.mockResolvedValue({ data: { planId: 'plan-1' } });
-    mocks.get.mockResolvedValue({ data: { plan: 100 } });
-    const lines = [
-      {
-        period: '2026-01',
-        accountCode: '740',
-        costCenterCode: 'HQ',
-        projectCode: '',
-        departmentCode: '',
-        branchCode: '',
-        direction: 'EXPENSE' as const,
-        plannedAmount: 100,
-        currency: 'TRY',
-        description: 'Test',
-      },
-    ];
-
-    await replaceBudgetLines(35, 'plan/1', 'version/1', lines);
-    await fetchBudgetControl(35, 'plan/1', 'version/1');
-
-    expect(mocks.put).toHaveBeenCalledWith(
-      '/api/v1/budgets/plan%2F1/versions/version%2F1/lines',
-      { lines },
-      { headers: { 'X-Company-Id': '35' } },
-    );
-    expect(mocks.get).toHaveBeenCalledWith(
-      '/api/v1/budgets/plan%2F1/versions/version%2F1/control',
-      { headers: { 'X-Company-Id': '35' } },
-    );
-  });
-
-  it('does not send a protected request before shell auth is ready', async () => {
-    mocks.ready.mockResolvedValue({ ok: false, reason: 'unauthenticated' });
-
-    await expect(createBudget(35, 2026, 'TRY')).rejects.toMatchObject({
-      kind: 'AUTHENTICATION_REQUIRED',
+    expect(mocks.get).toHaveBeenNthCalledWith(1, '/v1/reports/company-options');
+    expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/reports/project-options', {
+      headers: { 'X-Company-Id': '35' },
     });
-    expect(mocks.post).not.toHaveBeenCalled();
   });
 
-  it('maps cross-scope denial to an explicit authorization error', async () => {
-    mocks.post.mockRejectedValue({ response: { status: 403 } });
-
-    await expect(createBudget(35, 2026, 'TRY')).rejects.toEqual(
+  it('does not issue protected requests before auth is ready', async () => {
+    mocks.ready.mockResolvedValue({ ok: false });
+    await expect(fetchCompanies()).rejects.toEqual(
       expect.objectContaining<Partial<BudgetApiError>>({
-        kind: 'FORBIDDEN',
+        kind: 'AUTHENTICATION_REQUIRED',
       }),
     );
+    expect(mocks.get).not.toHaveBeenCalled();
   });
 });

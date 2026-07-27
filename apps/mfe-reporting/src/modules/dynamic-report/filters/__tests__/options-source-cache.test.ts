@@ -155,6 +155,35 @@ describe('resolveFilterOptions', () => {
     ).rejects.toThrow(/endpoint/);
   });
 
+  it('normalizes canonical project options into value and readable label', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 91,
+          code: 'IL05',
+          name: 'Equinix IL05.1 Istanbul Data Centre',
+          active: true,
+        },
+      ],
+    });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'projectId',
+        optionsSource: { type: 'endpoint', endpoint: '/v1/reports/project-options' },
+      }),
+      'fin-proje-muhasebe-gercekleseni',
+    );
+
+    expect(result).toEqual([
+      {
+        value: '91',
+        label: 'IL05 — Equinix IL05.1 Istanbul Data Centre',
+      },
+    ]);
+  });
+
   it('endpoint source caches second call (single network round-trip)', async () => {
     const get = vi.fn().mockResolvedValue({ data: [{ value: 'A' }] });
     mockResolveHttpClient.mockReturnValue({ get });

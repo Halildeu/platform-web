@@ -90,6 +90,8 @@ const reports = {
   'reports.hrCompensation.filters.searchPlaceholder': 'Nach Name, Abteilung oder Position suchen',
   'reports.hrCompensation.filters.department': 'Abteilung',
   'reports.hrCompensation.filters.company': 'Unternehmen',
+  'reports.budgetActual.filters.project': 'Projekt',
+  'reports.budgetActual.filters.dateRange': 'Datumsbereich',
   'reports.hrCompensation.filters.collarType': 'Kragentyp',
   'reports.hrCompensation.filters.gender': 'Geschlecht',
   'reports.hrCompensation.filters.education': 'Bildung',

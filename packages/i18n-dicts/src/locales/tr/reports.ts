@@ -116,6 +116,8 @@ const reports = {
   'reports.hrCompensation.filters.collarType': 'Yaka Tipi',
   'reports.hrCompensation.filters.gender': 'Cinsiyet',
   'reports.hrCompensation.filters.education': 'Eğitim',
+  'reports.budgetActual.filters.project': 'Proje',
+  'reports.budgetActual.filters.dateRange': 'Tarih aralığı',
   'reports.hrCompensation.collarType.white': 'Beyaz Yaka',
   'reports.hrCompensation.collarType.blue': 'Mavi Yaka',
   'reports.hrCompensation.gender.female': 'Kadın',

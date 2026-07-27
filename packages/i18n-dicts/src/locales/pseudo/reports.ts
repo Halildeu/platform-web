@@ -78,6 +78,8 @@ const pseudo = {
   'reports.hrCompensation.filters.searchPlaceholder': '[Search ⟪S⟫]',
   'reports.hrCompensation.filters.department': '[Department ⟪D⟫]',
   'reports.hrCompensation.filters.company': '[Company ⟪Co⟫]',
+  'reports.budgetActual.filters.project': '[Prójéct ⟪Pj⟫]',
+  'reports.budgetActual.filters.dateRange': '[Dáté ráñgé ⟪Dr⟫]',
   'reports.hrCompensation.filters.collarType': '[Collar ⟪CT⟫]',
   'reports.hrCompensation.filters.gender': '[Gender ⟪G⟫]',
   'reports.hrCompensation.filters.education': '[Education ⟪E⟫]',

@@ -2,7 +2,12 @@ import React from 'react';
 import type { SharedReportId } from '@platform/capabilities';
 import type { ReportModule } from '../types';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
-import type { DynamicReportFilters, DynamicReportRow, ReportListItem } from './types';
+import type {
+  DynamicReportFilters,
+  DynamicReportRow,
+  FilterDefinition,
+  ReportListItem,
+} from './types';
 import { fetchReportData, exportReportData, fetchFilterValues } from './api';
 import { CompanyPicker } from '../../components/CompanyPicker';
 import {
@@ -20,6 +25,26 @@ import {
 // fetch/export closures.
 import { FilterRenderer } from './filters/widgets';
 import { translateMetadataFilters } from './filters/metadata-filter-model-translator';
+
+/**
+ * Read a metadata filter from the URL. Date ranges use two explicit
+ * parameters (`<urlParam>From`, `<urlParam>To`) so deep links can carry
+ * both bounds without an opaque JSON value.
+ */
+export const readMetadataFilterUrlValue = (
+  definition: FilterDefinition,
+  searchParams: URLSearchParams | undefined,
+): unknown => {
+  if (!searchParams) return undefined;
+  const urlParam = definition.urlParam ?? definition.key;
+  if (definition.kind === 'date-range') {
+    const from = searchParams.get(`${urlParam}From`)?.trim();
+    const to = searchParams.get(`${urlParam}To`)?.trim();
+    return from || to ? { from: from || undefined, to: to || undefined } : undefined;
+  }
+  const value = searchParams.get(urlParam);
+  return value === null ? undefined : value;
+};
 
 /* ------------------------------------------------------------------ */
 /*  Dynamic report module factory                                      */
@@ -95,9 +120,8 @@ export const createDynamicReportModule = (
           if (def.defaultValue !== undefined) {
             seeded[def.key] = def.defaultValue;
           }
-          const urlParam = def.urlParam ?? def.key;
-          const urlValue = context?.searchParams?.get(urlParam);
-          if (urlValue !== null && urlValue !== undefined) {
+          const urlValue = readMetadataFilterUrlValue(def, context?.searchParams);
+          if (urlValue !== undefined) {
             seeded[def.key] = urlValue;
           }
         }
