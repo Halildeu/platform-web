@@ -32,12 +32,13 @@ const h = vi.hoisted(() => {
     mkPage,
     page: mkPage([REL]) as Record<string, unknown>,
     releasesState: { isLoading: false, isError: false },
+    dispatchState: { isLoading: false, error: undefined as unknown },
   };
 });
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
   useListAgentUpdateReleasesQuery: () => ({ data: h.page, ...h.releasesState }),
-  useDispatchAgentUpdateMutation: () => [h.dispatchMock, { isLoading: false, error: undefined }],
+  useDispatchAgentUpdateMutation: () => [h.dispatchMock, h.dispatchState],
 }));
 
 import { AgentUpdateModal } from '../components/AgentUpdateModal';
@@ -48,6 +49,8 @@ afterEach(() => {
   h.page = h.mkPage([h.REL]) as Record<string, unknown>;
   h.releasesState.isLoading = false;
   h.releasesState.isError = false;
+  h.dispatchState.isLoading = false;
+  h.dispatchState.error = undefined;
 });
 
 const renderModal = (props?: Partial<React.ComponentProps<typeof AgentUpdateModal>>) =>
@@ -108,6 +111,37 @@ describe('AgentUpdateModal', () => {
     renderModal();
     expect(screen.getByTestId('agent-update-no-releases')).toBeInTheDocument();
     expect((screen.getByTestId('agent-update-submit') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('UPDATE_AGENT capability eksiginde ayni cihaza bagli onarim yolunu gosterir', () => {
+    h.dispatchState.error = {
+      status: 422,
+      data: {
+        message:
+          "Agent does not advertise the 'UPDATE_AGENT' capability on the most recent heartbeat.",
+      },
+    };
+
+    renderModal({ deviceId: '2f7ad30f-970a-42e7-8af8-08764ae6066f' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/managed agent updates/i);
+    expect(screen.getByTestId('agent-update-recovery-link')).toHaveAttribute(
+      'href',
+      '/endpoint-admin/enrollments?repairDeviceId=2f7ad30f-970a-42e7-8af8-08764ae6066f',
+    );
+  });
+
+  it('bilinmeyen backend hata ayrintisini kullaniciya sizdirmaz', () => {
+    h.dispatchState.error = {
+      status: 500,
+      data: { message: 'private internal diagnostic' },
+    };
+
+    renderModal();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not dispatch/i);
+    expect(screen.getByRole('alert')).not.toHaveTextContent('private internal diagnostic');
+    expect(screen.queryByTestId('agent-update-recovery-link')).toBeNull();
   });
 
   // Regression: with 31 approved releases the panel grew to 2656px inside an

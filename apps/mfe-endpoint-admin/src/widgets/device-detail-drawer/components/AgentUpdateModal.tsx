@@ -21,6 +21,22 @@ export interface AgentUpdateModalProps {
   onDispatched: (commandId: string) => void;
 }
 
+const isMissingUpdateCapability = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object' || !('status' in error) || !('data' in error)) {
+    return false;
+  }
+  const { status, data } = error as { status: unknown; data: unknown };
+  if (status !== 422 || !data || typeof data !== 'object' || !('message' in data)) {
+    return false;
+  }
+  const message = (data as { message: unknown }).message;
+  return (
+    typeof message === 'string' &&
+    message.includes("'UPDATE_AGENT' capability") &&
+    message.includes('most recent heartbeat')
+  );
+};
+
 /**
  * AG-029 (Faz 22.5) — catalog-bound signed agent self-update dispatch modal.
  *
@@ -88,6 +104,8 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
   const noReleases = !releasesLoading && !releasesError && dispatchable.length === 0;
   const canDispatch =
     !!selectedReleaseId && trimmedReason.length > 0 && !reasonTooLong && !dispatching;
+  const capabilityMissing = isMissingUpdateCapability(dispatchError);
+  const recoveryHref = `/endpoint-admin/enrollments?repairDeviceId=${encodeURIComponent(deviceId)}`;
   // Explain a dead submit button, but only when the operator can actually act on
   // it: while dispatching, or when the catalog has nothing dispatchable at all
   // (that case renders its own warning), a hint would be noise.
@@ -249,11 +267,26 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
 
           {dispatchError && (
             <div
-              className="text-sm text-danger"
+              className="rounded-md border border-state-danger-border bg-state-danger-subtle px-3 py-2 text-sm text-state-danger-text"
               role="alert"
               data-testid="agent-update-dispatch-error"
             >
-              {t('endpointAdmin.modal.agentUpdate.dispatchError')}
+              <p>
+                {t(
+                  capabilityMissing
+                    ? 'endpointAdmin.modal.agentUpdate.capabilityMissing'
+                    : 'endpointAdmin.modal.agentUpdate.dispatchError',
+                )}
+              </p>
+              {capabilityMissing && (
+                <a
+                  href={recoveryHref}
+                  data-testid="agent-update-recovery-link"
+                  className="mt-2 inline-flex rounded-md border border-state-danger-border bg-surface-default px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-surface-hover"
+                >
+                  {t('endpointAdmin.modal.agentUpdate.openRecovery')}
+                </a>
+              )}
             </div>
           )}
         </div>

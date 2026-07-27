@@ -1257,6 +1257,9 @@ const DICT_TR = {
   'endpointAdmin.modal.agentUpdate.tier.TRUSTED_SIGNED': 'Güvenilir imzalı',
   'endpointAdmin.modal.agentUpdate.tier.LAB_ONLY_EVIDENCE': 'Yalnızca laboratuvar',
   'endpointAdmin.modal.agentUpdate.dispatchError': 'Ajan güncelleme komutu gönderilemedi.',
+  'endpointAdmin.modal.agentUpdate.capabilityMissing':
+    'Bu cihazın son heartbeat kaydı merkezi ajan güncelleme yeteneğini içermiyor. Güvenlik nedeniyle güncelleme komutu gönderilmedi. Cihazı bir kez onarıp yeniden kaydedin; yeni heartbeat sonrasında merkezi güncelleme kullanılabilir.',
+  'endpointAdmin.modal.agentUpdate.openRecovery': 'Cihaz onarımını aç',
   'endpointAdmin.modal.agentUpdate.dispatch': 'Güncelle',
   'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
     'Göndermek için bir sürüm seçin ve gerekçe girin.',
@@ -3034,6 +3037,9 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.agentUpdate.tier.TRUSTED_SIGNED': 'Trusted signed',
   'endpointAdmin.modal.agentUpdate.tier.LAB_ONLY_EVIDENCE': 'Lab only',
   'endpointAdmin.modal.agentUpdate.dispatchError': 'Could not dispatch the agent update command.',
+  'endpointAdmin.modal.agentUpdate.capabilityMissing':
+    'The latest heartbeat for this device does not include managed agent updates. The command was blocked for safety. Repair and re-enroll the device once; managed updates become available after a fresh heartbeat.',
+  'endpointAdmin.modal.agentUpdate.openRecovery': 'Open device recovery',
   'endpointAdmin.modal.agentUpdate.dispatch': 'Update',
   'endpointAdmin.modal.agentUpdate.dispatchDisabledHint':
     'Pick a release and enter a reason to dispatch.',

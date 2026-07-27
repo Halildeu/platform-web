@@ -15,6 +15,7 @@ type EnrollmentTarget = 'new-device' | 'existing-device';
 export interface CreateEnrollmentDialogProps {
   open: boolean;
   canManage: boolean;
+  initialDeviceId?: string | null;
   onClose: () => void;
   onCreated: (
     response: CreateEndpointEnrollmentResponse,
@@ -25,6 +26,7 @@ export interface CreateEnrollmentDialogProps {
 export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
   open,
   canManage,
+  initialDeviceId = null,
   onClose,
   onCreated,
 }) => {
@@ -48,6 +50,12 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
   );
 
   React.useEffect(() => {
+    if (open && initialDeviceId) {
+      setTarget('existing-device');
+      setDeviceId(initialDeviceId);
+      setValidationError(null);
+      return;
+    }
     if (!open) {
       setExpiresInMinutes(DEFAULT_MINUTES);
       setNote('');
@@ -56,7 +64,7 @@ export const CreateEnrollmentDialog: React.FC<CreateEnrollmentDialogProps> = ({
       setValidationError(null);
       createState.reset();
     }
-  }, [open, createState]);
+  }, [open, initialDeviceId, createState]);
 
   if (!open) {
     return null;
