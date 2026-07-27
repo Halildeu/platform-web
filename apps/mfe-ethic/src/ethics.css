@@ -224,13 +224,44 @@
   flex-wrap: wrap;
 }
 
-.ethics-inline-form input {
-  flex: 1 1 16rem;
+.ethics-inline-form input,
+.ethics-inline-form select {
+  flex: 1 1 12rem;
   min-width: 0;
   padding: 0.7rem;
   border: 1px solid var(--ethics-border);
   border-radius: 0.5rem;
   font-family: inherit;
+  background: inherit;
+}
+
+/* ES-203/C — who is on this case. Each row carries a short handle-derived
+   code so two same-named colleagues stay two visibly different people. */
+.ethics-participants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.ethics-participants li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 0.5rem;
+}
+
+.ethics-participants li.is-empty {
+  border-style: dashed;
+  color: var(--ethics-muted);
+}
+
+.ethics-participants li span {
+  color: var(--ethics-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .ethics-manager textarea {

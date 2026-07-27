@@ -106,3 +106,20 @@ export function acknowledgementState(
       : `Alındı teyidi bekliyor — ${ACKNOWLEDGEMENT_DEADLINE_DAYS - elapsed} gün kaldı`,
   };
 }
+
+/**
+ * ES-203/C — the participant role vocabulary. This mirrors the CHECK
+ * constraint on `ethics_case_participants.role`; a value outside it is
+ * refused by the server. It lives here rather than in `ethics-api.ts` for
+ * the same reason NEXT_STATUSES does: it is a domain rule, and a test that
+ * mocks the transport module must not erase the vocabulary with it.
+ */
+export const PARTICIPANT_ROLES = ['triager', 'handler', 'evidence_approver'] as const;
+export type ParticipantRole = (typeof PARTICIPANT_ROLES)[number];
+
+export const participantRoleLabel = (role: string) =>
+  ({
+    triager: 'Triyaj',
+    handler: 'Vaka sorumlusu',
+    evidence_approver: 'Kanıt onaylayıcı',
+  })[role] ?? role;
