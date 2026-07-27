@@ -8,7 +8,7 @@ vi.mock('./ethics-api');
 const summary: api.EthicsCaseSummary = {
   id: '11111111-1111-1111-1111-111111111111',
   status: 'NEW',
-  assignedTo: null,
+  legacyAssignmentLabel: null,
   version: 0,
   createdAt: '2026-07-18T12:00:00Z',
   updatedAt: '2026-07-18T12:00:00Z',
