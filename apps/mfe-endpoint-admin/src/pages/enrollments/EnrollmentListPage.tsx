@@ -84,6 +84,22 @@ function resolveArtifactBaseUrl(): string {
   return 'https://testai.acik.com/artifacts';
 }
 
+function resolveRecoveryDeviceId(): string | null {
+  if (typeof window === 'undefined' || !window.location) return null;
+  const value = new URLSearchParams(window.location.search).get('repairDeviceId')?.trim() ?? '';
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
+function removeRecoveryDeviceIdFromLocation(): void {
+  if (typeof window === 'undefined' || !window.location || !window.history) return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has('repairDeviceId')) return;
+  url.searchParams.delete('repairDeviceId');
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride }) => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
@@ -91,7 +107,10 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
   const apiUrl = apiUrlOverride ?? resolveApiUrl();
   const artifactBaseUrl = resolveArtifactBaseUrl();
 
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [recoveryDeviceId, setRecoveryDeviceId] = React.useState<string | null>(
+    resolveRecoveryDeviceId,
+  );
+  const [dialogOpen, setDialogOpen] = React.useState(() => recoveryDeviceId !== null);
   const [createdEnrollment, setCreatedEnrollment] = React.useState<{
     response: CreateEndpointEnrollmentResponse;
     targetDevice: EndpointDevice | null;
@@ -100,6 +119,12 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
   const { data, error, isLoading, isFetching, refetch } =
     endpointAdminApi.useListEndpointEnrollmentsQuery();
 
+  const closeEnrollmentDialog = () => {
+    setDialogOpen(false);
+    setRecoveryDeviceId(null);
+    removeRecoveryDeviceIdFromLocation();
+  };
+
   return (
     <div data-testid="enrollment-list-page" style={{ padding: 24 }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -107,7 +132,11 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
         <button
           type="button"
           data-testid="enrollment-list-page-create"
-          onClick={() => setDialogOpen(true)}
+          onClick={() => {
+            setRecoveryDeviceId(null);
+            removeRecoveryDeviceIdFromLocation();
+            setDialogOpen(true);
+          }}
           disabled={!canManage}
           aria-describedby={!canManage ? manageHintId : undefined}
           title={!canManage ? t('endpointAdmin.authz.manageRequired') : undefined}
@@ -176,9 +205,10 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
       <CreateEnrollmentDialog
         open={dialogOpen}
         canManage={canManage}
-        onClose={() => setDialogOpen(false)}
+        initialDeviceId={recoveryDeviceId}
+        onClose={closeEnrollmentDialog}
         onCreated={(response, targetDevice) => {
-          setDialogOpen(false);
+          closeEnrollmentDialog();
           setCreatedEnrollment({ response, targetDevice });
         }}
       />

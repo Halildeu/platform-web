@@ -81,6 +81,7 @@ function stubValidManifest(): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, '', '/endpoint-admin/enrollments');
   canManageMock = true;
   mockedDevices.mockReturnValue({
     data: [],
@@ -94,6 +95,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState({}, '', '/endpoint-admin/enrollments');
 });
 
 function row(overrides: Partial<EndpointEnrollment> = {}): EndpointEnrollment {
@@ -289,6 +291,33 @@ describe('EnrollmentListPage', () => {
     expect(await screen.findByTestId('enrollment-token-modal-onecommand')).toBeInTheDocument();
     expect(screen.queryByTestId('enrollment-token-modal-raw')).not.toBeInTheDocument();
     expect(screen.queryByTestId('enrollment-token-modal-copy-token')).not.toBeInTheDocument();
+  });
+
+  it('capability recovery deep-linkini ayni cihaz secili olarak acar', () => {
+    const targetDevice = device({ id: '2f7ad30f-970a-42e7-8af8-08764ae6066f', hostname: 'MKR-A1' });
+    mockedDevices.mockReturnValue({
+      data: [targetDevice],
+      error: undefined,
+      isLoading: false,
+      isFetching: false,
+    });
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    window.history.replaceState(
+      {},
+      '',
+      `/endpoint-admin/enrollments?repairDeviceId=${targetDevice.id}`,
+    );
+
+    render(<EnrollmentListPage apiUrlOverride="https://example/api" />);
+
+    expect(screen.getByTestId('create-enrollment-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('create-enrollment-dialog-target-existing')).toBeChecked();
+    expect(screen.getByTestId('create-enrollment-dialog-device-select')).toHaveValue(
+      targetDevice.id,
+    );
+
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-cancel'));
+    expect(window.location.search).toBe('');
   });
 
   it('requires a target device before submitting an existing-device recovery enrollment', async () => {
