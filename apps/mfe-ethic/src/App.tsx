@@ -12,6 +12,16 @@ import {
   type EthicsCaseSummary,
   type StaffEvidence,
 } from './ethics-api';
+import {
+  acknowledgementState,
+  NEXT_STATUSES,
+  OUTCOME_OPTIONS,
+  outcomeLabel,
+  statusLabel,
+  transitionLabel,
+  type CaseOutcome,
+  type CaseStatus,
+} from './case-lifecycle';
 import './ethics.css';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -28,6 +38,11 @@ export default function App() {
   const [internalNote, setInternalNote] = useState('');
   const [assignee, setAssignee] = useState('');
   const [busy, setBusy] = useState(false);
+  // A closure needs a finding and a reopening needs a reason, so both are collected
+  // before the request rather than sent empty and refused by the server.
+  const [pendingMove, setPendingMove] = useState<CaseStatus | null>(null);
+  const [outcome, setOutcome] = useState<CaseOutcome>('UNSUBSTANTIATED');
+  const [reopenReason, setReopenReason] = useState('');
   const selectionSequence = useRef(0);
   const operationKeys = useRef(new Map<string, string>());
 
@@ -127,15 +142,22 @@ export default function App() {
     }
   };
 
-  const changeStatus = async (status: string) => {
+  const changeStatus = async (status: CaseStatus) => {
     if (!selected) return;
+    const closing = status === 'CLOSED';
+    const reopening = selected.status === 'CLOSED' && status !== 'CLOSED';
+    if (reopening && !reopenReason.trim()) return;
     const requestSequence = ++selectionSequence.current;
     const caseId = selected.id;
     const version = selected.version;
     setBusy(true);
     setError('');
     try {
-      await updateCase(caseId, version, { status });
+      await updateCase(caseId, version, {
+        status,
+        ...(closing ? { outcome } : {}),
+        ...(reopening ? { reason: reopenReason.trim() } : {}),
+      });
       if (requestSequence !== selectionSequence.current) return;
       try {
         const [fresh, next] = await Promise.all([getCase(caseId), listCases()]);
@@ -143,6 +165,8 @@ export default function App() {
         setSelected(fresh);
         setAssignee(fresh.assignedTo ?? '');
         setItems(next);
+        setPendingMove(null);
+        setReopenReason('');
       } catch (refreshError) {
         if (requestSequence === selectionSequence.current) {
           showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
@@ -367,6 +391,22 @@ export default function App() {
                   </div>
                   <Badge variant="info">{statusLabel(selected.status)}</Badge>
                 </div>
+                {(() => {
+                  const ack = acknowledgementState(selected);
+                  return (
+                    <p
+                      className="ethics-muted"
+                      data-testid="acknowledgement-state"
+                      data-overdue={ack.overdue}
+                      role={ack.overdue ? 'alert' : undefined}
+                    >
+                      {ack.text}
+                      {selected.status === 'CLOSED' && selected.outcome
+                        ? ` · Sonuç: ${outcomeLabel(selected.outcome)}`
+                        : ''}
+                    </p>
+                  );
+                })()}
                 <section aria-labelledby="narrative-heading">
                   <h3 id="narrative-heading">Bildirim</h3>
                   <p className="ethics-narrative">{selected.description}</p>
@@ -441,17 +481,72 @@ export default function App() {
                     </p>
                   </div>
                   <div className="ethics-actions">
-                    <Button disabled={busy} onClick={() => void changeStatus('IN_REVIEW')}>
-                      İncelemeye al
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => void changeStatus('CLOSED')}
-                    >
-                      Kapat
-                    </Button>
+                    {/* Only the moves the server will accept from here. Offering the rest
+                        would be a button that looks available and answers with a conflict. */}
+                    {(NEXT_STATUSES[selected.status as CaseStatus] ?? []).map((next) => (
+                      <Button
+                        key={next}
+                        variant={next === 'CLOSED' ? 'secondary' : 'primary'}
+                        disabled={busy}
+                        onClick={() => {
+                          if (next === 'CLOSED' || selected.status === 'CLOSED') {
+                            setPendingMove(pendingMove === next ? null : next);
+                            return;
+                          }
+                          void changeStatus(next);
+                        }}
+                      >
+                        {selected.status === 'CLOSED' ? 'Yeniden aç' : transitionLabel(next)}
+                      </Button>
+                    ))}
                   </div>
+                  {pendingMove === 'CLOSED' && (
+                    <div className="ethics-closure">
+                      <label htmlFor="case-outcome">Sonuç</label>
+                      <select
+                        id="case-outcome"
+                        value={outcome}
+                        disabled={busy}
+                        onChange={(event) => setOutcome(event.target.value as CaseOutcome)}
+                      >
+                        {OUTCOME_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {outcomeLabel(value)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="ethics-muted">
+                        Sonuç kalıcı olarak kaydedilir. Dava yeniden açılırsa sonuç silinir ve
+                        gerekçe denetim kaydına yazılır.
+                      </p>
+                      <Button disabled={busy} onClick={() => void changeStatus('CLOSED')}>
+                        Sonucu kaydet ve kapat
+                      </Button>
+                    </div>
+                  )}
+                  {pendingMove === 'ASSESSING' && selected.status === 'CLOSED' && (
+                    <div className="ethics-closure">
+                      <label htmlFor="reopen-reason">Yeniden açma gerekçesi</label>
+                      <textarea
+                        id="reopen-reason"
+                        rows={2}
+                        maxLength={500}
+                        value={reopenReason}
+                        disabled={busy}
+                        onChange={(event) => setReopenReason(event.target.value)}
+                      />
+                      <p className="ethics-muted">
+                        Kayıtlı sonuç ({selected.outcome ? outcomeLabel(selected.outcome) : '—'})
+                        silinecek. Gerekçe zorunludur.
+                      </p>
+                      <Button
+                        disabled={busy || !reopenReason.trim()}
+                        onClick={() => void changeStatus('ASSESSING')}
+                      >
+                        Davayı yeniden aç
+                      </Button>
+                    </div>
+                  )}
                 </section>
                 <section aria-labelledby="notes-heading" className="ethics-internal-note">
                   <h3 id="notes-heading">İç not</h3>
@@ -569,8 +664,6 @@ function showRequestErrorAfterWrite(
   );
 }
 const shortId = (id: string) => `#${id.slice(0, 8).toUpperCase()}`;
-const statusLabel = (status: string) =>
-  ({ NEW: 'Yeni', IN_REVIEW: 'İncelemede', CLOSED: 'Kapalı' })[status] ?? status;
 
 const evidenceStateLabel = (state: StaffEvidence['state']) =>
   ({
