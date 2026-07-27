@@ -21,6 +21,7 @@ const apiMocks = vi.hoisted(() => ({
   requestCandidateLoginCode: vi.fn(),
   verifyCandidateLoginCode: vi.fn(),
   listCandidateLoginApplications: vi.fn(),
+  parseTrackingCredentialFile: vi.fn(),
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
   readCandidateSession: apiMocks.readCandidateSession,
@@ -37,6 +38,7 @@ vi.mock('../../features/ats-portals/api/application-api', () => ({
   requestCandidateLoginCode: apiMocks.requestCandidateLoginCode,
   verifyCandidateLoginCode: apiMocks.verifyCandidateLoginCode,
   listCandidateLoginApplications: apiMocks.listCandidateLoginApplications,
+  parseTrackingCredentialFile: apiMocks.parseTrackingCredentialFile,
 }));
 
 const SESSION = { publicRef: 'app_abcdefghijklmnopqrstuvwx', candidateAccessToken: 'A'.repeat(43) };
@@ -87,6 +89,51 @@ describe('CandidatePortalPage', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('fills both fields from the tracking file the product itself produced', async () => {
+    // #1044: dosyayi BIZ uretiyoruz (#1026). Adaydan 43 karakteri elle
+    // kopyalamasini istemenin gerekcesi yok — tek karakter kaymasi girisi
+    // reddediyordu.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    apiMocks.parseTrackingCredentialFile.mockReturnValue({
+      publicRef: 'app_zzzzzzzzzzzzzzzzzzzzzzzz',
+      candidateAccessToken: 'Z'.repeat(43),
+    });
+    renderPage();
+
+    const input = await screen.findByTestId('candidate-tracking-file');
+    const file = new File(['Başvuru referansı: app_zzzzzzzzzzzzzzzzzzzzzzzz'], 'basvuru.txt', {
+      type: 'text/plain',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('candidate-sign-in-ref')).toHaveValue(
+        'app_zzzzzzzzzzzzzzzzzzzzzzzz',
+      );
+    });
+    expect(screen.getByTestId('candidate-sign-in-token')).toHaveValue('Z'.repeat(43));
+    expect(screen.queryByTestId('candidate-sign-in-error')).not.toBeInTheDocument();
+  });
+
+  it('leaves the fields untouched when the file has no credential', async () => {
+    // Yarim doldurmak adayin neden giremedigini GIZLER; alanlar bos kalir ve
+    // hata net konusur.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    apiMocks.parseTrackingCredentialFile.mockReturnValue(null);
+    renderPage();
+
+    const input = await screen.findByTestId('candidate-tracking-file');
+    fireEvent.change(input, {
+      target: { files: [new File(['alakasiz metin'], 'not.txt', { type: 'text/plain' })] },
+    });
+
+    expect(await screen.findByTestId('candidate-sign-in-error')).toHaveTextContent(
+      /bulunamadı/i,
+    );
+    expect(screen.getByTestId('candidate-sign-in-ref')).toHaveValue('');
+    expect(screen.getByTestId('candidate-sign-in-token')).toHaveValue('');
   });
 
   it('never claims the code was sent, because the server hides whether the address exists',

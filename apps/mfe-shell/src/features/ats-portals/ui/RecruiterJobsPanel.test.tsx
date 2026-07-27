@@ -67,6 +67,60 @@ describe('RecruiterJobsPanel', () => {
     vi.clearAllMocks();
   });
 
+  it('opens on the published jobs, not on the closed ones', async () => {
+    // OLCULEN SORUN (#1043): 21 ilanin 3'u yayindaydi ama liste filtresizdi ve
+    // `updatedAt DESC` siraliydi; ilk acilista yalniz `Kapandi` kartlar
+    // goruluyordu. Sayac "3 Yayinda" diyor, liste gostermiyordu.
+    apiMocks.listRecruiterJobs.mockResolvedValue([
+      { ...JOB, jobId: `job_${'C'.repeat(24)}`, slug: 'kapali-ilan', title: 'Kapalı İlan',
+        status: 'CLOSED' as const, updatedAt: '2026-07-27T10:00:00Z' },
+      { ...JOB, jobId: `job_${'P'.repeat(24)}`, slug: 'yayinda-ilan', title: 'Yayında İlan',
+        status: 'PUBLISHED' as const, applyEnabled: true, updatedAt: '2026-07-20T10:00:00Z' },
+    ]);
+    render(<RecruiterJobsPanel canManage applications={[]} onDrillDown={() => {}} />);
+
+    expect(await screen.findByText('Yayında İlan')).toBeVisible();
+    expect(screen.queryByText('Kapalı İlan')).not.toBeInTheDocument();
+    // Her filtrenin sayisi listelenebilecek kart sayisiyla birebir.
+    expect(screen.getByTestId('recruiter-job-filter-PUBLISHED')).toHaveTextContent('Yayında · 1');
+    expect(screen.getByTestId('recruiter-job-filter-CLOSED')).toHaveTextContent('Kapandı · 1');
+    expect(screen.getByTestId('recruiter-job-filter-ALL')).toHaveTextContent('Tümü · 2');
+
+    fireEvent.click(screen.getByTestId('recruiter-job-filter-CLOSED'));
+    expect(await screen.findByText('Kapalı İlan')).toBeVisible();
+    expect(screen.queryByText('Yayında İlan')).not.toBeInTheDocument();
+  });
+
+  it('falls back to every job when nothing is published, instead of an empty page', async () => {
+    // 21 ilani olan tenant'i bos sayfayla karsilamak sorunu cozmek degil yerini
+    // degistirmek olurdu. Hangi kumede oldugu aktif filtre dugmesinde gorunur.
+    apiMocks.listRecruiterJobs.mockResolvedValue([
+      { ...JOB, jobId: `job_${'D'.repeat(24)}`, slug: 'taslak-ilan', title: 'Taslak İlan' },
+    ]);
+    render(<RecruiterJobsPanel canManage applications={[]} onDrillDown={() => {}} />);
+
+    expect(await screen.findByText('Taslak İlan')).toBeVisible();
+    expect(screen.getByTestId('recruiter-job-filter-ALL')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('says which set is empty instead of silently widening it', async () => {
+    apiMocks.listRecruiterJobs.mockResolvedValue([
+      { ...JOB, jobId: `job_${'E'.repeat(24)}`, slug: 'yayinda-tek', title: 'Yayında Tek',
+        status: 'PUBLISHED' as const, applyEnabled: true },
+    ]);
+    render(<RecruiterJobsPanel canManage applications={[]} onDrillDown={() => {}} />);
+    expect(await screen.findByText('Yayında Tek')).toBeVisible();
+
+    fireEvent.click(screen.getByTestId('recruiter-job-filter-CLOSED'));
+
+    const empty = await screen.findByTestId('recruiter-jobs-empty-filter');
+    expect(empty).toHaveTextContent(/Kapandı durumunda ilan yok/i);
+    // Kullanici yanlis kumeye baktigini FARK ETMELI: liste sessizce genislemez.
+    expect(screen.queryByText('Yayında Tek')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('recruiter-jobs-show-all'));
+    expect(await screen.findByText('Yayında Tek')).toBeVisible();
+  });
+
   it('shows the applicant breakdown on the job itself, and drills through', async () => {
     // SAHIP ILKESI: bir sayi gosteriyorsan o sayinin KIMLERDEN olustugu ayni
     // yerden gorulmeli. Onceden ilana bakan IK "kac kisi basvurmus" sorusunun

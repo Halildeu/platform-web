@@ -961,6 +961,31 @@ export const listCandidateLoginApplications = async (
   return payload.items ?? [];
 };
 
+/**
+ * #1044: `#1026`'nın ürettiği takip dosyasından giriş bilgilerini okur.
+ *
+ * Ayrıştırma **etikete değil değer şekline** bağlıdır ("Başvuru referansı:"
+ * gibi bir başlık aranmaz): dosya şablonu ileride değişirse yükleme çalışmaya
+ * devam eder. Metin boşluklara göre parçalanır ve her parça TAM olarak
+ * eşleştirilir — alt-dize araması 43 karakterlik anahtarın içinden yanlış bir
+ * pencere seçebilir ve aday neden giremediğini asla anlamazdı.
+ *
+ * Dosya okuma çağıranın işi (`FileReader`); bu fonksiyon saf metin alır ve
+ * hiçbir ağ isteği yapmaz — kimlik bilgisi ağa çıkmaz.
+ */
+export const parseTrackingCredentialFile = (
+  content: string,
+): { publicRef: string; candidateAccessToken: string } | null => {
+  const tokens = content.split(/\s+/u).filter((token) => token.length > 0);
+  const publicRef = tokens.find((token) => PUBLIC_REF_PATTERN.test(token));
+  // Referansın kendisi de 43 karakter olamaz (app_ + 24), ama yine de dışlıyoruz
+  // ki tek bir eşleşme iki alanı doldurmaya çalışmasın.
+  const candidateAccessToken = tokens.find(
+    (token) => token !== publicRef && CANDIDATE_ACCESS_PATTERN.test(token),
+  );
+  return publicRef && candidateAccessToken ? { publicRef, candidateAccessToken } : null;
+};
+
 export const readCandidateEmailSession = (): CandidateEmailSession | null => {
   if (typeof window === 'undefined') return null;
   try {

@@ -9,6 +9,7 @@ import {
   getCandidateOffers,
   getCandidateStatus,
   listCandidateLoginApplications,
+  parseTrackingCredentialFile,
   readCandidateEmailSession,
   readCandidateSession,
   requestCandidateLoginCode,
@@ -313,6 +314,35 @@ const CandidatePortalPage = () => {
     setLoginCode('');
     setLoginError('');
     setLoginNotice('');
+  };
+
+  /**
+   * #1044: takip dosyasını yükleyip iki alanı doldurur. Dosyayı biz üretiyoruz
+   * (#1026); adaydan 43 karakteri elle kopyalamasını istemenin gerekçesi yok —
+   * tek karakter kayması "beklenen biçimde değil" hatası veriyordu.
+   *
+   * Okuma tamamen tarayıcıda: içerik hiçbir uca gönderilmez.
+   */
+  const loadTrackingFile = async (file: File) => {
+    setSignInError('');
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      setSignInError('Dosya okunamadı. Dosyayı yeniden indirip deneyin.');
+      return;
+    }
+    const parsed = parseTrackingCredentialFile(text);
+    if (!parsed) {
+      // Alanlara DOKUNMUYORUZ: yarım doldurmak, adayın neden giremediğini gizler.
+      setSignInError(
+        'Bu dosyada başvuru referansı ve takip anahtarı bulunamadı. ' +
+          'Başvurunuz alındığında indirdiğiniz dosyayı seçin.',
+      );
+      return;
+    }
+    setSignInRef(parsed.publicRef);
+    setSignInToken(parsed.candidateAccessToken);
   };
 
   const signIn = () => {
@@ -702,6 +732,31 @@ const CandidatePortalPage = () => {
                   43 karakterlik anahtar. Yalnız bu sekmede tutulur; adres satırına veya kalıcı
                   tarayıcı depolamasına yazılmaz.
                 </p>
+              </div>
+              <div className="rounded-xl border border-border-subtle bg-surface-muted p-3">
+                <label
+                  htmlFor="candidate-tracking-file"
+                  className="block text-sm font-semibold text-text-primary"
+                >
+                  Takip dosyanız varsa yükleyin
+                </label>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Başvurunuz alındığında indirdiğiniz <strong>.txt</strong> dosyasını seçin; iki
+                  alan otomatik dolar. Dosya bilgisayarınızda kalır, hiçbir yere gönderilmez.
+                </p>
+                <input
+                  id="candidate-tracking-file"
+                  data-testid="candidate-tracking-file"
+                  type="file"
+                  accept=".txt,text/plain"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void loadTrackingFile(file);
+                    // Aynı dosyayı ikinci kez seçebilmek için input sıfırlanır.
+                    event.target.value = '';
+                  }}
+                  className="mt-2 block w-full text-sm"
+                />
               </div>
               {/* Metin rengi `text-text-primary`: ölçülen değerle
                   `text-state-danger-text` (#ef4444) bu zeminde (#fce8e8) 3.19
