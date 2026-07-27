@@ -164,7 +164,12 @@ const ReportingHub: React.FC = () => {
           item={{
             ...ci,
             badge: {
-              label: ci.type === 'dashboard' ? 'Dashboard' : 'Grid',
+              label:
+                ci.type === 'dashboard'
+                  ? 'Dashboard'
+                  : ci.type === 'mixed'
+                    ? 'Çalışma alanı'
+                    : 'Grid',
               tone: catalogTypeTone[ci.type] ?? 'default',
             },
           }}

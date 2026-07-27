@@ -28,6 +28,21 @@ export const catalogTypeTone: Record<string, string> = {
   mixed: 'warning',
 };
 
+const BUDGET_WORKSPACE_ITEM: CatalogItem = {
+  id: 'budget-control-workspace',
+  title: 'Bütçe ve Maliyet Kontrolü',
+  description: 'Plan, muhasebe fiilisi, taahhüt, kalan ve tahminleri tek kontrollü akışta yönetin.',
+  group: 'Finans',
+  icon: '💰',
+  tags: ['bütçe', 'maliyet', 'muhasebe', 'fatura'],
+  badge: { label: 'Çalışma alanı', tone: 'warning' },
+  route: 'budget-control',
+  type: 'mixed',
+  category: 'Finans',
+  source: 'static',
+  reportGroup: 'FINANCE_REPORTS',
+};
+
 /* ------------------------------------------------------------------ */
 /*  Mappers                                                            */
 /* ------------------------------------------------------------------ */
@@ -187,7 +202,13 @@ export function useCatalog() {
     // the original `staticItems` set. Returning the unfiltered set put
     // both the legacy static catalog item AND its dynamic replacement
     // side-by-side in the hub, defeating the migration goal.
-    return [...filteredStaticItems, ...dynamicItems, ...dashboardItems, ...extraItems];
+    return [
+      BUDGET_WORKSPACE_ITEM,
+      ...filteredStaticItems,
+      ...dynamicItems,
+      ...dashboardItems,
+      ...extraItems,
+    ];
   }, [staticItems, reportsQuery.data, dashboardsQuery.data]);
 
   const isLoading = reportsQuery.isLoading || dashboardsQuery.isLoading;

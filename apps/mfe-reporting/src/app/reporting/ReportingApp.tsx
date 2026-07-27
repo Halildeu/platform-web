@@ -9,6 +9,12 @@ import type { DashboardListItem } from '../../modules/dashboard';
 import type { ReportListItem } from '../../modules/dynamic-report';
 import type { ReportModule } from '../../modules/types';
 
+const BudgetWorkspace = React.lazy(() =>
+  import('../../modules/budget-workspace').then((module) => ({
+    default: module.BudgetWorkspace,
+  })),
+);
+
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type AnyModule = ReportModule<any, any>;
 
@@ -175,6 +181,21 @@ const ReportingApp: React.FC = () => {
         }
       >
         <ReportingHub />
+      </React.Suspense>
+    );
+  }
+
+  if (activeKey === 'budget-control') {
+    return (
+      <React.Suspense
+        fallback={
+          <div className="flex flex-col gap-4 p-6" aria-label="Bütçe ekranı yükleniyor">
+            <div className="h-10 w-64 animate-pulse rounded-lg bg-surface-muted" />
+            <div className="h-40 w-full animate-pulse rounded-xl bg-surface-muted" />
+          </div>
+        }
+      >
+        <BudgetWorkspace />
       </React.Suspense>
     );
   }
