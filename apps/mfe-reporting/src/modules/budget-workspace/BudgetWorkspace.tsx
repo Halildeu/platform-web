@@ -113,7 +113,7 @@ export const BudgetWorkspace: React.FC = () => {
             kadar kanıtlanabilen kaynak zincirini inceleyin.
           </p>
         </div>
-        <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+        <span className="rounded-full border border-state-success-text/30 bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
           MSSQL / ERP salt okunur
         </span>
       </header>
@@ -205,13 +205,13 @@ export const BudgetWorkspace: React.FC = () => {
       {error ? (
         <div
           role="alert"
-          className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+          className="rounded-lg border border-state-danger-text/30 bg-state-danger-bg p-4 text-sm text-state-danger-text"
         >
           <strong>Veri gösterilemedi.</strong> {error}
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-text-primary">
+      <section className="rounded-xl border border-state-warning-text/30 bg-state-warning-bg p-4 text-sm text-text-primary">
         <strong>Maliyet sınıflaması kontrollü ilerleyecek.</strong> Bu ilk görünüm seçilen
         projenin muhasebe gerçekleşenini ve kaynak belgesini gösterir. Hangi hesapların
         bütçe maliyeti sayılacağı kural setiyle belirlenecek; AI yalnız kod önerisi
