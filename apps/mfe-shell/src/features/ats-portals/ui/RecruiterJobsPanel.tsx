@@ -46,6 +46,27 @@ const STATUS_LABELS: Record<RecruiterJobStatus, string> = {
   ARCHIVED: 'Arşivlendi',
 };
 
+/**
+ * #1043: durum filtresi. Ölçülen sorun — 21 ilanın 3'ü yayındaydı ama liste
+ * filtresizdi ve `updatedAt DESC` sıralıydı, bu yüzden ilk açılışta yalnız
+ * `Kapandı` kartlar görünüyordu: sayaç "3 Yayında" diyor, liste göstermiyordu.
+ *
+ * `PAUSED`/`ARCHIVED` ayrı sekme almıyor — canlıda hiç kullanılmıyorlar ve her
+ * duruma sekme açmak ilkeyi (tek sayfa, eğitim gerektirmeden) bozar. İkisi
+ * `Tümü` içinde görünür kalır; kaybolmazlar.
+ */
+const JOB_FILTERS = [
+  { id: 'PUBLISHED', label: 'Yayında' },
+  { id: 'DRAFT', label: 'Taslak' },
+  { id: 'CLOSED', label: 'Kapandı' },
+  { id: 'ALL', label: 'Tümü' },
+] as const;
+
+type JobFilterId = (typeof JOB_FILTERS)[number]['id'];
+
+const matchesJobFilter = (job: RecruiterJobDto, filter: JobFilterId): boolean =>
+  filter === 'ALL' || job.status === filter;
+
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
@@ -131,6 +152,17 @@ const RecruiterJobsPanel = ({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
+  /**
+   * İlk açılış AKTİF ilanlar: İK'nın en çok baktığı küme sayfanın altında
+   * kalmasın. `null` = ilanlar henüz yüklenmedi, karar verilmedi.
+   *
+   * Yayında ilan YOKSA varsayılan `Tümü` olur: 21 ilanı olan bir tenant'ı boş
+   * bir sayfayla karşılamak, sorunu çözmek yerine yerini değiştirmek olurdu.
+   * Bu "sessiz" değil — hangi kümede olduğunu aktif filtre düğmesi gösterir.
+   */
+  const [jobFilter, setJobFilter] = useState<JobFilterId | null>(null);
+  const activeFilter: JobFilterId = jobFilter ?? 'PUBLISHED';
+  const visibleJobs = jobs.filter((job) => matchesJobFilter(job, activeFilter));
   const retryKeys = useRef(new Map<string, { key: string; payloadFingerprint: string }>());
   const previewDialogRef = useRef<HTMLDivElement>(null);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
@@ -179,6 +211,11 @@ const RecruiterJobsPanel = ({
     try {
       const loaded = await listRecruiterJobs();
       setJobs(loaded);
+      // İlk yüklemede karar: yayında ilan varsa oraya odaklan, yoksa Tümü.
+      // Kullanıcı bir filtre seçtiyse ona DOKUNMA (yenileme seçimi ezmez).
+      setJobFilter((current) =>
+        current ?? (loaded.some((job) => job.status === 'PUBLISHED') ? 'PUBLISHED' : 'ALL'),
+      );
       return loaded;
     } catch (loadError) {
       setJobs([]);
@@ -371,6 +408,32 @@ const RecruiterJobsPanel = ({
             <p className="mt-1 text-sm font-medium text-text-secondary">{label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Sayıya tıklamak listeyi o kümeye indirir: "3 Yayında" yazıp onu
+          göstermemek, kullanıcıyı kaydırmaya zorluyordu. */}
+      <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="İlan durumu filtresi">
+        {JOB_FILTERS.map((filter) => {
+          const count =
+            filter.id === 'ALL' ? jobs.length : jobs.filter((job) => job.status === filter.id).length;
+          const active = activeFilter === filter.id;
+          return (
+            <button
+              key={filter.id}
+              type="button"
+              data-testid={`recruiter-job-filter-${filter.id}`}
+              aria-pressed={active}
+              onClick={() => setJobFilter(filter.id)}
+              className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-bold ${
+                active
+                  ? 'border-action-primary bg-action-primary text-action-primary-text'
+                  : 'border-border-subtle bg-surface-default text-text-primary'
+              }`}
+            >
+              {filter.label} · {count}
+            </button>
+          );
+        })}
       </div>
 
       {error ? (
@@ -642,9 +705,32 @@ const RecruiterJobsPanel = ({
             </p>
           </div>
         ) : null}
-        {!loading && jobs.length > 0 ? (
+        {/* İlan VAR ama seçili kümede yok: sessizce tüm listeyi göstermek,
+            kullanıcının yanlış kümeye baktığını fark etmemesine yol açar. */}
+        {!loading && !error && jobs.length > 0 && visibleJobs.length === 0 ? (
+          <div
+            className="rounded-2xl border border-dashed border-border-strong bg-surface-muted p-6 text-center"
+            data-testid="recruiter-jobs-empty-filter"
+          >
+            <p className="font-bold text-text-primary">
+              {JOB_FILTERS.find((filter) => filter.id === activeFilter)?.label} durumunda ilan yok.
+            </p>
+            <p className="mt-2 text-sm text-text-secondary">
+              Bu tenant'ın {jobs.length} ilanı var; hepsini görmek için Tümü'ne geçin.
+            </p>
+            <button
+              type="button"
+              data-testid="recruiter-jobs-show-all"
+              onClick={() => setJobFilter('ALL')}
+              className="mt-3 min-h-11 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
+            >
+              Tümü · {jobs.length}
+            </button>
+          </div>
+        ) : null}
+        {!loading && visibleJobs.length > 0 ? (
           <ul className="grid gap-4 lg:grid-cols-2" aria-label="Tenant ilanları">
-            {jobs.map((job) => (
+            {visibleJobs.map((job) => (
               <li
                 key={job.jobId}
                 className="rounded-2xl border border-border-subtle bg-surface-default p-5 shadow-xs"

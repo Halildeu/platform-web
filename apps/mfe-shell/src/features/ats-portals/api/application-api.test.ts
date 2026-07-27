@@ -6,6 +6,7 @@ vi.mock('@mfe/shared-http', () => ({ api: httpMocks }));
 
 import {
   clearCandidateSession,
+  parseTrackingCredentialFile,
   confirmResumeImport,
   createApplicationIdempotencyKey,
   establishCandidateSession,
@@ -839,5 +840,52 @@ describe('application-api', () => {
         'Başvuru detayı yüklenemedi.',
       ),
     ).toBe('Bu işlem için yetkiniz yok. İK rolünüzün ATS başvuru görüntüleme iznini kontrol edin.');
+  });
+
+  describe('parseTrackingCredentialFile (#1044)', () => {
+    // Ürünün KENDİ ürettiği dosya (#1026) formatı.
+    const realFile = [
+      'Açık Kariyer — başvuru takip bilgileri',
+      '',
+      'İlan: Ürün Yöneticisi',
+      'Başvuru referansı: app_abcdefghijklmnopqrstuvwx',
+      `Takip anahtarı: ${'A'.repeat(43)}`,
+      'Gönderim: 2026-07-28T09:00:00Z',
+      '',
+      'Bu iki bilgiyi birlikte girerek başvurunuzun durumunu izleyebilirsiniz:',
+      'https://testai.acik.com/candidate',
+      '',
+    ].join('\n');
+
+    it('reads the credential out of the real file', () => {
+      expect(parseTrackingCredentialFile(realFile)).toEqual({
+        publicRef: 'app_abcdefghijklmnopqrstuvwx',
+        candidateAccessToken: 'A'.repeat(43),
+      });
+    });
+
+    it('binds to value shape, not to the Turkish labels', () => {
+      // Şablon ileride değişirse yükleme çalışmaya DEVAM etmeli; etikete
+      // bağlanmak dosyanın başlığını sözleşme yapardı.
+      const noLabels = `app_abcdefghijklmnopqrstuvwx\n${'B'.repeat(43)}\n`;
+      expect(parseTrackingCredentialFile(noLabels)).toEqual({
+        publicRef: 'app_abcdefghijklmnopqrstuvwx',
+        candidateAccessToken: 'B'.repeat(43),
+      });
+    });
+
+    it('refuses a 44-character run instead of slicing a 43-character window out of it', () => {
+      // Alt-dize araması bu girdiden geçerli görünen bir anahtar ÜRETİRDİ ve
+      // aday neden giremediğini asla anlamazdı.
+      const tooLong = `app_abcdefghijklmnopqrstuvwx ${'C'.repeat(44)}`;
+      expect(parseTrackingCredentialFile(tooLong)).toBeNull();
+    });
+
+    it('returns null when either half is missing', () => {
+      expect(parseTrackingCredentialFile('app_abcdefghijklmnopqrstuvwx')).toBeNull();
+      expect(parseTrackingCredentialFile('D'.repeat(43))).toBeNull();
+      expect(parseTrackingCredentialFile('alakasız metin')).toBeNull();
+      expect(parseTrackingCredentialFile('')).toBeNull();
+    });
   });
 });
