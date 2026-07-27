@@ -4,10 +4,17 @@ export const ATS_API_BASE = '/api/ats/v1';
 export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
 export const RESUME_IMPORT_NOTICE_VERSION = 'candidate-resume-import-v1' as const;
 const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
+/**
+ * #235 e-posta girişi oturumu. Başvuru-başına anahtardan AYRI tutulur: biri
+ * tek başvuruyu açar, diğeri o adresin tümünü. Aynı kutuya yazmak, e-posta
+ * girişinden çıkmanın elle girilen anahtarı da silmesine yol açardı.
+ */
+const EMAIL_LOGIN_SESSION_KEY = 'ats.candidate.emailLogin.v1';
 const PUBLIC_REF_PATTERN = /^app_[A-Za-z0-9_-]{24}$/u;
 const INTERVIEW_ID_PATTERN = /^int_[A-Za-z0-9_-]{24}$/u;
 const OFFER_ID_PATTERN = /^off_[A-Za-z0-9_-]{24}$/u;
 const CANDIDATE_ACCESS_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const LOGIN_CODE_PATTERN = /^[0-9]{6}$/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/u;
 const PUBLIC_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,7}$/u;
 const PUBLIC_JOB_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){0,15}$/u;
@@ -853,6 +860,129 @@ export const withdrawCandidateApplication = async ({
     },
   );
   return safeJson<CandidateStatusDto>(response);
+};
+
+/**
+ * #235: e-posta + tek kullanımlık kod girişi.
+ *
+ * Sunucu sözleşmesi gereği `request` adresin kayıtlı olup olmadığını ASLA
+ * ayırt ettirmez — kayıtlı olmayan adres de 202 alır. Bu yüzden ekran
+ * "gönderildi" değil "kod geldiyse girin" demek zorundadır; aksi halde arayüz
+ * sunucunun bilerek gizlediği bilgiyi sızdırırdı.
+ */
+export const requestCandidateLoginCode = async (email: string): Promise<void> => {
+  const trimmed = email.trim();
+  if (!trimmed || !trimmed.includes('@') || trimmed.length > 320) {
+    throw new Error('Geçerli bir e-posta adresi girin.');
+  }
+  const response = await fetch(`${ATS_API_BASE}/candidate/login/request`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ email: trimmed }),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { reason?: string } | null;
+    // 503 = gönderim yapılandırılmamış/çalışmıyor. Sunucu fail-closed davranıyor;
+    // arayüz de "gönderdim" demez.
+    throw new Error(
+      response.status === 503
+        ? 'Kod gönderimi şu anda kullanılamıyor. Takip anahtarınızla girebilirsiniz.'
+        : (payload?.reason ?? 'Kod isteği tamamlanamadı.'),
+    );
+  }
+};
+
+export type CandidateEmailSession = { email: string; sessionToken: string };
+
+/** Kodu doğrular ve o adrese ait kısa ömürlü oturumu bu sekmede saklar. */
+export const verifyCandidateLoginCode = async (
+  email: string,
+  code: string,
+): Promise<CandidateEmailSession> => {
+  const trimmedEmail = email.trim();
+  const trimmedCode = code.trim();
+  if (!LOGIN_CODE_PATTERN.test(trimmedCode)) {
+    // Ağ isteği ÜRETMEDEN reddet: 6 hane olmayan girdi zaten sunucuda düşer,
+    // ama denemeyi harcamak adayın bütçesini boşa yer.
+    throw new Error('Kod 6 haneli olmalı.');
+  }
+  const response = await fetch(`${ATS_API_BASE}/candidate/login/verify`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ email: trimmedEmail, code: trimmedCode }),
+  });
+  const payload = await safeJson<{ sessionToken: string }>(response);
+  if (!CANDIDATE_ACCESS_PATTERN.test(payload.sessionToken)) {
+    throw new Error('Sunucu beklenen oturum anahtarını döndürmedi.');
+  }
+  const session: CandidateEmailSession = {
+    email: trimmedEmail.toLowerCase(),
+    sessionToken: payload.sessionToken,
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(EMAIL_LOGIN_SESSION_KEY, JSON.stringify(session));
+    } catch {
+      // Depolama reddedilse de oturum bu sekmede geçerli; sessizce erişimsiz
+      // bırakmak boşluğun ta kendisiydi (aynı gerekçe anahtar yolunda da var).
+    }
+  }
+  return session;
+};
+
+export type CandidateLoginApplicationDto = {
+  publicRef: string;
+  jobSlug: string;
+  jobTitle: string;
+  status: ApplicationStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Oturumdaki adrese ait TÜM başvurular (yeniden eskiye). */
+export const listCandidateLoginApplications = async (
+  session: CandidateEmailSession,
+): Promise<CandidateLoginApplicationDto[]> => {
+  if (!CANDIDATE_ACCESS_PATTERN.test(session.sessionToken)) {
+    throw new Error('Giriş oturumu geçersiz.');
+  }
+  const response = await fetch(`${ATS_API_BASE}/candidate/login/applications`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      // Anahtar adres satırına GİRMEZ — yalnız başlıkta taşınır.
+      'X-ATS-Candidate-Session': session.sessionToken,
+    },
+    credentials: 'same-origin',
+  });
+  const payload = await safeJson<{ items?: CandidateLoginApplicationDto[] }>(response);
+  return payload.items ?? [];
+};
+
+export const readCandidateEmailSession = (): CandidateEmailSession | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(
+      window.sessionStorage.getItem(EMAIL_LOGIN_SESSION_KEY) ?? 'null',
+    ) as Partial<CandidateEmailSession> | null;
+    return parsed?.email && parsed.sessionToken &&
+      CANDIDATE_ACCESS_PATTERN.test(parsed.sessionToken)
+      ? { email: parsed.email, sessionToken: parsed.sessionToken }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+export const clearCandidateEmailSession = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(EMAIL_LOGIN_SESSION_KEY);
+  } catch {
+    // Erişilemezse silinecek bir şey de yok.
+  }
 };
 
 export const saveCandidateSession = (receipt: ApplicationReceiptDto): boolean => {

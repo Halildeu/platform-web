@@ -16,6 +16,11 @@ const apiMocks = vi.hoisted(() => ({
   respondCandidateOffer: vi.fn(),
   createApplicationIdempotencyKey: vi.fn(() => 'web-offer-response-1234'),
   withdrawCandidateApplication: vi.fn(),
+  readCandidateEmailSession: vi.fn(),
+  clearCandidateEmailSession: vi.fn(),
+  requestCandidateLoginCode: vi.fn(),
+  verifyCandidateLoginCode: vi.fn(),
+  listCandidateLoginApplications: vi.fn(),
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
   readCandidateSession: apiMocks.readCandidateSession,
@@ -27,6 +32,11 @@ vi.mock('../../features/ats-portals/api/application-api', () => ({
   respondCandidateOffer: apiMocks.respondCandidateOffer,
   createApplicationIdempotencyKey: apiMocks.createApplicationIdempotencyKey,
   withdrawCandidateApplication: apiMocks.withdrawCandidateApplication,
+  readCandidateEmailSession: apiMocks.readCandidateEmailSession,
+  clearCandidateEmailSession: apiMocks.clearCandidateEmailSession,
+  requestCandidateLoginCode: apiMocks.requestCandidateLoginCode,
+  verifyCandidateLoginCode: apiMocks.verifyCandidateLoginCode,
+  listCandidateLoginApplications: apiMocks.listCandidateLoginApplications,
 }));
 
 const SESSION = { publicRef: 'app_abcdefghijklmnopqrstuvwx', candidateAccessToken: 'A'.repeat(43) };
@@ -58,6 +68,9 @@ const renderPage = () =>
 describe('CandidatePortalPage', () => {
   beforeEach(() => {
     apiMocks.readCandidateSession.mockReturnValue(SESSION);
+    apiMocks.readCandidateEmailSession.mockReturnValue(null);
+    apiMocks.requestCandidateLoginCode.mockResolvedValue(undefined);
+    apiMocks.listCandidateLoginApplications.mockResolvedValue([]);
     apiMocks.getCandidateStatus.mockResolvedValue(STATUS);
     apiMocks.getCandidateInterviews.mockResolvedValue([]);
     apiMocks.getCandidateOffers.mockResolvedValue([]);
@@ -74,6 +87,93 @@ describe('CandidatePortalPage', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('never claims the code was sent, because the server hides whether the address exists',
+    async () => {
+      // Sunucu sözleşmesi: kayıtlı olmayan adres de 202 alır. Arayüz
+      // "gönderdik" derse sunucunun bilerek gizlediği bilgiyi sızdırır.
+      renderPage();
+      fireEvent.change(screen.getByTestId('candidate-login-email'), {
+        target: { value: 'aday@example.test' },
+      });
+      fireEvent.click(screen.getByTestId('candidate-login-submit'));
+
+      const notice = await screen.findByTestId('candidate-login-notice');
+      expect(notice).toHaveTextContent(/başvuru varsa/i);
+      expect(notice.textContent ?? '').not.toMatch(/gönderdik|adresinize gönderildi\b/i);
+      expect(apiMocks.requestCandidateLoginCode).toHaveBeenCalledWith('aday@example.test');
+    });
+
+  it('lists every application of the address after the code is verified', async () => {
+    apiMocks.verifyCandidateLoginCode.mockResolvedValue({
+      email: 'aday@example.test',
+      sessionToken: 'B'.repeat(43),
+    });
+    apiMocks.listCandidateLoginApplications.mockResolvedValue([
+      {
+        publicRef: 'app_bbbbbbbbbbbbbbbbbbbbbbbb',
+        jobSlug: 'urun-yoneticisi',
+        jobTitle: 'Ürün Yöneticisi',
+        status: 'UNDER_REVIEW',
+        createdAt: '2026-07-20T10:00:00Z',
+        updatedAt: '2026-07-20T11:00:00Z',
+      },
+      {
+        publicRef: 'app_cccccccccccccccccccccccc',
+        jobSlug: 'kidemli-frontend',
+        jobTitle: 'Kıdemli Frontend',
+        status: 'INTERVIEW_PENDING',
+        createdAt: '2026-07-18T10:00:00Z',
+        updatedAt: '2026-07-19T11:00:00Z',
+      },
+    ]);
+    renderPage();
+    fireEvent.change(screen.getByTestId('candidate-login-email'), {
+      target: { value: 'aday@example.test' },
+    });
+    fireEvent.click(screen.getByTestId('candidate-login-submit'));
+    fireEvent.change(await screen.findByTestId('candidate-login-code'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByTestId('candidate-login-submit'));
+
+    // #226'nın çözdüğü asıl şey: aynı adayın İKİ başvurusu TEK listede.
+    expect(await screen.findByTestId('candidate-my-applications')).toBeVisible();
+    expect(screen.getByTestId('candidate-my-application-app_bbbbbbbbbbbbbbbbbbbbbbbb')).toBeVisible();
+    expect(screen.getByTestId('candidate-my-application-app_cccccccccccccccccccccccc')).toBeVisible();
+    expect(screen.getByText(/aday@example\.test adresine ait 2 başvuru/i)).toBeVisible();
+    // Aday dili korunur: aşama İK jargonuyla ("Kısa liste") gösterilmez.
+    expect(screen.getByText('Mülakat planlaması')).toBeVisible();
+    expect(screen.queryByText(/Kısa liste/i)).not.toBeInTheDocument();
+  });
+
+  it('surfaces a fail-closed delivery outage instead of pretending success', async () => {
+    apiMocks.requestCandidateLoginCode.mockRejectedValue(
+      new Error('Kod gönderimi şu anda kullanılamıyor. Takip anahtarınızla girebilirsiniz.'),
+    );
+    renderPage();
+    fireEvent.change(screen.getByTestId('candidate-login-email'), {
+      target: { value: 'aday@example.test' },
+    });
+    fireEvent.click(screen.getByTestId('candidate-login-submit'));
+
+    expect(await screen.findByTestId('candidate-login-error')).toHaveTextContent(
+      /kullanılamıyor/i,
+    );
+    // Arıza varken kod ekranına GEÇMEZ: aday olmayan bir kodu beklerdi.
+    expect(screen.queryByTestId('candidate-login-code')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('candidate-login-notice')).not.toBeInTheDocument();
+  });
+
+  it('keeps the tracking-key path available next to email login', async () => {
+    // E-posta girişi anahtar yolunun YERİNE geçmez: anahtarı olan aday tek
+    // adımda girmeye devam eder, e-posta yolu kaybedeni kurtarır.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    renderPage();
+    expect(await screen.findByTestId('candidate-email-login')).toBeVisible();
+    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+    expect(screen.getByTestId('candidate-sign-in-token')).toBeVisible();
   });
 
   it('loads minimal persistent status with the session-only tracking credential', async () => {
