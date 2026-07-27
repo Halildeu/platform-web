@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import App from './App';
@@ -62,6 +62,12 @@ describe('Etik Speak manager MFE', () => {
       body: 'İç not',
       createdAt: '2026-07-18T12:02:00Z',
     });
+    vi.mocked(api.listCaseParticipants).mockResolvedValue([]);
+    vi.mocked(api.listAssignableStaff).mockResolvedValue([
+      { handle: 'v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1', displayName: 'Ayşe Yılmaz' },
+      { handle: 'v1.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB2', displayName: 'Ayşe Yılmaz' },
+    ]);
+    vi.mocked(api.addCaseParticipant).mockResolvedValue(undefined);
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
       value: vi.fn().mockReturnValue('blob:synthetic-derivative'),
@@ -117,14 +123,59 @@ describe('Etik Speak manager MFE', () => {
       ),
     );
   });
-  test('assignment and internal note are explicit staff operations', async () => {
+  test('assignment goes through a case-scoped handle — no free-text label, no subject', async () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
-    await userEvent.type(screen.getByLabelText('Yetkili ataması'), 'team:ethics');
-    await userEvent.click(screen.getByRole('button', { name: 'Atamayı kaydet' }));
+
+    // The retired free-text path must not come back: a label the authorization
+    // plane cannot check is how `assigned_to` accumulated junk like `jbjb`.
+    expect(screen.queryByLabelText('Yetkili ataması')).not.toBeInTheDocument();
+
+    // Two colleagues share a name; the handle-derived short code keeps them
+    // two visibly different choices.
+    const picker = await screen.findByLabelText('Kişi ata');
+    const options = within(picker).getAllByRole('option', { name: /Ayşe Yılmaz/ });
+    expect(options).toHaveLength(2);
+    expect(options[0].textContent).not.toEqual(options[1].textContent);
+
+    await userEvent.selectOptions(picker, 'v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1');
+    await userEvent.selectOptions(screen.getByLabelText('Rol'), 'handler');
+    await userEvent.click(screen.getByRole('button', { name: 'Davaya ekle' }));
     await waitFor(() =>
-      expect(api.updateCase).toHaveBeenCalledWith(summary.id, 0, { assignedTo: 'team:ethics' }),
+      expect(api.addCaseParticipant).toHaveBeenCalledWith(
+        summary.id,
+        'v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1',
+        'handler',
+      ),
     );
+  });
+  test('a participant whose name cannot be resolved right now stays visible', async () => {
+    vi.mocked(api.listCaseParticipants).mockResolvedValue([
+      {
+        handle: 'v1.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC3',
+        displayName: null,
+        role: 'handler',
+        addedAt: '2026-07-18T12:05:00Z',
+      },
+    ]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    expect(await screen.findByText('Ad şu anda çözülemiyor')).toBeInTheDocument();
+    const list = screen.getByRole('list', { name: 'Davadaki kişiler' });
+    expect(within(list).getByText(/Vaka sorumlusu/)).toBeInTheDocument();
+  });
+  test('when the staff directory is down, assignment is visibly closed — not an empty team', async () => {
+    vi.mocked(api.listAssignableStaff).mockRejectedValue(
+      Object.assign(new Error('unavailable'), { response: { status: 503 } }),
+    );
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    expect(await screen.findByTestId('staff-directory-down')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Kişi ata')).not.toBeInTheDocument();
+  });
+  test('internal note is an explicit staff operation', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
     await userEvent.type(screen.getByLabelText('Yetkili ekip notu'), 'Reporter görmemeli');
     await userEvent.click(screen.getByRole('button', { name: 'İç notu kaydet' }));
     await waitFor(() =>

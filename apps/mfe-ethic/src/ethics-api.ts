@@ -1,4 +1,5 @@
 import { api } from '@mfe/shared-http';
+import type { ParticipantRole } from './case-lifecycle';
 
 /**
  * ES-301A. `acknowledgedAt` is stamped by the service when the reporter is first
@@ -155,4 +156,74 @@ export async function addInternalNote(
     { headers: { 'Idempotency-Key': idempotencyKey } },
   );
   return response.data;
+}
+
+/**
+ * ES-203/C+D — participants are named by opaque, case-scoped handles.
+ *
+ * The handle is what goes back to the server; the display name is what the
+ * human reads. A subject UUID never appears on this surface: handles from two
+ * different cases for the same colleague are unrelated, so nothing durable in
+ * the browser can join them into "the same person".
+ *
+ * `displayName` on a participant is null when the directory cannot answer —
+ * the view degrades, it does not lie. On the assignable list the server fails
+ * closed instead (503): choosing between unnamed rows is exactly the
+ * wrong-person assignment this workflow exists to prevent.
+ */
+export interface AssignableStaffEntry {
+  handle: string;
+  displayName: string;
+}
+export interface CaseParticipant {
+  handle: string;
+  displayName: string | null;
+  role: string;
+  addedAt: string;
+}
+const validHandle = (value: unknown): value is string =>
+  typeof value === 'string' && /^v[0-9]+\.[A-Za-z0-9_-]+$/.test(value);
+
+export async function listAssignableStaff(caseId: string): Promise<AssignableStaffEntry[]> {
+  const response = await api.get<unknown>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/assignable-staff`,
+  );
+  const rows = response.data;
+  if (
+    !Array.isArray(rows) ||
+    !rows.every((row) => {
+      const entry = row as Partial<AssignableStaffEntry> | null;
+      return !!entry && validHandle(entry.handle) && typeof entry.displayName === 'string';
+    })
+  )
+    throw new Error('Atanabilir personel sözleşmesi geçersiz');
+  return rows as AssignableStaffEntry[];
+}
+export async function listCaseParticipants(caseId: string): Promise<CaseParticipant[]> {
+  const response = await api.get<unknown>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/participants`,
+  );
+  const rows = response.data;
+  if (
+    !Array.isArray(rows) ||
+    !rows.every((row) => {
+      const entry = row as Partial<CaseParticipant> | null;
+      return (
+        !!entry &&
+        validHandle(entry.handle) &&
+        (entry.displayName === null || typeof entry.displayName === 'string') &&
+        typeof entry.role === 'string' &&
+        typeof entry.addedAt === 'string'
+      );
+    })
+  )
+    throw new Error('Dava katılımcı listesi sözleşmesi geçersiz');
+  return rows as CaseParticipant[];
+}
+export async function addCaseParticipant(
+  caseId: string,
+  handle: string,
+  role: ParticipantRole,
+): Promise<void> {
+  await api.post(`/v1/ethics/cases/${encodeURIComponent(caseId)}/participants`, { handle, role });
 }

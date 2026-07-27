@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
 import {
+  addCaseParticipant,
   addInternalNote,
   downloadCaseEvidence,
   getCase,
+  listAssignableStaff,
   listCaseEvidence,
+  listCaseParticipants,
   listCases,
   replyToReporter,
   updateCase,
+  type AssignableStaffEntry,
+  type CaseParticipant,
   type EthicsCaseDetail,
   type EthicsCaseSummary,
   type StaffEvidence,
@@ -17,10 +22,13 @@ import {
   NEXT_STATUSES,
   OUTCOME_OPTIONS,
   outcomeLabel,
+  PARTICIPANT_ROLES,
+  participantRoleLabel,
   statusLabel,
   transitionLabel,
   type CaseOutcome,
   type CaseStatus,
+  type ParticipantRole,
 } from './case-lifecycle';
 import './ethics.css';
 
@@ -36,7 +44,15 @@ export default function App() {
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
   const [internalNote, setInternalNote] = useState('');
-  const [assignee, setAssignee] = useState('');
+  // ES-203/C — participants are handle-named; the free-text `assignedTo` label
+  // is gone from this surface so the case cannot grow a second, rival answer
+  // to "who is on this" (backend retirement is #945's remaining half).
+  const [participants, setParticipants] = useState<CaseParticipant[]>([]);
+  const [participantsError, setParticipantsError] = useState('');
+  const [staffOptions, setStaffOptions] = useState<AssignableStaffEntry[]>([]);
+  const [staffState, setStaffState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [pickerHandle, setPickerHandle] = useState('');
+  const [pickerRole, setPickerRole] = useState<ParticipantRole>('handler');
   const [busy, setBusy] = useState(false);
   // A closure needs a finding and a reopening needs a reason, so both are collected
   // before the request rather than sent empty and refused by the server.
@@ -56,7 +72,11 @@ export default function App() {
     setDownloadingEvidenceId('');
     setReply('');
     setInternalNote('');
-    setAssignee('');
+    setParticipants([]);
+    setParticipantsError('');
+    setStaffOptions([]);
+    setStaffState('loading');
+    setPickerHandle('');
     setBusy(false);
     operationKeys.current.clear();
   };
@@ -73,6 +93,42 @@ export default function App() {
     const key = crypto.randomUUID();
     operationKeys.current.set(identity, key);
     return { identity, key };
+  };
+
+  // ES-203/C — two loads with opposite failure shapes, matching the server's.
+  // The participants list degrades (people on a case must stay knowable even
+  // when a dependency is down); the assignable list fails closed (the server
+  // answers 503 rather than serving unnamed rows, and this surface says so
+  // instead of pretending the team is empty).
+  const loadParticipants = async (caseId: string, requestSequence: number) => {
+    try {
+      const next = await listCaseParticipants(caseId);
+      if (requestSequence !== selectionSequence.current) return;
+      setParticipants(next);
+      setParticipantsError('');
+    } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
+      if (isAuthorizationFailure(requestError)) {
+        showRequestError(requestError);
+        return;
+      }
+      setParticipants([]);
+      setParticipantsError('Katılımcı listesi şu anda doğrulanamıyor.');
+    }
+  };
+
+  const loadAssignableStaff = async (caseId: string, requestSequence: number) => {
+    setStaffState('loading');
+    try {
+      const next = await listAssignableStaff(caseId);
+      if (requestSequence !== selectionSequence.current) return;
+      setStaffOptions(next);
+      setStaffState('ready');
+    } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
+      setStaffOptions([]);
+      setStaffState('unavailable');
+    }
   };
 
   const loadCaseEvidence = async (caseId: string, requestSequence: number) => {
@@ -108,8 +164,9 @@ export default function App() {
         const fresh = await getCase(selectedId);
         if (requestSequence === selectionSequence.current) {
           setSelected(fresh);
-          setAssignee(fresh.assignedTo ?? '');
           await loadCaseEvidence(selectedId, requestSequence);
+          await loadParticipants(selectedId, requestSequence);
+          await loadAssignableStaff(selectedId, requestSequence);
         }
       }
     } catch (requestError) {
@@ -128,15 +185,20 @@ export default function App() {
     setError('');
     setReply('');
     setInternalNote('');
-    setAssignee('');
     setEvidence([]);
     setEvidenceError('');
+    setParticipants([]);
+    setParticipantsError('');
+    setStaffOptions([]);
+    setStaffState('loading');
+    setPickerHandle('');
     try {
       const next = await getCase(item.id);
       if (requestSequence === selectionSequence.current) {
         setSelected(next);
-        setAssignee(next.assignedTo ?? '');
         await loadCaseEvidence(item.id, requestSequence);
+        await loadParticipants(item.id, requestSequence);
+        await loadAssignableStaff(item.id, requestSequence);
       }
     } catch (requestError) {
       if (requestSequence === selectionSequence.current) showRequestError(requestError);
@@ -165,7 +227,6 @@ export default function App() {
         const [fresh, next] = await Promise.all([getCase(caseId), listCases()]);
         if (requestSequence !== selectionSequence.current) return;
         setSelected(fresh);
-        setAssignee(fresh.assignedTo ?? '');
         setItems(next);
         setPendingMove(null);
         setReopenReason('');
@@ -180,7 +241,6 @@ export default function App() {
         requestError,
         caseId,
         setSelected,
-        setAssignee,
         showRequestError,
         () => requestSequence === selectionSequence.current,
       );
@@ -189,36 +249,22 @@ export default function App() {
     }
   };
 
-  const saveAssignment = async () => {
-    if (!selected) return;
+  // ES-203/C — assignment goes through the handle the server minted for this
+  // case. There is no free-text path anymore: a label the authorization plane
+  // cannot check is how `assigned_to` accumulated values like `jbjb`.
+  const addParticipant = async () => {
+    if (!selected || !pickerHandle) return;
     const requestSequence = ++selectionSequence.current;
     const caseId = selected.id;
-    const version = selected.version;
     setBusy(true);
     setError('');
     try {
-      await updateCase(caseId, version, { assignedTo: assignee.trim() || null });
+      await addCaseParticipant(caseId, pickerHandle, pickerRole);
       if (requestSequence !== selectionSequence.current) return;
-      try {
-        const [fresh, next] = await Promise.all([getCase(caseId), listCases()]);
-        if (requestSequence !== selectionSequence.current) return;
-        setSelected(fresh);
-        setAssignee(fresh.assignedTo ?? '');
-        setItems(next);
-      } catch (refreshError) {
-        if (requestSequence === selectionSequence.current) {
-          showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
-        }
-      }
+      setPickerHandle('');
+      await loadParticipants(caseId, requestSequence);
     } catch (requestError) {
-      await handleWriteFailure(
-        requestError,
-        caseId,
-        setSelected,
-        setAssignee,
-        showRequestError,
-        () => requestSequence === selectionSequence.current,
-      );
+      if (requestSequence === selectionSequence.current) showRequestError(requestError);
     } finally {
       if (requestSequence === selectionSequence.current) setBusy(false);
     }
@@ -241,7 +287,6 @@ export default function App() {
         const fresh = await getCase(caseId);
         if (requestSequence !== selectionSequence.current) return;
         setSelected(fresh);
-        setAssignee(fresh.assignedTo ?? '');
       } catch (refreshError) {
         if (requestSequence === selectionSequence.current) {
           showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
@@ -271,7 +316,6 @@ export default function App() {
         const fresh = await getCase(caseId);
         if (requestSequence !== selectionSequence.current) return;
         setSelected(fresh);
-        setAssignee(fresh.assignedTo ?? '');
       } catch (refreshError) {
         if (requestSequence === selectionSequence.current) {
           showRequestErrorAfterWrite(refreshError, clearSensitiveState, setError);
@@ -462,25 +506,83 @@ export default function App() {
                 <section aria-labelledby="workflow-heading">
                   <h3 id="workflow-heading">İş akışı</h3>
                   <div className="ethics-assignment">
-                    <label htmlFor="case-assignee">Yetkili ataması</label>
-                    <div className="ethics-inline-form">
-                      <input
-                        id="case-assignee"
-                        value={assignee}
-                        onChange={(event) => setAssignee(event.target.value)}
-                        maxLength={200}
-                        placeholder="Kullanıcı veya ekip referansı"
-                      />
-                      <Button
-                        variant="secondary"
-                        disabled={busy}
-                        onClick={() => void saveAssignment()}
-                      >
-                        Atamayı kaydet
-                      </Button>
-                    </div>
+                    <h4 id="participants-heading">Davadaki kişiler</h4>
+                    {participantsError && (
+                      <p className="ethics-muted" role="status">
+                        {participantsError}
+                      </p>
+                    )}
+                    <ul className="ethics-participants" aria-labelledby="participants-heading">
+                      {participants.length === 0 && !participantsError && (
+                        <li className="is-empty">Bu davaya henüz kimse atanmadı.</li>
+                      )}
+                      {participants.map((participant) => (
+                        <li key={participant.handle}>
+                          <strong>
+                            {/* Null means the directory could not answer just now — the view
+                                degrades honestly instead of hiding the person. */}
+                            {participant.displayName ?? 'Ad şu anda çözülemiyor'}
+                          </strong>
+                          <span>
+                            {participantRoleLabel(participant.role)} ·{' '}
+                            {handleDiscriminator(participant.handle)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {staffState === 'unavailable' ? (
+                      /* The server refuses to serve unnamed rows (503) and this surface says
+                         so. Picking from an unnamed list is precisely the wrong-person
+                         assignment this workflow exists to prevent. */
+                      <p role="alert" data-testid="staff-directory-down">
+                        Ad dizini şu anda yanıt vermiyor; kişi atama geçici olarak kapalı.
+                        Katılımcı listesi ve mesajlaşma kullanılmaya devam edilebilir.
+                      </p>
+                    ) : (
+                      <div className="ethics-inline-form">
+                        <label htmlFor="participant-pick">Kişi ata</label>
+                        <select
+                          id="participant-pick"
+                          value={pickerHandle}
+                          disabled={busy || staffState === 'loading'}
+                          onChange={(event) => setPickerHandle(event.target.value)}
+                        >
+                          <option value="">
+                            {staffState === 'loading' ? 'Kişiler yükleniyor…' : 'Kişi seçin…'}
+                          </option>
+                          {staffOptions.map((entry) => (
+                            <option key={entry.handle} value={entry.handle}>
+                              {/* The short code disambiguates duplicate names: two colleagues
+                                  who share a name must stay two separate choices. */}
+                              {entry.displayName} · {handleDiscriminator(entry.handle)}
+                            </option>
+                          ))}
+                        </select>
+                        <label htmlFor="participant-role">Rol</label>
+                        <select
+                          id="participant-role"
+                          value={pickerRole}
+                          disabled={busy}
+                          onChange={(event) => setPickerRole(event.target.value as ParticipantRole)}
+                        >
+                          {PARTICIPANT_ROLES.map((role) => (
+                            <option key={role} value={role}>
+                              {participantRoleLabel(role)}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="secondary"
+                          disabled={busy || !pickerHandle}
+                          onClick={() => void addParticipant()}
+                        >
+                          Davaya ekle
+                        </Button>
+                      </div>
+                    )}
                     <p className="ethics-muted">
-                      Atama, ürün yetkisi ve çıkar çatışması kontrolünden sonra uygulanır.
+                      Atama, ürün yetkisi ve çıkar çatışması kontrolünden sonra uygulanır. Kişi
+                      kimliği tarayıcıya yalnız bu davaya özgü bir kodla gelir.
                     </p>
                   </div>
                   <div className="ethics-actions">
@@ -654,7 +756,6 @@ async function handleWriteFailure(
   error: unknown,
   caseId: string,
   setSelected: (value: EthicsCaseDetail | null) => void,
-  setAssignee: (value: string) => void,
   showError: (value: unknown) => void,
   isCurrent: () => boolean,
 ) {
@@ -664,7 +765,6 @@ async function handleWriteFailure(
       const fresh = await getCase(caseId);
       if (!isCurrent()) return;
       setSelected(fresh);
-      setAssignee(fresh.assignedTo ?? '');
     } catch (refreshError) {
       if (isCurrent()) showError(refreshError);
       return;
@@ -688,6 +788,12 @@ function showRequestErrorAfterWrite(
   );
 }
 const shortId = (id: string) => `#${id.slice(0, 8).toUpperCase()}`;
+
+// ES-203/C — the last characters of the case-scoped handle. Enough to tell two
+// same-named colleagues apart within this case; useless as a correlation key
+// across cases, because the handle itself changes per case.
+const handleDiscriminator = (handle: string) => handle.slice(-6);
+
 
 const evidenceStateLabel = (state: StaffEvidence['state']) =>
   ({
