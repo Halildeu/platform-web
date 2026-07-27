@@ -243,12 +243,21 @@ describe('Etik Speak manager MFE', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Sonuçlandır' }));
 
     await userEvent.selectOptions(screen.getByLabelText('Sonuç'), 'OUT_OF_SCOPE');
+
+    // ES-301B: the server refuses a closure that tells the reporter nothing, so the UI
+    // cannot offer one either — the button stays out of reach until there is a message.
+    expect(screen.getByRole('button', { name: 'Sonucu kaydet ve kapat' })).toBeDisabled();
+    await userEvent.type(
+      screen.getByLabelText('İhbarcıya iletilecek kapanış mesajı'),
+      'Bildiriminiz kapsam dışında kaldı.',
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Sonucu kaydet ve kapat' }));
 
     await waitFor(() =>
       expect(api.updateCase).toHaveBeenCalledWith(summary.id, 0, {
         status: 'CLOSED',
         outcome: 'OUT_OF_SCOPE',
+        closingMessage: 'Bildiriminiz kapsam dışında kaldı.',
       }),
     );
   });
