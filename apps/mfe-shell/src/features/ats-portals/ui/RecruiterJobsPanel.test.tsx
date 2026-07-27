@@ -67,6 +67,66 @@ describe('RecruiterJobsPanel', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the applicant breakdown on the job itself, and drills through', async () => {
+    // SAHIP ILKESI: bir sayi gosteriyorsan o sayinin KIMLERDEN olustugu ayni
+    // yerden gorulmeli. Onceden ilana bakan IK "kac kisi basvurmus" sorusunun
+    // cevabini bu panelde bulamiyordu; basvurular sekmesine gecip ilan filtresi
+    // uygulamasi gerekiyordu.
+    apiMocks.listRecruiterJobs.mockResolvedValue([JOB]);
+    const drilled: Array<{ jobSlug: string; stage: string }> = [];
+    render(
+      <RecruiterJobsPanel
+        canManage
+        applications={[
+          { jobSlug: JOB.slug, status: 'SUBMITTED' },
+          { jobSlug: JOB.slug, status: 'SUBMITTED' },
+          { jobSlug: JOB.slug, status: 'UNDER_REVIEW' },
+          { jobSlug: JOB.slug, status: 'REJECTED' },
+          // BASKA ilanin basvurusu bu ilanin sayisina KARISMAMALI.
+          { jobSlug: 'baska-ilan', status: 'SUBMITTED' },
+        ]}
+        onDrillDown={(jobSlug, stage) => drilled.push({ jobSlug, stage })}
+      />,
+    );
+
+    const breakdown = await screen.findByTestId(`recruiter-job-breakdown-${JOB.slug}`);
+    expect(breakdown).toBeVisible();
+    expect(screen.getByTestId(`recruiter-job-total-${JOB.slug}`)).toHaveTextContent('Tümü · 4');
+    expect(
+      screen.getByTestId(`recruiter-job-stage-${JOB.slug}-SUBMITTED`),
+    ).toHaveTextContent('Yeni · 2');
+    expect(
+      screen.getByTestId(`recruiter-job-stage-${JOB.slug}-UNDER_REVIEW`),
+    ).toHaveTextContent('İncelemede · 1');
+    expect(
+      screen.getByTestId(`recruiter-job-stage-${JOB.slug}-INTERVIEW_PENDING`),
+    ).toHaveTextContent('Mülakat · 0');
+    expect(
+      screen.getByTestId(`recruiter-job-stage-${JOB.slug}-REJECTED`),
+    ).toHaveTextContent('Reddedildi · 1');
+
+    // Sayiya tiklamak "hangileri"ne goturmeli: bu olmadan sayi cikmaz sokak.
+    fireEvent.click(screen.getByTestId(`recruiter-job-stage-${JOB.slug}-UNDER_REVIEW`));
+    fireEvent.click(screen.getByTestId(`recruiter-job-total-${JOB.slug}`));
+    expect(drilled).toEqual([
+      { jobSlug: JOB.slug, stage: 'UNDER_REVIEW' },
+      { jobSlug: JOB.slug, stage: 'ALL' },
+    ]);
+  });
+
+  it('shows zeros rather than hiding the breakdown when a job has no applicants', async () => {
+    // Bosluk da bilgidir: satiri gizlemek IK'ya "veri yok mu, basvuru yok mu?"
+    // sorusunu sordurur.
+    apiMocks.listRecruiterJobs.mockResolvedValue([JOB]);
+    render(<RecruiterJobsPanel canManage applications={[]} onDrillDown={() => {}} />);
+
+    expect(await screen.findByTestId(`recruiter-job-breakdown-${JOB.slug}`)).toBeVisible();
+    expect(screen.getByTestId(`recruiter-job-total-${JOB.slug}`)).toHaveTextContent('Tümü · 0');
+    expect(
+      screen.getByTestId(`recruiter-job-stage-${JOB.slug}-SUBMITTED`),
+    ).toHaveTextContent('Yeni · 0');
+  });
+
   it('creates a persistent draft from the recruiter-facing form', async () => {
     render(<RecruiterJobsPanel canManage />);
     expect(await screen.findByText('Henüz ilanınız yok.')).toBeVisible();

@@ -231,7 +231,19 @@ const RecruiterWorkspacePage = () => {
 
       {workspaceTab === 'jobs' ? (
         <section role="tabpanel" aria-label="İlan yönetimi" className="space-y-4">
-          <RecruiterJobsPanel canManage={canManageJobs} />
+          {/* #227: sayı gösterip "hangileri" için kullanıcıyı yalnız bırakmamak.
+              Sayıya tıklamak başvuru görünümünü o ilan + aşama filtresiyle açar;
+              yeni route yok, veri zaten burada. */}
+          <RecruiterJobsPanel
+            canManage={canManageJobs}
+            applications={applications}
+            onDrillDown={(jobSlug, stage) => {
+              setActiveJobSlug(jobSlug);
+              setActiveStage(stage as StageFilter);
+              setSelectedRef(null);
+              setWorkspaceTab('applications');
+            }}
+          />
           <div className="flex justify-end">
             <Link
               to={INTERVIEW_EVIDENCE_ENTRY.route}

@@ -85,7 +85,40 @@ const OPTIONAL_FIELD_OPTIONS: Array<{ key: ApplicationFieldKey; label: string }>
   { key: 'note', label: 'Başvuru motivasyonu notu' },
 ];
 
-const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
+/**
+ * #227 Dilim A: ilan satırında başvuru kırılımı.
+ *
+ * <p>Sahip ilkesi: bir iş tek sayfada, eğitim gerektirmeden yapılabilmeli ve bir
+ * sayı gösteriliyorsa o sayının KİMLERDEN oluştuğu aynı yerden görülebilmeli.
+ * Önceden ilana bakan İK "kaç kişi başvurmuş" sorusunun cevabını bu panelde
+ * bulamıyordu; başvurular sekmesine geçip ilan filtresi uygulaması gerekiyordu.
+ *
+ * <p>Sayılar `applications` listesinden türetilir — yeni istek YOK, veri zaten
+ * ekranda. Sayıya tıklamak başvuru görünümünü o ilan + o aşama filtresiyle açar,
+ * yani sayı ile "hangileri" arasında gezinme kalmaz.
+ */
+type JobBreakdownStage = { id: string; label: string };
+
+/** Görünen kırılım: yeni gelen, süreçte olan, kapanan. Tam liste başvuru
+ *  görünümünde; burada İK'nın ilana bakarken sorduğu üç soru var. */
+const JOB_BREAKDOWN_STAGES: readonly JobBreakdownStage[] = [
+  { id: 'SUBMITTED', label: 'Yeni' },
+  { id: 'UNDER_REVIEW', label: 'İncelemede' },
+  { id: 'INTERVIEW_PENDING', label: 'Mülakat' },
+  { id: 'REJECTED', label: 'Reddedildi' },
+];
+
+const RecruiterJobsPanel = ({
+  canManage,
+  applications = [],
+  onDrillDown,
+}: {
+  canManage: boolean;
+  /** Sayaçlar bundan türetilir; boşsa kırılım 0 gösterir (gizlenmez). */
+  applications?: ReadonlyArray<{ jobSlug: string; status: string }>;
+  /** Sayıya tıklandığında başvuru görünümünü bu ilan + aşama ile açar. */
+  onDrillDown?: (jobSlug: string, stage: string) => void;
+}) => {
   const [jobs, setJobs] = useState<RecruiterJobDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -644,6 +677,40 @@ const RecruiterJobsPanel = ({ canManage }: { canManage: boolean }) => {
                 <p className="mt-3 text-xs text-text-subtle">
                   Son değişiklik: {formatDate(job.updatedAt)}
                 </p>
+                {/* #227: sayı VE "hangileri". Başvurusu olmayan ilan 0 gösterir,
+                    satır gizlenmez — boşluk da bilgidir. */}
+                <div
+                  className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-4"
+                  data-testid={`recruiter-job-breakdown-${job.slug}`}
+                >
+                  <span className="text-xs font-semibold text-text-secondary">Başvurular</span>
+                  <button
+                    type="button"
+                    onClick={() => onDrillDown?.(job.slug, 'ALL')}
+                    disabled={!onDrillDown}
+                    data-testid={`recruiter-job-total-${job.slug}`}
+                    className="min-h-8 rounded-lg border border-border-strong bg-surface-default px-2.5 py-1 text-xs font-bold text-text-primary disabled:opacity-60"
+                  >
+                    Tümü · {applications.filter((a) => a.jobSlug === job.slug).length}
+                  </button>
+                  {JOB_BREAKDOWN_STAGES.map((stage) => (
+                    <button
+                      key={stage.id}
+                      type="button"
+                      onClick={() => onDrillDown?.(job.slug, stage.id)}
+                      disabled={!onDrillDown}
+                      data-testid={`recruiter-job-stage-${job.slug}-${stage.id}`}
+                      className="min-h-8 rounded-lg border border-border-subtle bg-surface-muted px-2.5 py-1 text-xs font-semibold text-text-primary disabled:opacity-60"
+                    >
+                      {stage.label} ·{' '}
+                      {
+                        applications.filter(
+                          (a) => a.jobSlug === job.slug && a.status === stage.id,
+                        ).length
+                      }
+                    </button>
+                  ))}
+                </div>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <ActionButton
                     label="Önizle"
