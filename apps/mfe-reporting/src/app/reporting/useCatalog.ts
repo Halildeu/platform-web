@@ -30,12 +30,12 @@ export const catalogTypeTone: Record<string, string> = {
 
 const BUDGET_WORKSPACE_ITEM: CatalogItem = {
   id: 'budget-control-workspace',
-  title: 'Bütçe ve Maliyet Kontrolü',
-  description: 'Plan, muhasebe fiilisi, taahhüt, kalan ve tahminleri tek kontrollü akışta yönetin.',
+  title: 'Proje Bütçe ve Muhasebe Gerçekleşeni',
+  description: 'Şirket ve proje adıyla canlı muhasebe gerçekleşenini görün; planlama ikinci kontrollü adımdır.',
   group: 'Finans',
   icon: '💰',
   tags: ['bütçe', 'maliyet', 'muhasebe', 'fatura'],
-  badge: { label: 'Çalışma alanı', tone: 'warning' },
+  badge: { label: 'Gerçekleşen', tone: 'warning' },
   route: 'budget-control',
   type: 'mixed',
   category: 'Finans',

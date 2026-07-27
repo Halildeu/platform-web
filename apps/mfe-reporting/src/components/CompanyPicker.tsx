@@ -33,7 +33,7 @@ const readSelected = (): string => {
   return window.localStorage.getItem(STORAGE_KEY) ?? '';
 };
 
-const writeSelected = (value: string): void => {
+export const selectReportingCompany = (value: string): void => {
   try {
     if (value) {
       window.localStorage.setItem(STORAGE_KEY, value);
@@ -106,7 +106,7 @@ export const CompanyPicker: React.FC<CompanyPickerProps> = ({ required, compact 
   const onChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const next = event.target.value;
     setSelected(next);
-    writeSelected(next);
+    selectReportingCompany(next);
     // Force the dynamic-report module to refetch with the new header.
     // V2 idea: switch to event-bus + AG Grid api.refreshServerSide().
     if (next) {

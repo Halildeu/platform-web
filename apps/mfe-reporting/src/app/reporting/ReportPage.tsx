@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { getSharedReport, getSharedReportExportMode } from '@platform/capabilities';
 import {
+  DetailDrawer,
   PageLayout,
   createPageLayoutBreadcrumbItems,
   createPageLayoutPreset,
@@ -428,6 +429,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
    * user-facing P0.
    */
   const [gridApi, setGridApi] = React.useState<GridApi<TRow> | null>(null);
+  const [detailRow, setDetailRow] = React.useState<Record<string, unknown> | null>(null);
   const handleGridReady = React.useCallback((event: GridReadyEvent<TRow>) => {
     setGridApi(event.api);
   }, []);
@@ -1216,6 +1218,15 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   });
 
   const initialVariantId = searchParams.get('variant') ?? undefined;
+  const sourceTraceReport =
+    module.id === 'reports.dynamic.fin-proje-muhasebe-gercekleseni';
+  const detailContent = React.useMemo(() => {
+    if (!detailRow) return null;
+    if (module.getColumnMeta) {
+      return buildDetailRenderer(module.getColumnMeta())(detailRow, t);
+    }
+    return module.renderDetail?.(detailRow as TRow, t) ?? null;
+  }, [detailRow, module, t]);
 
   /*
    * PR-0.5e (Codex thread 019e2de0) — local working-layout draft
@@ -1354,6 +1365,13 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       >
         {module.renderDashboard ? module.renderDashboard(t, filters) : null}
 
+        {sourceTraceReport ? (
+          <div className="rounded-xl border border-selection-outline/40 bg-selection-surface px-4 py-3 text-sm text-text-primary">
+            Bir muhasebe satırına çift tıklayarak fiş, kaynak belge, varsa sipariş,
+            fatura veya virman zincirini ayrıntılı açabilirsiniz.
+          </div>
+        ) : null}
+
         <EntityGridTemplate<TRow>
           /*
            * PR-0.2 hardening: include module.id + capabilityKey in the
@@ -1373,6 +1391,11 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           defaultColDef={groupingDefaultColDef}
           gridOptions={gridOptions}
           onGridReady={handleGridReady}
+          onRowDoubleClick={
+            sourceTraceReport
+              ? (row) => setDetailRow(row as Record<string, unknown>)
+              : undefined
+          }
           dataSourceMode={dataSourceMode}
           sanitizeVariantColumnState={sanitizeVariantColumnState}
           sanitizeVariantPivotMode={sanitizeVariantPivotMode}
@@ -1413,17 +1436,6 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             t,
             requiredFields: module.requiredFilterFields,
           })}
-          detailDrawer={
-            module.getColumnMeta
-              ? (row) =>
-                  buildDetailRenderer(module.getColumnMeta!())(
-                    row as Record<string, unknown> | null,
-                    t,
-                  )
-              : module.renderDetail
-                ? (row) => module.renderDetail?.(row, t)
-                : undefined
-          }
           localeText={localeText}
           quickFilterLabel={t(module.titleKey)}
           quickFilterPlaceholder={
@@ -1434,6 +1446,22 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           onServerExport={exportEnabled ? handleServerExport : undefined}
           supportsViewExport={supportsViewExport}
         />
+        {sourceTraceReport ? (
+          <DetailDrawer
+            open={detailRow !== null}
+            onClose={() => setDetailRow(null)}
+            title="Kaynak belge zinciri"
+            subtitle={
+              detailRow?.SOURCE_DOCUMENT_NO
+                ? `Belge: ${String(detailRow.SOURCE_DOCUMENT_NO)}`
+                : undefined
+            }
+            size="xl"
+            closeOnBackdrop
+          >
+            {detailContent}
+          </DetailDrawer>
+        ) : null}
       </PageLayout>
     </div>
   );
