@@ -362,10 +362,33 @@ export type RecruiterApplicationEvaluationRequest = {
   predecessorEvaluationId?: string;
 };
 
+/**
+ * #226: aynı adayın DİĞER başvurusu. Ölçüldü — aynı e-postayla aynı ilana
+ * sınırsız başvurulabiliyor ve İK bunu hiçbir yerde göremiyordu.
+ */
+export type RecruiterCandidateOtherApplicationDto = {
+  publicRef: string;
+  jobSlug: string;
+  jobTitle: string;
+  status: ApplicationStatus;
+  submittedAt: string;
+  /** Aynı ilana ikinci başvuru mu — İK'nın asıl sorduğu bu. */
+  sameJob: boolean;
+};
+
 export type RecruiterApplicationDetailDto = {
   application: RecruiterApplicationDto;
   history: RecruiterApplicationHistoryEventDto[];
   evaluations: RecruiterApplicationEvaluationDto[];
+  /**
+   * #226 aynı adayın diğer başvuruları.
+   *
+   * OPSİYONEL olmak zorunda: bu alanı `ats#229` ekledi ve ondan ÖNCEKİ backend
+   * sürümü yanıtta hiç göndermiyor. Zorunlu okuma, frontend backend
+   * promosyonundan önce inerse İK panelini CANLIDA çökertirdi — `#1019`'da
+   * tam bu olacaktı.
+   */
+  otherApplications?: RecruiterCandidateOtherApplicationDto[];
 };
 
 export type RecruiterApplicationPageDto = {

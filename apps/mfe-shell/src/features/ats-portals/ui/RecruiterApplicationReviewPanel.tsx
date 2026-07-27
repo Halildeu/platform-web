@@ -286,6 +286,10 @@ const RecruiterApplicationReviewPanel = ({
      */
     const experienceEntries = application.experienceEntries ?? [];
     const educationEntries = application.educationEntries ?? [];
+    // #226: aynı adayın diğer başvuruları. Aynı yokluk toleransı — bu alanı
+    // `ats#229` ekledi ve ondan önceki backend hiç göndermiyor.
+    const otherApplications = detail.otherApplications ?? [];
+    const sameJobAgain = otherApplications.filter((o) => o.sameJob);
     return (
       <div className="mt-5 space-y-5">
         <section className="rounded-2xl border border-border-subtle bg-surface-muted p-4">
@@ -298,6 +302,50 @@ const RecruiterApplicationReviewPanel = ({
             {STATUS_LABELS[application.status]}
           </p>
         </section>
+        {/* #226: "adaya tıklayınca her şeyi gör" — aynı adayın diğer başvuruları
+            AYNI panelde. Sayı gösterip nereye bakacağını söylememek, İK'yı
+            başvuru listesinde arama yapmaya zorlardı.
+            Boşsa bölüm HİÇ çizilmez: "diğer başvurusu yok" cümlesi her adayda
+            tekrarlanan gürültüdür; burada yokluk zaten varsayılan. */}
+        {otherApplications.length > 0 ? (
+          <section
+            className="rounded-2xl border border-state-warning-border bg-state-warning-bg p-4"
+            data-testid="recruiter-other-applications"
+            aria-labelledby="recruiter-other-applications-heading"
+          >
+            <h4
+              id="recruiter-other-applications-heading"
+              className="text-sm font-bold text-text-primary"
+            >
+              Bu adayın {otherApplications.length} başvurusu daha var
+              {sameJobAgain.length > 0
+                ? ` — ${sameJobAgain.length} tanesi bu ilana`
+                : ''}
+            </h4>
+            <ol className="mt-3 space-y-2">
+              {otherApplications.map((other) => (
+                <li
+                  key={other.publicRef}
+                  data-testid={`recruiter-other-application-${other.publicRef}`}
+                  className="rounded-lg border border-border-subtle bg-surface-default p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-text-primary">
+                      {other.jobTitle}
+                      {other.sameJob ? ' · aynı ilan' : ''}
+                    </span>
+                    <span className="rounded-lg bg-surface-muted px-2 py-1 text-xs font-bold">
+                      {STATUS_LABELS[other.status] ?? other.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 break-all font-mono text-xs text-text-secondary">
+                    {other.publicRef}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
 
         <dl className="space-y-3 text-sm">
           <div>

@@ -400,6 +400,60 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText('ISO 45001')).toBeVisible();
   });
 
+  it('shows the same candidate other applications in the same panel', async () => {
+    // #226: canli olculdu — ayni e-postayla ayni ilana SINIRSIZ basvurulabiliyor
+    // ve IK bunu hicbir yerde goremiyordu. Sahip ilkesi: adaya tiklayinca ONA
+    // AIT her sey ayni yerde gorunmeli; sayi gosterip nereye bakacagini
+    // soylememek IK'yi listede aramaya zorlar.
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: APPLICATION,
+      history: [],
+      evaluations: [],
+      otherApplications: [
+        {
+          publicRef: 'app_zyxwvutsrqponmlkjihgfe',
+          jobSlug: APPLICATION.jobSlug,
+          jobTitle: APPLICATION.jobTitle,
+          status: 'REJECTED',
+          submittedAt: '2026-07-10T09:00:00Z',
+          sameJob: true,
+        },
+        {
+          publicRef: 'app_mnopqrstuvwxyzabcdefgh',
+          jobSlug: 'baska-ilan',
+          jobTitle: 'Başka İlan',
+          status: 'SUBMITTED',
+          submittedAt: '2026-07-12T09:00:00Z',
+          sameJob: false,
+        },
+      ],
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+
+    const section = await screen.findByTestId('recruiter-other-applications');
+    expect(section).toBeVisible();
+    // Sayi VE "hangileri" birlikte: kac tane, kaci ayni ilana, ve hangileri.
+    expect(section).toHaveTextContent('Bu adayın 2 başvurusu daha var');
+    expect(section).toHaveTextContent('1 tanesi bu ilana');
+    expect(
+      screen.getByTestId('recruiter-other-application-app_zyxwvutsrqponmlkjihgfe'),
+    ).toHaveTextContent('aynı ilan');
+    expect(
+      screen.getByTestId('recruiter-other-application-app_mnopqrstuvwxyzabcdefgh'),
+    ).toHaveTextContent('Başka İlan');
+  });
+
+  it('hides the other-applications block for a candidate with a single application', async () => {
+    // Bos liste icin "diger basvurusu yok" cumlesi HER adayda tekrarlanan
+    // gurultudur; yokluk zaten varsayilan.
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByTestId('recruiter-review-panel');
+    expect(screen.queryByTestId('recruiter-other-applications')).not.toBeInTheDocument();
+  });
+
   it('still renders when the backend predates the entry fields entirely', async () => {
     // ats#220 bu alanları EKLEDİ; ondan önceki backend sürümü yanıtta hiç
     // göndermiyor. `experienceEntries.length` doğrudan okunduğunda panelin tamamı
