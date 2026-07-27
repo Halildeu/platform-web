@@ -241,7 +241,7 @@ test.describe('Full ATS authorized product access', () => {
     await expect(
       candidatePortal.getByRole('heading', { name: 'Başvurunuzun durumunu izleyin' }),
     ).toBeVisible();
-    // Sekme oturumu boşken ekran ÇIKMAZ olmamalı: aday makbuzundaki referans +
+    // Sekme oturumu boşken ekran ÇIKMAZ olmamalı: aday başvuru onayında verilen referans +
     // takip anahtarı ile girebilir. Önceden yalnız "bu sekmede başvuru yok"
     // yazıp adayı yeni başvuru göndermeye yönlendiriyordu — başvuru sekme
     // kapanınca kalıcı olarak erişilemez hâle geliyordu.
