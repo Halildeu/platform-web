@@ -83,6 +83,18 @@ type MergeConflict = {
  */
 type EntryRow<T> = { rowId: string; value: T };
 
+/**
+ * #239: alan tipine uygun girdi. `kind` yoksa düz metin (mevcut davranış).
+ *
+ * `month`/`year` seçimi VERİYİ DÜŞÜRMEDEN uygulanır: CV ayrıştırıcısı serbest
+ * metin üretebiliyor ("Eyl 2022"). Böyle bir değeri `type="month"` girdisine
+ * koymak tarayıcıda BOŞ gösterir — aday, ayrıştırıcının bulduğu bilgiyi
+ * kaybettiğini fark etmez. O yüzden tip yalnız değer BOŞ ya da zaten beklenen
+ * biçimdeyken uygulanır; eski serbest metin metin girdisinde kalır ve aday
+ * isterse temizleyip seçiciyi kullanır.
+ */
+type EntryFieldKind = 'text' | 'month' | 'year';
+
 type EntryFieldSpec<T> = {
   key: keyof T & string;
   label: string;
@@ -90,6 +102,52 @@ type EntryFieldSpec<T> = {
   maxLength: number;
   span?: 'full' | 'half';
   rows?: number;
+  kind?: EntryFieldKind;
+};
+
+const MONTH_VALUE = /^\d{4}-(0[1-9]|1[0-2])$/u;
+const YEAR_VALUE = /^\d{4}$/u;
+/** Diploma/işe giriş yılı için makul alt sınır; altı veri hatasıdır. */
+const MIN_ENTRY_YEAR = 1950;
+/**
+ * Üst sınır render anında hesaplanır: sabit yazmak yıl dönümünde sessizce
+ * eskir ve 1 Ocak'ta geçerli bir yılı reddetmeye başlardı.
+ */
+const CURRENT_YEAR = new Date().getFullYear();
+
+/**
+ * Değer beklenen biçimdeyse (ya da boşsa) yapısal girdi; değilse metin.
+ * Kararı DEĞER verir, spec değil — miras veri hiçbir zaman kaybolmaz.
+ */
+/**
+ * Bitiş < başlangıç olan kayıt. YALNIZ iki taraf da yapısal biçimdeyse
+ * denetlenir: miras serbest metni ("Eyl 2022") kıyaslamaya zorlamak yanlış
+ * pozitif üretir ve adayı düzeltemeyeceği bir hataya kilitler. Boş bitiş
+ * "devam ediyor" demek, hata değil.
+ */
+/**
+ * Dört haneli filtre `0001`'i de geçirir. Makul aralık dışındaki yıl bir
+ * beyan değil veri hatasıdır; İK onu düzeltemez, aday düzeltebilir.
+ */
+const hasImplausibleYear = (...years: Array<string | undefined>): boolean =>
+  years.some((raw) => {
+    const value = (raw ?? '').trim();
+    if (!YEAR_VALUE.test(value)) return false;
+    const year = Number(value);
+    return year < MIN_ENTRY_YEAR || year > CURRENT_YEAR;
+  });
+
+const hasBackwardRange = (start: string, end: string, shape: RegExp): boolean => {
+  const a = start.trim();
+  const b = end.trim();
+  if (!a || !b || !shape.test(a) || !shape.test(b)) return false;
+  return b < a; // YYYY-MM ve YYYY sözlüksel sırada kronolojiktir
+};
+
+const resolveEntryInputKind = (kind: EntryFieldKind | undefined, value: string): EntryFieldKind => {
+  if (kind === 'month') return value === '' || MONTH_VALUE.test(value) ? 'month' : 'text';
+  if (kind === 'year') return value === '' || YEAR_VALUE.test(value) ? 'year' : 'text';
+  return 'text';
 };
 
 export const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperienceEntry>> = [
@@ -113,13 +171,17 @@ export const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperien
     placeholder: 'Eyl 2022',
     maxLength: APPLICATION_ENTRY_LIMITS.dateText,
     span: 'half',
+    kind: 'month',
   },
   {
     key: 'endDate',
-    label: 'Bitiş',
-    placeholder: 'Devam ediyor',
+    // Boş bırakmak "devam ediyor" demektir; ayrı bir kutu eklemek yerine
+    // etiketin kendisi söylüyor — alan zaten isteğe bağlı.
+    label: 'Bitiş (boşsa devam ediyor)',
+    placeholder: 'Eyl 2024',
     maxLength: APPLICATION_ENTRY_LIMITS.dateText,
     span: 'half',
+    kind: 'month',
   },
   {
     key: 'description',
@@ -166,13 +228,15 @@ export const EDUCATION_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationEducation
     placeholder: '2016',
     maxLength: APPLICATION_ENTRY_LIMITS.dateText,
     span: 'half',
+    kind: 'year',
   },
   {
     key: 'endYear',
-    label: 'Bitiş yılı',
+    label: 'Bitiş yılı (boşsa devam ediyor)',
     placeholder: '2020',
     maxLength: APPLICATION_ENTRY_LIMITS.dateText,
     span: 'half',
+    kind: 'year',
   },
   {
     key: 'description',
@@ -1115,6 +1179,24 @@ const CandidateApplicationPage = () => {
       setFormError('Önizlemeye geçmek için yıldızlı alanları doldurun.');
       return;
     }
+    // #239: bitiş < başlangıç sessizce gönderilmemeli — İK bunu veri hatası
+    // olarak değil adayın beyanı olarak okur.
+    const backwardExperience = experienceRows.some((row) =>
+      hasBackwardRange(row.value.startDate ?? '', row.value.endDate ?? '', MONTH_VALUE),
+    );
+    const backwardEducation = educationRows.some((row) =>
+      hasBackwardRange(row.value.startYear ?? '', row.value.endYear ?? '', YEAR_VALUE),
+    );
+    if (backwardExperience || backwardEducation) {
+      setFormError('Bitiş tarihi başlangıçtan önce olamaz; ilgili kaydı düzeltin.');
+      return;
+    }
+    if (
+      educationRows.some((row) => hasImplausibleYear(row.value.startYear, row.value.endYear))
+    ) {
+      setFormError(`Eğitim yılı ${MIN_ENTRY_YEAR} ile ${CURRENT_YEAR} arasında olmalı.`);
+      return;
+    }
     // Deneyim/eğitim zorunluluğu TÜRETİLMİŞ metin üzerinde denetlenir; backend
     // doğrulaması da (`between(effectiveExperience(), 1, 8000)`) aynı değere bakar.
     // Satır sayısına bakmak yanıltıcı olurdu: boş satır sayılırdı.
@@ -1478,15 +1560,45 @@ const CandidateApplicationPage = () => {
                         rows={spec.rows}
                       />
                     ) : (
-                      <input
-                        id={inputId}
-                        data-testid={inputId}
-                        className={inputClassName}
-                        value={currentValue}
-                        onChange={updateEntryField(setRows, index, spec.key)}
-                        placeholder={spec.placeholder}
-                        maxLength={spec.maxLength}
-                      />
+                      (() => {
+                        const resolved = resolveEntryInputKind(spec.kind, currentValue);
+                        // Yıl alanı BİLEREK `type="number"` DEĞİL: sayı girdisi
+                        // artırma oklarıyla geliyor (yıl için anlamsız) ve
+                        // denetimli değerde biçime uymayan girdiyi sessizce
+                        // boşaltıyor — ayrıştırıcıdan gelen değer kaybolurdu.
+                        // Bunun yerine rakam filtresi: harf zaten YAZILAMAZ.
+                        const typed =
+                          resolved === 'month'
+                            ? { type: 'month', max: `${CURRENT_YEAR}-12` }
+                            : resolved === 'year'
+                              ? {
+                                  inputMode: 'numeric' as const,
+                                  pattern: '\\d{4}',
+                                  maxLength: 4,
+                                }
+                              : { maxLength: spec.maxLength };
+                        const onFieldChange = updateEntryField(setRows, index, spec.key);
+                        return (
+                          <input
+                            id={inputId}
+                            data-testid={inputId}
+                            className={inputClassName}
+                            value={currentValue}
+                            onChange={
+                              resolved === 'year'
+                                ? (event) => {
+                                    event.target.value = event.target.value
+                                      .replace(/\D/gu, '')
+                                      .slice(0, 4);
+                                    onFieldChange(event);
+                                  }
+                                : onFieldChange
+                            }
+                            placeholder={spec.placeholder}
+                            {...typed}
+                          />
+                        );
+                      })()
                     )}
                   </div>
                 );

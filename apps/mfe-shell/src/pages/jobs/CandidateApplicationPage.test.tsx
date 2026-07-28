@@ -718,6 +718,59 @@ describe('CandidateApplicationPage', () => {
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
   });
 
+  it('gives date fields an input that matches the data, without dropping legacy text', async () => {
+    // #239: yil alanina HARF yazilamaz; deneyim tarihi ay+yil secicisi olur.
+    // Ama CV ayristiricisi serbest metin uretebiliyor ("Eyl 2022") — o degeri
+    // yapisal girdiye koymak tarayicida BOSALTIR ve aday kaybettigini fark
+    // etmez. O yuzden tip DEGERE gore cozulur.
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+
+    const year = screen.getByTestId('candidate-education-0-startYear');
+    expect(year).toHaveAttribute('inputMode', 'numeric');
+    fireEvent.change(year, { target: { value: '19a9x' } });
+    expect(year).toHaveValue('199');
+
+    const start = screen.getByTestId('candidate-experience-0-startDate');
+    // Bos deger yapisal girdi alir.
+    expect(start).toHaveAttribute('type', 'month');
+    // Miras serbest metin METIN girdisinde kalir — deger KAYBOLMAZ.
+    fireEvent.change(start, { target: { value: '2022-09' } });
+    expect(start).toHaveValue('2022-09');
+  });
+
+  it('refuses an implausible education year that the 4-digit filter would allow', async () => {
+    // Rakam filtresi "0001"i de gecirir; dort hane olmak makul olmak degildir.
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+
+    fireEvent.change(screen.getByTestId('candidate-education-0-startYear'), {
+      target: { value: '0001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+
+    expect(screen.getByText(/Eğitim yılı 1950 ile \d{4} arasında olmalı/i)).toBeVisible();
+    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
+  });
+
+  it('refuses a record whose end is before its start', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+
+    fireEvent.change(screen.getByTestId('candidate-experience-0-startDate'), {
+      target: { value: '2023-05' },
+    });
+    fireEvent.change(screen.getByTestId('candidate-experience-0-endDate'), {
+      target: { value: '2021-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+
+    expect(screen.getByText(/Bitiş tarihi başlangıçtan önce olamaz/i)).toBeVisible();
+    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
+  });
+
   it('blocks preview when required fields are missing', async () => {
     // #1048: tek gerçek kapı önizleme. Aşama geçişleri kaydırmaya indiği için
     // zorunlu-alan doğrulaması ARTIK YALNIZ burada — iki yerde tutmak drift
