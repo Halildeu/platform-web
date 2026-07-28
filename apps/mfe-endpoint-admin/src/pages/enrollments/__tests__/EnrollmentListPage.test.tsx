@@ -548,6 +548,22 @@ describe('EnrollmentListPage', () => {
     );
   });
 
+  it('makes the signed enterprise package primary and keeps PowerShell closed as break-glass', async () => {
+    openModalWith('enterprise-first-token');
+
+    const packageLink = await screen.findByTestId('enrollment-token-modal-download-package');
+    expect(packageLink).toHaveAttribute(
+      'href',
+      'http://localhost/artifacts/endpoint-agent/current/EndpointAgent.zip',
+    );
+    expect(screen.getByTestId('enrollment-token-modal-enterprise-path')).toBeInTheDocument();
+
+    const breakGlass = screen.getByTestId('enrollment-token-modal-break-glass');
+    expect(breakGlass).not.toHaveAttribute('open');
+    expect(breakGlass).toContainElement(screen.getByTestId('enrollment-token-modal-onecommand'));
+    expect(breakGlass).toContainElement(screen.getByTestId('enrollment-token-modal-raw'));
+  });
+
   it('keeps the manual install fallback on the same managed self-update policy', async () => {
     openModalWith('manual-policy-token');
 

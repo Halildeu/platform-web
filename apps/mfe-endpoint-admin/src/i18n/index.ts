@@ -348,7 +348,18 @@ const DICT_TR = {
   'endpointAdmin.enrollments.modal.warning':
     'Bu token yalnızca şimdi gösterilir. Kapattıktan sonra tekrar görüntülenemez. Hemen güvenli bir yere kopyalayın veya aşağıdaki komutu hedef cihaza yapıştırın.',
   'endpointAdmin.enrollments.modal.renewalWarning':
-    'Bu tek kullanımlık onarım işlemi seçilen mevcut cihaza bağlıdır. Token ayrı gösterilmez; yalnız aşağıdaki cihaz-bağlı komut aynı cihazda Administrator PowerShell ile çalıştırılabilir.',
+    'Bu tek kullanımlık onarım işlemi seçilen mevcut cihaza bağlıdır. Sağlıklı ajanlarda bu ekranı kapatın ve Tüm Cihazlar > İşlemler yolundaki tarayıcı güncelleme veya TPM yenileme işlemini kullanın.',
+  'endpointAdmin.enrollments.modal.enterpriseTitle': 'Önerilen Kurulum Yolu',
+  'endpointAdmin.enrollments.modal.enterpriseInstallHelp':
+    'İmzalı ajan paketini indirin ve kurumunuzun Intune, GPO veya SCCM dağıtım süreciyle hedef cihaza kurun. Windows üzerinde yükseltilmiş kurulum gereklidir; tarayıcı uzaktaki bilgisayarda sessiz yönetici kodu çalıştırmaz.',
+  'endpointAdmin.enrollments.modal.enterpriseRecoveryHelp':
+    'Komut alamayan eski veya bozuk ajanı kurumunuzun Intune, GPO veya SCCM dağıtım süreciyle imzalı paket kullanarak yerinde onarın. Sağlıklı ajanlarda bu kurtarma yolunu kullanmayın.',
+  'endpointAdmin.enrollments.modal.downloadPackage': 'İmzalı Ajan Paketini İndir',
+  'endpointAdmin.enrollments.modal.packagePreparing': 'Güncel imzalı paket doğrulanıyor…',
+  'endpointAdmin.enrollments.modal.breakGlassLabel':
+    'İleri Düzey Break-glass: Administrator PowerShell',
+  'endpointAdmin.enrollments.modal.breakGlassHelp':
+    'Yalnız kurumsal dağıtım kullanılamıyorsa ve hedef Windows cihazının başındaysanız açın. Bu manuel yol ana ürün akışı değildir; işlem Windows yükseltmesi ve yerel operatör sorumluluğu gerektirir.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
   'endpointAdmin.enrollments.modal.oneCommandLabel': 'Tek Komut Kurulum (Administrator PowerShell)',
   'endpointAdmin.enrollments.modal.oneCommandHelp':
@@ -2135,7 +2146,18 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.modal.warning':
     'This token is shown only now. After closing this dialog it cannot be retrieved. Copy it to a secure place or paste the install snippet on the target host now.',
   'endpointAdmin.enrollments.modal.renewalWarning':
-    'This one-time recovery is bound to the selected existing device. The token is not shown separately; only the device-bound command below may be run in Administrator PowerShell on that same device.',
+    'This one-time recovery is bound to the selected existing device. For a healthy agent, close this dialog and use the browser-managed update or TPM renewal action under All Devices > Operations.',
+  'endpointAdmin.enrollments.modal.enterpriseTitle': 'Recommended installation path',
+  'endpointAdmin.enrollments.modal.enterpriseInstallHelp':
+    'Download the signed agent package and deploy it to the target through your organization’s Intune, GPO, or SCCM process. Windows elevation is required; a browser cannot silently run administrator code on a remote computer.',
+  'endpointAdmin.enrollments.modal.enterpriseRecoveryHelp':
+    'Repair an old or command-unreachable agent in place with the signed package through your organization’s Intune, GPO, or SCCM process. Do not use this recovery path for a healthy agent.',
+  'endpointAdmin.enrollments.modal.downloadPackage': 'Download signed agent package',
+  'endpointAdmin.enrollments.modal.packagePreparing': 'Verifying the current signed package…',
+  'endpointAdmin.enrollments.modal.breakGlassLabel':
+    'Advanced break-glass: Administrator PowerShell',
+  'endpointAdmin.enrollments.modal.breakGlassHelp':
+    'Open only when enterprise deployment is unavailable and you are present at the target Windows device. This manual path is not the primary product flow; it requires Windows elevation and local operator responsibility.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
   'endpointAdmin.enrollments.modal.oneCommandLabel':
     'One-command install (Administrator PowerShell)',

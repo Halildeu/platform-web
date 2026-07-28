@@ -327,129 +327,169 @@ export const EnrollmentTokenModal: React.FC<EnrollmentTokenModalProps> = ({
           )}
         </p>
 
-        {!isRenewal && (
-          <section style={{ marginTop: 16 }}>
-            <h3>{t('endpointAdmin.enrollments.modal.tokenLabel')}</h3>
-            <code
-              data-testid="enrollment-token-modal-raw"
-              style={{
-                display: 'block',
-                padding: 8,
-                background: '#f5f5f5',
-                wordBreak: 'break-all',
-                fontFamily: 'monospace',
-              }}
-            >
-              {response.token}
-            </code>
-            <button
-              type="button"
-              data-testid="enrollment-token-modal-copy-token"
-              onClick={() => handleCopy(response.token, 'token')}
-            >
-              {copied === 'token'
-                ? t('endpointAdmin.enrollments.modal.copied')
-                : t('endpointAdmin.enrollments.modal.copy')}
-            </button>
-          </section>
-        )}
-
-        <section style={{ marginTop: 16 }}>
-          <h3>
+        <section
+          data-testid="enrollment-token-modal-enterprise-path"
+          style={{ marginTop: 16, padding: 16, border: '1px solid #c7d7ee', borderRadius: 6 }}
+        >
+          <h3>{t('endpointAdmin.enrollments.modal.enterpriseTitle')}</h3>
+          <p style={{ marginTop: 4 }}>
             {t(
-              canUseInstalledAgent
-                ? 'endpointAdmin.enrollments.modal.renewalCommandLabel'
-                : requiresRepair
-                  ? 'endpointAdmin.enrollments.modal.repairCommandLabel'
-                  : 'endpointAdmin.enrollments.modal.oneCommandLabel',
-            )}
-          </h3>
-          <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
-            {t(
-              canUseInstalledAgent
-                ? 'endpointAdmin.enrollments.modal.renewalCommandHelp'
-                : requiresRepair
-                  ? 'endpointAdmin.enrollments.modal.repairCommandHelp'
-                  : 'endpointAdmin.enrollments.modal.oneCommandHelp',
+              isRenewal
+                ? 'endpointAdmin.enrollments.modal.enterpriseRecoveryHelp'
+                : 'endpointAdmin.enrollments.modal.enterpriseInstallHelp',
             )}
           </p>
-
-          {(!manifestMatchesResponse || manifestState.status === 'loading') && (
-            <p data-testid="enrollment-token-modal-onecommand-loading" style={{ opacity: 0.7 }}>
-              {t('endpointAdmin.enrollments.modal.oneCommandLoading')}
-            </p>
-          )}
-
-          {manifestMatchesResponse && manifestState.status === 'error' && (
-            <div data-testid="enrollment-token-modal-onecommand-error">
-              <p style={{ color: '#b00020' }}>
-                {t('endpointAdmin.enrollments.modal.oneCommandError')}
+          {manifestReady ? (
+            <>
+              <a
+                data-testid="enrollment-token-modal-download-package"
+                href={`${artifactBaseUrl}/endpoint-agent/current/EndpointAgent.zip`}
+                download
+              >
+                {t('endpointAdmin.enrollments.modal.downloadPackage')}
+              </a>
+              <p style={{ marginTop: 8, opacity: 0.75, fontSize: 13 }}>
+                {manifestState.manifest.release_tag ?? 'current'} · SHA-256{' '}
+                <code>{manifestState.manifest.endpoint_agent_zip_sha256}</code>
               </p>
+            </>
+          ) : (
+            <p style={{ opacity: 0.75 }}>{t('endpointAdmin.enrollments.modal.packagePreparing')}</p>
+          )}
+        </section>
+
+        <details data-testid="enrollment-token-modal-break-glass" style={{ marginTop: 16 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+            {t('endpointAdmin.enrollments.modal.breakGlassLabel')}
+          </summary>
+          <p style={{ marginTop: 8, opacity: 0.75, fontSize: 13 }}>
+            {t('endpointAdmin.enrollments.modal.breakGlassHelp')}
+          </p>
+
+          {!isRenewal && (
+            <section style={{ marginTop: 16 }}>
+              <h3>{t('endpointAdmin.enrollments.modal.tokenLabel')}</h3>
+              <code
+                data-testid="enrollment-token-modal-raw"
+                style={{
+                  display: 'block',
+                  padding: 8,
+                  background: '#f5f5f5',
+                  wordBreak: 'break-all',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {response.token}
+              </code>
               <button
                 type="button"
-                data-testid="enrollment-token-modal-onecommand-retry"
-                onClick={() => setRetryNonce((n) => n + 1)}
+                data-testid="enrollment-token-modal-copy-token"
+                onClick={() => handleCopy(response.token, 'token')}
               >
-                {t('endpointAdmin.enrollments.modal.retry')}
+                {copied === 'token'
+                  ? t('endpointAdmin.enrollments.modal.copied')
+                  : t('endpointAdmin.enrollments.modal.copy')}
               </button>
-            </div>
+            </section>
           )}
 
-          {oneCommand !== null && (
-            <>
+          <section style={{ marginTop: 16 }}>
+            <h3>
+              {t(
+                canUseInstalledAgent
+                  ? 'endpointAdmin.enrollments.modal.renewalCommandLabel'
+                  : requiresRepair
+                    ? 'endpointAdmin.enrollments.modal.repairCommandLabel'
+                    : 'endpointAdmin.enrollments.modal.oneCommandLabel',
+              )}
+            </h3>
+            <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
+              {t(
+                canUseInstalledAgent
+                  ? 'endpointAdmin.enrollments.modal.renewalCommandHelp'
+                  : requiresRepair
+                    ? 'endpointAdmin.enrollments.modal.repairCommandHelp'
+                    : 'endpointAdmin.enrollments.modal.oneCommandHelp',
+              )}
+            </p>
+
+            {(!manifestMatchesResponse || manifestState.status === 'loading') && (
+              <p data-testid="enrollment-token-modal-onecommand-loading" style={{ opacity: 0.7 }}>
+                {t('endpointAdmin.enrollments.modal.oneCommandLoading')}
+              </p>
+            )}
+
+            {manifestMatchesResponse && manifestState.status === 'error' && (
+              <div data-testid="enrollment-token-modal-onecommand-error">
+                <p style={{ color: '#b00020' }}>
+                  {t('endpointAdmin.enrollments.modal.oneCommandError')}
+                </p>
+                <button
+                  type="button"
+                  data-testid="enrollment-token-modal-onecommand-retry"
+                  onClick={() => setRetryNonce((n) => n + 1)}
+                >
+                  {t('endpointAdmin.enrollments.modal.retry')}
+                </button>
+              </div>
+            )}
+
+            {oneCommand !== null && (
+              <>
+                <pre
+                  data-testid="enrollment-token-modal-onecommand"
+                  style={{
+                    padding: 8,
+                    background: '#f5f5f5',
+                    fontFamily: 'monospace',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  {oneCommand}
+                </pre>
+                <button
+                  type="button"
+                  data-testid="enrollment-token-modal-copy-onecommand"
+                  onClick={() => handleCopy(oneCommand, 'onecommand')}
+                >
+                  {copied === 'onecommand'
+                    ? t('endpointAdmin.enrollments.modal.copied')
+                    : t('endpointAdmin.enrollments.modal.copy')}
+                </button>
+              </>
+            )}
+          </section>
+
+          {snippet !== null && (
+            <section style={{ marginTop: 16 }}>
+              <h3>{t('endpointAdmin.enrollments.modal.manualLabel')}</h3>
+              <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
+                {t('endpointAdmin.enrollments.modal.manualHelp')}
+              </p>
               <pre
-                data-testid="enrollment-token-modal-onecommand"
+                data-testid="enrollment-token-modal-snippet"
                 style={{
                   padding: 8,
                   background: '#f5f5f5',
                   fontFamily: 'monospace',
                   whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
                 }}
               >
-                {oneCommand}
+                {snippet}
               </pre>
               <button
                 type="button"
-                data-testid="enrollment-token-modal-copy-onecommand"
-                onClick={() => handleCopy(oneCommand, 'onecommand')}
+                data-testid="enrollment-token-modal-copy-snippet"
+                onClick={() => handleCopy(snippet, 'snippet')}
               >
-                {copied === 'onecommand'
+                {copied === 'snippet'
                   ? t('endpointAdmin.enrollments.modal.copied')
                   : t('endpointAdmin.enrollments.modal.copy')}
               </button>
-            </>
+            </section>
           )}
-        </section>
-
-        {snippet !== null && (
-          <section style={{ marginTop: 16 }}>
-            <h3>{t('endpointAdmin.enrollments.modal.manualLabel')}</h3>
-            <p style={{ marginTop: 4, opacity: 0.75, fontSize: 13 }}>
-              {t('endpointAdmin.enrollments.modal.manualHelp')}
-            </p>
-            <pre
-              data-testid="enrollment-token-modal-snippet"
-              style={{
-                padding: 8,
-                background: '#f5f5f5',
-                fontFamily: 'monospace',
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {snippet}
-            </pre>
-            <button
-              type="button"
-              data-testid="enrollment-token-modal-copy-snippet"
-              onClick={() => handleCopy(snippet, 'snippet')}
-            >
-              {copied === 'snippet'
-                ? t('endpointAdmin.enrollments.modal.copied')
-                : t('endpointAdmin.enrollments.modal.copy')}
-            </button>
-          </section>
-        )}
+        </details>
 
         <p style={{ marginTop: 16 }}>
           <strong>{t('endpointAdmin.enrollments.modal.expiresLabel')}:</strong>{' '}
