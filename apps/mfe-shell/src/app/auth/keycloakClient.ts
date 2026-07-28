@@ -18,6 +18,7 @@ type KeycloakLoginOptions = KeycloakLoginRedirectOptions & {
 };
 
 const ETHICS_MANAGER_LOGIN_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
+const BUDGET_PLANNER_LOGIN_SCOPE = 'openid budget:read budget:write';
 
 const asStringArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
@@ -54,6 +55,14 @@ export const buildKeycloakLoginOptions = (redirectUri: string): KeycloakLoginOpt
     const path = new URL(redirectUri, 'https://invalid.local').pathname;
     if (path === '/ethic' || path.startsWith('/ethic/')) {
       return { redirectUri, scope: ETHICS_MANAGER_LOGIN_SCOPE };
+    }
+    if (
+      path === '/admin/reports/budget-control' ||
+      path.startsWith('/admin/reports/budget-control/') ||
+      path === '/reports/budget-control' ||
+      path.startsWith('/reports/budget-control/')
+    ) {
+      return { redirectUri, scope: BUDGET_PLANNER_LOGIN_SCOPE };
     }
   } catch {
     // keycloak-js redirectUri doğrulamasını yapmaya devam eder. Geçersiz bir
@@ -233,6 +242,7 @@ export const resolveKeycloakLoginUrl = async ({
 // @mfe/shared-http is not shared via Module Federation.
 if (typeof window !== 'undefined') {
   (window as Record<string, unknown>).__keycloak = keycloak;
+  (window as Record<string, unknown>).__startKeycloakLogin = startKeycloakLogin;
 }
 
 export default keycloak;
