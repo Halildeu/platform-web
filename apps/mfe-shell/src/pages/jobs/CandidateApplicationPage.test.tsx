@@ -731,12 +731,17 @@ describe('CandidateApplicationPage', () => {
     fireEvent.change(year, { target: { value: '19a9x' } });
     expect(year).toHaveValue('199');
 
+    // #242 dilim B: `type="month"` KALDIRILDI — gün istemiyordu ama YILI da
+    // kabul etmiyordu, yıl-only değer metne düşüyor ve aday serbest metin
+    // yazabiliyordu. Artık filtreli girdi: iki granülerlik de yapısal.
     const start = screen.getByTestId('candidate-experience-0-startDate');
-    // Bos deger yapisal girdi alir.
-    expect(start).toHaveAttribute('type', 'month');
-    // Miras serbest metin METIN girdisinde kalir — deger KAYBOLMAZ.
-    fireEvent.change(start, { target: { value: '2022-09' } });
-    expect(start).toHaveValue('2022-09');
+    expect(start).toHaveAttribute('inputMode', 'numeric');
+    fireEvent.change(start, { target: { value: 'Eyl 2022' } });
+    expect(start).toHaveValue('2022'); // harf ve boşluk YAZILAMAZ
+    fireEvent.change(start, { target: { value: '202209' } });
+    expect(start).toHaveValue('2022-09'); // tire kendiliğinden yerleşir
+    fireEvent.change(start, { target: { value: '2019' } });
+    expect(start).toHaveValue('2019'); // yıl-only da geçerli (ats#244 sözleşmesi)
   });
 
   it('refuses an implausible education year that the 4-digit filter would allow', async () => {

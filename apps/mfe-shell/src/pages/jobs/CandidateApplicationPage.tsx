@@ -105,10 +105,17 @@ type EntryFieldSpec<T> = {
   kind?: EntryFieldKind;
 };
 
-const MONTH_VALUE = /^\d{4}-(0[1-9]|1[0-2])$/u;
 const YEAR_VALUE = /^\d{4}$/u;
 /** Yazım sırasında yıl olabilecek girdi: yalnız rakam, en çok 4 hane (boş dahil). */
 const YEAR_TYPEABLE = /^\d{0,4}$/u;
+/**
+ * #242 dilim B: deneyim tarihi YIL ya da YIL-AY olabilir (sunucu sözleşmesi
+ * `ats#244` ile buna sabitlendi). Yazım sırasında da yapısal kalmalı:
+ * "2", "20", "202", "2022", "2022-", "2022-0", "2022-09" hepsi geçerli ARA
+ * durumdur. Bitmiş biçim `MONTH_OR_YEAR_VALUE` ile ayrıca doğrulanır.
+ */
+const MONTH_OR_YEAR_TYPEABLE = /^\d{0,4}(-\d{0,2})?$/u;
+const MONTH_OR_YEAR_VALUE = /^\d{4}(-(0[1-9]|1[0-2]))?$/u;
 /** Diploma/işe giriş yılı için makul alt sınır; altı veri hatasıdır. */
 const MIN_ENTRY_YEAR = 1950;
 /**
@@ -143,11 +150,19 @@ const hasBackwardRange = (start: string, end: string, shape: RegExp): boolean =>
   const a = start.trim();
   const b = end.trim();
   if (!a || !b || !shape.test(a) || !shape.test(b)) return false;
-  return b < a; // YYYY-MM ve YYYY sözlüksel sırada kronolojiktir
+  // #242: kıyas yalnız AYNI hassasiyette. "2019-06 → 2019" ("Haziran 2019'da
+  // başladı, 2019 içinde bitti") meşru bir beyandır; sözlüksel kıyas onu ters
+  // aralık sanardı. Aynı yanlış pozitifi sunucuda da kapattım (ats#244).
+  if (a.length !== b.length) return false;
+  return b < a; // aynı uzunlukta sözlüksel sıra kronolojiktir
 };
 
 const resolveEntryInputKind = (kind: EntryFieldKind | undefined, value: string): EntryFieldKind => {
-  if (kind === 'month') return value === '' || MONTH_VALUE.test(value) ? 'month' : 'text';
+  // `type="month"` BIRAKILDI: gün istemiyordu ama YILI da kabul etmiyordu,
+  // dolayısıyla yıl-only değer metne düşüyor ve aday serbest metin yazabiliyordu
+  // — dilim B'nin kapatmak istediği boşluk tam buydu. Yerine filtreli girdi:
+  // yalnız rakam ve tek tire; harf YAZILAMAZ, gün uydurulmaz.
+  if (kind === 'month') return MONTH_OR_YEAR_TYPEABLE.test(value) ? 'month' : 'text';
   // YAZARKEN de yıl modunda kalmalı: `^\d{4}$` ile ölçmek "199"u (henüz
   // tamamlanmamış) metne düşürüyordu, filtre kapanıyordu ve sonraki tuşta harf
   // girilebiliyordu. Canlıda ölçüldü: "19a9x" → "199" (filtre çalıştı), ama
@@ -176,7 +191,7 @@ export const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperien
   {
     key: 'startDate',
     label: 'Başlangıç',
-    placeholder: 'Eyl 2022',
+    placeholder: '2022-09 veya 2022',
     maxLength: APPLICATION_ENTRY_LIMITS.dateText,
     span: 'half',
     kind: 'month',
@@ -186,7 +201,7 @@ export const EXPERIENCE_FIELDS: ReadonlyArray<EntryFieldSpec<ApplicationExperien
     // Boş bırakmak "devam ediyor" demektir; ayrı bir kutu eklemek yerine
     // etiketin kendisi söylüyor — alan zaten isteğe bağlı.
     label: 'Bitiş (boşsa devam ediyor)',
-    placeholder: 'Eyl 2024',
+    placeholder: '2024-03 veya 2024',
     maxLength: APPLICATION_ENTRY_LIMITS.dateText,
     span: 'half',
     kind: 'month',
@@ -1190,7 +1205,7 @@ const CandidateApplicationPage = () => {
     // #239: bitiş < başlangıç sessizce gönderilmemeli — İK bunu veri hatası
     // olarak değil adayın beyanı olarak okur.
     const backwardExperience = experienceRows.some((row) =>
-      hasBackwardRange(row.value.startDate ?? '', row.value.endDate ?? '', MONTH_VALUE),
+      hasBackwardRange(row.value.startDate ?? '', row.value.endDate ?? '', MONTH_OR_YEAR_VALUE),
     );
     const backwardEducation = educationRows.some((row) =>
       hasBackwardRange(row.value.startYear ?? '', row.value.endYear ?? '', YEAR_VALUE),
@@ -1577,7 +1592,11 @@ const CandidateApplicationPage = () => {
                         // Bunun yerine rakam filtresi: harf zaten YAZILAMAZ.
                         const typed =
                           resolved === 'month'
-                            ? { type: 'month', max: `${CURRENT_YEAR}-12` }
+                            ? {
+                                inputMode: 'numeric' as const,
+                                pattern: '\\d{4}(-(0[1-9]|1[0-2]))?',
+                                maxLength: 7,
+                              }
                             : resolved === 'year'
                               ? {
                                   inputMode: 'numeric' as const,
@@ -1600,7 +1619,18 @@ const CandidateApplicationPage = () => {
                                       .slice(0, 4);
                                     onFieldChange(event);
                                   }
-                                : onFieldChange
+                                : resolved === 'month'
+                                  ? (event) => {
+                                      // Rakam + EN FAZLA bir tire; "2022-09"a
+                                      // kadar serbest yazılır, harf giremez.
+                                      const digits = event.target.value.replace(/[^\d]/gu, '');
+                                      event.target.value =
+                                        digits.length <= 4
+                                          ? digits
+                                          : `${digits.slice(0, 4)}-${digits.slice(4, 6)}`;
+                                      onFieldChange(event);
+                                    }
+                                  : onFieldChange
                             }
                             placeholder={spec.placeholder}
                             {...typed}
