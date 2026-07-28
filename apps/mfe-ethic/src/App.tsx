@@ -417,7 +417,7 @@ export default function App() {
             </Stack>
           </Card>
 
-          <Card variant="outlined" padding="md">
+          <Card variant="outlined" padding="md" className="ethics-detail-pane">
             {!selected ? (
               <div className="ethics-empty">
                 <Text as="h2" size="lg" weight="bold">

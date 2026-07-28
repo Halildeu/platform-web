@@ -6,6 +6,19 @@ import {
   type PropsWithChildren,
 } from 'react';
 
+/**
+ * Keep the adapter's own class when a caller supplies one.
+ *
+ * <p>Spreading caller props over a literal `className` silently *replaces* it, so a
+ * component that asked for one extra class would lose its border, padding and
+ * background and still render — nothing throws, nothing logs, and the shared
+ * `mfe-ethic` tests pass because they run against the real design system rather
+ * than this stand-in.
+ */
+function cx(...parts: Array<string | undefined | false>) {
+  return parts.filter(Boolean).join(' ');
+}
+
 export function Badge({ children }: PropsWithChildren<{ variant?: string }>) {
   return <span className="manager-badge">{children}</span>;
 }
@@ -18,10 +31,11 @@ export function Button({
 }: PropsWithChildren<
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }
 >) {
+  const { className, ...htmlProps } = props;
   return (
     <button
-      className={`manager-button ${variant === 'secondary' ? 'is-secondary' : ''}`}
-      {...props}
+      {...htmlProps}
+      className={cx('manager-button', variant === 'secondary' && 'is-secondary', className)}
     >
       {children}
     </button>
@@ -32,9 +46,9 @@ export function Card({
   children,
   ...props
 }: PropsWithChildren<HTMLAttributes<HTMLDivElement> & { variant?: string; padding?: string }>) {
-  const { variant: _variant, padding: _padding, ...htmlProps } = props;
+  const { variant: _variant, padding: _padding, className, ...htmlProps } = props;
   return (
-    <section className="manager-card" {...htmlProps}>
+    <section {...htmlProps} className={cx('manager-card', className)}>
       {children}
     </section>
   );
