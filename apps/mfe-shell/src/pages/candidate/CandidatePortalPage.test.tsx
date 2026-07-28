@@ -249,6 +249,23 @@ describe('CandidatePortalPage', () => {
     expect(screen.getByTestId('candidate-tracking-file')).toBeInTheDocument();
   });
 
+  it('renders every option pane inside the same card as the selector', async () => {
+    // #1062 SAHIP BILDIRIMI: "tasarımlar farklı farklı yerlerde". Seçenekler
+    // bir kartta, seçilenin içeriği BAŞKA bir kartta açılıyordu; seçim ile
+    // sonucu ayırmak kullanıcıya iki ayrı şeymiş gibi görünüyordu.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    renderPage();
+
+    const card = (await screen.findByTestId('candidate-email-login')) as HTMLElement;
+    for (const pane of ['email', 'file', 'manual'] as const) {
+      // Üç bölme de SEÇİCİNİN kartının içinde olmalı.
+      expect(card).toContainElement(screen.getByTestId(`candidate-signin-pane-${pane}`));
+    }
+    expect(card).toContainElement(screen.getByTestId('candidate-open-positions'));
+    // Ayrı kart artık YOK.
+    expect(screen.queryByTestId('candidate-sign-in')).not.toBeInTheDocument();
+  });
+
   it('keeps the way out to open positions on every option', async () => {
     // Bu yönlendirme elle giriş bölmesinin İÇİNDEYDİ; e-posta seçiliyken
     // kayboluyordu ve o yolda kalan adayın ilanlara dönecek bağlantısı
@@ -492,7 +509,8 @@ describe('CandidatePortalPage', () => {
       /beklenen biçimde değil/i,
     );
     expect(apiMocks.getCandidateStatus).not.toHaveBeenCalled();
-    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+    // #1062: ayrı kart yok; iddia "giriş formu kullanılabilir".
+    expect(screen.getByTestId('candidate-signin-pane-manual')).not.toHaveAttribute('hidden');
   });
 
   it('offers a way back to the form when the pair does not resolve', async () => {
@@ -505,7 +523,8 @@ describe('CandidatePortalPage', () => {
     fireEvent.click(screen.getByTestId('candidate-sign-in-again'));
 
     expect(apiMocks.clearCandidateSession).toHaveBeenCalled();
-    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+    // #1062: ayrı kart yok; iddia "giriş formu kullanılabilir".
+    expect(screen.getByTestId('candidate-signin-pane-manual')).not.toHaveAttribute('hidden');
   });
 
   it('clears the tracking credential from a shared device on sign-out', async () => {
@@ -515,7 +534,8 @@ describe('CandidatePortalPage', () => {
     fireEvent.click(screen.getByTestId('candidate-sign-out'));
 
     expect(apiMocks.clearCandidateSession).toHaveBeenCalled();
-    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+    // #1062: ayrı kart yok; iddia "giriş formu kullanılabilir".
+    expect(screen.getByTestId('candidate-signin-pane-manual')).not.toHaveAttribute('hidden');
     expect(screen.queryByText(SESSION.publicRef)).not.toBeInTheDocument();
   });
 
