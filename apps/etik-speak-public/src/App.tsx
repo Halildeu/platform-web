@@ -700,7 +700,12 @@ function Mailbox({
           ))}
         </ol>
       </section>
-      <ol>
+      {/* The line the reporter came for. Above the thread, not buried in it: the question
+          is "did anyone answer me", and it should be answered before they start reading. */}
+      <p className="mailbox-reply-status" role="status">
+        {reporterReplyStatus(messages).text}
+      </p>
+      <ol aria-label="Bildirim yazışması">
         {messages.length === 0 && <li className="empty">Henüz mesaj yok.</li>}
         {messages.map((m) => (
           <li key={m.id} className={m.authorType === 'STAFF' ? 'staff' : 'reporter'}>
@@ -829,6 +834,46 @@ export function reporterAcknowledgement(
     known: true,
     overdue: true,
     text: `Yetkili ekip ${elapsed} gündür yanıt yazmadı. ${ACKNOWLEDGEMENT_DEADLINE_DAYS} günlük yanıt süresi aşıldı; bu ekranı ve bildirim numaranızı kayıt olarak saklayın.`,
+  };
+}
+
+/**
+ * Whether the team has written back, answered at a glance.
+ *
+ * <p>This is not a notification and must not be described as one. A purely anonymous
+ * reporter has, by definition, no channel to push anything to — every report this cell has
+ * received is anonymous, and the intake refuses any other mode. What can be fixed is the
+ * question they actually arrive with: *did anyone answer me?* Until now that meant reading
+ * down an unlabelled list looking for a "Etik ekibi" entry.
+ *
+ * <p>Deliberately stores nothing. No last-viewed timestamp on the server — that would build
+ * a record of when an anonymous person checked on their own report, which is precisely the
+ * correlation this product exists to prevent. Nothing in the browser either: a whistleblower
+ * may be on a shared or monitored device, and a trace left there can cost more than the
+ * convenience is worth. The answer is computed from the messages already on screen.
+ *
+ * <p>Takes the most recent staff message by timestamp rather than trusting list order.
+ * Unlike the staff timeline — where re-sorting would paper over a broken ledger — the
+ * question here is genuinely "when was the last one", so the maximum is the honest answer.
+ */
+export function reporterReplyStatus(
+  messages: readonly { authorType: string; createdAt: string }[],
+): { text: string; answered: boolean } {
+  let latest = Number.NEGATIVE_INFINITY;
+  let answered = false;
+  for (const message of messages) {
+    if (message.authorType !== 'STAFF') continue;
+    answered = true;
+    const at = Date.parse(message.createdAt);
+    if (!Number.isNaN(at) && at > latest) latest = at;
+  }
+  if (!answered) return { answered: false, text: 'Etik ekibi henüz size yazmadı.' };
+  // A reply whose timestamp will not parse is still a reply; the date is what is missing,
+  // and claiming a date we do not have would be worse than omitting it.
+  if (latest === Number.NEGATIVE_INFINITY) return { answered: true, text: 'Etik ekibi size yazdı.' };
+  return {
+    answered: true,
+    text: `Etik ekibi en son ${new Date(latest).toLocaleString('tr-TR')} tarihinde yazdı.`,
   };
 }
 
