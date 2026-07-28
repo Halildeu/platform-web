@@ -571,3 +571,11 @@ footer a {
   color: var(--state-danger-text, #7f1d1d);
   font-weight: 600;
 }
+
+/* Reads before the thread does. Not an alert: "no reply yet" is a normal state early in a
+   case, and styling it as a warning would tell the reporter something is wrong when the
+   team is simply still within its time. */
+.mailbox-reply-status {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}

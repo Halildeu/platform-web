@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import App from './App';
+import App, { reporterReplyStatus } from './App';
 import * as api from './public-api';
 vi.mock('./public-api');
 describe('Etik Speak public reporter', () => {
@@ -229,5 +229,39 @@ describe('Etik Speak public reporter', () => {
 
     await screen.findByTestId('etik-case-status');
     expect(screen.queryByTestId('etik-case-acknowledgement')).not.toBeInTheDocument();
+  });
+
+  // İhbarcı bu sayfaya tek bir soruyla geliyor: bana cevap verdiler mi? Cevap listenin
+  // içine gömülüydü; "Etik ekibi" satırını bulmak için okumak gerekiyordu.
+  test('ekip yazmadıysa bu açıkça söylenir', () => {
+    expect(reporterReplyStatus([]).answered).toBe(false);
+    expect(reporterReplyStatus([]).text).toContain('henüz size yazmadı');
+    expect(
+      reporterReplyStatus([{ authorType: 'REPORTER', createdAt: '2026-07-18T12:00:00Z' }]).answered,
+    ).toBe(false);
+  });
+
+  test('ekip yazdıysa en son yazdığı an gösterilir', () => {
+    const status = reporterReplyStatus([
+      { authorType: 'STAFF', createdAt: '2026-07-18T09:00:00Z' },
+      { authorType: 'REPORTER', createdAt: '2026-07-19T09:00:00Z' },
+      { authorType: 'STAFF', createdAt: '2026-07-20T15:30:00Z' },
+    ]);
+    expect(status.answered).toBe(true);
+    // Sıraya değil damgaya bakılır: burada sorulan gerçekten "en son ne zaman".
+    // Saat dilimine bağlı kalmamak için beklenen metin aynı damgadan üretiliyor; asıl
+    // iddia şu: EN SON yanıtın anı yazıyor, ilkininki DEĞİL.
+    const latest = new Date(Date.parse('2026-07-20T15:30:00Z')).toLocaleString('tr-TR');
+    const earlier = new Date(Date.parse('2026-07-18T09:00:00Z')).toLocaleString('tr-TR');
+    expect(status.text).toContain(latest);
+    expect(status.text).not.toContain(earlier);
+  });
+
+  // Damgası okunamayan bir yanıt yine de bir yanıttır; eksik olan tarih. Olmayan bir tarihi
+  // uydurmak, tarihi hiç yazmamaktan kötüdür.
+  test('tarihi okunamayan yanıt yine de yanıt sayılır', () => {
+    const status = reporterReplyStatus([{ authorType: 'STAFF', createdAt: 'bozuk' }]);
+    expect(status.answered).toBe(true);
+    expect(status.text).toBe('Etik ekibi size yazdı.');
   });
 });
