@@ -249,6 +249,18 @@ describe('CandidatePortalPage', () => {
     expect(screen.getByTestId('candidate-tracking-file')).toBeInTheDocument();
   });
 
+  it('keeps the way out to open positions on every option', async () => {
+    // Bu yönlendirme elle giriş bölmesinin İÇİNDEYDİ; e-posta seçiliyken
+    // kayboluyordu ve o yolda kalan adayın ilanlara dönecek bağlantısı
+    // olmuyordu. Seçenekten bağımsız olduğu için kartın altında durmalı.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    renderPage();
+    for (const option of ['email', 'file', 'manual'] as const) {
+      fireEvent.click(await screen.findByTestId(`candidate-signin-option-${option}`));
+      expect(screen.getByTestId('candidate-open-positions')).toBeVisible();
+    }
+  });
+
   it('switches to the manual option by itself when code delivery is unavailable', async () => {
     // Hata metni "takip anahtarınızla girebilirsiniz" diyordu ama kullanıcıyı o
     // yola GÖTÜRMÜYORDU. Söylemek yetmez.

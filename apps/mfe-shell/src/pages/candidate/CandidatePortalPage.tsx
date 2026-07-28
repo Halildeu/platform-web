@@ -674,6 +674,21 @@ const CandidatePortalPage = () => {
               </div>
             </form>
             </div>
+            {/* Üç seçeneğin ORTAK çıkışı. Elle giriş bölmesinin içindeydi;
+                e-posta seçiliyken kayboluyordu ve o yolda kalan adayın açık
+                ilanlara dönecek hiçbir bağlantısı olmuyordu (sahip bildirimi).
+                Yönlendirme seçenekten bağımsız olduğu için kartın altında. */}
+            <p className="mt-6 text-sm leading-6 text-text-secondary">
+              Elinizde bu bilgilerden hiçbiri yok mu? Takip anahtarı güvenlik gereği yeniden
+              gösterilemez; yeni bir başvuru gönderebilirsiniz.
+            </p>
+            <Link
+              to="/jobs"
+              data-testid="candidate-open-positions"
+              className="mt-3 inline-flex min-h-12 items-center justify-center rounded-xl border border-border-strong bg-surface-default px-5 py-3 text-sm font-bold text-text-primary"
+            >
+              Açık pozisyonlara git
+            </Link>
           </section>
         ) : (
           <section
@@ -863,16 +878,6 @@ const CandidatePortalPage = () => {
                 Başvurumu göster
               </button>
             </form>
-            <p className="mt-6 text-sm leading-6 text-text-secondary">
-              Takip bilgileriniz elinizde değil mi? Anahtar güvenlik gereği yeniden gösterilemez; yeni bir
-              başvuru gönderebilirsiniz.
-            </p>
-            <Link
-              to="/jobs"
-              className="mt-3 inline-flex min-h-12 items-center justify-center rounded-xl border border-border-strong bg-surface-default px-5 py-3 text-sm font-bold text-text-primary"
-            >
-              Açık pozisyonlara git
-            </Link>
             </div>
           </section>
         ) : null}
