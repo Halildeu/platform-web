@@ -155,3 +155,76 @@ export const categoryLabel = (category: string | null) =>
  * on the row means that constraint is known before the case is opened.
  */
 export const isAnonymous = (mode: string | null) => mode === 'ANONYMOUS';
+
+/**
+ * What a handler narrows the list by.
+ *
+ * <p>The two booleans are not "more filters" — they are the two questions triage exists
+ * to answer. `unattended` finds the reports nobody has picked up; `overdue` finds the
+ * ones whose seven-day acknowledgement has run. Everything else on this screen can wait;
+ * those two are how a case goes wrong without anyone choosing it.
+ */
+export interface CaseFilter {
+  query: string;
+  status: string;
+  category: string;
+  unattended: boolean;
+  overdue: boolean;
+}
+
+export const EMPTY_CASE_FILTER: CaseFilter = Object.freeze({
+  query: '',
+  status: '',
+  category: '',
+  unattended: false,
+  overdue: false,
+});
+
+export const isFilterActive = (filter: CaseFilter) =>
+  filter.query.trim() !== '' ||
+  filter.status !== '' ||
+  filter.category !== '' ||
+  filter.unattended ||
+  filter.overdue;
+
+/**
+ * Narrow a loaded list. Filtering happens here rather than on the server because the whole
+ * list already arrived — 138 cases is 6 KB — so a round trip per keystroke would buy
+ * nothing and cost the authorization work the list endpoint has to redo each time.
+ *
+ * <p>A case with no readable subject survives every text query. It is malformed, which is
+ * a reason to look at it; dropping it because it has no text to match would hide exactly
+ * the record that needs attention.
+ */
+export function filterCases<
+  T extends {
+    subject: string | null;
+    status: string;
+    category: string | null;
+    participantCount: number;
+    createdAt: string;
+    acknowledgedAt?: string | null;
+  },
+>(items: readonly T[], filter: CaseFilter, now: number = Date.now()): T[] {
+  const needle = filter.query.trim().toLocaleLowerCase('tr');
+  return items.filter((item) => {
+    if (needle && item.subject !== null && !item.subject.toLocaleLowerCase('tr').includes(needle))
+      return false;
+    if (filter.status && item.status !== filter.status) return false;
+    if (filter.category && item.category !== filter.category) return false;
+    if (filter.unattended && item.participantCount !== 0) return false;
+    if (filter.overdue && !acknowledgementState(item, now).overdue) return false;
+    return true;
+  });
+}
+
+/** The categories the intake form offers, in the order it offers them. */
+export const CASE_CATEGORIES = [
+  'WORKPLACE_CONDUCT',
+  'FRAUD_CORRUPTION',
+  'HARASSMENT_DISCRIMINATION',
+  'OTHER',
+] as const;
+
+/** The lifecycle statuses, in the order a case moves through them. */
+export const CASE_STATUSES: readonly CaseStatus[] = ['NEW', 'ASSESSING', 'INVESTIGATING', 'CLOSED'];

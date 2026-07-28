@@ -378,3 +378,65 @@
     align-items: start;
   }
 }
+
+/* Filters sit above the list, compact, so they cost the list as little height as
+   possible — the list is what the screen is for. */
+.ethics-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.ethics-filters label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--ethics-muted);
+}
+
+.ethics-filters input[type='search'],
+.ethics-filters select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 0.4rem;
+  font: inherit;
+  background: inherit;
+  color: var(--ethics-ink);
+  min-width: 0;
+}
+
+.ethics-filter-search {
+  grid-column: 1/-1;
+}
+
+.ethics-filter-toggle {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ethics-ink);
+}
+
+/* Deliberately prominent: this is the line that stops a stale filter from reading as
+   "there are only nine cases". */
+.ethics-filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ethics-brand);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.ethics-filter-summary button {
+  border: 1px solid var(--ethics-border);
+  background: var(--ethics-surface);
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  cursor: pointer;
+}
