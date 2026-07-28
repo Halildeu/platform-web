@@ -58,6 +58,13 @@ describe('Etik Speak public reporter', () => {
     expect(await screen.findByText('secret-once')).toBeInTheDocument();
     expect(api.createReport).toHaveBeenCalledTimes(1);
   });
+  const openMailboxView = async () => {
+    await userEvent.click(screen.getByRole('button', { name: 'Bildirimi takip et' }));
+    await userEvent.type(screen.getByLabelText('Bildirim numarası'), 'r-1');
+    await userEvent.type(screen.getByLabelText('Erişim sırrı'), 'secret-once');
+    await userEvent.click(screen.getByRole('button', { name: 'Güvenli mailbox aç' }));
+  };
+
   test('mailbox secret input is password and not URL', async () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Bildirimi takip et' }));
@@ -174,5 +181,53 @@ describe('Etik Speak public reporter', () => {
 
     expect(api.uploadEvidence).not.toHaveBeenCalled();
     expect(await screen.findByText('Güvenli türev hazır')).toBeInTheDocument();
+  });
+
+  // The seven-day acknowledgement is the promise made to the reporter at intake. The case
+  // has always carried the timestamps and the handler's screen has always shown the
+  // deadline in red; the person the deadline protects was told nothing. These lock the
+  // three answers apart, because the one that matters most is the third: a page that
+  // cannot tell must not imply it can.
+  test('an unanswered report past the deadline says so', async () => {
+    vi.mocked(api.getMailbox).mockResolvedValue({
+      status: 'NEW',
+      messages: [],
+      filedAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+      acknowledgedAt: null,
+    });
+    render(<App />);
+    await openMailboxView();
+
+    const line = await screen.findByTestId('etik-case-acknowledgement');
+    expect(line).toHaveAttribute('data-overdue', 'true');
+    expect(line).toHaveTextContent(/20 gündür yanıt yazmadı/);
+    // Announced, because it changed while the reporter was reading.
+    expect(line).toHaveAttribute('role', 'alert');
+  });
+
+  test('an answered report says how long it took, without an alarm', async () => {
+    vi.mocked(api.getMailbox).mockResolvedValue({
+      status: 'IN_REVIEW',
+      messages: [],
+      filedAt: '2026-07-01T09:00:00Z',
+      acknowledgedAt: '2026-07-04T09:00:00Z',
+    });
+    render(<App />);
+    await openMailboxView();
+
+    const line = await screen.findByTestId('etik-case-acknowledgement');
+    expect(line).toHaveTextContent('Bildiriminiz 3 gün içinde yanıtlandı.');
+    expect(line).toHaveAttribute('data-overdue', 'false');
+  });
+
+  // A bundle deployed ahead of the service receives neither timestamp. A countdown from a
+  // missing date would still read as a statement about a legal deadline, so it says nothing.
+  test('a response without the timestamps claims no deadline at all', async () => {
+    vi.mocked(api.getMailbox).mockResolvedValue({ status: 'NEW', messages: [] });
+    render(<App />);
+    await openMailboxView();
+
+    await screen.findByTestId('etik-case-status');
+    expect(screen.queryByTestId('etik-case-acknowledgement')).not.toBeInTheDocument();
   });
 });

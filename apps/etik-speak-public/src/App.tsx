@@ -39,6 +39,10 @@ export default function App() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [mailboxStatus, setMailboxStatus] = useState<ReporterCaseStatus | null>(null);
+  // Kept beside the status because it answers the other half of "nerede duruyor":
+  // the status says what stage the case is at, this says whether the promise made
+  // when it was filed is still being kept.
+  const [acknowledgement, setAcknowledgement] = useState<ReturnType<typeof reporterAcknowledgement> | null>(null);
   const [attachments, setAttachments] = useState<EvidenceStatus[]>([]);
   const [attachmentError, setAttachmentError] = useState('');
   const [mailboxReply, setMailboxReply] = useState('');
@@ -85,6 +89,7 @@ export default function App() {
     const mailbox = await getMailbox();
     setMessages(mailbox.messages);
     setMailboxStatus(mailbox.status);
+    setAcknowledgement(reporterAcknowledgement(mailbox));
     try {
       setAttachments(await listEvidence());
       setAttachmentError('');
@@ -267,6 +272,7 @@ export default function App() {
         {view === 'mailbox' && (
           <Mailbox
             status={mailboxStatus}
+            acknowledgement={acknowledgement}
             messages={messages}
             attachments={attachments}
             attachmentError={attachmentError}
@@ -597,6 +603,7 @@ function MailboxLogin({
 }
 function Mailbox({
   status,
+  acknowledgement,
   messages,
   attachments,
   attachmentError,
@@ -609,6 +616,7 @@ function Mailbox({
   onClose,
 }: {
   status: ReporterCaseStatus | null;
+  acknowledgement: ReturnType<typeof reporterAcknowledgement> | null;
   messages: Message[];
   attachments: EvidenceStatus[];
   attachmentError: string;
@@ -626,6 +634,19 @@ function Mailbox({
       {status && (
         <p className="case-status" data-testid="etik-case-status">
           Bildirim durumu: <strong>{reporterStatusLabel(status)}</strong>
+        </p>
+      )}
+      {/* The status says which stage the case is at; this says whether the promise made
+          when it was filed is being kept. A reporter with no channel back has no other
+          way to learn it — they cannot be told, so the page has to say it when they come. */}
+      {acknowledgement?.known && (
+        <p
+          className={`case-acknowledgement${acknowledgement.overdue ? ' is-overdue' : ''}`}
+          data-testid="etik-case-acknowledgement"
+          data-overdue={acknowledgement.overdue}
+          role={acknowledgement.overdue ? 'alert' : undefined}
+        >
+          {acknowledgement.text}
         </p>
       )}
       <p className="help">
@@ -749,6 +770,66 @@ function reporterStatusLabel(status: ReporterCaseStatus) {
     IN_REVIEW: 'İncelemede',
     CLOSED: 'Sonuçlandırıldı',
   }[status];
+}
+
+const ACKNOWLEDGEMENT_DEADLINE_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/**
+ * Where the seven-day promise stands, said to the person it was made to.
+ *
+ * <p>The case has carried `acknowledgedAt` since the beginning and the handler's screen
+ * marks it overdue in red. The reporter — who is the one the deadline protects — was
+ * never told any of it. A case answered on day three and a case ignored for three weeks
+ * read the same here, so the only way to find out was to keep coming back and re-reading
+ * the message list.
+ *
+ * <p>Absent is not null. A bundle deployed ahead of the service gets neither timestamp,
+ * and a countdown computed from a missing date would still read as a statement about a
+ * legal deadline — so it says it cannot tell instead.
+ *
+ * <p>The overdue wording deliberately does not apologise or promise a new date. It states
+ * what is true and what the reporter can do about it; a reassurance this page cannot keep
+ * would be worth less than the fact.
+ */
+export function reporterAcknowledgement(
+  view: { filedAt?: string | null; acknowledgedAt?: string | null },
+  now: number = Date.now(),
+): { text: string; overdue: boolean; known: boolean } {
+  if (view.filedAt === undefined || view.acknowledgedAt === undefined) {
+    return { text: '', overdue: false, known: false };
+  }
+  const filed = view.filedAt === null ? NaN : Date.parse(view.filedAt);
+  if (Number.isNaN(filed)) return { text: '', overdue: false, known: false };
+
+  if (view.acknowledgedAt) {
+    const answered = Date.parse(view.acknowledgedAt);
+    if (Number.isNaN(answered)) return { text: '', overdue: false, known: false };
+    const days = Math.max(0, Math.floor((answered - filed) / DAY_MS));
+    return {
+      known: true,
+      overdue: false,
+      text:
+        days === 0
+          ? 'Bildiriminiz aynı gün yanıtlandı.'
+          : `Bildiriminiz ${days} gün içinde yanıtlandı.`,
+    };
+  }
+
+  const elapsed = Math.floor((now - filed) / DAY_MS);
+  const remaining = ACKNOWLEDGEMENT_DEADLINE_DAYS - elapsed;
+  if (remaining > 0) {
+    return {
+      known: true,
+      overdue: false,
+      text: `Yetkili ekip henüz yanıt yazmadı. Yanıt süresi ${ACKNOWLEDGEMENT_DEADLINE_DAYS} gündür; ${remaining} gün kaldı.`,
+    };
+  }
+  return {
+    known: true,
+    overdue: true,
+    text: `Yetkili ekip ${elapsed} gündür yanıt yazmadı. ${ACKNOWLEDGEMENT_DEADLINE_DAYS} günlük yanıt süresi aşıldı; bu ekranı ve bildirim numaranızı kayıt olarak saklayın.`,
+  };
 }
 
 function PrivacyNotice() {

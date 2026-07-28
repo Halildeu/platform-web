@@ -18,6 +18,16 @@ export type ReporterCaseStatus = 'NEW' | 'IN_REVIEW' | 'CLOSED';
 export interface MailboxView {
   status: ReporterCaseStatus;
   messages: Message[];
+  /**
+   * When the report was filed, and when the team first wrote back.
+   *
+   * <p>Optional on purpose. A bundle deployed ahead of the service receives neither, and
+   * absent is not the same as null: null means nobody has replied yet, absent means this
+   * page cannot tell. A countdown computed from a missing date would still read to the
+   * reporter as a statement about a legal deadline.
+   */
+  filedAt?: string | null;
+  acknowledgedAt?: string | null;
 }
 // The complete custody vocabulary as the service emits it. `REJECTED` was
 // never one of them, while every terminal *failure* state was missing — and an
