@@ -139,6 +139,7 @@ describe('AuthBootstrapper — cold-mount triple-init guard (2026-05-25)', () =>
   beforeEach(async () => {
     kcInit.mockClear();
     kcToken = 'mock-jwt-token';
+    window.history.replaceState({}, '', '/');
     const mod = await import('./AuthBootstrapper');
     AuthBootstrapper = mod.AuthBootstrapper;
     resetPageState = mod.__resetAuthBootstrapperPageStateForTests;
@@ -177,6 +178,7 @@ describe('AuthBootstrapper — cold-mount triple-init guard (2026-05-25)', () =>
     });
     expect(kcInit).toHaveBeenCalledTimes(1);
     expect(countInitStartingLogs()).toBe(1);
+    expect(kcInit.mock.calls[0]?.[0]).not.toHaveProperty('scope');
 
     // Force a parent re-render. AuthBootstrapper itself receives the
     // same `dispatch` and computes the same `shouldUseKeycloak` (true)
@@ -191,6 +193,29 @@ describe('AuthBootstrapper — cold-mount triple-init guard (2026-05-25)', () =>
     expect(renderCount).toBe(2);
     expect(kcInit).toHaveBeenCalledTimes(1);
     expect(countInitStartingLogs()).toBe(1);
+  });
+
+  it('budget deep-link silent SSO requests read/write scopes but never approve', async () => {
+    window.history.replaceState({}, '', '/admin/reports/budget-control');
+    const store = buildStore();
+
+    render(
+      <Provider store={store}>
+        <AuthBootstrapper>
+          <div data-testid="budget-child" />
+        </AuthBootstrapper>
+      </Provider>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(kcInit).toHaveBeenCalledTimes(1);
+    const initOptions = kcInit.mock.calls[0]?.[0] as { scope?: string };
+    expect(initOptions.scope).toBe('openid budget:read budget:write');
+    expect(initOptions.scope).not.toContain('budget:approve');
   });
 
   it('StrictMode dev-mode double-mount + pending keycloak.init: bootstrap stays single-fire and final auth state populated', async () => {

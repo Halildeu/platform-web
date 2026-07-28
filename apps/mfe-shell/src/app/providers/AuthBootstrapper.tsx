@@ -12,6 +12,7 @@ import {
 } from '../../features/auth/model/auth.slice';
 import { subscribeAuthState, withSuppressedAuthBroadcast } from '../auth/auth-sync';
 import { createDevAuthSession, mapKeycloakProfile } from '../config/auth-helpers';
+import { resolveKeycloakRouteScope } from '../auth/keycloakRouteScope';
 import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { registerGridVariantsTokenResolver } from '@mfe/design-system';
 import { bootstrapAuthController, type BootstrapInitOptions } from './auth-bootstrap-controller';
@@ -758,6 +759,17 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           pkceMethod: 'S256',
           checkLoginIframe: false,
         };
+        const routeScopedInitScope =
+          typeof window !== 'undefined'
+            ? resolveKeycloakRouteScope(window.location.href)
+            : undefined;
+        if (routeScopedInitScope) {
+          // keycloak-js@26.2.4 treats init.scope as the default for
+          // check-sso/login URL creation. Reuse the exact interactive-login
+          // decision so a budget deep-link reload cannot silently replace a
+          // budget-scoped token with the frontend client's default scopes.
+          initOptions.scope = routeScopedInitScope;
+        }
         // 2026-05-11 (Codex 019e13ef AGREE on semantic correctness;
         // REVISE on hypothesis):
         //
@@ -838,6 +850,7 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           isLoginRoute,
           urlHasAuthCode,
           onLoad: initOptions.onLoad,
+          routeScopedScopeRequested: Boolean(initOptions.scope),
           kcUrl: authConfig.keycloak.url,
           ...urlCodeDiag,
         };

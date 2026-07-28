@@ -56,6 +56,7 @@ export interface BootstrapKeycloak {
 export interface BootstrapInitOptions {
   pkceMethod: 'S256';
   checkLoginIframe: false;
+  scope?: string;
   onLoad?: 'check-sso';
   silentCheckSsoRedirectUri?: string;
 }
