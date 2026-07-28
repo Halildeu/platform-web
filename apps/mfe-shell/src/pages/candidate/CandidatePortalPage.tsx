@@ -674,96 +674,12 @@ const CandidatePortalPage = () => {
               </div>
             </form>
             </div>
-            {/* Üç seçeneğin ORTAK çıkışı. Elle giriş bölmesinin içindeydi;
-                e-posta seçiliyken kayboluyordu ve o yolda kalan adayın açık
-                ilanlara dönecek hiçbir bağlantısı olmuyordu (sahip bildirimi).
-                Yönlendirme seçenekten bağımsız olduğu için kartın altında. */}
-            <p className="mt-6 text-sm leading-6 text-text-secondary">
-              Elinizde bu bilgilerden hiçbiri yok mu? Takip anahtarı güvenlik gereği yeniden
-              gösterilemez; yeni bir başvuru gönderebilirsiniz.
-            </p>
-            <Link
-              to="/jobs"
-              data-testid="candidate-open-positions"
-              className="mt-3 inline-flex min-h-12 items-center justify-center rounded-xl border border-border-strong bg-surface-default px-5 py-3 text-sm font-bold text-text-primary"
-            >
-              Açık pozisyonlara git
-            </Link>
-          </section>
-        ) : (
-          <section
-            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs sm:p-10"
-            aria-labelledby="candidate-my-applications-heading"
-            data-testid="candidate-my-applications"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 id="candidate-my-applications-heading" className="text-2xl font-bold">
-                  Başvurularım
-                </h2>
-                <p className="mt-2 text-sm text-text-secondary">
-                  {emailSession.email} adresine ait {myApplications.length} başvuru
-                </p>
-              </div>
-              <button
-                type="button"
-                data-testid="candidate-email-sign-out"
-                onClick={emailSignOut}
-                className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
-              >
-                Çıkış yap
-              </button>
-            </div>
-            {myApplicationsError ? (
-              <p
-                role="alert"
-                data-testid="candidate-my-applications-error"
-                className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
-              >
-                {myApplicationsError}
-              </p>
-            ) : null}
-            {myApplications.length === 0 && !myApplicationsError ? (
-              <p className="mt-4 text-sm text-text-secondary">
-                Bu adrese ait başvuru görünmüyor.
-              </p>
-            ) : null}
-            <ul className="mt-4 space-y-3">
-              {myApplications.map((item) => (
-                <li
-                  key={item.publicRef}
-                  data-testid={`candidate-my-application-${item.publicRef}`}
-                  className="rounded-2xl border border-border-subtle bg-surface-subtle p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-text-primary">{item.jobTitle}</p>
-                    <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-bold">
-                      {STATUS_COPY[item.status].label}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    {formatDate(item.createdAt)} · <span className="font-mono">{item.publicRef}</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-            {/* Ayrıntı (görüşme, teklif, geri çekme) hâlâ başvuru anahtarına
-                bağlı: e-posta sahipliği kimliği kanıtlar ama tek bir başvurunun
-                mutasyon yetkisini vermez. Liste, adayın hangi anahtarı
-                kullanacağını bulmasını sağlar. */}
-          </section>
-        )}
+            {/* #1062: dosya ve elle giriş bölmeleri AYRI BİR KARTTAYDI —
+                seçenekler bir kutuda, seçilenin içeriği başka kutuda açılıyordu
+                (sahip bildirimi: "tasarımlar farklı farklı yerlerde"). Seçim ile
+                sonucu ayırmak, kullanıcıya iki ayrı şeymiş gibi görünüyordu.
+                Bölmeler seçicinin olduğu karta taşındı; ikinci kart silindi. */}
 
-        {/* #1059 düzeltmesi: e-posta seçiliyken bu bölümün İÇİ gizleniyordu ama
-            KABUĞU kalıyordu — sayfanın altında boş bir kart duruyordu (canlıda
-            ekran görüntüsüyle görüldü). Kabuk da koşula bağlandı. */}
-        {!session ? (
-          <section
-            hidden={signInOption === 'email'}
-            className="mt-4 rounded-3xl border border-border-subtle bg-surface-muted p-5 sm:p-8"
-            aria-labelledby="candidate-sign-in-heading"
-            data-testid="candidate-sign-in"
-          >
             {/* #1059: bu bölüm artık iki AYRI seçeneğin bölmesi. Üstteki
                 seçici hangisinin görüneceğini belirler; katlanır başlık
                 kaldırıldı çünkü seçim yukarıda yapılıyor. */}
@@ -879,8 +795,90 @@ const CandidatePortalPage = () => {
               </button>
             </form>
             </div>
+
+            {/* Üç seçeneğin ORTAK çıkışı. Elle giriş bölmesinin içindeydi;
+                e-posta seçiliyken kayboluyordu ve o yolda kalan adayın açık
+                ilanlara dönecek hiçbir bağlantısı olmuyordu (sahip bildirimi).
+                Yönlendirme seçenekten bağımsız olduğu için kartın altında. */}
+            <p className="mt-6 text-sm leading-6 text-text-secondary">
+              Elinizde bu bilgilerden hiçbiri yok mu? Takip anahtarı güvenlik gereği yeniden
+              gösterilemez; yeni bir başvuru gönderebilirsiniz.
+            </p>
+            <Link
+              to="/jobs"
+              data-testid="candidate-open-positions"
+              className="mt-3 inline-flex min-h-12 items-center justify-center rounded-xl border border-border-strong bg-surface-default px-5 py-3 text-sm font-bold text-text-primary"
+            >
+              Açık pozisyonlara git
+            </Link>
           </section>
-        ) : null}
+        ) : (
+          <section
+            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs sm:p-10"
+            aria-labelledby="candidate-my-applications-heading"
+            data-testid="candidate-my-applications"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="candidate-my-applications-heading" className="text-2xl font-bold">
+                  Başvurularım
+                </h2>
+                <p className="mt-2 text-sm text-text-secondary">
+                  {emailSession.email} adresine ait {myApplications.length} başvuru
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="candidate-email-sign-out"
+                onClick={emailSignOut}
+                className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 py-2 text-sm font-bold text-text-primary"
+              >
+                Çıkış yap
+              </button>
+            </div>
+            {myApplicationsError ? (
+              <p
+                role="alert"
+                data-testid="candidate-my-applications-error"
+                className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
+              >
+                {myApplicationsError}
+              </p>
+            ) : null}
+            {myApplications.length === 0 && !myApplicationsError ? (
+              <p className="mt-4 text-sm text-text-secondary">
+                Bu adrese ait başvuru görünmüyor.
+              </p>
+            ) : null}
+            <ul className="mt-4 space-y-3">
+              {myApplications.map((item) => (
+                <li
+                  key={item.publicRef}
+                  data-testid={`candidate-my-application-${item.publicRef}`}
+                  className="rounded-2xl border border-border-subtle bg-surface-subtle p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-text-primary">{item.jobTitle}</p>
+                    <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-bold">
+                      {STATUS_COPY[item.status].label}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {formatDate(item.createdAt)} · <span className="font-mono">{item.publicRef}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {/* Ayrıntı (görüşme, teklif, geri çekme) hâlâ başvuru anahtarına
+                bağlı: e-posta sahipliği kimliği kanıtlar ama tek bir başvurunun
+                mutasyon yetkisini vermez. Liste, adayın hangi anahtarı
+                kullanacağını bulmasını sağlar. */}
+          </section>
+        )}
+
+        {/* #1059 düzeltmesi: e-posta seçiliyken bu bölümün İÇİ gizleniyordu ama
+            KABUĞU kalıyordu — sayfanın altında boş bir kart duruyordu (canlıda
+            ekran görüntüsüyle görüldü). Kabuk da koşula bağlandı. */}
 
         {loading ? (
           <div
