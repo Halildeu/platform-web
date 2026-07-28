@@ -9,8 +9,10 @@ import { endpointAdminApi } from '../../app/services/endpointAdminApi';
 import { endpointAdminReduxContext } from '../../app/services/redux-context';
 import EndpointDevicesPage, {
   DEFAULT_PRESET,
+  selectDeviceForDrawer,
   withDefaultStatusFilter,
 } from './EndpointDevicesPage';
+import type { EndpointDevice } from '../../entities/endpoint-device/types';
 
 /**
  * #1154 PR-3 — the devices grid is now SERVER-mode (SSRM datasource →
@@ -77,6 +79,23 @@ describe('EndpointDevicesPage (server mode)', () => {
     });
     expect(screen.queryByTestId('inventory-export-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('export-snapshot-columns-notice')).not.toBeInTheDocument();
+  });
+});
+
+describe('EndpointDevicesPage drawer target binding', () => {
+  const deviceA = { id: 'device-a', hostname: 'MKR-A1' } as EndpointDevice;
+  const deviceB = { id: 'device-b', hostname: 'AgentPc2' } as EndpointDevice;
+
+  it('unmounts the drawer when the selection is cleared even if RTK retains device A', () => {
+    expect(selectDeviceForDrawer(null, deviceA)).toBeNull();
+  });
+
+  it('rejects stale device A while the current selection is device B', () => {
+    expect(selectDeviceForDrawer(deviceB.id, deviceA)).toBeNull();
+  });
+
+  it('opens the command surface only for the exact selected device', () => {
+    expect(selectDeviceForDrawer(deviceB.id, deviceB)).toBe(deviceB);
   });
 });
 
