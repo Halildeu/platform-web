@@ -388,6 +388,10 @@ const CandidatePortalPage = () => {
 
   /** Yanlış çiftle girildiğinde adayın forma dönebilmesi gerekir. */
   const signOut = () => {
+    // Düğmenin adı "başka referans ve anahtarla gir" — adayı o seçeneğe
+    // GÖTÜRMELİ. Aksi halde çıkış yapıp e-posta ekranında kalıyordu ve
+    // söylenen şeyi yapmak için bir tık daha gerekiyordu.
+    setSignInOption('manual');
     clearCandidateSession();
     setSession(null);
     setStatus(null);
@@ -735,8 +739,12 @@ const CandidatePortalPage = () => {
           </section>
         )}
 
+        {/* #1059 düzeltmesi: e-posta seçiliyken bu bölümün İÇİ gizleniyordu ama
+            KABUĞU kalıyordu — sayfanın altında boş bir kart duruyordu (canlıda
+            ekran görüntüsüyle görüldü). Kabuk da koşula bağlandı. */}
         {!session ? (
           <section
+            hidden={signInOption === 'email'}
             className="mt-4 rounded-3xl border border-border-subtle bg-surface-muted p-5 sm:p-8"
             aria-labelledby="candidate-sign-in-heading"
             data-testid="candidate-sign-in"

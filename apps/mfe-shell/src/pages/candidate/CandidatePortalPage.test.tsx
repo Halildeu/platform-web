@@ -67,6 +67,11 @@ const renderPage = () =>
     </MemoryRouter>,
   );
 
+/** #1059: elle giriş artık bir SEÇENEK; gerçek aday da önce onu seçiyor. */
+const chooseManualOption = async () => {
+  fireEvent.click(await screen.findByTestId('candidate-signin-option-manual'));
+};
+
 describe('CandidatePortalPage', () => {
   beforeEach(() => {
     apiMocks.readCandidateSession.mockReturnValue(SESSION);
@@ -465,6 +470,7 @@ describe('CandidatePortalPage', () => {
     apiMocks.readCandidateSession.mockReturnValue(null);
     apiMocks.establishCandidateSession.mockReturnValue(null);
     renderPage();
+    fireEvent.click(screen.getByTestId('candidate-signin-option-manual'));
 
     fireEvent.change(screen.getByTestId('candidate-sign-in-ref'), { target: { value: 'app_kisa' } });
     fireEvent.change(screen.getByTestId('candidate-sign-in-token'), { target: { value: 'bozuk' } });
@@ -492,6 +498,7 @@ describe('CandidatePortalPage', () => {
 
   it('clears the tracking credential from a shared device on sign-out', async () => {
     renderPage();
+    await chooseManualOption();
     await screen.findAllByText('İnsan incelemesinde');
     fireEvent.click(screen.getByTestId('candidate-sign-out'));
 
