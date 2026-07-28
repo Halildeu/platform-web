@@ -166,7 +166,6 @@ const renderPage = () =>
 const reachPreview = async () => {
   await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
   fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-  fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
   fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
   expect(screen.getByTestId('candidate-application-preview')).toBeVisible();
 };
@@ -234,20 +233,23 @@ describe('CandidateApplicationPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('presents one clear application step at a time and preserves editable values', async () => {
+  it('shows every form section on one page instead of one step at a time', async () => {
+    // #1048 SAHIP ILKESI: aralarinda islevsel kapi olmayan alan gruplarini
+    // adim adim gostermek adaya sebepsiz sira dayatiyordu. Uc bolum artik
+    // asagi dogru akiyor; aday CV yuklemeden de bilgilerini girebilir.
     renderPage();
     expect(await screen.findByRole('heading', { name: 'CV’nizle başlayın' })).toBeVisible();
-    expect(screen.queryByRole('heading', { name: 'Size nasıl ulaşalım?' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
     expect(screen.getByRole('heading', { name: 'Size nasıl ulaşalım?' })).toBeVisible();
-    expect(screen.queryByRole('heading', { name: 'CV’nizle başlayın' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Deneyiminizi anlatın' })).toBeVisible();
+
+    // Duzenlenen deger, sayfada gezinirken korunur.
     fireEvent.change(screen.getByLabelText(/Ad soyad/i), {
       target: { value: 'Düzenlenmiş Sentetik Aday' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
-    expect(screen.getByRole('heading', { name: 'Deneyiminizi anlatın' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'İletişim bilgilerime dön' }));
+    fireEvent.click(screen.getByTestId('candidate-step-back-contact'));
     expect(screen.getByLabelText(/Ad soyad/i)).toHaveValue('Düzenlenmiş Sentetik Aday');
+    // CV bolumu gizlenmedi: gosterge artik bir icindekiler listesi.
+    expect(screen.getByRole('heading', { name: 'CV’nizle başlayın' })).toBeVisible();
   });
 
   it('submits the editable form to the persistent API and stores tracking only after success', async () => {
@@ -408,7 +410,11 @@ describe('CandidateApplicationPage', () => {
       'web-idempotency-123456',
       'A'.repeat(43),
     );
-    expect(screen.queryByTestId('candidate-fullName')).not.toBeInTheDocument();
+    // #1048: alan artik ayni sayfada GORUNUR. Asil degismez onun gizli olmasi
+    // degil, onerinin aktarim ONCESI alana SIZMAMASI — yani DEGER bos kalmali.
+    // Gorunurlugu test etmek, tasarim degisince kirilan ama sizintiyi
+    // yakalamayan bir capa olurdu.
+    expect(screen.getByTestId('candidate-fullName')).toHaveValue('');
     expect(screen.getByTestId('candidate-resume-review')).not.toHaveTextContent('ornek-cv.pdf');
 
     fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
@@ -581,7 +587,6 @@ describe('CandidateApplicationPage', () => {
   it('requires an explicit choice instead of overwriting a non-empty manual field', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
-    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     fireEvent.change(screen.getByTestId('candidate-fullName'), {
       target: { value: 'Elle Yazılan Aday' },
     });
@@ -606,7 +611,6 @@ describe('CandidateApplicationPage', () => {
   it('lets the candidate combine and edit a manual value with a CV proposal', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
-    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     fireEvent.change(screen.getByTestId('candidate-fullName'), {
       target: { value: 'Elle Yazılan Aday' },
     });
@@ -657,7 +661,6 @@ describe('CandidateApplicationPage', () => {
     });
 
     expect(await screen.findByTestId('candidate-resume-parsing')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
     fireEvent.change(screen.getByTestId('candidate-fullName'), { target: { value: 'Form Açık' } });
     expect(screen.getByTestId('candidate-fullName')).toHaveValue('Form Açık');
@@ -680,7 +683,6 @@ describe('CandidateApplicationPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('UNSUPPORTED_IN_GATE');
     expect(alert).toHaveFocus();
-    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
   });
 
@@ -713,18 +715,22 @@ describe('CandidateApplicationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Evet, tümünü reddet' }));
     await waitFor(() => expect(apiMocks.terminateResumeImport).toHaveBeenCalled());
     expect(screen.queryByTestId('candidate-resume-review')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
     expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
   });
 
   it('blocks preview when required fields are missing', async () => {
+    // #1048: tek gerçek kapı önizleme. Aşama geçişleri kaydırmaya indiği için
+    // zorunlu-alan doğrulaması ARTIK YALNIZ burada — iki yerde tutmak drift
+    // üretiyordu (aynı kural iki farklı metinle iki yerde yaşıyordu).
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
-    fireEvent.click(screen.getByRole('button', { name: 'CV olmadan devam et' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'iletişim bilgilerindeki yıldızlı alanları doldurun',
-    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+
+    expect(
+      screen.getByText(/Önizlemeye geçmek için yıldızlı alanları doldurun/i),
+    ).toBeVisible();
+    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
   });
 
   it('does not duplicate the synthetic-only policy client side (backend is the authority)', async () => {
@@ -737,7 +743,6 @@ describe('CandidateApplicationPage', () => {
     fireEvent.change(screen.getByLabelText(/E-posta/i), {
       target: { value: 'gercek.aday@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(await screen.findByRole('button', { name: 'Başvuruyu gönder' })).toBeInTheDocument();
@@ -753,7 +758,6 @@ describe('CandidateApplicationPage', () => {
     fireEvent.change(screen.getByLabelText(/E-posta/i), {
       target: { value: 'gercek.aday@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
     screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
@@ -767,7 +771,6 @@ describe('CandidateApplicationPage', () => {
     renderPage();
     expect(await screen.findByRole('alert')).toHaveTextContent('ilan yok');
     fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
     screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
     await waitFor(() =>
@@ -785,7 +788,6 @@ describe('CandidateApplicationPage', () => {
   const reachProfileStep = async () => {
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
     fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     expect(screen.getByRole('heading', { name: 'Deneyiminizi anlatın' })).toBeVisible();
   };
 
@@ -852,7 +854,6 @@ describe('CandidateApplicationPage', () => {
     );
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
     fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
 
     // Metin yok → açılır bölüm de, KVKK onay kutusu da yok.
@@ -919,21 +920,20 @@ describe('CandidateApplicationPage', () => {
     });
   });
 
-  it('turns completed steps in the progress indicator into back links', async () => {
+  it('uses the indicator as a section navigator, not as completed-step back links', async () => {
+    // #1048: "tamamlanmis adim" kavrami kalkti. Uzun bir sayfada gostergenin
+    // hala isi var — icindekiler listesi. UC bolumun HEPSI her zaman
+    // gezilebilir; ileri/geri ayrimi anlamsizlasti.
     renderPage();
     await reachProfileStep();
 
-    // Tamamlanmış adımlar tıklanır.
     expect(screen.getByTestId('candidate-step-back-resume')).toBeInTheDocument();
     expect(screen.getByTestId('candidate-step-back-contact')).toBeInTheDocument();
-    // Bulunulan adım ve ileri adımlar tıklanmaz: ileri geçiş zorunlu-alan
-    // doğrulamasına tabidir, tıklanabilir gösterip hiçbir şey yapmamak
-    // olmayan bir yol varmış gibi görünürdü.
-    expect(screen.queryByTestId('candidate-step-back-profile')).not.toBeInTheDocument();
+    expect(screen.getByTestId('candidate-step-back-profile')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('candidate-step-back-contact'));
     expect(screen.getByRole('heading', { name: 'Size nasıl ulaşalım?' })).toBeVisible();
-    // Veri korunur — geri dönmek form durumunu sıfırlamaz.
+    // Gezinmek form durumunu sifirlamaz.
     expect(screen.getByTestId('candidate-fullName')).toHaveValue('Deniz Yılmaz');
   });
 
@@ -1165,7 +1165,6 @@ describe('CandidateApplicationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
 
     await waitFor(() => expect(screen.getByTestId('candidate-fullName')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
     expect(screen.getByTestId('candidate-experience-0-description')).toHaveValue(
       EXPERIENCE_PROPOSAL_VALUE,
     );
@@ -1225,7 +1224,6 @@ describe('CandidateApplicationPage', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
     await waitFor(() => expect(screen.getByTestId('candidate-fullName')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Deneyim bilgilerime devam et' }));
   };
 
   it('spreads grouped resume records across separate cards', async () => {
