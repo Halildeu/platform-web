@@ -2,11 +2,13 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import {
   chunkToSegment,
+  collapseFoldedFragments,
   connectLiveTranscriptSse,
   liveStatusToSegmentStatus,
   resolveLiveTranscriptSseEndpoint,
   type LiveTranscriptChunk,
 } from './meeting-live-transcript-sse';
+import type { TranscriptSegment } from './meeting-workbench';
 
 const ENDPOINT_ENV = 'VITE_MEETING_LIVE_TRANSCRIPT_SSE_URL';
 
@@ -101,6 +103,58 @@ describe('chunkToSegment', () => {
   });
 });
 
+describe('collapseFoldedFragments', () => {
+  const seg = (id: string, status: TranscriptSegment['status']): TranscriptSegment => ({
+    id,
+    speaker: 'Kayıtçı',
+    startedAtMs: 0,
+    status,
+    text: 'x',
+  });
+
+  test('removes the raw fragments an assembled line folded in', () => {
+    const before = [seg('evt-1', 'draft'), seg('evt-2', 'draft'), seg('evt-9', 'draft')];
+    const after = collapseFoldedFragments(before, ['evt-1', 'evt-2']);
+    expect(after.map((s) => s.id)).toEqual(['evt-9']);
+  });
+
+  // Deleting a line that was never folded is worse than briefly showing a
+  // duplicate, so no ids to match must mean no deletions.
+  test.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['empty', [] as string[]],
+  ])('%s sourceEventIds removes nothing', (_label, ids) => {
+    const before = [seg('evt-1', 'draft'), seg('evt-2', 'draft')];
+    expect(collapseFoldedFragments(before, ids).map((s) => s.id)).toEqual(['evt-1', 'evt-2']);
+  });
+
+  test('a fragment that was already promoted survives — accuracy outranks readability', () => {
+    const before = [seg('evt-1', 'final'), seg('evt-2', 'draft')];
+    const after = collapseFoldedFragments(before, ['evt-1', 'evt-2']);
+    expect(after.map((s) => s.id)).toEqual(['evt-1']);
+  });
+
+  test('does not mutate the array it was given', () => {
+    const before = [seg('evt-1', 'draft')];
+    collapseFoldedFragments(before, ['evt-1']);
+    expect(before).toHaveLength(1);
+  });
+});
+
+describe('chunkToSegment id', () => {
+  test('uses the gateway id so an assembled line can find its fragments', () => {
+    expect(chunkToSegment({ text: 'a', eventId: '1700000000000-3' }, 0, 111).id).toBe(
+      '1700000000000-3',
+    );
+  });
+
+  test('falls back to a local id when the gateway sends none', () => {
+    expect(chunkToSegment({ text: 'a' }, 4, 111).id).toBe('live-sse-111-4');
+    expect(chunkToSegment({ text: 'a', eventId: '   ' }, 4, 111).id).toBe('live-sse-111-4');
+  });
+});
+
 describe('connectLiveTranscriptSse', () => {
   const original = { ...import.meta.env };
 
@@ -110,6 +164,45 @@ describe('connectLiveTranscriptSse', () => {
 
   afterEach(() => {
     Object.assign(import.meta.env, original);
+  });
+
+  // Wiring anchor: collapseFoldedFragments is unit-tested above, but disabling
+  // the CALL leaves those tests green. This one fails the moment the stream
+  // stops folding, which is the regression a viewer would actually see.
+  test('an assembled line replaces the fragments it folded, instead of stacking on them', () => {
+    (import.meta.env as Record<string, string | undefined>)[ENDPOINT_ENV] =
+      'https://gw.example/api/v1/audio-gateway/meetings/{meetingId}/live-transcript/stream';
+    const listeners = new Map<string, EventListener>();
+    const fakeSource = {
+      addEventListener: (event: string, listener: EventListener) => {
+        listeners.set(event, listener);
+      },
+      set onopen(_handler: () => void) {},
+      set onerror(_handler: () => void) {},
+      close: vi.fn(),
+    } as unknown as EventSource;
+
+    const controller = connectLiveTranscriptSse('m-1', {}, () => fakeSource);
+    const send = (chunk: LiveTranscriptChunk) =>
+      listeners.get('transcript-chunk')?.(
+        new MessageEvent('transcript-chunk', { data: JSON.stringify(chunk) }),
+      );
+
+    send({ text: 'Toplantıyı', eventId: 'evt-1', status: 'DRAFT' });
+    send({ text: 'başlatalım.', eventId: 'evt-2', status: 'DRAFT' });
+    expect(controller.snapshot().chunks.map((c) => c.id)).toEqual(['evt-1', 'evt-2']);
+
+    send({
+      text: 'Toplantıyı başlatalım.',
+      eventId: 'evt-3',
+      status: 'UTTERANCE',
+      sourceEventIds: ['evt-1', 'evt-2'],
+    });
+
+    const after = controller.snapshot().chunks;
+    expect(after.map((c) => c.id)).toEqual(['evt-3']);
+    expect(after[0].status).toBe('final');
+    expect(after[0].text).toBe('Toplantıyı başlatalım.');
   });
 
   test('not-configured when env is unset', () => {

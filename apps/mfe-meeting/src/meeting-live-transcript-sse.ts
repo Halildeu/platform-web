@@ -33,6 +33,12 @@ export interface LiveTranscriptChunk {
   computeType?: string | null;
   device?: string | null;
   /**
+   * Durable id this event was stored under — the same id space sourceEventIds
+   * is written in. Absent on gateways older than platform-backend#982, in
+   * which case folded fragments simply cannot be matched and stay on screen.
+   */
+  eventId?: string | null;
+  /**
    * {@code DRAFT} for a raw committed chunk, {@code UTTERANCE} for a line the
    * gateway assembled from consecutive chunks (audio-gateway
    * LiveTranscriptEvent). Absent on older gateways.
@@ -86,6 +92,31 @@ export function liveStatusToSegmentStatus(status?: string | null): TranscriptSeg
   return status === 'UTTERANCE' ? 'final' : 'draft';
 }
 
+/**
+ * Drop the raw fragments an assembled line folded in.
+ *
+ * The gateway publishes an assembled line under a NEW id, so without this the
+ * viewer reads the same sentence twice — first split, then whole. Desktop hit
+ * this first and the complaint was literal: "aynı cümleyi ön satırda
+ * okuyorsun".
+ *
+ * Two deliberate restraints, both copied from the desktop implementation:
+ *   - No ids to match means nothing is removed. Showing a duplicate for a
+ *     moment beats deleting a line that was never folded.
+ *   - Only raw drafts go. A fragment that had already been promoted stays,
+ *     because accuracy outranks readability.
+ */
+export function collapseFoldedFragments(
+  segments: readonly TranscriptSegment[],
+  sourceEventIds: readonly string[] | null | undefined,
+): TranscriptSegment[] {
+  if (!sourceEventIds || sourceEventIds.length === 0) {
+    return [...segments];
+  }
+  const folded = new Set(sourceEventIds);
+  return segments.filter((segment) => !folded.has(segment.id) || segment.status !== 'draft');
+}
+
 /** Convert a backend LiveTranscriptChunk into a UI TranscriptSegment. */
 export function chunkToSegment(
   chunk: LiveTranscriptChunk,
@@ -94,7 +125,11 @@ export function chunkToSegment(
 ): TranscriptSegment {
   const sourceEventIds = chunk.sourceEventIds ?? undefined;
   return {
-    id: `live-sse-${receivedAtMs}-${seq}`,
+    // The gateway id when we have one: it is the id sourceEventIds refers to,
+    // so carrying it is what makes an assembled line able to find the
+    // fragments it replaced. The local id is only a fallback for gateways
+    // that do not send one.
+    id: chunk.eventId?.trim() ? chunk.eventId.trim() : `live-sse-${receivedAtMs}-${seq}`,
     speaker: 'Kayıtçı',
     startedAtMs: receivedAtMs,
     status: liveStatusToSegmentStatus(chunk.status),
@@ -176,7 +211,12 @@ export function connectLiveTranscriptSse(
       const messageEvent = raw as MessageEvent;
       const parsed = JSON.parse(messageEvent.data) as LiveTranscriptChunk;
       const receivedAtMs = Date.now();
-      chunks.push(chunkToSegment(parsed, seq++, receivedAtMs));
+      const segment = chunkToSegment(parsed, seq++, receivedAtMs);
+      // Remove what this line folded in BEFORE appending it, so the assembled
+      // sentence takes the fragments' place instead of stacking on top of them.
+      const remaining = collapseFoldedFragments(chunks, parsed.sourceEventIds);
+      chunks.length = 0;
+      chunks.push(...remaining, segment);
       lastChunkAt = new Date(receivedAtMs).toISOString();
       state = 'receiving';
       emit();
