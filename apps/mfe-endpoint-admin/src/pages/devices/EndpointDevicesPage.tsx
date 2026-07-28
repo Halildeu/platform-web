@@ -25,7 +25,11 @@ import {
   type DeviceGridRow,
 } from '../../entities/endpoint-device-grid/types';
 import { useEndpointAdminI18n } from '../../i18n';
-import type { DeviceStatus, OsType } from '../../entities/endpoint-device/types';
+import type {
+  DeviceStatus,
+  EndpointDevice,
+  OsType,
+} from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
 import DeviceBulkActionsMenu, { type BulkSelectableDevice } from './DeviceBulkActionsMenu';
 import {
@@ -219,6 +223,22 @@ export interface EndpointDevicesPageProps {
   preset?: EndpointDevicesPagePreset;
 }
 
+/**
+ * Keep the command-capable drawer bound to the exact row selection.
+ *
+ * RTK Query intentionally keeps `data` from the previous argument while a new
+ * argument loads, and can also retain it when a query becomes skipped. That is
+ * useful for passive content, but unsafe here: closing device A or selecting
+ * device B must never leave device A's command surface mounted.
+ */
+export function selectDeviceForDrawer(
+  selectedDeviceId: string | null,
+  currentDevice: EndpointDevice | undefined,
+): EndpointDevice | null {
+  if (!selectedDeviceId || currentDevice?.id !== selectedDeviceId) return null;
+  return currentDevice;
+}
+
 export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
   preset = DEFAULT_PRESET,
 }) => {
@@ -239,9 +259,13 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
   // Row click fetches the full EndpointDevice by id (the flat grid row lacks
   // tenantId/machineFingerprint/enrolledAt/createdAt/updatedAt the drawer
   // reads). Skipped until a row is selected.
-  const { data: selectedDevice } = useGetEndpointDeviceQuery(selectedDeviceId ?? '', {
-    skip: selectedDeviceId == null,
-  });
+  const { currentData: currentSelectedDevice } = useGetEndpointDeviceQuery(
+    selectedDeviceId ?? '',
+    {
+      skip: selectedDeviceId == null,
+    },
+  );
+  const selectedDevice = selectDeviceForDrawer(selectedDeviceId, currentSelectedDevice);
 
   // Feed the grid's DeviceGridExportError to the ONE classifier: its transport
   // `httpStatus` (kept apart from the app `code`, so `403 { code: 'ACCESS_DENIED' }`
@@ -921,6 +945,7 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
           polling) open under "no access" (Codex S4a P1-3 follow-up). */}
       {showGrid ? (
         <DeviceDetailDrawer
+          key={selectedDeviceId}
           open={selectedDevice != null}
           device={selectedDevice ?? null}
           onClose={() => setSelectedDeviceId(null)}
