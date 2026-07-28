@@ -85,6 +85,21 @@ describe('Etik Speak manager MFE', () => {
     expect(screen.getByText('Sentetik anlatım')).toBeInTheDocument();
     expect(api.listCaseEvidence).toHaveBeenCalledWith(summary.id);
   });
+  // The stylesheet pins the detail pane so a long case list can be scrolled without
+  // losing sight of the case that was just opened. That rule keys off this class, and
+  // a class that quietly stops being applied leaves no trace: the markup still renders,
+  // the tests still pass, and the pane silently scrolls away again.
+  test('the detail pane stays addressable by the rule that pins it', async () => {
+    const { container } = render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await screen.findByRole('heading', { name: 'Sentetik bildirim' });
+
+    const pane = container.querySelector('.ethics-detail-pane');
+    expect(pane).not.toBeNull();
+    expect(pane).toContainElement(screen.getByRole('heading', { name: 'Sentetik bildirim' }));
+    // Pinning only works against a scrolling sibling, so the list must stay outside it.
+    expect(pane).not.toContainElement(screen.getByRole('button', { name: /#11111111/ }));
+  });
   test('only an available sanitized derivative can be downloaded', async () => {
     vi.mocked(api.listCaseEvidence).mockResolvedValueOnce([scanningEvidence, availableEvidence]);
     const anchorClick = vi

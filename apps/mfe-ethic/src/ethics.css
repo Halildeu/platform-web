@@ -30,6 +30,20 @@
   display: grid;
   grid-template-columns: minmax(270px, 360px) minmax(0, 1fr);
   gap: 1rem;
+  align-items: start;
+}
+
+/* The case list grows with the caseload; the detail pane must not scroll away with
+   it. Without this, picking a case near the bottom of a long list leaves the reader
+   looking at empty space and forces a scroll back to the top to read what they just
+   opened — the list and the thing it selects have to be visible at the same time.
+   `align-items: start` above is load-bearing: a stretched grid item is exactly as
+   tall as the row, so `position: sticky` would have nothing to travel within. */
+.ethics-detail-pane {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
 }
 
 .ethics-alert {
@@ -283,6 +297,14 @@
 @media (width <= 800px) {
   .ethics-manager-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* One column: the detail already follows the list in reading order, so pinning it
+     would trap the reader in a short scrolling box instead of helping them. */
+  .ethics-detail-pane {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .ethics-manager {
