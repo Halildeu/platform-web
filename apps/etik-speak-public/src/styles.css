@@ -552,3 +552,22 @@ footer a {
   margin-top: 1rem;
   text-decoration: none;
 }
+
+/* The seven-day promise, said to the person it was made to. Overdue is a fact, not an
+   alarm: it stays readable rather than shouting, because the reporter cannot act on
+   volume — they can act on knowing, and on having the wording to point at. Colour is
+   never the only carrier; the sentence says it too. */
+.case-acknowledgement {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--border-default, #cbd5e1);
+  border-radius: 0.25rem;
+  line-height: 1.5;
+}
+
+.case-acknowledgement.is-overdue {
+  border-left-color: var(--state-danger-border, #b3261e);
+  background: var(--state-danger-bg, #fdecea);
+  color: var(--state-danger-text, #7f1d1d);
+  font-weight: 600;
+}
