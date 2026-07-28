@@ -615,6 +615,67 @@ describe('Etik Speak manager MFE', () => {
     expect(rows[1]).toHaveTextContent('Ayşe Yılmaz');
   });
 
+  // Aktörü çözülemeyen satırın sessiz kalması, denetim izinin sessizce fakirleşmesiydi:
+  // okuyan "kimse dokunmamış" diye anlıyordu. Artık servis söylerse ekran da söylüyor.
+  test('aktörü çözülemeyen satır bunu söyler, sessiz kalmaz', async () => {
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([
+      {
+        occurredAt: '2026-07-19T08:30:00Z',
+        event: 'ethics.case.updated',
+        actorHandle: null,
+        actorDisplayName: null,
+        detail: 'CLOSED',
+        actorState: 'UNRESOLVED',
+      },
+    ]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const history = await screen.findByRole('list', { name: 'Vaka geçmişi' });
+    expect(within(history).getByText('Aktör şu anda çözülemiyor')).toBeInTheDocument();
+  });
+
+  // NONE gerçekten "aktör yoktu" demek — anonim ihbar, boru hattı adımı. Oraya
+  // "çözülemiyor" yazmak, hiç aktörü olmamış bir olay için alarm üretmek olurdu.
+  test('aktörü olmayan satır uyarı üretmez', async () => {
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([
+      {
+        occurredAt: '2026-07-18T12:00:00Z',
+        event: 'ethics.report.created',
+        actorHandle: null,
+        actorDisplayName: null,
+        detail: null,
+        actorState: 'NONE',
+      },
+    ]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const history = await screen.findByRole('list', { name: 'Vaka geçmişi' });
+    expect(within(history).getByText('İhbar alındı')).toBeInTheDocument();
+    expect(within(history).queryByText('Aktör şu anda çözülemiyor')).not.toBeInTheDocument();
+  });
+
+  // Bu paket, alanı henüz göndermeyen bir servisle konuşabilir — bugün tam tersi oldu ve
+  // ekran, var olmayan bir endpoint'e 403 aldı. Alan yoksa hiçbir şey iddia edilmez.
+  test('alanı göndermeyen servisle konuşurken hiçbir şey iddia edilmez', async () => {
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([
+      {
+        occurredAt: '2026-07-18T12:00:00Z',
+        event: 'ethics.report.created',
+        actorHandle: null,
+        actorDisplayName: null,
+        detail: null,
+      },
+    ]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const history = await screen.findByRole('list', { name: 'Vaka geçmişi' });
+    expect(within(history).getByText('İhbar alındı')).toBeInTheDocument();
+    expect(within(history).queryByText('Aktör şu anda çözülemiyor')).not.toBeInTheDocument();
+  });
+
   // ASIL SÖZLEŞME: okunamayan geçmiş, boş geçmiş gibi görünmemeli. "Bu vakaya hiçbir şey
   // olmamış" bir kanıdır ve devralan kişi ona göre karar verir; başarısız bir istekle
   // ulaşılabilir olmamalı.

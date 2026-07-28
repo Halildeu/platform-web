@@ -262,12 +262,33 @@ export async function addCaseParticipant(
  * <p>`detail` is the single extra field the server chose to carry for a handful of event
  * types. It is never the report's narrative.
  */
+export type TimelineActorState = 'NONE' | 'RESOLVED' | 'UNRESOLVED';
+
+// Module-local on purpose: a vocabulary exported from this transport module and read
+// elsewhere would be emptied by `vi.mock` automocking, and the tests that rely on it would
+// keep passing against an empty list.
+const ACTOR_STATES: readonly TimelineActorState[] = ['NONE', 'RESOLVED', 'UNRESOLVED'];
+
 export interface CaseTimelineEntry {
   occurredAt: string;
   event: string;
   actorHandle: string | null;
   actorDisplayName: string | null;
   detail: string | null;
+  /**
+   * Whether this entry has an actor, and whether the service could name it.
+   *
+   * <p>Optional, and the distinction matters. **Absent** means this bundle is talking to a
+   * service that predates the field and simply cannot say — the screen then behaves as it
+   * did before and claims nothing. **Present** means the service answered, and `UNRESOLVED`
+   * is a real statement worth showing: an actor is recorded and cannot be named right now.
+   *
+   * <p>This is not defensive habit. Today a bundle shipped ahead of its service and every
+   * timeline read came back 403 for an endpoint that did not exist yet; the two halves of a
+   * feature do not land at the same instant, and a field treated as guaranteed turns that
+   * ordinary gap into a wrong claim on screen.
+   */
+  actorState?: TimelineActorState;
 }
 
 /**
@@ -293,7 +314,12 @@ export async function listCaseTimeline(caseId: string): Promise<CaseTimelineEntr
         entry.event !== '' &&
         (entry.actorHandle === null || validHandle(entry.actorHandle)) &&
         (entry.actorDisplayName === null || typeof entry.actorDisplayName === 'string') &&
-        (entry.detail === null || typeof entry.detail === 'string')
+        (entry.detail === null || typeof entry.detail === 'string') &&
+        // Absent is fine (older service); a value this build does not recognise is not —
+        // rendering an unknown state as if it were "no actor" is the exact confusion the
+        // field exists to end.
+        (entry.actorState === undefined ||
+          ACTOR_STATES.includes(entry.actorState as TimelineActorState))
       );
     })
   )

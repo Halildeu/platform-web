@@ -935,13 +935,23 @@ export default function App() {
                             </time>
                             <strong>{timelineEventLabel(entry.event)}</strong>
                             {detail && <span className="ethics-timeline-detail">{detail}</span>}
-                            {/* Shown only when there is one. A null actor means either
-                                nobody was recorded or nobody still resolves, and the
-                                response cannot tell those apart — so this names neither. */}
-                            {entry.actorDisplayName && (
+                            {entry.actorDisplayName ? (
                               <span className="ethics-timeline-actor">
                                 {entry.actorDisplayName}
                               </span>
+                            ) : (
+                              /* Said only when the service actually said it. UNRESOLVED means
+                                 an actor is recorded and cannot be named right now — worth
+                                 showing, because a handler reading a bare line would otherwise
+                                 conclude nobody acted. Nothing is claimed when the field is
+                                 absent (older service) or NONE (anonymous filing, pipeline
+                                 step): inventing "unknown" there would raise an alarm about
+                                 an event that never had an actor. */
+                              entry.actorState === 'UNRESOLVED' && (
+                                <span className="ethics-timeline-actor is-unresolved">
+                                  Aktör şu anda çözülemiyor
+                                </span>
+                              )
                             )}
                           </li>
                         );

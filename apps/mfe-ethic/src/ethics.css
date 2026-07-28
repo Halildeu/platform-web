@@ -502,3 +502,9 @@
   font-size: 0.8rem;
   color: var(--ethics-muted);
 }
+
+/* Not an alarm. The record is incomplete, which the reader should know, but an event whose
+   actor cannot be named right now is not itself a problem with the case. */
+.ethics-timeline-actor.is-unresolved {
+  font-style: italic;
+}
