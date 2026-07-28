@@ -38,13 +38,47 @@ export const OUTCOME_OPTIONS: CaseOutcome[] = [
   'WITHDRAWN',
 ];
 
+/** The statuses a case can be in today. These are the ones a handler can choose. */
+const CURRENT_STATUS_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  NEW: 'Yeni',
+  ASSESSING: 'Değerlendirmede',
+  INVESTIGATING: 'Soruşturmada',
+  CLOSED: 'Sonuçlandırıldı',
+});
+
+/**
+ * Statuses that no longer exist but are written into the audit trail forever.
+ *
+ * <p>The vocabulary changed at some point and the ledger is WORM: `IN_REVIEW` was written
+ * 45 times between 20 and 26 July and never again, and no live case carries it. It is not
+ * a rare edge — it is more than half of every status entry in the trail, so a handler
+ * reading a case's history saw raw codes on most of the lines that mattered.
+ *
+ * <p>Kept **separate** from the current vocabulary rather than folded into it. Mapping
+ * `IN_REVIEW` onto `ASSESSING` would be the tempting move, and it would be a claim: that
+ * the two meant the same thing. There is no period dictionary or migration note saying so,
+ * and an audit record has to be shown with the meaning it was written with — reinterpreting
+ * history through today's model is exactly what an immutable ledger exists to prevent.
+ *
+ * <p>So the label says what it is and marks itself historical. The raw code stays visible
+ * in the title attribute for anyone reconciling against the ledger.
+ */
+const HISTORICAL_STATUS_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  IN_REVIEW: 'İncelemede (tarihsel)',
+});
+
 export const statusLabel = (status: string) =>
-  ({
-    NEW: 'Yeni',
-    ASSESSING: 'Değerlendirmede',
-    INVESTIGATING: 'Soruşturmada',
-    CLOSED: 'Sonuçlandırıldı',
-  })[status] ?? status;
+  CURRENT_STATUS_LABELS[status] ?? HISTORICAL_STATUS_LABELS[status] ?? status;
+
+/** Whether this value belongs to a vocabulary the product no longer uses. */
+export const isHistoricalStatus = (status: string) =>
+  !(status in CURRENT_STATUS_LABELS) && status in HISTORICAL_STATUS_LABELS;
+
+/** Every status the ledger can hold — current and retired. Used by the contract test. */
+export const KNOWN_STATUS_VALUES: readonly string[] = Object.freeze([
+  ...Object.keys(CURRENT_STATUS_LABELS),
+  ...Object.keys(HISTORICAL_STATUS_LABELS),
+]);
 
 /** The wording follows the finding: "doğrulanamadı" is a conclusion, "kapsam dışı" is not one. */
 export const outcomeLabel = (outcome: string) =>
