@@ -440,3 +440,18 @@
   font: inherit;
   cursor: pointer;
 }
+
+.ethics-reply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Sits under the button rather than inside it: the sentence explains what pressing it
+   does and does not do, and a button label cannot carry that without lying by brevity. */
+.ethics-reply-hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+}
