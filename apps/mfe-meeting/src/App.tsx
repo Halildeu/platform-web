@@ -468,8 +468,9 @@ export default function MeetingApp({
   );
   // Faz 24 İ2-T — SSE broadcast fed by audio-gateway when this browser is a
   // viewer OTHER than the recording desktop. Separate track from the WS
-  // liveStream (owner-recorder path); chunks are draft-only, canonical
-  // persistence stays in meeting-service.
+  // liveStream (owner-recorder path). Chunks are NOT draft-only: an assembled
+  // line arrives as 'final' and replaces the fragments it folded. Canonical
+  // persistence still stays in meeting-service.
   const [liveTranscriptSse, setLiveTranscriptSse] = useState<LiveTranscriptSseSnapshot | null>(
     null,
   );
