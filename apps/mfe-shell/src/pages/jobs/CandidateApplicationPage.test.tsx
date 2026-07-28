@@ -754,6 +754,30 @@ describe('CandidateApplicationPage', () => {
     expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
   });
 
+  it('keeps the year field filtered WHILE typing, not only when four digits are complete', async () => {
+    // CANLIDA OLCULEN KUSUR: "tamamlanmis yil" olcutu ("^\\d{4}$") yaziminin
+    // ortasindaki "199"u metne dusuruyordu; filtre kapaniyor ve SONRAKI tusta
+    // harf girilebiliyordu. Tek seferlik degisim yapan birim test bunu
+    // yakalamamisti — tus tus yazmak gerekiyordu.
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    const year = screen.getByTestId('candidate-education-0-startYear');
+
+    for (const [typed, expected] of [
+      ['1', '1'],
+      ['19', '19'],
+      ['199', '199'],
+      ['199a', '199'],
+      ['1999', '1999'],
+    ] as const) {
+      fireEvent.change(year, { target: { value: typed } });
+      expect(year).toHaveValue(expected);
+      // Her adimda yil modunda KALMALI.
+      expect(year).toHaveAttribute('inputMode', 'numeric');
+      expect(year).toHaveAttribute('maxLength', '4');
+    }
+  });
+
   it('refuses a record whose end is before its start', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
