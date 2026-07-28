@@ -35,6 +35,10 @@ const trNumber = new Intl.NumberFormat('tr-TR', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const trAlphabetical = new Intl.Collator('tr-TR', {
+  sensitivity: 'base',
+  numeric: true,
+});
 
 const errorMessage = (error: unknown): string =>
   error instanceof BudgetApiError
@@ -53,6 +57,20 @@ const projectLabel = (project: ProjectOption): string => {
   const label = prefix ? `${prefix} — ${project.name}` : project.name;
   return project.active ? label : `${label} (pasif)`;
 };
+
+const sortCompaniesAlphabetically = (items: CompanyOption[]): CompanyOption[] =>
+  [...items].sort(
+    (left, right) =>
+      trAlphabetical.compare(companyLabel(left), companyLabel(right)) || left.id - right.id,
+  );
+
+const sortProjectsAlphabetically = (items: ProjectOption[]): ProjectOption[] =>
+  [...items].sort(
+    (left, right) =>
+      trAlphabetical.compare(left.name.trim(), right.name.trim()) ||
+      trAlphabetical.compare(left.code?.trim() ?? '', right.code?.trim() ?? '') ||
+      left.id - right.id,
+  );
 
 const amountLabel = (amount: number, currency: string): string =>
   `${trNumber.format(amount)} ${currency === 'N/A' ? '' : currency}`.trim();
@@ -202,7 +220,7 @@ export const BudgetWorkspace: React.FC = () => {
     let active = true;
     void fetchCompanies()
       .then((items) => {
-        if (active) setCompanies(items);
+        if (active) setCompanies(sortCompaniesAlphabetically(items));
       })
       .catch((reason) => {
         if (active) setError(errorMessage(reason));
@@ -235,7 +253,7 @@ export const BudgetWorkspace: React.FC = () => {
 
     setCatalogBusy(true);
     try {
-      setProjects(await fetchProjects(Number(next)));
+      setProjects(sortProjectsAlphabetically(await fetchProjects(Number(next))));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
