@@ -107,6 +107,8 @@ type EntryFieldSpec<T> = {
 
 const MONTH_VALUE = /^\d{4}-(0[1-9]|1[0-2])$/u;
 const YEAR_VALUE = /^\d{4}$/u;
+/** Yazım sırasında yıl olabilecek girdi: yalnız rakam, en çok 4 hane (boş dahil). */
+const YEAR_TYPEABLE = /^\d{0,4}$/u;
 /** Diploma/işe giriş yılı için makul alt sınır; altı veri hatasıdır. */
 const MIN_ENTRY_YEAR = 1950;
 /**
@@ -146,7 +148,13 @@ const hasBackwardRange = (start: string, end: string, shape: RegExp): boolean =>
 
 const resolveEntryInputKind = (kind: EntryFieldKind | undefined, value: string): EntryFieldKind => {
   if (kind === 'month') return value === '' || MONTH_VALUE.test(value) ? 'month' : 'text';
-  if (kind === 'year') return value === '' || YEAR_VALUE.test(value) ? 'year' : 'text';
+  // YAZARKEN de yıl modunda kalmalı: `^\d{4}$` ile ölçmek "199"u (henüz
+  // tamamlanmamış) metne düşürüyordu, filtre kapanıyordu ve sonraki tuşta harf
+  // girilebiliyordu. Canlıda ölçüldü: "19a9x" → "199" (filtre çalıştı), ama
+  // ondan sonra alan `maxLength=40`, `inputMode` yok. Ölçüt "tamamlanmış yıl"
+  // değil, "yıl OLABİLİR": yalnız rakam ve en çok 4 hane. Miras serbest metin
+  // ("2016-2020", "Eyl 2022") bu testi geçemez, metin girdisinde kalır.
+  if (kind === 'year') return YEAR_TYPEABLE.test(value) ? 'year' : 'text';
   return 'text';
 };
 
