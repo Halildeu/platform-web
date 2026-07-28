@@ -19,6 +19,8 @@ import {
 } from './ethics-api';
 import {
   acknowledgementState,
+  categoryLabel,
+  isAnonymous,
   NEXT_STATUSES,
   OUTCOME_OPTIONS,
   outcomeLabel,
@@ -400,12 +402,47 @@ export default function App() {
                   <li key={item.id}>
                     <button
                       className={selected?.id === item.id ? 'is-selected' : ''}
-                      aria-label={`Vaka #${item.id.toUpperCase()} · ${statusLabel(item.status)}`}
+                      // Read aloud in the order it is read on screen: what the case is
+                      // first, then the flags that change how it is handled. The id stays
+                      // because it is how a case is referred to outside this screen.
+                      aria-label={[
+                        item.subject ?? 'Konu okunamadı',
+                        statusLabel(item.status),
+                        isAnonymous(item.mode) ? 'anonim' : null,
+                        item.participantCount === 0 ? 'sahipsiz' : null,
+                        acknowledgementState(item).overdue ? 'teyit süresi geçti' : null,
+                        `Vaka #${item.id.toUpperCase()}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                       onClick={() => void openCase(item)}
                     >
-                      <span className="ethics-case-list-id">{shortId(item.id)}</span>
-                      <span>{statusLabel(item.status)}</span>
-                      <small>
+                      {/* The subject leads, because it is the only thing that says what
+                          the case is. The row used to open with an id fragment, which
+                          distinguishes cases from each other but describes none of them. */}
+                      <span className="ethics-case-subject">
+                        {item.subject ?? 'Konu okunamadı'}
+                      </span>
+                      <span className="ethics-case-status">{statusLabel(item.status)}</span>
+                      <small className="ethics-case-meta">
+                        {isAnonymous(item.mode) && (
+                          <span className="ethics-tag is-anonymous">Anonim</span>
+                        )}
+                        {categoryLabel(item.category) && (
+                          <span className="ethics-tag">{categoryLabel(item.category)}</span>
+                        )}
+                        {/* Nobody on the case is the state that most needs to be seen from
+                            the list: it is how a report goes unworked without anyone
+                            deciding that it should. */}
+                        {item.participantCount === 0 && (
+                          <span className="ethics-tag is-unattended">Sahipsiz</span>
+                        )}
+                        {acknowledgementState(item).overdue && (
+                          <span className="ethics-tag is-overdue">Teyit süresi geçti</span>
+                        )}
+                      </small>
+                      <small className="ethics-case-foot">
+                        <span className="ethics-case-list-id">{shortId(item.id)}</span>
                         <time dateTime={item.updatedAt}>
                           {new Date(item.updatedAt).toLocaleString('tr-TR')}
                         </time>

@@ -123,3 +123,35 @@ export const participantRoleLabel = (role: string) =>
     handler: 'Vaka sorumlusu',
     evidence_approver: 'Kanıt onaylayıcı',
   })[role] ?? role;
+
+/**
+ * The category words the reporter actually chose.
+ *
+ * <p>These mirror the public intake form option-for-option, deliberately. The person
+ * filing picked "Taciz / ayrımcılık" from a list; a handler who reads "HARASSMENT_
+ * DISCRIMINATION", or a differently-worded translation of it, is reading a second
+ * description of the same choice and has to trust that the two agree.
+ *
+ * <p>Mirrors {@code EthicsDtos.ReportCategory}. An unknown value renders as itself
+ * rather than as a guess — a category the server added and this bundle has not learned
+ * should look unfamiliar, not be quietly relabelled.
+ */
+export const categoryLabel = (category: string | null) =>
+  category === null
+    ? null
+    : ({
+        WORKPLACE_CONDUCT: 'İş yeri davranışı',
+        FRAUD_CORRUPTION: 'Usulsüzlük / yolsuzluk',
+        HARASSMENT_DISCRIMINATION: 'Taciz / ayrımcılık',
+        OTHER: 'Diğer',
+      })[category] ?? category;
+
+/**
+ * Whether the reporter can be reached at all.
+ *
+ * <p>This is not decoration. An anonymous report has no channel back to the person who
+ * filed it, so "ask them for detail" is not a move the handler has — and the seven-day
+ * acknowledgement can only be met through the mailbox they hold a code for. Showing it
+ * on the row means that constraint is known before the case is opened.
+ */
+export const isAnonymous = (mode: string | null) => mode === 'ANONYMOUS';

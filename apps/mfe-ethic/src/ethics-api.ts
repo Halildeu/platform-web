@@ -24,6 +24,22 @@ export interface EthicsCaseSummary {
   acknowledgedAt: string | null;
   outcome: string | null;
   closedAt: string | null;
+  /**
+   * What the list needs to tell two cases apart. The row used to carry an id
+   * fragment, a status and a timestamp, so choosing between 138 reports meant
+   * opening each one.
+   *
+   * `mode` earns its place separately: an anonymous report has no channel back
+   * to the person who filed it, which changes what the handler can do next.
+   *
+   * Nullable because a case whose report row is missing is malformed, and a row
+   * that needs attention should still appear rather than disappear.
+   */
+  subject: string | null;
+  category: string | null;
+  mode: string | null;
+  /** Zero means nobody is on the case — the state that most needs to be visible. */
+  participantCount: number;
 }
 
 // The status vocabulary, transition table and labels live in `case-lifecycle.ts`.
