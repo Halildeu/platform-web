@@ -455,3 +455,50 @@
   margin: 0.2rem 0 0;
   font-size: 0.8rem;
 }
+
+/* The case's own history. A vertical rail with the marker on the line, so the eye can run
+   down the sequence — which is the whole question this section answers: what happened, in
+   what order, and how far apart. */
+.ethics-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--ethics-border);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.ethics-timeline li {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.ethics-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -1.34rem;
+  top: 0.45rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ethics-brand);
+}
+
+/* The time leads and stays quiet: it is read when scanning for a gap, not when reading
+   what happened. */
+.ethics-timeline time {
+  font-size: 0.75rem;
+  color: var(--ethics-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ethics-timeline strong {
+  font-weight: 600;
+}
+
+.ethics-timeline-detail,
+.ethics-timeline-actor {
+  font-size: 0.8rem;
+  color: var(--ethics-muted);
+}

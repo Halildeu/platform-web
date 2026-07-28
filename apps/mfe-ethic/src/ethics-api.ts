@@ -249,3 +249,54 @@ export async function addCaseParticipant(
 ): Promise<void> {
   await api.post(`/v1/ethics/cases/${encodeURIComponent(caseId)}/participants`, { handle, role });
 }
+
+/**
+ * One recorded thing that happened to a case.
+ *
+ * <p>`actorHandle` and `actorDisplayName` are null together and mean one of two things the
+ * server cannot currently tell apart: nobody was recorded as acting (an anonymous filing,
+ * a pipeline step), or somebody was but no longer resolves — they left the product, or the
+ * name directory was unreachable. Because the two are indistinguishable here, this client
+ * shows an actor only when it has one, and never guesses.
+ *
+ * <p>`detail` is the single extra field the server chose to carry for a handful of event
+ * types. It is never the report's narrative.
+ */
+export interface CaseTimelineEntry {
+  occurredAt: string;
+  event: string;
+  actorHandle: string | null;
+  actorDisplayName: string | null;
+  detail: string | null;
+}
+
+/**
+ * The case's own history, oldest first, exactly as the server ordered it.
+ *
+ * <p>Deliberately not re-sorted here. The order is the server's claim about what happened
+ * when; sorting it again on arrival would quietly repair a broken ledger and hide the one
+ * defect this screen exists to make visible.
+ */
+export async function listCaseTimeline(caseId: string): Promise<CaseTimelineEntry[]> {
+  const response = await api.get<unknown>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/timeline`,
+  );
+  const rows = response.data;
+  if (
+    !Array.isArray(rows) ||
+    !rows.every((row) => {
+      const entry = row as Partial<CaseTimelineEntry> | null;
+      return (
+        !!entry &&
+        typeof entry.occurredAt === 'string' &&
+        typeof entry.event === 'string' &&
+        entry.event !== '' &&
+        (entry.actorHandle === null || validHandle(entry.actorHandle)) &&
+        (entry.actorDisplayName === null || typeof entry.actorDisplayName === 'string') &&
+        (entry.detail === null || typeof entry.detail === 'string')
+      );
+    })
+  )
+    throw new Error('Vaka geçmişi sözleşmesi geçersiz');
+  return rows as CaseTimelineEntry[];
+}

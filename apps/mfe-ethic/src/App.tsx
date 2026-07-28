@@ -8,15 +8,18 @@ import {
   listAssignableStaff,
   listCaseEvidence,
   listCaseParticipants,
+  listCaseTimeline,
   listCases,
   replyToReporter,
   updateCase,
   type AssignableStaffEntry,
   type CaseParticipant,
+  type CaseTimelineEntry,
   type EthicsCaseDetail,
   type EthicsCaseSummary,
   type StaffEvidence,
 } from './ethics-api';
+import { timelineDetailLabel, timelineEventLabel, timelineMoment } from './case-timeline';
 import {
   acknowledgementDraft,
   acknowledgementState,
@@ -62,6 +65,12 @@ export default function App() {
   // cannot grow a second, rival answer to "who is on this".
   const [participants, setParticipants] = useState<CaseParticipant[]>([]);
   const [participantsError, setParticipantsError] = useState('');
+  const [timeline, setTimeline] = useState<CaseTimelineEntry[]>([]);
+  // Three states, not two. "Loaded and empty" and "could not load" look identical if both
+  // render an empty list, and on an audit trail those two mean opposite things.
+  const [timelineState, setTimelineState] = useState<'loading' | 'ready' | 'unavailable'>(
+    'loading',
+  );
   const [staffOptions, setStaffOptions] = useState<AssignableStaffEntry[]>([]);
   const [staffState, setStaffState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [pickerHandle, setPickerHandle] = useState('');
@@ -87,6 +96,10 @@ export default function App() {
     setInternalNote('');
     setParticipants([]);
     setParticipantsError('');
+    // The history carries case-scoped actor handles and who did what — it belongs to the
+    // session being torn down, not to whatever loads next.
+    setTimeline([]);
+    setTimelineState('loading');
     setStaffOptions([]);
     setStaffState('loading');
     setPickerHandle('');
@@ -144,6 +157,31 @@ export default function App() {
     }
   };
 
+  /**
+   * The case's history. A display surface, so it degrades — but it degrades *loudly*.
+   *
+   * <p>Silence here is the dangerous failure: a handler who sees an empty history concludes
+   * nothing has happened to the case, and on a whistleblowing record that conclusion drives
+   * real decisions. So a failed load never leaves an empty list behind; it says it failed.
+   */
+  const loadCaseTimeline = async (caseId: string, requestSequence: number) => {
+    setTimelineState('loading');
+    try {
+      const next = await listCaseTimeline(caseId);
+      if (requestSequence !== selectionSequence.current) return;
+      setTimeline(next);
+      setTimelineState('ready');
+    } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
+      if (isAuthorizationFailure(requestError)) {
+        showRequestError(requestError);
+        return;
+      }
+      setTimeline([]);
+      setTimelineState('unavailable');
+    }
+  };
+
   const loadCaseEvidence = async (caseId: string, requestSequence: number) => {
     try {
       const next = await listCaseEvidence(caseId);
@@ -180,6 +218,7 @@ export default function App() {
           await loadCaseEvidence(selectedId, requestSequence);
           await loadParticipants(selectedId, requestSequence);
           await loadAssignableStaff(selectedId, requestSequence);
+          await loadCaseTimeline(selectedId, requestSequence);
         }
       }
     } catch (requestError) {
@@ -202,6 +241,8 @@ export default function App() {
     setEvidenceError('');
     setParticipants([]);
     setParticipantsError('');
+    setTimeline([]);
+    setTimelineState('loading');
     setStaffOptions([]);
     setStaffState('loading');
     setPickerHandle('');
@@ -212,6 +253,7 @@ export default function App() {
         await loadCaseEvidence(item.id, requestSequence);
         await loadParticipants(item.id, requestSequence);
         await loadAssignableStaff(item.id, requestSequence);
+        await loadCaseTimeline(item.id, requestSequence);
       }
     } catch (requestError) {
       if (requestSequence === selectionSequence.current) showRequestError(requestError);
@@ -867,6 +909,45 @@ export default function App() {
                   <Button disabled={busy || !reply.trim()} onClick={() => void sendReply()}>
                     Yanıtı gönder
                   </Button>
+                </section>
+                <section aria-labelledby="timeline-heading">
+                  <h3 id="timeline-heading">Vaka geçmişi</h3>
+                  {timelineState === 'unavailable' ? (
+                    /* An alert, not a quiet note. The alternative reading of an empty
+                       history — "nothing has happened to this case" — is a conclusion a
+                       handler acts on, and it must never be reachable by a failed fetch. */
+                    <p role="alert" data-testid="timeline-unavailable">
+                      Vaka geçmişi şu anda okunamıyor. Bu, geçmişin boş olduğu anlamına
+                      gelmez; yenileyip tekrar deneyin.
+                    </p>
+                  ) : timelineState === 'loading' ? (
+                    <p className="ethics-muted">Geçmiş yükleniyor…</p>
+                  ) : timeline.length === 0 ? (
+                    <p className="ethics-muted">Bu vaka için kayıtlı olay yok.</p>
+                  ) : (
+                    <ol className="ethics-timeline" aria-labelledby="timeline-heading">
+                      {timeline.map((entry, index) => {
+                        const detail = timelineDetailLabel(entry.event, entry.detail);
+                        return (
+                          <li key={`${entry.occurredAt}-${entry.event}-${index}`}>
+                            <time dateTime={entry.occurredAt}>
+                              {timelineMoment(entry.occurredAt)}
+                            </time>
+                            <strong>{timelineEventLabel(entry.event)}</strong>
+                            {detail && <span className="ethics-timeline-detail">{detail}</span>}
+                            {/* Shown only when there is one. A null actor means either
+                                nobody was recorded or nobody still resolves, and the
+                                response cannot tell those apart — so this names neither. */}
+                            {entry.actorDisplayName && (
+                              <span className="ethics-timeline-actor">
+                                {entry.actorDisplayName}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
                 </section>
               </Stack>
             )}

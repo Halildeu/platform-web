@@ -69,6 +69,7 @@ describe('Etik Speak manager MFE', () => {
       createdAt: '2026-07-18T12:02:00Z',
     });
     vi.mocked(api.listCaseParticipants).mockResolvedValue([]);
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([]);
     vi.mocked(api.listAssignableStaff).mockResolvedValue([
       { handle: 'v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1', displayName: 'Ayşe Yılmaz' },
       { handle: 'v1.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB2', displayName: 'Ayşe Yılmaz' },
@@ -581,5 +582,80 @@ describe('Etik Speak manager MFE', () => {
     for (const promise of ['sonuçland', 'gün içinde', 'hafta içinde', 'garanti', 'kesinlikle']) {
       expect(draft.toLocaleLowerCase('tr')).not.toContain(promise);
     }
+  });
+
+  // Vakanın geçmişi zaten yazılıyordu; okunamıyordu. Devralan biri "bunu kim, ne zaman
+  // taşımış" sorusunu soramıyordu.
+  test('vaka geçmişi sunucunun verdiği sırayla okunur', async () => {
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([
+      {
+        occurredAt: '2026-07-18T12:00:00Z',
+        event: 'ethics.report.created',
+        actorHandle: null,
+        actorDisplayName: null,
+        detail: null,
+      },
+      {
+        occurredAt: '2026-07-19T08:30:00Z',
+        event: 'ethics.case.updated',
+        actorHandle: 'v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1',
+        actorDisplayName: 'Ayşe Yılmaz',
+        detail: 'INVESTIGATING',
+      },
+    ]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const history = await screen.findByRole('list', { name: 'Vaka geçmişi' });
+    const rows = within(history).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    // Sunucu eskiden yeniye veriyor; burada yeniden sıralamak bozuk bir defteri sessizce
+    // onarmak olurdu.
+    expect(rows[0]).toHaveTextContent('İhbar alındı');
+    expect(rows[1]).toHaveTextContent('Ayşe Yılmaz');
+  });
+
+  // ASIL SÖZLEŞME: okunamayan geçmiş, boş geçmiş gibi görünmemeli. "Bu vakaya hiçbir şey
+  // olmamış" bir kanıdır ve devralan kişi ona göre karar verir; başarısız bir istekle
+  // ulaşılabilir olmamalı.
+  test('geçmiş okunamıyorsa bu açıkça söylenir, boş liste gösterilmez', async () => {
+    vi.mocked(api.listCaseTimeline).mockRejectedValue({ response: { status: 503 } });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const alert = await screen.findByTestId('timeline-unavailable');
+    expect(alert).toHaveTextContent('boş olduğu anlamına gelmez');
+    expect(screen.queryByRole('list', { name: 'Vaka geçmişi' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Bu vaka için kayıtlı olay yok.')).not.toBeInTheDocument();
+  });
+
+  test('gerçekten boş geçmiş, okunamayan geçmişten farklı görünür', async () => {
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await screen.findByRole('heading', { name: 'Vaka geçmişi' });
+
+    expect(screen.getByText('Bu vaka için kayıtlı olay yok.')).toBeInTheDocument();
+    expect(screen.queryByTestId('timeline-unavailable')).not.toBeInTheDocument();
+  });
+
+  // Aktörü null gelen satır "kimse yoktu" da olabilir "artık çözülmüyor" da; yanıt ikisini
+  // ayırmıyor. O yüzden bu ekran hiçbirini iddia etmez — kimseyi adlandırmaz.
+  test('aktörü çözülemeyen satır başkasının adını taşımaz', async () => {
+    vi.mocked(api.listCaseTimeline).mockResolvedValue([
+      {
+        occurredAt: '2026-07-18T12:00:00Z',
+        event: 'ethics.report.created',
+        actorHandle: null,
+        actorDisplayName: null,
+        detail: null,
+      },
+    ]);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const history = await screen.findByRole('list', { name: 'Vaka geçmişi' });
+    expect(within(history).getByRole('listitem')).toHaveTextContent('İhbar alındı');
+    expect(within(history).queryByText('Ayşe Yılmaz')).not.toBeInTheDocument();
   });
 });
