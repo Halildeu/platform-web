@@ -18,7 +18,7 @@
  *   - No PII in local storage or console logs (text is user-facing only).
  */
 
-import type { TranscriptSegment } from './meeting-workbench';
+import type { TranscriptSegment, TranscriptSegmentStatus } from './meeting-workbench';
 
 const DEFAULT_LIVE_TRANSCRIPT_SSE_ENV = 'VITE_MEETING_LIVE_TRANSCRIPT_SSE_URL';
 
@@ -32,6 +32,16 @@ export interface LiveTranscriptChunk {
   model?: string | null;
   computeType?: string | null;
   device?: string | null;
+  /**
+   * {@code DRAFT} for a raw committed chunk, {@code UTTERANCE} for a line the
+   * gateway assembled from consecutive chunks (audio-gateway
+   * LiveTranscriptEvent). Absent on older gateways.
+   */
+  status?: string | null;
+  /** Why the assembled line closed; null for a raw chunk. */
+  assemblyReason?: string | null;
+  /** The chunks folded into the assembled line, in order; empty for a raw chunk. */
+  sourceEventIds?: string[] | null;
 }
 
 export type LiveTranscriptSseState =
@@ -59,18 +69,40 @@ export function resolveLiveTranscriptSseEndpoint(meetingId: string): string | nu
   return configured.replace('{meetingId}', encodeURIComponent(meetingId));
 }
 
+/**
+ * Backend transcript status -> UI segment status.
+ *
+ * The gateway folds consecutive chunks into whole lines and marks those
+ * {@code UTTERANCE}; a raw chunk stays {@code DRAFT}. Until this mapping
+ * existed every live segment was hardcoded to 'draft', so assembled lines
+ * never became permanent — and, less obviously, no citation could ever anchor
+ * to the live transcript at all, because a citation only counts against a
+ * segment whose status is 'final' (see meeting-workbench evidence coverage).
+ *
+ * Anything we do not recognise stays 'draft' on purpose. 'final' is what makes
+ * a line citable, so an unknown status must never be promoted into it.
+ */
+export function liveStatusToSegmentStatus(status?: string | null): TranscriptSegmentStatus {
+  return status === 'UTTERANCE' ? 'final' : 'draft';
+}
+
 /** Convert a backend LiveTranscriptChunk into a UI TranscriptSegment. */
 export function chunkToSegment(
   chunk: LiveTranscriptChunk,
   seq: number,
   receivedAtMs: number,
 ): TranscriptSegment {
+  const sourceEventIds = chunk.sourceEventIds ?? undefined;
   return {
     id: `live-sse-${receivedAtMs}-${seq}`,
     speaker: 'Kayıtçı',
     startedAtMs: receivedAtMs,
-    status: 'draft',
+    status: liveStatusToSegmentStatus(chunk.status),
     text: chunk.text ?? '',
+    // Audit trail back to the fragments the gateway folded, so a citation on
+    // an assembled line can be traced to the chunks it came from.
+    assemblyReason: chunk.assemblyReason ?? undefined,
+    sourceEventIds: sourceEventIds && sourceEventIds.length > 0 ? sourceEventIds : undefined,
   };
 }
 
