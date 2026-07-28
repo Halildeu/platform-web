@@ -1,6 +1,7 @@
 import Keycloak from 'keycloak-js';
 import { authConfig } from './auth-config';
 import { decodeJwtPayload } from '../../features/auth/model/auth.slice';
+import { resolveKeycloakRouteScope } from './keycloakRouteScope';
 
 // STORY-0034: FE Keycloak / OIDC Integration
 const keycloak = new Keycloak({
@@ -16,9 +17,6 @@ type KeycloakLoginRedirectOptions = {
 type KeycloakLoginOptions = KeycloakLoginRedirectOptions & {
   scope?: string;
 };
-
-const ETHICS_MANAGER_LOGIN_SCOPE = 'openid ethics-manager-audience ethics:case:manage';
-const BUDGET_PLANNER_LOGIN_SCOPE = 'openid budget:read budget:write';
 
 const asStringArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
@@ -51,24 +49,8 @@ export const hasEthicsManagerTokenContract = (token: string | null | undefined):
  * yalnız /ethic yoluna dönen interaktif giriş açıkça bu yetkileri ister.
  */
 export const buildKeycloakLoginOptions = (redirectUri: string): KeycloakLoginOptions => {
-  try {
-    const path = new URL(redirectUri, 'https://invalid.local').pathname;
-    if (path === '/ethic' || path.startsWith('/ethic/')) {
-      return { redirectUri, scope: ETHICS_MANAGER_LOGIN_SCOPE };
-    }
-    if (
-      path === '/admin/reports/budget-control' ||
-      path.startsWith('/admin/reports/budget-control/') ||
-      path === '/reports/budget-control' ||
-      path.startsWith('/reports/budget-control/')
-    ) {
-      return { redirectUri, scope: BUDGET_PLANNER_LOGIN_SCOPE };
-    }
-  } catch {
-    // keycloak-js redirectUri doğrulamasını yapmaya devam eder. Geçersiz bir
-    // URI için genişletilmiş scope vermemek fail-closed davranıştır.
-  }
-  return { redirectUri };
+  const scope = resolveKeycloakRouteScope(redirectUri);
+  return scope ? { redirectUri, scope } : { redirectUri };
 };
 
 const LOGIN_URL_TIMEOUT_MS = 3_000;
