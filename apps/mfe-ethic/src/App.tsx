@@ -18,6 +18,7 @@ import {
   type StaffEvidence,
 } from './ethics-api';
 import {
+  acknowledgementDraft,
   acknowledgementState,
   categoryLabel,
   CASE_CATEGORIES,
@@ -833,7 +834,29 @@ export default function App() {
                       </li>
                     ))}
                   </ol>
-                  <label htmlFor="staff-reply">Reporter'a güvenli yanıt</label>
+                  <div className="ethics-reply-head">
+                    <label htmlFor="staff-reply">Reporter'a güvenli yanıt</label>
+                    {/* Only while the acknowledgement is still owed. Once it has been given
+                        the button is noise, and on a case that already has an answer it would
+                        invite sending the same paragraph twice. */}
+                    {!selected.acknowledgedAt && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setReply(acknowledgementDraft(selected.id, selected.createdAt))
+                        }
+                      >
+                        Alındı teyidi hazırla
+                      </Button>
+                    )}
+                  </div>
+                  {!selected.acknowledgedAt && (
+                    <p className="ethics-muted ethics-reply-hint">
+                      Metin hazırlanır, gönderilmez. Okuyup değiştirdikten sonra siz
+                      gönderirsiniz.
+                    </p>
+                  )}
                   <textarea
                     id="staff-reply"
                     rows={4}

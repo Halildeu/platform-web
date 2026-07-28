@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import App from './App';
+import { acknowledgementDraft } from './case-lifecycle';
 import * as api from './ethics-api';
 
 vi.mock('./ethics-api');
@@ -522,5 +523,63 @@ describe('Etik Speak manager MFE', () => {
 
     expect(screen.queryByRole('button', { name: /Depo bildirimi/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Konu okunamadı/ })).toBeInTheDocument();
+  });
+
+  // Canlı hücrede 164 vakanın 132'si yedi günlük teyidi hiç almadı. Zorlayıcı olan
+  // yükümlülük değil, her seferinde paragrafı yazmaktı. Bu düğme onu kaldırır — ve
+  // BAŞKA HİÇBİR ŞEYİ. Teyit, bildirmek için risk almış bir insana yapılan beyandır;
+  // kimsenin okumadan yolladığı bir şablon, elle yazılmış geç bir yanıttan kötüdür:
+  // cevap gibi görünür, hiçbir şey cevaplamaz.
+  test('teyit düğmesi metni hazırlar ve GÖNDERMEZ', async () => {
+    vi.mocked(api.getCase).mockResolvedValue({ ...detail, acknowledgedAt: null });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    // Yalnız bu etkileşim sayılsın: mock dosya boyunca paylaşılıyor ve önceki testlerin
+    // çağrıları iddiayı yanlış sebeple düşürür.
+    vi.mocked(api.replyToReporter).mockClear();
+    await userEvent.click(await screen.findByRole('button', { name: 'Alındı teyidi hazırla' }));
+
+    const box = screen.getByLabelText("Reporter'a güvenli yanıt");
+    expect((box as HTMLTextAreaElement).value).toContain('kayda alındı');
+    // Asıl sözleşme: hazırlamak göndermek değildir.
+    expect(api.replyToReporter).not.toHaveBeenCalled();
+  });
+
+  test('hazırlanan metin düzenlenebilir', async () => {
+    vi.mocked(api.getCase).mockResolvedValue({ ...detail, acknowledgedAt: null });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Alındı teyidi hazırla' }));
+
+    const box = screen.getByLabelText("Reporter'a güvenli yanıt");
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Kendi cümlem');
+    expect(box).toHaveValue('Kendi cümlem');
+  });
+
+  // Teyit verilmiş bir vakada düğme gürültüdür ve aynı paragrafı ikinci kez göndermeye
+  // davet eder.
+  test('teyit verilmiş vakada düğme görünmez', async () => {
+    vi.mocked(api.getCase).mockResolvedValue({
+      ...detail,
+      acknowledgedAt: '2026-07-19T09:00:00Z',
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await screen.findByRole('heading', { name: 'Sentetik bildirim' });
+
+    expect(screen.queryByRole('button', { name: 'Alındı teyidi hazırla' })).not.toBeInTheDocument();
+  });
+
+  // Metin sonuç ya da tarih vaat etmemeli: sonradan "asılsız" kapanan bir vaka, verilmiş
+  // bir sözün bozulması gibi okunmamalı.
+  test('taslak sonuç ya da tarih vaat etmez', () => {
+    const draft = acknowledgementDraft('11111111-1111-1111-1111-111111111111', '2026-07-18T12:00:00Z');
+    expect(draft).toContain('#11111111');
+    expect(draft).toContain('posta');
+    for (const promise of ['sonuçland', 'gün içinde', 'hafta içinde', 'garanti', 'kesinlikle']) {
+      expect(draft.toLocaleLowerCase('tr')).not.toContain(promise);
+    }
   });
 });

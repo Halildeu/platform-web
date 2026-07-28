@@ -228,3 +228,45 @@ export const CASE_CATEGORIES = [
 
 /** The lifecycle statuses, in the order a case moves through them. */
 export const CASE_STATUSES: readonly CaseStatus[] = ['NEW', 'ASSESSING', 'INVESTIGATING', 'CLOSED'];
+
+/**
+ * A ready acknowledgement, for the handler to read and change before it goes.
+ *
+ * <p>The seven-day acknowledgement is an obligation, and on the live cell 132 of 164 cases
+ * never received one. The obligation was not the hard part — writing the paragraph each
+ * time was. This removes that and nothing else.
+ *
+ * <p>It prepares; it does not send. An acknowledgement is a statement to a person who took
+ * a risk to file, and a template posted without anyone reading it is worse than a late
+ * reply written by hand: it looks like an answer and answers nothing. The handler still
+ * presses send, and can rewrite every word first.
+ *
+ * <p>What the wording does and does not do is deliberate. It confirms receipt and names the
+ * reference, because that is what the reporter cannot otherwise verify. It says where
+ * updates will appear, because an anonymous reporter has no channel back and would
+ * otherwise wait for a message that can never arrive. It promises no outcome and no date —
+ * a case that later closes as unsubstantiated must not read as a broken promise, and
+ * nothing on this screen can commit to a schedule the investigation does not control.
+ */
+export function acknowledgementDraft(caseId: string, filedAt: string): string {
+  const filed = Date.parse(filedAt);
+  const filedText = Number.isNaN(filed)
+    ? null
+    : new Date(filed).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  return [
+    'Merhaba,',
+    '',
+    filedText
+      ? `${filedText} tarihinde ilettiğiniz bildirim tarafımıza ulaştı ve kayda alındı.`
+      : 'İlettiğiniz bildirim tarafımıza ulaştı ve kayda alındı.',
+    `Bildirim numaranız: #${caseId.slice(0, 8).toUpperCase()}`,
+    '',
+    'Bildiriminiz yetkili ekip tarafından inceleniyor. İnceleme sürerken size bu posta',
+    'kutusundan yazacağız; buraya elinizdeki erişim bilgileriyle istediğiniz zaman',
+    'girip durumu görebilir ve bize yazabilirsiniz.',
+    '',
+    'Eklemek istediğiniz bilgi ya da belge olursa aynı yerden iletebilirsiniz.',
+    '',
+    'Bildiriminiz için teşekkür ederiz.',
+  ].join('\n');
+}
