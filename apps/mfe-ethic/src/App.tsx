@@ -934,7 +934,18 @@ export default function App() {
                               {timelineMoment(entry.occurredAt)}
                             </time>
                             <strong>{timelineEventLabel(entry.event)}</strong>
-                            {detail && <span className="ethics-timeline-detail">{detail}</span>}
+                            {detail && (
+                              <span
+                                className="ethics-timeline-detail"
+                                /* The value as the ledger holds it, for anyone reconciling
+                                   this screen against the audit trail. Only when it differs
+                                   from what is shown — a reason typed by a handler is
+                                   already its own raw value. */
+                                title={detail === entry.detail ? undefined : (entry.detail ?? undefined)}
+                              >
+                                {detail}
+                              </span>
+                            )}
                             {entry.actorDisplayName ? (
                               <span className="ethics-timeline-actor">
                                 {entry.actorDisplayName}
