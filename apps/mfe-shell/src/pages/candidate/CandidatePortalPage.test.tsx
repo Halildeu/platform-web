@@ -213,13 +213,42 @@ describe('CandidatePortalPage', () => {
     expect(screen.queryByTestId('candidate-login-notice')).not.toBeInTheDocument();
   });
 
-  it('keeps the tracking-key path available next to email login', async () => {
-    // E-posta girişi anahtar yolunun YERİNE geçmez: anahtarı olan aday tek
-    // adımda girmeye devam eder, e-posta yolu kaybedeni kurtarır.
+  it('offers the key path as a secondary route, not as a rival card', async () => {
+    // #1048: iki eşit kart adayı kendi kıyaslamaya zorluyordu. E-posta
+    // birincil (her adayda çalışır, TÜM başvuruları getirir); anahtar yedek.
     apiMocks.readCandidateSession.mockReturnValue(null);
     renderPage();
+
     expect(await screen.findByTestId('candidate-email-login')).toBeVisible();
-    expect(screen.getByTestId('candidate-sign-in')).toBeVisible();
+    const toggle = screen.getByTestId('candidate-key-path-toggle');
+    // Kapalı başlar ama DOM'da: klavye ve ekran okuyucu ulaşabilir.
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('candidate-sign-in-token')).toBeVisible();
+  });
+
+  it('opens the key path by itself when code delivery is unavailable', async () => {
+    // Hata metni zaten "takip anahtarınızla girebilirsiniz" diyordu ama
+    // kullanıcıyı o alana GÖTÜRMÜYORDU. Söylemek yetmez, yolu açmak gerekir.
+    apiMocks.readCandidateSession.mockReturnValue(null);
+    apiMocks.requestCandidateLoginCode.mockRejectedValue(
+      new Error('Kod gönderimi şu anda kullanılamıyor. Takip anahtarınızla girebilirsiniz.'),
+    );
+    renderPage();
+
+    fireEvent.change(await screen.findByTestId('candidate-login-email'), {
+      target: { value: 'aday@example.test' },
+    });
+    fireEvent.click(screen.getByTestId('candidate-login-submit'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('candidate-key-path-toggle')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      ),
+    );
     expect(screen.getByTestId('candidate-sign-in-token')).toBeVisible();
   });
 
@@ -260,8 +289,11 @@ describe('CandidatePortalPage', () => {
     apiMocks.readCandidateSession.mockReturnValue(null);
     renderPage();
     // Sekme oturumu boşken uydurma bir yolculuk gösterilmez; ama artık ÇIKMAZ
-    // da değil: aday referans + anahtarla girebilir.
-    expect(screen.getByRole('heading', { name: 'Başvurunuzu görüntüleyin' })).toBeVisible();
+    // da değil: #1048 sonrası giriş TEK kartta — e-posta birincil, anahtar
+    // yolu onun altında ikincil. İddia "bir giriş yolu var", "şu başlık var"
+    // değil; başlık metnine çakılmak tasarımı test etmek olurdu.
+    expect(screen.getByTestId('candidate-email-login')).toBeVisible();
+    expect(screen.getByTestId('candidate-key-path-toggle')).toBeInTheDocument();
     expect(apiMocks.getCandidateStatus).not.toHaveBeenCalled();
   });
 

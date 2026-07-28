@@ -163,6 +163,14 @@ const CandidatePortalPage = () => {
   const [loginNotice, setLoginNotice] = useState('');
   const [myApplications, setMyApplications] = useState<CandidateLoginApplicationDto[]>([]);
   const [myApplicationsError, setMyApplicationsError] = useState('');
+  /**
+   * #1048: anahtar yolu artık AYRI bir kart değil, e-posta girişinin altındaki
+   * ikincil yol. Ölçüm: e-posta her adayda çalışır (adresini bilir) ve o adrese
+   * ait TÜM başvuruları getirir; anahtar tek başvuru açar ve kaybolabilir.
+   * Yani birincil e-posta, anahtar yedek. İki eşit kart göstermek adayı
+   * kendi kıyaslamaya zorluyordu.
+   */
+  const [keyPathOpen, setKeyPathOpen] = useState(false);
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
   const [interviews, setInterviews] = useState<CandidateInterviewDto[]>([]);
   const [offers, setOffers] = useState<CandidateOfferDto[]>([]);
@@ -284,6 +292,10 @@ const CandidatePortalPage = () => {
       setLoginError(
         requestError instanceof Error ? requestError.message : 'Kod isteği tamamlanamadı.',
       );
+      // Kod gelmiyorsa aday açıkta kalmasın: yedek yol kendiliğinden açılır.
+      // Hata metni zaten "takip anahtarınızla girebilirsiniz" diyordu ama
+      // kullanıcıyı o alana GÖTÜRMÜYORDU — söylemek yetmez, yolu açmak gerekir.
+      setKeyPathOpen(true);
     } finally {
       setLoginBusy(false);
     }
@@ -674,17 +686,39 @@ const CandidatePortalPage = () => {
 
         {!session ? (
           <section
-            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs sm:p-10"
+            className="mt-4 rounded-3xl border border-border-subtle bg-surface-muted p-5 sm:p-8"
             aria-labelledby="candidate-sign-in-heading"
             data-testid="candidate-sign-in"
           >
-            <h2 id="candidate-sign-in-heading" className="text-2xl font-bold">
-              Başvurunuzu görüntüleyin
-            </h2>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
+            {/* #1048: ayrı kart DEĞİL, e-posta girişinin altındaki ikincil yol.
+                Kapalı başlar; `details/summary` yerine düğme + aria-expanded
+                kullanıldı çünkü 503'te bunu KOD ile açmamız gerekiyor. */}
+            <button
+              type="button"
+              data-testid="candidate-key-path-toggle"
+              aria-expanded={keyPathOpen}
+              aria-controls="candidate-key-path"
+              onClick={() => setKeyPathOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 text-left"
+            >
+              <span>
+                <span id="candidate-sign-in-heading" className="block text-base font-bold">
+                  E-postanıza erişemiyor musunuz?
+                </span>
+                <span className="mt-1 block text-sm text-text-secondary">
+                  Başvuru referansı ve takip anahtarıyla girin
+                </span>
+              </span>
+              <span aria-hidden="true" className="text-lg font-bold text-text-secondary">
+                {keyPathOpen ? '−' : '+'}
+              </span>
+            </button>
+            <div id="candidate-key-path" hidden={!keyPathOpen}>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-text-secondary">
               Başvurunuz alındığında verilen <strong>başvuru referansı</strong> ve{' '}
-              <strong>takip anahtarı</strong> ile girin. Şifre veya hesap oluşturmanız gerekmez.
-              İkisi birlikte gerekir: referans tek başına başvurunuzu açmaz.
+              <strong>takip anahtarı</strong> ile girin. İkisi birlikte gerekir: referans tek
+              başına başvurunuzu açmaz. Bu yol yedektir — e-posta ile giriş her adayda çalışır
+              ve o adrese ait tüm başvuruları getirir.
             </p>
             <form
               className="mt-6 max-w-xl space-y-4"
@@ -791,6 +825,7 @@ const CandidatePortalPage = () => {
             >
               Açık pozisyonlara git
             </Link>
+            </div>
           </section>
         ) : null}
 
