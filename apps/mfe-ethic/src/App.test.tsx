@@ -15,9 +15,14 @@ const summary: api.EthicsCaseSummary = {
   acknowledgedAt: null,
   outcome: null,
   closedAt: null,
+  subject: 'Sentetik bildirim',
+  category: 'WORKPLACE_CONDUCT',
+  mode: 'ANONYMOUS',
+  participantCount: 0,
 };
 const detail: api.EthicsCaseDetail = {
   ...summary,
+  // The detail always has a report behind it, so these narrow to non-null here.
   mode: 'ANONYMOUS',
   category: 'WORKPLACE_CONDUCT',
   subject: 'Sentetik bildirim',
@@ -85,6 +90,68 @@ describe('Etik Speak manager MFE', () => {
     expect(screen.getByText('Sentetik anlatım')).toBeInTheDocument();
     expect(api.listCaseEvidence).toHaveBeenCalledWith(summary.id);
   });
+  // A triage list has to answer "which of these first?" without opening any of them.
+  // The row used to carry an id fragment, a status and a timestamp — enough to tell
+  // cases apart, not enough to choose between them. These assert the four things that
+  // change what a handler does, because a row that renders them and a row that renders
+  // them *for the right case* are different, and only the second one is useful.
+  test('the row says what the case is and what constrains it', async () => {
+    const overdue = {
+      ...summary,
+      id: '33333333-3333-3333-3333-333333333333',
+      subject: 'Depoda gece vardiyası baskısı',
+      category: 'HARASSMENT_DISCRIMINATION',
+      mode: 'ANONYMOUS',
+      participantCount: 0,
+      // Filed well past the seven-day acknowledgement window, never acknowledged.
+      createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+      acknowledgedAt: null,
+    };
+    vi.mocked(api.listCases).mockResolvedValueOnce([overdue]);
+    render(<App />);
+
+    const row = await screen.findByRole('button', { name: /Depoda gece vardiyası baskısı/ });
+
+    // The reporter picked this wording on the intake form; the handler reads the same words.
+    expect(within(row).getByText('Taciz / ayrımcılık')).toBeInTheDocument();
+    // No channel back to the reporter — it changes what the handler can do next.
+    expect(within(row).getByText('Anonim')).toBeInTheDocument();
+    // Nobody is on it. This is how a report goes unworked without anyone deciding so.
+    expect(within(row).getByText('Sahipsiz')).toBeInTheDocument();
+    expect(within(row).getByText('Teyit süresi geçti')).toBeInTheDocument();
+    // Still addressable by id: that is how a case is referred to off this screen.
+    expect(within(row).getByText(/33333333/i)).toBeInTheDocument();
+  });
+
+  test('a case that is owned and acknowledged carries neither warning', async () => {
+    const healthy = {
+      ...summary,
+      id: '44444444-4444-4444-4444-444444444444',
+      subject: 'Tedarikçi hediyesi bildirimi',
+      participantCount: 2,
+      createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+      acknowledgedAt: new Date(Date.now() - 19 * 86_400_000).toISOString(),
+    };
+    vi.mocked(api.listCases).mockResolvedValueOnce([healthy]);
+    render(<App />);
+
+    const row = await screen.findByRole('button', { name: /Tedarikçi hediyesi/ });
+
+    expect(within(row).queryByText('Sahipsiz')).not.toBeInTheDocument();
+    expect(within(row).queryByText('Teyit süresi geçti')).not.toBeInTheDocument();
+  });
+
+  // A malformed case — one with no report row behind it — is exactly the case that needs
+  // attention. Rendering nothing for its subject would drop it off the list silently.
+  test('a case with no readable subject still appears', async () => {
+    vi.mocked(api.listCases).mockResolvedValueOnce([
+      { ...summary, subject: null, category: null, mode: null },
+    ]);
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: /Konu okunamadı/ })).toBeInTheDocument();
+  });
+
   // The stylesheet pins the detail pane so a long case list can be scrolled without
   // losing sight of the case that was just opened. That rule keys off this class, and
   // a class that quietly stops being applied leaves no trace: the markup still renders,
@@ -280,7 +347,9 @@ describe('Etik Speak manager MFE', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
     await userEvent.click(screen.getByRole('button', { name: /#22222222/ }));
-    resolveSecond({ ...detail, ...second });
+    // Only the two fields that differ: spreading the summary would widen `mode` back to
+    // nullable, and the detail always has a report behind it.
+    resolveSecond({ ...detail, id: second.id, subject: second.subject });
     expect(
       await screen.findByRole('heading', { name: 'İkinci sentetik vaka' }),
     ).toBeInTheDocument();

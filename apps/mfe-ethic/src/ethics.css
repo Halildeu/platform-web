@@ -88,6 +88,68 @@
   color: var(--ethics-muted);
 }
 
+/* The subject is what the row is; it gets the weight and the space. It also has to
+   survive a reporter writing a paragraph into the field, so it clamps to two lines
+   rather than pushing the rest of the row out of the card. */
+.ethics-case-subject {
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ethics-case-status {
+  align-self: start;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.ethics-case-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+/* The id and the timestamp answer "which one" and "when", which matter after a case is
+   chosen rather than while choosing. They stay on the row and stop competing for it. */
+.ethics-case-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.ethics-tag {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 0.35rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Three states change what the handler can do, so they read as states rather than as
+   more text: no channel back to the reporter, nobody working it, and a deadline that
+   has run out. Colour is never the only carrier — each one is also a word. */
+.ethics-tag.is-anonymous {
+  border-color: var(--ethics-brand);
+  color: var(--ethics-brand);
+}
+
+.ethics-tag.is-unattended {
+  border-color: var(--ethics-warning);
+  background: var(--ethics-warning-surface);
+}
+
+.ethics-tag.is-overdue {
+  border-color: var(--ethics-danger);
+  background: var(--ethics-danger-surface);
+  color: var(--ethics-danger-text);
+  font-weight: 600;
+}
+
 .ethics-case-list-id {
   font-weight: 700;
 }
