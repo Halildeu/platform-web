@@ -72,7 +72,7 @@ describe('project actuals API contract', () => {
 
     await findProjectBinding(35, 44200);
 
-    expect(mocks.get).toHaveBeenCalledWith('/api/v1/budgets/projects/bindings', {
+    expect(mocks.get).toHaveBeenCalledWith('/v1/budgets/projects/bindings', {
       headers: { 'X-Company-Id': '35' },
       params: {
         sourceSystem: 'WORKCUBE',
@@ -103,7 +103,7 @@ describe('project actuals API contract', () => {
 
     expect(mocks.post).toHaveBeenNthCalledWith(
       1,
-      '/api/v1/budgets/projects',
+      '/v1/budgets/projects',
       {
         platformProjectRef: 'workcube:35:44200',
         sourceSystem: 'WORKCUBE',
@@ -115,19 +115,19 @@ describe('project actuals API contract', () => {
     );
     expect(mocks.post).toHaveBeenNthCalledWith(
       2,
-      '/api/v1/budgets/projects/binding-1/actuals/sync',
+      '/v1/budgets/projects/binding-1/actuals/sync',
       { from: '2026-01-01', to: '2026-07-28' },
       { headers: { 'X-Company-Id': '35' } },
     );
     expect(mocks.get).toHaveBeenNthCalledWith(
       1,
-      '/api/v1/budgets/projects/binding-1/actuals/summary',
+      '/v1/budgets/projects/binding-1/actuals/summary',
       {
         headers: { 'X-Company-Id': '35' },
         params: { from: '2026-01-01', to: '2026-07-28' },
       },
     );
-    expect(mocks.get).toHaveBeenNthCalledWith(2, '/api/v1/budgets/projects/binding-1/actuals', {
+    expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/budgets/projects/binding-1/actuals', {
       headers: { 'X-Company-Id': '35' },
       params: { from: '2026-01-01', to: '2026-07-28', limit: 2000 },
     });

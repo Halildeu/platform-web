@@ -9,7 +9,9 @@ import type {
 } from './types';
 
 const REPORTS_BASE = '/v1/reports';
-const PROJECT_BUDGETS_BASE = '/api/v1/budgets/projects';
+// Shell HTTP client already owns the external `/api` gateway prefix.
+// Keep module paths relative to that base to avoid `/api/api/...` requests.
+const PROJECT_BUDGETS_BASE = '/v1/budgets/projects';
 
 export type BudgetErrorKind =
   | 'AUTHENTICATION_REQUIRED'
