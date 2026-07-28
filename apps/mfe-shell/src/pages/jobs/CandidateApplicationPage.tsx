@@ -497,7 +497,24 @@ const CandidateApplicationPage = () => {
   const derivedExperience = deriveExperienceText(experienceEntries);
   const derivedEducation = deriveEducationText(educationEntries);
   const [view, setView] = useState<View>('form');
+  /**
+   * #1048: `formStep` artık bölüm GİZLEMİYOR — üç bölüm (CV / İletişim /
+   * Deneyim) aynı sayfada aşağı doğru akıyor. Aralarında işlevsel bir kapı
+   * yoktu: aday CV yüklemeden de bilgilerini girebilir, CV önerileri
+   * aşağıdaki alanları besler. Aşama gizlemek, kullanıcıya sebepsiz bir
+   * sıra dayatıyordu.
+   *
+   * State KALDIRILMADI çünkü 11 çağrı yerinin niyeti hâlâ geçerli: "adayı
+   * iletişim bölümüne götür". Artık bunu gizleyerek değil KAYDIRARAK yapıyor.
+   * Gerçek kapılar (`preview` açık onayı, `receipt` gönderim sonrası durumu)
+   * ayrı `view` state'inde ve olduğu gibi duruyor.
+   */
   const [formStep, setFormStep] = useState<FormStep>('resume');
+  const resumeSectionRef = useRef<HTMLDivElement | null>(null);
+  const contactSectionRef = useRef<HTMLDivElement | null>(null);
+  const profileSectionRef = useRef<HTMLDivElement | null>(null);
+  /** İlk render'da kaydırma YOK: sayfa açılışında zıplamak istemiyoruz. */
+  const stepScrollArmed = useRef(false);
   const [fileMeta, setFileMeta] = useState<LocalFileMeta | null>(null);
   const [fileError, setFileError] = useState('');
   const [resumeStatus, setResumeStatus] = useState<ResumeStatus>('idle');
@@ -1070,29 +1087,15 @@ const CandidateApplicationPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /**
+   * #1048: artık bir KAPI değil, kaydırma. Tek sayfada aday alanları istediği
+   * sırada doldurabilir; "deneyim bölümüne inmek için iletişimi tamamla"
+   * demek düşmanca olurdu. Zorunlu-alan doğrulaması tek gerçek kapıda
+   * (`openPreview`) duruyor — iki yerde tutmak drift üretirdi.
+   */
   const openProfileStep = () => {
-    const missingContact = (['fullName', 'email', 'phone', 'city'] as const).some(
-      (field) => values[field].trim().length === 0,
-    );
-    if (missingContact) {
-      setFormError('Devam etmek için iletişim bilgilerindeki yıldızlı alanları doldurun.');
-      return;
-    }
-    if (!isValidEmail(values.email)) {
-      setFormError('Geçerli bir e-posta adresi girin.');
-      return;
-    }
-    if (!isValidPhone(values.phone)) {
-      setFormError('Geçerli bir telefon numarası girin.');
-      return;
-    }
-    if (!isValidOptionalHttpUrl(values.linkedIn) || !isValidOptionalHttpUrl(values.portfolio)) {
-      setFormError('LinkedIn ve portföy adresleri http:// veya https:// ile başlamalıdır.');
-      return;
-    }
     setFormError('');
     setFormStep('profile');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const openPreview: React.FormEventHandler<HTMLFormElement> = (event) => {
@@ -1548,6 +1551,27 @@ const CandidateApplicationPage = () => {
     REJECTED: resumeProposals.filter((proposal) => proposal.state === 'REJECTED').length,
     PENDING: resumeProposals.length - resumeDecidedFields,
   };
+  useEffect(() => {
+    if (!stepScrollArmed.current) {
+      stepScrollArmed.current = true;
+      return;
+    }
+    if (view !== 'form') return;
+    // Üç ayrı ref: tek bir nesnede toplamak her render'da yeni kimlik üretir
+    // ve etkiyi formStep değişimine değil HER render'a bağlardı.
+    const target =
+      formStep === 'resume'
+        ? resumeSectionRef
+        : formStep === 'contact'
+          ? contactSectionRef
+          : profileSectionRef;
+    // `?.` iki kez: jsdom `scrollIntoView` UYGULAMIYOR. Korumasız çağrı test
+    // ortamında TypeError atıyordu ve etkiden sonraki akışı kesiyordu — CV
+    // aktarım testi tam bunu yakaladı. Üretimde de doğru: kaydırma bir
+    // kolaylıktır, yokluğunda akış durmamalı.
+    target.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [formStep, view]);
+
   const currentStepId: FormStep | 'preview' | 'receipt' = view === 'form' ? formStep : view;
   const currentStepIndex = FORM_STEPS.findIndex((step) => step.id === currentStepId);
 
@@ -1625,7 +1649,11 @@ const CandidateApplicationPage = () => {
                 const completed = currentStepIndex > index;
                 const current = currentStepIndex === index;
                 const target = FORM_STEP_IDS.find((id) => id === step.id);
-                const navigable = view !== 'receipt' && completed && target !== undefined;
+                // #1048: form bölümleri artık aynı sayfada; "tamamlanmış adım"
+                // kavramı kalktı. Gösterge bir içindekiler listesi: form
+                // bölümlerine HER ZAMAN atlanabilir (gönderim sonrası hariç).
+                // Kontrol/Tamamlandı gerçek kapılar olduğu için durum kalır.
+                const navigable = view !== 'receipt' && target !== undefined;
                 const mark = (
                   <span
                     className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${
@@ -1659,7 +1687,7 @@ const CandidateApplicationPage = () => {
                         // altındaki "CV adımına dön" düğmesiyle ADI ÇAKIŞIYORDU ve
                         // ekran okuyucu kullanıcısı ikisini ayırt edemezdi (mevcut
                         // üç test bu çakışmayı "Found multiple elements" ile yakaladı).
-                        aria-label={`${index + 1}. adım: ${step.label} — bu adıma dön`}
+                        aria-label={`${step.label} bölümüne git`}
                         className="block w-full rounded-lg px-1 py-0.5 hover:bg-surface-subtle focus:outline-hidden focus:ring-2 focus:ring-selection-outline"
                       >
                         {mark}
@@ -1679,8 +1707,8 @@ const CandidateApplicationPage = () => {
 
           {view === 'form' ? (
             <form className="flex flex-col gap-5" onSubmit={openPreview} noValidate>
-              {formStep === 'resume' ? (
-                <>
+              {(
+                <div ref={resumeSectionRef}>
                   <section className={sectionClassName} aria-labelledby="resume-heading">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -2277,18 +2305,18 @@ const CandidateApplicationPage = () => {
                       }}
                       className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-5 text-sm font-bold text-action-primary-text"
                     >
-                      {resumeBinding ? 'Bilgilerimi kontrol et' : 'CV olmadan devam et'}
+                      {resumeBinding ? 'İletişim bilgilerime geç' : 'CV olmadan devam et'}
                     </button>
                   </div>
-                </>
-              ) : null}
+                </div>
+              )}
 
-              {formStep === 'contact' ? (
-                <>
+              {(
+                <div ref={contactSectionRef}>
                   <section className={sectionClassName} aria-labelledby="contact-heading">
                     <div className="mb-5">
                       <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
-                        Adım 2 · Aday bilgileri
+                        Aday bilgileri
                       </p>
                       <h2 id="contact-heading" className="mt-1 text-xl font-bold">
                         Size nasıl ulaşalım?
@@ -2297,16 +2325,11 @@ const CandidateApplicationPage = () => {
                         CV’den gelen alanları kontrol edin; her bilgiyi göndermeden önce
                         değiştirebilirsiniz.
                       </p>
-                      {resumeBinding && fileMeta ? (
-                        <p
-                          role="status"
-                          data-testid="candidate-resume-meta"
-                          className="mt-3 rounded-xl border border-state-success-border bg-state-success-bg px-4 py-3 text-sm font-semibold text-state-success-text"
-                        >
-                          CV’den dolduruldu: {fileMeta.importedFieldCount} alan forma aktarıldı. Ham
-                          PDF ve dosya adı saklanmadı.
-                        </p>
-                      ) : null}
+                      {/* #1048: CV aktarım özeti artık YALNIZ CV bölümünde. Adım
+                          adım tasarımda CV bölümü gizlendiği için burada bir
+                          kopyası vardı; tek sayfada aynı `data-testid` iki kez
+                          render ediliyordu (test "Found multiple elements" ile
+                          yakaladı) ve aday aynı bilgiyi iki kez okuyordu. */}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       {renderField('fullName', 'Ad soyad', {
@@ -2341,14 +2364,9 @@ const CandidateApplicationPage = () => {
                         : null}
                     </div>
                   </section>
-                  {formError ? (
-                    <p
-                      role="alert"
-                      className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
-                    >
-                      {formError}
-                    </p>
-                  ) : null}
+                  {/* #1048: formError TEK yerde — gönderim eyleminin yanında.
+                      Adım adım tasarımda her adımın kendi kopyası vardı; tek
+                      sayfada aynı mesaj tekrarlanıyordu. */}
                   <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
                       type="button"
@@ -2366,18 +2384,18 @@ const CandidateApplicationPage = () => {
                       onClick={openProfileStep}
                       className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action-primary px-5 text-sm font-bold text-action-primary-text"
                     >
-                      Deneyim bilgilerime devam et
+                      Deneyim bilgilerime geç
                     </button>
                   </div>
-                </>
-              ) : null}
+                </div>
+              )}
 
-              {formStep === 'profile' ? (
-                <>
+              {(
+                <div ref={profileSectionRef}>
                   <section className={sectionClassName} aria-labelledby="profile-heading">
                     <div className="mb-5">
                       <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
-                        Adım 3 · Profil
+                        Deneyim ve profil
                       </p>
                       <h2 id="profile-heading" className="mt-1 text-xl font-bold">
                         Deneyiminizi anlatın
@@ -2469,8 +2487,8 @@ const CandidateApplicationPage = () => {
                       Başvuruyu kontrol et
                     </button>
                   </div>
-                </>
-              ) : null}
+                </div>
+              )}
             </form>
           ) : null}
 
