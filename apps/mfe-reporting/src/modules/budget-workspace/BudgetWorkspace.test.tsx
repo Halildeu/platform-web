@@ -192,6 +192,44 @@ describe('BudgetWorkspace project actuals', () => {
     expect(screen.queryByRole('button', { name: 'Yeni taslak oluştur' })).not.toBeInTheDocument();
   });
 
+  it('sorts companies by visible label and projects by Turkish project name', async () => {
+    apiMocks.fetchCompanies.mockResolvedValue([
+      { id: 2, nickname: 'Zulu', name: 'Zulu A.Ş.' },
+      { id: 35, nickname: 'İnci', name: 'İnci A.Ş.' },
+      { id: 1, nickname: 'Açık', name: 'Açık Holding A.Ş.' },
+    ]);
+    apiMocks.fetchProjects.mockResolvedValue([
+      { id: 3, code: 'A01', name: 'Zeytin Projesi', companyId: 1, active: true },
+      { id: 2, code: 'Z99', name: 'İzmir Projesi', companyId: 1, active: true },
+      { id: 1, code: 'K01', name: 'Ankara Projesi', companyId: 1, active: true },
+    ]);
+
+    renderWorkspace();
+
+    const companySelect = await screen.findByLabelText('Şirket adı');
+    expect(
+      Array.from(companySelect.querySelectorAll('option')).map((option) => option.textContent),
+    ).toEqual([
+      'Şirket seçin',
+      'Açık — Açık Holding A.Ş.',
+      'İnci — İnci A.Ş.',
+      'Zulu — Zulu A.Ş.',
+    ]);
+
+    fireEvent.change(companySelect, { target: { value: '1' } });
+    const projectSelect = screen.getByLabelText('Proje');
+    await waitFor(() =>
+      expect(
+        Array.from(projectSelect.querySelectorAll('option')).map((option) => option.textContent),
+      ).toEqual([
+        'Proje seçin',
+        'K01 — Ankara Projesi',
+        'Z99 — İzmir Projesi',
+        'A01 — Zeytin Projesi',
+      ]),
+    );
+  });
+
   it('loads an existing PostgreSQL snapshot without requiring a sync write', async () => {
     renderWorkspace();
     await chooseIdc1();
