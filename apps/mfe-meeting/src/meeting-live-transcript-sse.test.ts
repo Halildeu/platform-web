@@ -3,6 +3,7 @@ import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import {
   chunkToSegment,
   connectLiveTranscriptSse,
+  liveStatusToSegmentStatus,
   resolveLiveTranscriptSseEndpoint,
   type LiveTranscriptChunk,
 } from './meeting-live-transcript-sse';
@@ -49,6 +50,55 @@ describe('chunkToSegment', () => {
     const seg = chunkToSegment({ text: null as unknown as string }, 0, 0);
     expect(seg.text).toBe('');
   });
+
+  test('UTTERANCE becomes a permanent line, DRAFT stays volatile', () => {
+    const assembled = chunkToSegment(
+      { text: 'Toplantıyı başlatalım.', status: 'UTTERANCE' },
+      0,
+      1_700_000_000_000,
+    );
+    expect(assembled.status).toBe('final');
+
+    const raw = chunkToSegment({ text: 'Toplantıyı', status: 'DRAFT' }, 1, 1_700_000_000_000);
+    expect(raw.status).toBe('draft');
+  });
+
+  test('an assembled line carries the audit trail back to its fragments', () => {
+    const seg = chunkToSegment(
+      {
+        text: 'Toplantıyı başlatalım.',
+        status: 'UTTERANCE',
+        assemblyReason: 'SILENCE',
+        sourceEventIds: ['evt-1', 'evt-2'],
+      },
+      0,
+      1_700_000_000_000,
+    );
+    expect(seg.assemblyReason).toBe('SILENCE');
+    expect(seg.sourceEventIds).toEqual(['evt-1', 'evt-2']);
+  });
+
+  test('a raw chunk carries no audit trail fields', () => {
+    const seg = chunkToSegment({ text: 'Toplantıyı', status: 'DRAFT', sourceEventIds: [] }, 0, 0);
+    expect(seg.assemblyReason).toBeUndefined();
+    expect(seg.sourceEventIds).toBeUndefined();
+  });
+
+  // 'final' is what makes a line citable, so an unrecognised status must never
+  // reach it. Without this anchor the mapping could be loosened to a default of
+  // 'final' and the suite would still pass on the two known values.
+  const uncitableStatuses: ReadonlyArray<readonly [string, string | null | undefined]> = [
+    ['missing', undefined],
+    ['null', null],
+    ['lowercase', 'utterance'],
+    ['unknown', 'PARTIAL'],
+    ['empty', ''],
+  ];
+
+  test.each(uncitableStatuses)('%s status is not promoted to a citable line', (_label, status) => {
+    expect(liveStatusToSegmentStatus(status)).toBe('draft');
+    expect(chunkToSegment({ text: 'x', status }, 0, 0).status).toBe('draft');
+  });
 });
 
 describe('connectLiveTranscriptSse', () => {
@@ -73,17 +123,19 @@ describe('connectLiveTranscriptSse', () => {
     (import.meta.env as Record<string, string | undefined>)[ENDPOINT_ENV] =
       'https://gw.example/api/v1/audio-gateway/meetings/{meetingId}/live-transcript/stream';
     const listeners = new Map<string, EventListener>();
-    let openHandler: (() => void) | null = null;
-    let errorHandler: (() => void) | null = null;
+    // Held on an object, not in `let` bindings: the assignments happen inside
+    // the setters below, which the compiler cannot prove ever run, so it
+    // narrowed the bindings to `null` and every call site became `never`.
+    const captured: { open?: () => void; error?: () => void } = {};
     const fakeSource = {
       addEventListener: (event: string, listener: EventListener) => {
         listeners.set(event, listener);
       },
       set onopen(handler: () => void) {
-        openHandler = handler;
+        captured.open = handler;
       },
       set onerror(handler: () => void) {
-        errorHandler = handler;
+        captured.error = handler;
       },
       close: vi.fn(),
     } as unknown as EventSource;
@@ -97,7 +149,7 @@ describe('connectLiveTranscriptSse', () => {
 
     expect(controller.snapshot().state).toBe('connecting');
 
-    openHandler?.();
+    captured.open?.();
     expect(controller.snapshot().state).toBe('open');
 
     const handler = listeners.get('transcript-chunk');
@@ -109,7 +161,7 @@ describe('connectLiveTranscriptSse', () => {
     expect(controller.snapshot().chunks).toHaveLength(1);
     expect(controller.snapshot().chunks[0].text).toBe('Merhaba dunya');
 
-    errorHandler?.();
+    captured.error?.();
     expect(controller.snapshot().state).toBe('error');
 
     controller.close();

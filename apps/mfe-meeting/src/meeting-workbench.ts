@@ -11,6 +11,16 @@ export interface TranscriptSegment {
   startedAtMs: number;
   status: TranscriptSegmentStatus;
   text: string;
+  /**
+   * Why the gateway closed this assembled line; absent on a raw chunk or on a
+   * segment that did not come from the live stream.
+   */
+  assemblyReason?: string;
+  /**
+   * The chunks the gateway folded into this line, in order. This is the audit
+   * trail a citation on an assembled line traces back through.
+   */
+  sourceEventIds?: string[];
 }
 
 export interface EvidenceCitation {
