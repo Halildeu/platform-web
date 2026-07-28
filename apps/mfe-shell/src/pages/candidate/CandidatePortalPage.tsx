@@ -170,7 +170,17 @@ const CandidatePortalPage = () => {
    * Yani birincil e-posta, anahtar yedek. İki eşit kart göstermek adayı
    * kendi kıyaslamaya zorluyordu.
    */
-  const [keyPathOpen, setKeyPathOpen] = useState(false);
+  /**
+   * #1059: giriş yolu üç EŞİT seçenek. Önceki tasarımda e-posta bir kart,
+   * diğer ikisi tek bir katlanır bölümün içindeydi ve dosya yükleme elle
+   * girişin İÇİNE gömülüydü — aday üçüncü yolun varlığını ancak ikinciyi
+   * açınca görüyordu. Seçenekler eşit görünürlükte olmalı ki aday hangisinin
+   * elinde olduğuna göre seçsin.
+   *
+   * Sıra rastgele değil: e-posta önce çünkü HER adayda çalışır ve o adrese ait
+   * TÜM başvuruları getirir; diğer ikisi tek başvuru açar.
+   */
+  const [signInOption, setSignInOption] = useState<'email' | 'file' | 'manual'>('email');
   const [status, setStatus] = useState<CandidateStatusDto | null>(null);
   const [interviews, setInterviews] = useState<CandidateInterviewDto[]>([]);
   const [offers, setOffers] = useState<CandidateOfferDto[]>([]);
@@ -295,7 +305,7 @@ const CandidatePortalPage = () => {
       // Kod gelmiyorsa aday açıkta kalmasın: yedek yol kendiliğinden açılır.
       // Hata metni zaten "takip anahtarınızla girebilirsiniz" diyordu ama
       // kullanıcıyı o alana GÖTÜRMÜYORDU — söylemek yetmez, yolu açmak gerekir.
-      setKeyPathOpen(true);
+      setSignInOption('manual');
     } finally {
       setLoginBusy(false);
     }
@@ -355,6 +365,9 @@ const CandidatePortalPage = () => {
     }
     setSignInRef(parsed.publicRef);
     setSignInToken(parsed.candidateAccessToken);
+    // Dosya bir KISAYOL: iki alanı doldurup adayı gönderim düğmesinin olduğu
+    // seçeneğe taşır. Dosya seçtikten sonra "şimdi ne olacak" sorusu kalmaz.
+    setSignInOption('manual');
   };
 
   const signIn = () => {
@@ -516,9 +529,46 @@ const CandidatePortalPage = () => {
             aria-labelledby="candidate-email-login-heading"
             data-testid="candidate-email-login"
           >
+            {/* #1059: üç yol EŞİT görünür. `radiogroup` seçildi (tablist değil):
+                aday bir sekme gezmiyor, bir YOL seçiyor; ekran okuyucu da
+                "3 seçenekten biri" diye okur. */}
             <h2 id="candidate-email-login-heading" className="text-2xl font-bold">
-              E-posta ile giriş
+              Başvurunuza girin
             </h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              Elinizde ne varsa onu kullanın — üç yol da aynı başvuruya çıkar.
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="Giriş yolu"
+              className="mt-4 grid gap-2 sm:grid-cols-3"
+            >
+              {(
+                [
+                  ['email', 'E-posta ile kod', 'Tüm başvurularınız'],
+                  ['file', 'Takip dosyası', 'İndirdiğiniz .txt'],
+                  ['manual', 'Referans + anahtar', 'Elle girin'],
+                ] as const
+              ).map(([id, title, hint]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={signInOption === id}
+                  data-testid={`candidate-signin-option-${id}`}
+                  onClick={() => setSignInOption(id)}
+                  className={`rounded-2xl border p-3 text-left ${
+                    signInOption === id
+                      ? 'border-action-primary bg-surface-muted'
+                      : 'border-border-subtle bg-surface-default'
+                  }`}
+                >
+                  <span className="block text-sm font-bold text-text-primary">{title}</span>
+                  <span className="mt-0.5 block text-xs text-text-secondary">{hint}</span>
+                </button>
+              ))}
+            </div>
+            <div hidden={signInOption !== 'email'} data-testid="candidate-signin-pane-email">
             <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
               Başvuruda kullandığınız e-posta adresine tek kullanımlık bir kod gönderiyoruz.
               Kodu girdiğinizde <strong>bu adrese ait tüm başvurularınız</strong> tek listede
@@ -619,6 +669,7 @@ const CandidatePortalPage = () => {
                 ) : null}
               </div>
             </form>
+            </div>
           </section>
         ) : (
           <section
@@ -690,30 +741,13 @@ const CandidatePortalPage = () => {
             aria-labelledby="candidate-sign-in-heading"
             data-testid="candidate-sign-in"
           >
-            {/* #1048: ayrı kart DEĞİL, e-posta girişinin altındaki ikincil yol.
-                Kapalı başlar; `details/summary` yerine düğme + aria-expanded
-                kullanıldı çünkü 503'te bunu KOD ile açmamız gerekiyor. */}
-            <button
-              type="button"
-              data-testid="candidate-key-path-toggle"
-              aria-expanded={keyPathOpen}
-              aria-controls="candidate-key-path"
-              onClick={() => setKeyPathOpen((open) => !open)}
-              className="flex w-full items-center justify-between gap-3 text-left"
-            >
-              <span>
-                <span id="candidate-sign-in-heading" className="block text-base font-bold">
-                  E-postanıza erişemiyor musunuz?
-                </span>
-                <span className="mt-1 block text-sm text-text-secondary">
-                  Başvuru referansı ve takip anahtarıyla girin
-                </span>
-              </span>
-              <span aria-hidden="true" className="text-lg font-bold text-text-secondary">
-                {keyPathOpen ? '−' : '+'}
-              </span>
-            </button>
-            <div id="candidate-key-path" hidden={!keyPathOpen}>
+            {/* #1059: bu bölüm artık iki AYRI seçeneğin bölmesi. Üstteki
+                seçici hangisinin görüneceğini belirler; katlanır başlık
+                kaldırıldı çünkü seçim yukarıda yapılıyor. */}
+            <h2 id="candidate-sign-in-heading" className="sr-only">
+              Referans, anahtar veya takip dosyasıyla giriş
+            </h2>
+            <div hidden={signInOption === 'email'}>
             <p className="mt-4 max-w-xl text-sm leading-6 text-text-secondary">
               Başvurunuz alındığında verilen <strong>başvuru referansı</strong> ve{' '}
               <strong>takip anahtarı</strong> ile girin. İkisi birlikte gerekir: referans tek
@@ -727,6 +761,7 @@ const CandidatePortalPage = () => {
                 signIn();
               }}
             >
+              <div hidden={signInOption !== 'manual'} data-testid="candidate-signin-pane-manual">
               <div>
                 <label
                   htmlFor="candidate-sign-in-ref"
@@ -767,7 +802,12 @@ const CandidatePortalPage = () => {
                   tarayıcı depolamasına yazılmaz.
                 </p>
               </div>
-              <div className="rounded-xl border border-border-subtle bg-surface-muted p-3">
+              </div>
+              <div
+                hidden={signInOption !== 'file'}
+                data-testid="candidate-signin-pane-file"
+                className="rounded-xl border border-border-subtle bg-surface-muted p-3"
+              >
                 <label
                   htmlFor="candidate-tracking-file"
                   className="block text-sm font-semibold text-text-primary"
