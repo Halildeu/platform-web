@@ -475,4 +475,52 @@ describe('Etik Speak manager MFE', () => {
     expect(state).toHaveAttribute('data-overdue', 'false');
     expect(state).toHaveTextContent('2 gün içinde verildi');
   });
+
+  // 138 vakalık bir listede rozetleri görmek taramaya yarar; "sadece sahipsizleri göster"
+  // diyememek işi yarım bırakır. Asıl riskli olan filtrenin kendisi değil: bir uyum
+  // aracında açık kalmış bir filtre vakaları sessizce gizler ve gizlenen vaka, kimsenin
+  // bakmadığı ihbardır. Sayaç ve "süzmeyi kaldır" o yüzden sözleşme.
+  test('sahipsiz süzgeci yalnız kimsenin bakmadığı vakaları bırakır', async () => {
+    const owned = { ...summary, id: '55555555-5555-5555-5555-555555555555', subject: 'Sahipli vaka', participantCount: 2 };
+    const orphan = { ...summary, id: '66666666-6666-6666-6666-666666666666', subject: 'Sahipsiz vaka', participantCount: 0 };
+    vi.mocked(api.listCases).mockResolvedValueOnce([owned, orphan]);
+    render(<App />);
+    await screen.findByRole('button', { name: /Sahipli vaka/ });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Sahipsiz' }));
+
+    expect(screen.queryByRole('button', { name: /Sahipli vaka/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sahipsiz vaka/ })).toBeInTheDocument();
+  });
+
+  test('süzgeç açıkken kaç vakanın gizlendiği yazar ve tek tıkla geri alınır', async () => {
+    const owned = { ...summary, id: '77777777-7777-7777-7777-777777777777', subject: 'Sahipli vaka', participantCount: 2 };
+    const orphan = { ...summary, id: '88888888-8888-8888-8888-888888888888', subject: 'Sahipsiz vaka', participantCount: 0 };
+    vi.mocked(api.listCases).mockResolvedValueOnce([owned, orphan]);
+    render(<App />);
+    await screen.findByRole('button', { name: /Sahipli vaka/ });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Sahipsiz' }));
+
+    // Süzülmüş liste tam liste gibi görünmemeli.
+    const summaryLine = screen.getByRole('status');
+    expect(summaryLine).toHaveTextContent('1 / 2 vaka gösteriliyor');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Süzmeyi kaldır' }));
+    expect(screen.getByRole('button', { name: /Sahipli vaka/ })).toBeInTheDocument();
+  });
+
+  // Konusu okunamayan vaka bozuktur — yani tam da bakılması gereken kayıt. Metin
+  // aramasının onu düşürmesi, dikkat isteyen kaydı gizlemek olurdu.
+  test('konusu okunamayan vaka metin aramasında düşmez', async () => {
+    const named = { ...summary, id: '99999999-9999-9999-9999-999999999999', subject: 'Depo bildirimi' };
+    const broken = { ...summary, id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', subject: null };
+    vi.mocked(api.listCases).mockResolvedValueOnce([named, broken]);
+    render(<App />);
+    await screen.findByRole('button', { name: /Depo bildirimi/ });
+
+    await userEvent.type(screen.getByLabelText('Konu ara'), 'kesinlikle-eslesmeyen-metin');
+
+    expect(screen.queryByRole('button', { name: /Depo bildirimi/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Konu okunamadı/ })).toBeInTheDocument();
+  });
 });

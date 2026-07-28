@@ -20,6 +20,11 @@ import {
 import {
   acknowledgementState,
   categoryLabel,
+  CASE_CATEGORIES,
+  CASE_STATUSES,
+  EMPTY_CASE_FILTER,
+  filterCases,
+  isFilterActive,
   isAnonymous,
   NEXT_STATUSES,
   OUTCOME_OPTIONS,
@@ -28,6 +33,7 @@ import {
   participantRoleLabel,
   statusLabel,
   transitionLabel,
+  type CaseFilter,
   type CaseOutcome,
   type CaseStatus,
   type ParticipantRole,
@@ -43,6 +49,10 @@ export default function App() {
   const [evidenceError, setEvidenceError] = useState('');
   const [downloadingEvidenceId, setDownloadingEvidenceId] = useState('');
   const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [filter, setFilter] = useState<CaseFilter>(EMPTY_CASE_FILTER);
+  // Derived, not stored: a second copy of the list would drift from the first the moment
+  // a refresh lands while a filter is on.
+  const visibleItems = filterCases(items, filter);
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
   const [internalNote, setInternalNote] = useState('');
@@ -397,8 +407,82 @@ export default function App() {
               {loadState === 'ready' && items.length === 0 && (
                 <p>Yetkiniz kapsamında açık vaka yok.</p>
               )}
+              {loadState === 'ready' && items.length > 0 && (
+                <div className="ethics-filters">
+                  <label className="ethics-filter-search">
+                    <span>Konu ara</span>
+                    <input
+                      type="search"
+                      value={filter.query}
+                      onChange={(e) => setFilter({ ...filter, query: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Durum</span>
+                    <select
+                      value={filter.status}
+                      onChange={(e) => setFilter({ ...filter, status: e.target.value })}
+                    >
+                      <option value="">Hepsi</option>
+                      {CASE_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {statusLabel(s)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Kategori</span>
+                    <select
+                      value={filter.category}
+                      onChange={(e) => setFilter({ ...filter, category: e.target.value })}
+                    >
+                      <option value="">Hepsi</option>
+                      {CASE_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {categoryLabel(c)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {/* The two questions triage exists to answer, as one click each. */}
+                  <label className="ethics-filter-toggle">
+                    <input
+                      type="checkbox"
+                      checked={filter.unattended}
+                      onChange={(e) => setFilter({ ...filter, unattended: e.target.checked })}
+                    />
+                    <span>Sahipsiz</span>
+                  </label>
+                  <label className="ethics-filter-toggle">
+                    <input
+                      type="checkbox"
+                      checked={filter.overdue}
+                      onChange={(e) => setFilter({ ...filter, overdue: e.target.checked })}
+                    />
+                    <span>Teyit süresi geçti</span>
+                  </label>
+                </div>
+              )}
+              {/* A filtered list must never look like the whole list. A filter left on from
+                  an earlier question silently hides cases, and on this screen a hidden case
+                  is a report nobody is working. The count says what is being withheld and
+                  the button undoes it in one move. */}
+              {loadState === 'ready' && isFilterActive(filter) && (
+                <p className="ethics-filter-summary" role="status">
+                  <span>
+                    <strong>{visibleItems.length}</strong> / {items.length} vaka gösteriliyor
+                  </span>
+                  <button type="button" onClick={() => setFilter(EMPTY_CASE_FILTER)}>
+                    Süzmeyi kaldır
+                  </button>
+                </p>
+              )}
+              {loadState === 'ready' && items.length > 0 && visibleItems.length === 0 && (
+                <p>Bu süzgeçle eşleşen vaka yok.</p>
+              )}
               <ul className="ethics-case-list" aria-label="Etik vakaları">
-                {items.map((item) => (
+                {visibleItems.map((item) => (
                   <li key={item.id}>
                     <button
                       className={selected?.id === item.id ? 'is-selected' : ''}
