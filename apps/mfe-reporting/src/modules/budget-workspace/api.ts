@@ -1,15 +1,22 @@
 import { getShellServices } from '../../app/services/shell-services';
 import type {
   CompanyOption,
+  ProjectActualRow,
+  ProjectActualSummary,
+  ProjectActualSyncResult,
+  ProjectBinding,
   ProjectOption,
 } from './types';
 
 const REPORTS_BASE = '/v1/reports';
+const PROJECT_BUDGETS_BASE = '/api/v1/budgets/projects';
 
 export type BudgetErrorKind =
   | 'AUTHENTICATION_REQUIRED'
   | 'FORBIDDEN'
   | 'INVALID_REQUEST'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
   | 'UNAVAILABLE';
 
 export class BudgetApiError extends Error {
@@ -71,6 +78,15 @@ const mapError = (error: unknown): never => {
       message ?? 'Şirket, proje veya tarih aralığı doğrulanamadı.',
     );
   }
+  if (response?.status === 404) {
+    throw new BudgetApiError(
+      'NOT_FOUND',
+      message ?? 'Bu proje için gerçekleşen maliyet bağlantısı henüz kurulmamış.',
+    );
+  }
+  if (response?.status === 409) {
+    throw new BudgetApiError('CONFLICT', message ?? 'Proje bağlantısı mevcut kayıtla çakışıyor.');
+  }
   throw new BudgetApiError(
     'UNAVAILABLE',
     message ?? 'Gerçekleşen maliyet kaynağına ulaşılamadı. Kaynak veride değişiklik yapılmadı.',
@@ -95,4 +111,79 @@ export const fetchProjects = (companyId: number): Promise<ProjectOption[]> =>
     resolveClient().get<ProjectOption[]>(`${REPORTS_BASE}/project-options`, {
       headers: companyHeaders(companyId),
     }),
+  );
+
+export const findProjectBinding = (
+  companyId: number,
+  externalProjectId: number,
+): Promise<ProjectBinding> =>
+  execute(() =>
+    resolveClient().get<ProjectBinding>(`${PROJECT_BUDGETS_BASE}/bindings`, {
+      headers: companyHeaders(companyId),
+      params: {
+        sourceSystem: 'WORKCUBE',
+        externalProjectId,
+      },
+    }),
+  );
+
+export const createProjectBinding = (
+  companyId: number,
+  project: ProjectOption,
+): Promise<ProjectBinding> =>
+  execute(() =>
+    resolveClient().post<ProjectBinding>(
+      PROJECT_BUDGETS_BASE,
+      {
+        platformProjectRef: `workcube:${companyId}:${project.id}`,
+        sourceSystem: 'WORKCUBE',
+        externalCompanyNo: companyId,
+        externalProjectId: project.id,
+        externalProjectCode: project.code,
+      },
+      { headers: companyHeaders(companyId) },
+    ),
+  );
+
+export const fetchProjectActualRows = (
+  companyId: number,
+  bindingId: string,
+  from: string,
+  to: string,
+): Promise<ProjectActualRow[]> =>
+  execute(() =>
+    resolveClient().get<ProjectActualRow[]>(`${PROJECT_BUDGETS_BASE}/${bindingId}/actuals`, {
+      headers: companyHeaders(companyId),
+      params: { from, to, limit: 2000 },
+    }),
+  );
+
+export const fetchProjectActualSummary = (
+  companyId: number,
+  bindingId: string,
+  from: string,
+  to: string,
+): Promise<ProjectActualSummary> =>
+  execute(() =>
+    resolveClient().get<ProjectActualSummary>(
+      `${PROJECT_BUDGETS_BASE}/${bindingId}/actuals/summary`,
+      {
+        headers: companyHeaders(companyId),
+        params: { from, to },
+      },
+    ),
+  );
+
+export const syncProjectActuals = (
+  companyId: number,
+  bindingId: string,
+  from: string,
+  to: string,
+): Promise<ProjectActualSyncResult> =>
+  execute(() =>
+    resolveClient().post<ProjectActualSyncResult>(
+      `${PROJECT_BUDGETS_BASE}/${bindingId}/actuals/sync`,
+      { from, to },
+      { headers: companyHeaders(companyId) },
+    ),
   );
