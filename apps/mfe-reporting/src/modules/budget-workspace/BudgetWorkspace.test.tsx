@@ -17,6 +17,7 @@ const apiMocks = vi.hoisted(() => ({
 const gridMocks = vi.hoisted(() => ({
   buildColDefs: vi.fn((meta: unknown[]) => meta),
 }));
+const budgetLogin = vi.fn(() => Promise.resolve());
 
 vi.mock('@mfe/design-system/advanced/data-grid', () => ({
   buildColDefs: gridMocks.buildColDefs,
@@ -158,6 +159,11 @@ const chooseIdc1 = async () => {
 describe('BudgetWorkspace project actuals', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (
+      window as typeof window & {
+        __startKeycloakLogin?: (options: { redirectUri: string }) => Promise<void>;
+      }
+    ).__startKeycloakLogin = budgetLogin;
     apiMocks.fetchCompanies.mockResolvedValue(companies);
     apiMocks.fetchProjects.mockResolvedValue(projects);
     apiMocks.findProjectBinding.mockResolvedValue(binding);
@@ -276,6 +282,21 @@ describe('BudgetWorkspace project actuals', () => {
       '2026-07-28',
     );
     expect(screen.getByTestId('actuals-grid')).toBeInTheDocument();
+  });
+
+  it('offers route-scoped SSO reauthorization when the budget API rejects the token', async () => {
+    apiMocks.findProjectBinding.mockRejectedValue(
+      new BudgetApiError('FORBIDDEN', 'Bütçe yetkiniz bulunmuyor.'),
+    );
+    renderWorkspace();
+    await chooseIdc1();
+    fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Bütçe yetkisini güvenli girişle yenile' }),
+    );
+
+    expect(budgetLogin).toHaveBeenCalledWith({ redirectUri: window.location.href });
   });
 
   it('reports a blocked provider sync without presenting stale data as refreshed', async () => {

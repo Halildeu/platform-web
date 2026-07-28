@@ -167,9 +167,36 @@ export const BudgetWorkspace: React.FC = () => {
   const [rows, setRows] = React.useState<ProjectActualRow[]>([]);
   const [lastSync, setLastSync] = React.useState<ProjectActualSyncResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [budgetAuthorizationRequired, setBudgetAuthorizationRequired] = React.useState(false);
 
   const selectedProject = projects.find((project) => String(project.id) === projectId) ?? null;
   const validSelection = Boolean(companyId && projectId && from && to && from <= to);
+
+  const captureBudgetError = (reason: unknown) => {
+    setBudgetAuthorizationRequired(
+      reason instanceof BudgetApiError && reason.kind === 'FORBIDDEN',
+    );
+    setError(errorMessage(reason));
+  };
+
+  const renewBudgetAuthorization = async () => {
+    const login = (
+      window as typeof window & {
+        __startKeycloakLogin?: (options: { redirectUri: string }) => Promise<void>;
+      }
+    ).__startKeycloakLogin;
+    if (!login) {
+      setError('Bütçe yetkisi güvenli giriş üzerinden yenilenemedi. Lütfen yeniden giriş yapın.');
+      return;
+    }
+    setDataBusy(true);
+    try {
+      await login({ redirectUri: window.location.href });
+    } catch {
+      setDataBusy(false);
+      setError('Bütçe yetkisi yenileme başlatılamadı. Lütfen yeniden giriş yapın.');
+    }
+  };
 
   React.useEffect(() => {
     let active = true;
@@ -203,6 +230,7 @@ export const BudgetWorkspace: React.FC = () => {
     setProjects([]);
     clearActuals();
     setError(null);
+    setBudgetAuthorizationRequired(false);
     if (!next) return;
 
     setCatalogBusy(true);
@@ -219,6 +247,7 @@ export const BudgetWorkspace: React.FC = () => {
     setProjectId(event.target.value);
     clearActuals();
     setError(null);
+    setBudgetAuthorizationRequired(false);
   };
 
   const loadSnapshot = React.useCallback(
@@ -240,6 +269,7 @@ export const BudgetWorkspace: React.FC = () => {
     if (!validSelection) return;
     setDataBusy(true);
     setError(null);
+    setBudgetAuthorizationRequired(false);
     setLastSync(null);
     selectReportingCompany(companyId);
     try {
@@ -250,7 +280,7 @@ export const BudgetWorkspace: React.FC = () => {
         clearActuals();
         setBindingMissing(true);
       } else {
-        setError(errorMessage(reason));
+        captureBudgetError(reason);
       }
     } finally {
       setDataBusy(false);
@@ -261,6 +291,7 @@ export const BudgetWorkspace: React.FC = () => {
     if (!validSelection || !selectedProject) return;
     setSyncBusy(true);
     setError(null);
+    setBudgetAuthorizationRequired(false);
     selectReportingCompany(companyId);
     try {
       const activeBinding = await createProjectBinding(Number(companyId), selectedProject);
@@ -274,7 +305,7 @@ export const BudgetWorkspace: React.FC = () => {
       }
       await loadSnapshot(activeBinding);
     } catch (reason) {
-      setError(errorMessage(reason));
+      captureBudgetError(reason);
     } finally {
       setSyncBusy(false);
     }
@@ -284,6 +315,7 @@ export const BudgetWorkspace: React.FC = () => {
     if (!binding || !validSelection) return;
     setSyncBusy(true);
     setError(null);
+    setBudgetAuthorizationRequired(false);
     selectReportingCompany(companyId);
     try {
       const result = await syncProjectActuals(Number(companyId), binding.id, from, to);
@@ -294,7 +326,7 @@ export const BudgetWorkspace: React.FC = () => {
       }
       await loadSnapshot(binding);
     } catch (reason) {
-      setError(errorMessage(reason));
+      captureBudgetError(reason);
     } finally {
       setSyncBusy(false);
     }
@@ -527,6 +559,16 @@ export const BudgetWorkspace: React.FC = () => {
           className="rounded-lg border border-state-danger-text/30 bg-state-danger-bg p-4 text-sm text-state-danger-text"
         >
           <strong>İşlem tamamlanamadı.</strong> {error}
+          {budgetAuthorizationRequired ? (
+            <button
+              type="button"
+              className="ml-3 rounded-md border border-state-danger-text/40 px-3 py-1.5 font-semibold hover:bg-surface-default disabled:opacity-50"
+              disabled={dataBusy}
+              onClick={renewBudgetAuthorization}
+            >
+              Bütçe yetkisini güvenli girişle yenile
+            </button>
+          ) : null}
         </div>
       ) : null}
 

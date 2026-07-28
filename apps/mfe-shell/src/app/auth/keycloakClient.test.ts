@@ -25,6 +25,27 @@ describe('buildKeycloakLoginOptions', () => {
     });
   });
 
+  it('bütçe rotasında yalnız okuma ve yazma scope talep eder', () => {
+    expect(
+      buildKeycloakLoginOptions('https://testai.acik.com/admin/reports/budget-control'),
+    ).toEqual({
+      redirectUri: 'https://testai.acik.com/admin/reports/budget-control',
+      scope: 'openid budget:read budget:write',
+    });
+    expect(buildKeycloakLoginOptions('https://testai.acik.com/reports/budget-control/')).toEqual({
+      redirectUri: 'https://testai.acik.com/reports/budget-control/',
+      scope: 'openid budget:read budget:write',
+    });
+  });
+
+  it('benzer isimli bütçe yoluna ayrıcalıklı scope vermez', () => {
+    expect(
+      buildKeycloakLoginOptions('https://testai.acik.com/admin/reports/budget-controller'),
+    ).toEqual({
+      redirectUri: 'https://testai.acik.com/admin/reports/budget-controller',
+    });
+  });
+
   it('benzer isimli bir yolu Etik Speak rotası saymaz', () => {
     expect(buildKeycloakLoginOptions('https://testai.acik.com/ethical-decoy')).toEqual({
       redirectUri: 'https://testai.acik.com/ethical-decoy',
