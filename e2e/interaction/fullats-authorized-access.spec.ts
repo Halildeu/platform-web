@@ -245,14 +245,28 @@ test.describe('Full ATS authorized product access', () => {
     // takip anahtarı ile girebilir. Önceden yalnız "bu sekmede başvuru yok"
     // yazıp adayı yeni başvuru göndermeye yönlendiriyordu — başvuru sekme
     // kapanınca kalıcı olarak erişilemez hâle geliyordu.
+    //
+    // #1052→#1065 girişi tek karta topladı: "Başvurunuza girin" başlığı altında üç
+    // eşit yol (e-posta / takip dosyası / referans+anahtar) bir radiogroup'ta durur,
+    // referans bölmesi ancak o yol SEÇİLİNCE görünür. Bu test o rework'te
+    // güncellenmedi ve main'de kırmızı kaldı — assert'ler artık ürünün bugünkü
+    // sözleşmesini söylüyor: üç yol da görünür, seçim ağ isteği üretmez, referans
+    // yolu seçilince ref+anahtar alanları gelir.
     await expect(
-      candidatePortal.getByRole('heading', { name: 'Başvurunuzu görüntüleyin' }),
+      candidatePortal.getByRole('heading', { name: 'Başvurunuza girin' }),
     ).toBeVisible();
-    await expect(candidatePortal.getByTestId('candidate-sign-in-ref')).toBeVisible();
-    await expect(candidatePortal.getByTestId('candidate-sign-in-token')).toBeVisible();
+    await expect(candidatePortal.getByTestId('candidate-signin-option-email')).toBeVisible();
+    await expect(candidatePortal.getByTestId('candidate-signin-option-file')).toBeVisible();
+    await expect(candidatePortal.getByTestId('candidate-signin-option-manual')).toBeVisible();
     await expect(
       candidatePortal.getByRole('link', { name: 'Açık pozisyonlara git' }),
     ).toHaveAttribute('href', '/jobs');
+    expect(dataRequests).toEqual([]);
+
+    // Yol seçmek bir gezinme değildir: ağ isteği üretmeden bölmeyi açar.
+    await candidatePortal.getByTestId('candidate-signin-option-manual').click();
+    await expect(candidatePortal.getByTestId('candidate-sign-in-ref')).toBeVisible();
+    await expect(candidatePortal.getByTestId('candidate-sign-in-token')).toBeVisible();
     expect(dataRequests).toEqual([]);
 
     // Biçimi bozuk çift ağ isteği ÜRETMEDEN reddedilir.
