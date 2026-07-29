@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { LogIn } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useAppSelector } from '../../store/store.hooks';
 import { isPermitAllMode, buildAppRedirectUri } from '../../auth/auth-config';
 import { useShellCommonI18n } from '../../i18n';
@@ -18,11 +19,20 @@ import { UserMenuDropdown } from './UserMenuDropdown';
 /*  3. Unauthenticated — login button (Keycloak + LoginPopover)        */
 /* ------------------------------------------------------------------ */
 
+const REMOTE_VIEW_ROUTE =
+  /^\/endpoint-admin\/remote-access\/sessions\/[A-Za-z0-9._:-]{1,160}\/view$/;
+
+export function isRemoteViewRoute(pathname: string): boolean {
+  return REMOTE_VIEW_ROUTE.test(pathname);
+}
+
 export const HeaderActions: React.FC = () => {
   const { token } = useAppSelector((s) => s.auth);
+  const { pathname } = useLocation();
   const { t } = useShellCommonI18n();
   const permitAllMode = isPermitAllMode();
   const [loginOpen, setLoginOpen] = useState(false);
+  const suppressNotifications = isRemoteViewRoute(pathname);
 
   const handleLogin = useCallback(() => {
     setLoginOpen(false);
@@ -38,8 +48,12 @@ export const HeaderActions: React.FC = () => {
       {/* Notification + Language + Theme — always visible when authenticated */}
       {token && (
         <>
-          <NotificationCenter />
-          <div className="mx-0.5 h-5 w-px bg-border-subtle/50" aria-hidden />
+          {!suppressNotifications && (
+            <>
+              <NotificationCenter />
+              <div className="mx-0.5 h-5 w-px bg-border-subtle/50" aria-hidden />
+            </>
+          )}
           <LanguageSelector />
           <ThemeRuntimePanelButton />
           <div className="mx-0.5 h-5 w-px bg-border-subtle/50" aria-hidden />
