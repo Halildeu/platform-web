@@ -4,6 +4,13 @@ RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* .npmrc* ./
 COPY apps/etik-speak-manager ./apps/etik-speak-manager
 COPY apps/mfe-ethic/src ./apps/mfe-ethic/src
+# The real design system and the generated theme. The cell used to build against a
+# local stand-in with invented tokens, which is why nothing below was needed — and
+# why the manager panel looked like a different product from the platform.
+COPY packages/design-system ./packages/design-system
+COPY packages/shared-types ./packages/shared-types
+COPY packages/x-charts ./packages/x-charts
+COPY apps/mfe-shell/src/styles ./apps/mfe-shell/src/styles
 RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter etik-speak-manager build
 
