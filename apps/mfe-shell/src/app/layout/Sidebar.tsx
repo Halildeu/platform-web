@@ -125,7 +125,13 @@ export const buildSidebarNavItems = (
     {
       key: 'ethic',
       label: 'Etik Speak',
-      href: canUseEthic ? '/ethic' : undefined,
+      // Sahip geri bildirimi (2026-07-30): "burası neden başka bir uygulama
+      // gibi — aynı kabuk olmalı." Suite kullanıcısı için Etik Speak artık
+      // Meetings gibi KABUK İÇİ bir rotadır: aynı header, aynı sol ray, aynı
+      // oturum; ikinci uygulamaya tam sayfa atlama yok. Kenardaki bağımsız
+      // hücre (/ethic) ayrı satış senaryosu için aynen yaşıyor — bu iki yol
+      // farklı olduğu için 2026-07-26'daki çift-kapı yarışı da geri gelmez.
+      href: canUseEthic ? '/admin/ethics' : undefined,
       icon: <Scale aria-hidden />,
       dataTestId: 'nav-ethic',
       disabled: !canUseEthic,
