@@ -170,11 +170,11 @@ describe('buildSidebarNavItems — module gating', () => {
 
     const granted = pick(buildSidebarNavItems(false, allow('ETHIC')), 'ethic');
     expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/ethic');
+    expect(granted?.href).toBe('/admin/ethics');
 
     const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'ethic');
     expect(superAdmin?.disabled).toBe(false);
-    expect(superAdmin?.href).toBe('/ethic');
+    expect(superAdmin?.href).toBe('/admin/ethics');
   });
 
   it('gates the meetings item by MEETING or TRANSCRIPT and the meeting remote flag', () => {

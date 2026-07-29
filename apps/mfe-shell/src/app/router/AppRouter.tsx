@@ -22,6 +22,7 @@ import {
   MeetingModule,
   InterviewEvidenceModule,
   EndpointAdminModule,
+  EthicApp,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
 import {
@@ -168,6 +169,26 @@ export const AppRouter: React.FC = () => {
             ethicEnabled ? (
               <ProtectedRoute requiredModule="ETHIC">
                 <StandaloneAppRedirect path="/ethic" />
+              </ProtectedRoute>
+            ) : (
+              <Navigate to={defaultShellPath} replace />
+            )
+          }
+        />
+        {/*
+          Sahip geri bildirimi (2026-07-30): Etik Speak suite kullanıcısı için
+          AYNI kabuğun içinde yaşamalı — Meetings gibi. Bu rota kabuğun sahip
+          olduğu bir yoldadır (/admin/ethics); ingress'in kenar hücresine
+          verdiği /ethic ile çakışmaz, dolayısıyla 2026-07-26'daki "aynı yolda
+          iki kapı" belirsizliği burada yapısal olarak imkânsızdır. Kenar
+          hücresi ayrı satış senaryosu için değişmeden kalır.
+        */}
+        <Route
+          path="/admin/ethics/*"
+          element={
+            ethicEnabled ? (
+              <ProtectedRoute requiredModule="ETHIC">
+                <EthicApp />
               </ProtectedRoute>
             ) : (
               <Navigate to={defaultShellPath} replace />
