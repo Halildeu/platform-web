@@ -262,12 +262,26 @@ body {
   font-weight: 400;
 }
 
-.panel input:focus,
-.panel select:focus,
-.panel textarea:focus,
-.primary:focus-visible,
-.secondary:focus-visible,
-.brand:focus-visible {
+/* Every focusable thing, not only the ones that happen to sit inside `.panel`.
+   The rule used to be container-scoped, so a field rendered outside that wrapper — the
+   mailbox login among them — took focus with no visible indicator at all. A reporter
+   navigating by keyboard could not tell where they were while typing the one secret that
+   opens their case. (WCAG 2.2 · 2.4.7, 2.4.11) */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--etik-focus);
+  outline-offset: 2px;
+}
+
+/* Kept for browsers that do not support :focus-visible on form controls: an outline that
+   appears on mouse focus too is worse than none only in aesthetics, never in access. */
+input:focus,
+select:focus,
+textarea:focus {
   outline: 3px solid var(--etik-focus);
   outline-offset: 2px;
 }
