@@ -1,30 +1,28 @@
-:root {
-  color-scheme: light;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  --text-primary: oklch(28% 0.05 255deg);
-  --text-secondary: oklch(48% 0.03 250deg);
-  --surface-raised-bg: oklch(100% 0 0deg);
-  --surface-muted-bg: oklch(97% 0.01 240deg);
-  --border-default: oklch(85% 0.02 240deg);
-  --action-primary-bg: oklch(43% 0.11 235deg);
-  --action-primary-text: oklch(100% 0 0deg);
-  --focus-ring: oklch(50% 0.15 240deg / 30%);
-  --state-danger-border: oklch(48% 0.18 25deg);
-  --state-danger-bg: oklch(97% 0.02 15deg);
-  --state-danger-text: oklch(38% 0.14 15deg);
-  --state-warning-border: oklch(58% 0.15 65deg);
-  --state-warning-bg: oklch(98% 0.03 85deg);
-  --page-bg: oklch(95% 0.015 240deg);
-  --success-bg: oklch(94% 0.06 145deg);
-  --success-text: oklch(40% 0.12 145deg);
-}
+/* Etik Speak manager cell — the platform's design language, not a copy of it.
+ *
+ * This file used to declare its own token set: fifteen hand-picked oklch values that
+ * were close to the suite's and equal to none of them. The result was the complaint
+ * you would expect — the manager panel looked like a different product from the
+ * platform it sits next to. Tokens are a generated artifact with one source of truth
+ * (scripts/theme/generate-theme-css.mjs); a second list is not a theme, it is drift
+ * with a head start.
+ *
+ * So the cell now imports the same generated theme the suite shell imports, and the
+ * same Tailwind pipeline compiles the same design-system components. What remains
+ * below is only what is genuinely local to this cell: the auth screens shown before
+ * a session exists.
+ */
+@import 'tailwindcss';
+@import '../../mfe-shell/src/styles/generated-theme-inline.css';
+@import '../../mfe-shell/src/styles/theme-inline.extensions.css';
+@import '../../mfe-shell/src/styles/theme.css';
+@import '../../mfe-shell/src/styles/component-theme.generated.css';
+
+/* Utility classes are generated from what these sources actually use — the same
+   scanning contract as the suite shell, narrowed to what this cell ships. */
+@source '../../../packages/design-system/src/**/*.{ts,tsx}';
+@source '../../mfe-ethic/src/**/*.{ts,tsx}';
+@source './**/*.{ts,tsx}';
 
 * {
   box-sizing: border-box;
@@ -34,7 +32,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--page-bg);
+  font-family: var(--font-family-base);
+  background: var(--surface-page-bg);
   color: var(--text-primary);
 }
 
@@ -44,189 +43,44 @@ textarea {
   font: inherit;
 }
 
-.manager-stack {
-  display: flex;
-}
-
-.manager-stack-row {
-  flex-direction: row;
-}
-
-.manager-stack-column {
-  flex-direction: column;
-}
-
-.manager-gap-0 {
-  gap: 0;
-}
-
-.manager-gap-1 {
-  gap: 0.25rem;
-}
-
-.manager-gap-2 {
-  gap: 0.5rem;
-}
-
-.manager-gap-3 {
-  gap: 0.75rem;
-}
-
-.manager-gap-4 {
-  gap: 1rem;
-}
-
-.manager-gap-5 {
-  gap: 1.25rem;
-}
-
-.manager-gap-6 {
-  gap: 1.5rem;
-}
-
-.manager-gap-7 {
-  gap: 1.75rem;
-}
-
-.manager-gap-8 {
-  gap: 2rem;
-}
+/* ---- Pre-session screens (login pending / refused / probing) ------------- */
+/* The only chrome this cell owns outright: shown before AuthGate has a session,
+   so no shell exists yet. Styled from canonical tokens like everything else. */
 
 .manager-session-state {
   max-width: 44rem;
   margin: 12vh auto;
   padding: 2rem;
-  background: var(--surface-raised-bg);
-  border-radius: 1rem;
-}
-
-.manager-card {
-  padding: 1rem;
   border: 1px solid var(--border-default);
-  border-radius: 0.875rem;
+  border-radius: 1rem;
   background: var(--surface-raised-bg);
-}
-
-.manager-badge {
-  display: inline-flex;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  background: var(--success-bg);
-  color: var(--success-text);
-  font-weight: 700;
-}
-
-.manager-button {
-  border: 1px solid var(--action-primary-bg);
-  border-radius: 0.55rem;
-  padding: 0.65rem 0.9rem;
-  background: var(--action-primary-bg);
-  color: var(--action-primary-text);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.manager-button.is-secondary {
-  background: var(--surface-raised-bg);
-  color: var(--action-primary-bg);
-}
-
-.manager-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.manager-button:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-/* Product-scoped chrome. The suite shell is not mounted here on purpose (ADR-0046): this
-   artifact ships without the other products' code. What it does ship is a place to stand
-   — a header that names the product and a rail that lists its own screens. */
-.manager-shell {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-.manager-shell-header {
-  display: flex;
-  align-items: baseline;
   gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid var(--border-default);
-  background: var(--surface-raised-bg);
 }
 
-.manager-shell-brand {
-  font-weight: 700;
-  font-size: 1.05rem;
+.manager-session-state h1 {
+  margin: 0;
+  font-size: 1.15rem;
 }
 
-.manager-shell-env {
-  font-size: 0.8rem;
+.manager-session-state p {
+  margin: 0;
   color: var(--text-secondary);
 }
 
-.manager-shell-body {
-  display: grid;
-  grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
-  flex: 1;
-  align-items: start;
-}
-
-.manager-shell-nav {
-  position: sticky;
-  top: 0;
-  padding: 1rem 0.75rem;
-  border-right: 1px solid var(--border-default);
-}
-
-.manager-shell-nav ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.25rem;
-}
-
-.manager-shell-nav a {
-  display: block;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.5rem;
-  color: inherit;
-  text-decoration: none;
-}
-
-.manager-shell-nav a:hover,
-.manager-shell-nav a:focus-visible {
-  background: var(--surface-muted-bg);
-}
-
-.manager-shell-nav a.is-active {
-  background: var(--surface-muted-bg);
+.manager-session-state button {
+  align-self: flex-start;
+  border: 1px solid var(--action-primary-border);
+  border-radius: 0.55rem;
+  padding: 0.6rem 0.95rem;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
   font-weight: 600;
+  cursor: pointer;
 }
 
-.manager-shell-main {
-  min-width: 0;
-}
-
-/* One column on narrow screens: a 200px rail beside a case list leaves neither usable. */
-@media (width <= 800px) {
-  .manager-shell-body {
-    grid-template-columns: 1fr;
-  }
-
-  .manager-shell-nav {
-    position: static;
-    border-right: none;
-    border-bottom: 1px solid var(--border-default);
-  }
-
-  .manager-shell-nav ul {
-    grid-auto-flow: column;
-    justify-content: start;
-  }
+.manager-session-state button:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 2px;
 }
