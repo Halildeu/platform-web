@@ -257,15 +257,27 @@ importers:
 
   apps/etik-speak-manager:
     dependencies:
+      '@mfe/design-system':
+        specifier: '*'
+        version: link:../../packages/design-system
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       keycloak-js:
         specifier: ^26.2.4
         version: 26.2.4
+      lucide-react:
+        specifier: 1.7.0
+        version: 1.7.0(react@18.2.0)
       react:
         specifier: ~18.2.0
         version: 18.2.0
       react-dom:
         specifier: ~18.2.0
         version: 18.2.0(react@18.2.0)
+      tailwind-merge:
+        specifier: ^3.3.1
+        version: 3.5.0
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.6.3
