@@ -327,8 +327,8 @@ describe('BudgetWorkspace project actuals', () => {
       dataSourceMode: 'client',
       total: 1,
       pageSize: 50,
-      access: 'readonly',
     });
+    expect(gridMocks.latestEntityGridProps).not.toHaveProperty('access');
     expect(gridMocks.latestEntityGridProps?.exportConfig).toMatchObject({
       fileBaseName: 'butce-gerceklesen-IDC1-2026-01-01-2026-07-28',
       sheetName: 'Gerçekleşen Maliyet',
