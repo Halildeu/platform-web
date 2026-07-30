@@ -2,6 +2,8 @@ import { getShellServices } from '../../app/services/shell-services';
 import type {
   CompanyOption,
   ProjectActualRow,
+  ProjectActualSourceDocumentDetail,
+  ProjectActualSourceLineRow,
   ProjectActualSummary,
   ProjectActualSyncResult,
   ProjectBinding,
@@ -172,6 +174,36 @@ export const fetchProjectActualSummary = (
       {
         headers: companyHeaders(companyId),
         params: { from, to },
+      },
+    ),
+  );
+
+export const fetchProjectActualSourceLines = (
+  companyId: number,
+  bindingId: string,
+  from: string,
+  to: string,
+): Promise<ProjectActualSourceLineRow[]> =>
+  execute(() =>
+    resolveClient().get<ProjectActualSourceLineRow[]>(
+      `${PROJECT_BUDGETS_BASE}/${bindingId}/actuals/source-lines`,
+      {
+        headers: companyHeaders(companyId),
+        params: { from, to, limit: 2000 },
+      },
+    ),
+  );
+
+export const fetchProjectActualSourceDocument = (
+  companyId: number,
+  bindingId: string,
+  sourceDocumentId: string,
+): Promise<ProjectActualSourceDocumentDetail> =>
+  execute(() =>
+    resolveClient().get<ProjectActualSourceDocumentDetail>(
+      `${PROJECT_BUDGETS_BASE}/${bindingId}/actuals/source-documents/${sourceDocumentId}`,
+      {
+        headers: companyHeaders(companyId),
       },
     ),
   );

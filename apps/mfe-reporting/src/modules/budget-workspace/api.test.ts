@@ -23,6 +23,8 @@ import {
   createProjectBinding,
   fetchCompanies,
   fetchProjectActualRows,
+  fetchProjectActualSourceDocument,
+  fetchProjectActualSourceLines,
   fetchProjectActualSummary,
   fetchProjects,
   findProjectBinding,
@@ -94,12 +96,16 @@ describe('project actuals API contract', () => {
       .mockResolvedValueOnce({ data: { batchId: 'batch-1', status: 'MATCHED' } });
     mocks.get
       .mockResolvedValueOnce({ data: { projectBindingId: 'binding-1', rowCount: 1 } })
-      .mockResolvedValueOnce({ data: [{ id: 'row-1' }] });
+      .mockResolvedValueOnce({ data: [{ id: 'row-1' }] })
+      .mockResolvedValueOnce({ data: [{ id: 'source-line-1' }] })
+      .mockResolvedValueOnce({ data: { id: 'source-document-1' } });
 
     await createProjectBinding(35, project);
     await syncProjectActuals(35, 'binding-1', '2026-01-01', '2026-07-28');
     await fetchProjectActualSummary(35, 'binding-1', '2026-01-01', '2026-07-28');
     await fetchProjectActualRows(35, 'binding-1', '2026-01-01', '2026-07-28');
+    await fetchProjectActualSourceLines(35, 'binding-1', '2026-01-01', '2026-07-28');
+    await fetchProjectActualSourceDocument(35, 'binding-1', 'source-document-1');
 
     expect(mocks.post).toHaveBeenNthCalledWith(
       1,
@@ -131,6 +137,21 @@ describe('project actuals API contract', () => {
       headers: { 'X-Company-Id': '35' },
       params: { from: '2026-01-01', to: '2026-07-28', limit: 2000 },
     });
+    expect(mocks.get).toHaveBeenNthCalledWith(
+      3,
+      '/v1/budgets/projects/binding-1/actuals/source-lines',
+      {
+        headers: { 'X-Company-Id': '35' },
+        params: { from: '2026-01-01', to: '2026-07-28', limit: 2000 },
+      },
+    );
+    expect(mocks.get).toHaveBeenNthCalledWith(
+      4,
+      '/v1/budgets/projects/binding-1/actuals/source-documents/source-document-1',
+      {
+        headers: { 'X-Company-Id': '35' },
+      },
+    );
   });
 
   it('maps an absent project binding without treating it as provider outage', async () => {

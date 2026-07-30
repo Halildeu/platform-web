@@ -7,6 +7,8 @@ const apiMocks = vi.hoisted(() => ({
   createProjectBinding: vi.fn(),
   fetchCompanies: vi.fn(),
   fetchProjectActualRows: vi.fn(),
+  fetchProjectActualSourceDocument: vi.fn(),
+  fetchProjectActualSourceLines: vi.fn(),
   fetchProjectActualSummary: vi.fn(),
   fetchProjects: vi.fn(),
   findProjectBinding: vi.fn(),
@@ -54,7 +56,7 @@ vi.mock('../../grid', () => ({
             aria-label={`Kaynak izini aç ${String(row.id)}`}
             onDoubleClick={() => onRowDoubleClick?.(row)}
           >
-            {String(row.accountCode)} · {String(row.documentType)} · {String(row.documentNo)}
+            {String(row.productName)} · {String(row.documentType)} · {String(row.documentNo)}
           </button>
         ))}
       </div>
@@ -125,6 +127,8 @@ vi.mock('./api', () => {
     createProjectBinding: apiMocks.createProjectBinding,
     fetchCompanies: apiMocks.fetchCompanies,
     fetchProjectActualRows: apiMocks.fetchProjectActualRows,
+    fetchProjectActualSourceDocument: apiMocks.fetchProjectActualSourceDocument,
+    fetchProjectActualSourceLines: apiMocks.fetchProjectActualSourceLines,
     fetchProjectActualSummary: apiMocks.fetchProjectActualSummary,
     fetchProjects: apiMocks.fetchProjects,
     findProjectBinding: apiMocks.findProjectBinding,
@@ -174,6 +178,12 @@ const summary = {
   reconciliationStatus: 'MATCHED',
   reconciliationDifference: 0,
   lastSyncAt: '2026-07-28T03:00:00+03:00',
+  sourceLineActual: 900,
+  nonInvoiceActual: 0,
+  actualCost: 900,
+  sourceDocumentCount: 1,
+  sourceLineCount: 2,
+  unresolvedSourceLineCount: 0,
 };
 const rows = [
   {
@@ -181,8 +191,8 @@ const rows = [
     postingDate: '2026-06-15',
     accountCode: '740.01',
     debitCredit: 'DEBIT',
-    accountingAmount: 1000,
-    classifiedCostAmount: 1000,
+    accountingAmount: 900,
+    classifiedCostAmount: 900,
     currency: 'TRY',
     costTreatment: 'INCLUDE_COST',
     costRuleVersion: 1,
@@ -198,6 +208,86 @@ const rows = [
     syncedAt: '2026-07-28T03:00:00+03:00',
   },
 ];
+const sourceLines = [
+  {
+    id: 'source-line-1',
+    sourceDocumentId: 'source-document-1',
+    documentDate: '2026-06-15',
+    documentType: 'INVOICE',
+    documentKind: 'PURCHASE_INVOICE',
+    documentNo: 'INV-2026-1',
+    externalDocumentId: 100,
+    externalLineId: 1001,
+    lineOrdinal: 1,
+    productName: 'Elektrik giderleri',
+    description: 'Haziran elektrik',
+    quantity: 1,
+    unit: 'ADET',
+    unitPrice: 600,
+    netAmount: 600,
+    taxRate: 20,
+    taxAmount: 120,
+    grossAmount: 720,
+    costBasisAmount: 600,
+    currency: 'TRY',
+    accountCode: null,
+    lineMatchStatus: 'RECONCILED',
+    documentReconciliationStatus: 'RECONCILED',
+    accountingCostTotal: 900,
+    reconciliationDifference: 0,
+    accountingRowCount: 1,
+    cancelled: false,
+    syncedAt: '2026-07-28T03:00:00+03:00',
+  },
+  {
+    id: 'source-line-2',
+    sourceDocumentId: 'source-document-1',
+    documentDate: '2026-06-15',
+    documentType: 'INVOICE',
+    documentKind: 'PURCHASE_INVOICE',
+    documentNo: 'INV-2026-1',
+    externalDocumentId: 100,
+    externalLineId: 1002,
+    lineOrdinal: 2,
+    productName: 'Temizlik giderleri',
+    description: 'Haziran temizlik',
+    quantity: 1,
+    unit: 'ADET',
+    unitPrice: 300,
+    netAmount: 300,
+    taxRate: 20,
+    taxAmount: 60,
+    grossAmount: 360,
+    costBasisAmount: 300,
+    currency: 'TRY',
+    accountCode: null,
+    lineMatchStatus: 'RECONCILED',
+    documentReconciliationStatus: 'RECONCILED',
+    accountingCostTotal: 900,
+    reconciliationDifference: 0,
+    accountingRowCount: 1,
+    cancelled: false,
+    syncedAt: '2026-07-28T03:00:00+03:00',
+  },
+];
+const sourceDocumentDetail = {
+  id: 'source-document-1',
+  documentDate: '2026-06-15',
+  documentType: 'INVOICE',
+  documentKind: 'PURCHASE_INVOICE',
+  documentNo: 'INV-2026-1',
+  externalDocumentId: 100,
+  currency: 'TRY',
+  sourceLineTotal: 900,
+  accountingCostTotal: 900,
+  reconciliationDifference: 0,
+  reconciliationStatus: 'RECONCILED',
+  accountingRowCount: 1,
+  cancelled: false,
+  syncedAt: '2026-07-28T03:00:00+03:00',
+  lines: sourceLines,
+  accountingRows: rows,
+};
 
 const LocationProbe = () => {
   const location = useLocation();
@@ -247,6 +337,8 @@ describe('BudgetWorkspace project actuals', () => {
     apiMocks.createProjectBinding.mockResolvedValue(binding);
     apiMocks.fetchProjectActualSummary.mockResolvedValue(summary);
     apiMocks.fetchProjectActualRows.mockResolvedValue(rows);
+    apiMocks.fetchProjectActualSourceLines.mockResolvedValue(sourceLines);
+    apiMocks.fetchProjectActualSourceDocument.mockResolvedValue(sourceDocumentDetail);
     apiMocks.syncProjectActuals.mockResolvedValue({
       batchId: 'batch-1',
       status: 'MATCHED',
@@ -259,6 +351,10 @@ describe('BudgetWorkspace project actuals', () => {
       differenceAmount: 0,
       sourceFingerprint: 'synthetic-hash',
       finishedAt: '2026-07-28T03:00:00+03:00',
+      sourceDocumentCount: 1,
+      sourceLineCount: 2,
+      changedSourceLineCount: 2,
+      tombstoneSourceLineCount: 0,
     });
   });
 
@@ -307,11 +403,19 @@ describe('BudgetWorkspace project actuals', () => {
     await chooseIdc1();
     fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
 
-    expect(await screen.findByText('2.450,00 TRY')).toBeInTheDocument();
-    expect(screen.getByText('900,00 TRY')).toBeInTheDocument();
-    expect(screen.getByTestId('actuals-grid')).toHaveTextContent('740.01 · INVOICE · INV-2026-1');
+    expect(await screen.findByText('Gerçekleşen maliyet · kaynak satırları')).toBeInTheDocument();
+    expect(screen.getAllByText('900,00 TRY').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('actuals-grid')).toHaveTextContent(
+      'Elektrik giderleri · INVOICE · INV-2026-1',
+    );
     expect(apiMocks.findProjectBinding).toHaveBeenCalledWith(35, 44200);
     expect(apiMocks.syncProjectActuals).not.toHaveBeenCalled();
+    expect(apiMocks.fetchProjectActualSourceLines).toHaveBeenCalledWith(
+      35,
+      binding.id,
+      '2026-01-01',
+      '2026-07-28',
+    );
     expect(apiMocks.selectReportingCompany).toHaveBeenCalledWith('35');
   });
 
@@ -323,9 +427,9 @@ describe('BudgetWorkspace project actuals', () => {
 
     expect(gridMocks.latestEntityGridProps).toMatchObject({
       gridId: 'reports.budget-project-actuals',
-      gridSchemaVersion: 1,
+      gridSchemaVersion: 2,
       dataSourceMode: 'client',
-      total: 1,
+      total: 2,
       pageSize: 50,
     });
     expect(gridMocks.latestEntityGridProps).not.toHaveProperty('access');
@@ -343,14 +447,27 @@ describe('BudgetWorkspace project actuals', () => {
     renderWorkspace();
     await chooseIdc1();
     fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
-    fireEvent.doubleClick(await screen.findByRole('button', { name: 'Kaynak izini aç row-1' }));
+    fireEvent.doubleClick(
+      await screen.findByRole('button', {
+        name: 'Kaynak izini aç source-line:source-line-1',
+      }),
+    );
 
-    const drawer = await screen.findByRole('dialog', { name: 'Gerçekleşen maliyet satırı' });
-    expect(within(drawer).getByText('Kaynak belge izi')).toBeInTheDocument();
-    expect(within(drawer).getByText('Fatura')).toBeInTheDocument();
-    expect(within(drawer).getByText('Satır eşleşti')).toBeInTheDocument();
+    const drawer = await screen.findByRole('dialog', {
+      name: 'Kaynak belge ve maliyet satırları',
+    });
+    expect(within(drawer).getByText('Belge özeti')).toBeInTheDocument();
+    expect(within(drawer).getByText('Fatura satırları')).toBeInTheDocument();
+    expect(within(drawer).getByText('Muhasebe dağılımı')).toBeInTheDocument();
+    expect(within(drawer).getByText('Elektrik giderleri')).toBeInTheDocument();
+    expect(within(drawer).getByText('Temizlik giderleri')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Belge toplamı mutabık').length).toBeGreaterThan(0);
     expect(within(drawer).getByText('Belge: INV-2026-1')).toBeInTheDocument();
-    expect(within(drawer).getByText('Snapshot zamanı')).toBeInTheDocument();
+    expect(apiMocks.fetchProjectActualSourceDocument).toHaveBeenCalledWith(
+      35,
+      binding.id,
+      'source-document-1',
+    );
   });
 
   it('discloses when the bounded grid does not contain every snapshot row', async () => {
@@ -363,7 +480,7 @@ describe('BudgetWorkspace project actuals', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
 
     expect(
-      await screen.findByText(/Snapshot’ta 2.501 satır var; bu hızlı görünüm en güncel 1 satırı/),
+      await screen.findByText(/Kayıt sayısı hızlı görünüm sınırını aşıyor/),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Canlı Muhasebe Detayını aç' })).toBeInTheDocument();
   });
@@ -388,9 +505,17 @@ describe('BudgetWorkspace project actuals', () => {
     }>;
     expect(
       latestColumns
-        .filter((column) => ['accountingAmount', 'classifiedCostAmount'].includes(column.field))
+        .filter((column) =>
+          [
+            'unitPrice',
+            'netAmount',
+            'taxAmount',
+            'grossAmount',
+            'costBasisAmount',
+          ].includes(column.field),
+        )
         .map((column) => column.currencyCode),
-    ).toEqual(['TRY', 'TRY']);
+    ).toEqual(['TRY', 'TRY', 'TRY', 'TRY', 'TRY']);
   });
 
   it('locks scope and date controls while a snapshot request is in flight', async () => {
@@ -463,6 +588,10 @@ describe('BudgetWorkspace project actuals', () => {
       differenceAmount: 0,
       sourceFingerprint: null,
       finishedAt: '2026-07-28T03:00:00+03:00',
+      sourceDocumentCount: 0,
+      sourceLineCount: 0,
+      changedSourceLineCount: 0,
+      tombstoneSourceLineCount: 0,
     });
     renderWorkspace();
     await chooseIdc1();
