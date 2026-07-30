@@ -29,5 +29,8 @@
   "include": [
     "src",
     "../mfe-ethic/src"
+  ],
+  "exclude": [
+    "../mfe-ethic/src/app/services/**"
   ]
 }
