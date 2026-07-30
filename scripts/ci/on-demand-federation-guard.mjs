@@ -387,6 +387,50 @@ function scanSourceInvariants() {
   //
   // with flexible whitespace + optional type annotation.
   for (const r of ON_DEMAND_REGISTRY) {
+    // The four admin remotes no longer branch on their define at all — the
+    // wrapper path is unconditional, because the eager branch had no
+    // happens-before between mounting the remote app and configuring it (the
+    // configure is idle-deferred AND gated on `authState.token`, so on a cold
+    // session it is unscheduled, not merely late). Measured on prod
+    // 2026-07-30: 2 of 3 cold `/admin/users` loads threw inside the remote and
+    // issued zero API requests. For these entries the invariant flips from
+    // "canonical ternary" to "no eager App import may return", which is what
+    // actually keeps the ordering guarantee.
+    if (r.adminSetMember) {
+      const unconditionalPattern = new RegExp(
+        String.raw`export\s+const\s+${r.lazyRouteName}[^=]*=\s*${r.wrapperFile
+          .split('/')
+          .pop()
+          .replace(/\.tsx$/, '')
+          .replace(/^create/, '')}\s*;`,
+        'm',
+      );
+      if (!unconditionalPattern.test(lazyRoutes)) {
+        fail(
+          'S3',
+          `lazy-routes.ts must bind ${r.lazyRouteName} unconditionally to its on-demand wrapper ` +
+            `(admin remotes must not reintroduce a build-time branch: the eager branch mounts the ` +
+            `remote before its shell services are configured)`,
+        );
+        continue;
+      }
+      const eagerAppImport = new RegExp(
+        String.raw`import\s*\(\s*[\`'"]mfe_${r.key}/${r.expose}[\`'"]`,
+      );
+      if (eagerAppImport.test(lazyRoutes)) {
+        fail(
+          'S3',
+          `lazy-routes.ts still contains \`import('mfe_${r.key}/${r.expose}')\` — an eager admin ` +
+            `App import bypasses ensureRemoteShellServicesConfigured() and restores the race`,
+        );
+      } else {
+        pass(
+          'S3',
+          `lazy-routes.ts binds ${r.lazyRouteName} unconditionally to its wrapper; no eager mfe_${r.key}/${r.expose} import`,
+        );
+      }
+      continue;
+    }
     if (!lazyRoutes.includes(`declare const ${r.defineKey}: boolean;`)) {
       fail(
         'S3',

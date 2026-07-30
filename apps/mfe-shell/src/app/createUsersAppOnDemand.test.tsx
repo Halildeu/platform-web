@@ -320,3 +320,169 @@ describe('createUsersAppOnDemand (PR-B5b2-prep-2)', () => {
     expect(remotes[0].entry).toBe('http://localhost:3004/remoteEntry.js');
   });
 });
+
+/**
+ * The ordering invariant itself: shell services must be configured before the
+ * remote's app module is even fetched.
+ *
+ * Why it matters. `lazy-routes.ts` used to pick between this wrapper and a bare
+ * eager import of the remote's App expose based on a build-time define, and the
+ * eager side is what broke prod: it mounts the remote app while the work that
+ * configures it is idle-deferred AND gated on `authState.token`, so on a cold
+ * session the configure is unscheduled rather than late. `getShellServices()`
+ * then throws inside the remote and the surface renders an error having issued
+ * no request. Measured on ai.acik.com 2026-07-30: 2 of 3 cold `/admin/users`
+ * loads, zero `/api/v1/users` traffic.
+ *
+ * These assert on MODULE FACTORY invocation order rather than on React render
+ * timing, because React scheduling can mask a wrong order, and they hold the
+ * shell-services load open so "the app was not fetched early" is observed rather
+ * than inferred from a race the test happened to win.
+ *
+ * Scope, stated rather than implied: this proves the WRAPPER orders correctly.
+ * It does not prove `lazy-routes.ts` binds the route to the wrapper. Codex
+ * (thread 019fb1f7, D6) asked for the route export to be rendered here so the
+ * test could not be satisfied by a correct-but-unused wrapper. That is not
+ * achievable in this environment: importing `lazy-routes.ts` drags 10 static
+ * federation specifiers (e.g. the interview-evidence remote) into the test
+ * module graph, and `vite:import-analysis` fails to resolve them before any mock
+ * applies. Stubbing all ten would be a larger and riskier change to shared test
+ * infrastructure than the fix under test. The route-binding half is therefore
+ * enforced statically instead, by `scripts/ci/on-demand-federation-guard.mjs`
+ * S3, which requires the unconditional wrapper binding AND forbids an eager
+ * admin App import from returning to that file. Note the behaviour half could
+ * not cover a reintroduced build-time branch anyway, since `vitest.config.ts`
+ * inlines the admin define as `true`.
+ */
+describe('UsersModule route binding — configure happens before the app module loads', () => {
+  beforeEach(async () => {
+    clearGlobalInstances();
+    const reset = await getHelperReset();
+    reset();
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    cleanup();
+    clearGlobalInstances();
+    const reset = await getHelperReset();
+    reset();
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Fake host that records an ordered event log and holds the shell-services
+   * load open until the test releases it, so "app never loads early" is observed
+   * rather than inferred from a race the test happened to win.
+   */
+  function installOrderRecordingHost(): {
+    events: string[];
+    releaseShellServices: () => void;
+  } {
+    const events: string[] = [];
+    let release!: () => void;
+    const shellServicesGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const fake: FakeHostInstance = {
+      options: { name: HOST_NAME },
+      registerRemotes: vi.fn(() => {
+        events.push('register');
+      }),
+      loadRemote: vi.fn(async (key: string) => {
+        if (key.endsWith('/shell-services')) {
+          events.push('shell-services-load-started');
+          await shellServicesGate;
+          events.push('shell-services-module-resolved');
+          return {
+            configureShellServices: vi.fn(() => {
+              events.push('configureShellServices');
+            }),
+          };
+        }
+        // The App expose. Pushing here — at module resolution, before any React
+        // work — is what makes the assertion about load order rather than paint
+        // order.
+        events.push('UsersApp-module-factory');
+        return {
+          default: () => <div data-testid="users-remote-loaded">UsersApp loaded</div>,
+        };
+      }),
+    };
+
+    const root = globalThis as typeof globalThis & { __FEDERATION__?: FederationGlobalShape };
+    root.__FEDERATION__ = root.__FEDERATION__ ?? {};
+    root.__FEDERATION__.__INSTANCES__ = [fake];
+    return { events, releaseShellServices: release };
+  }
+
+  it('does not load the app module while shell-services configuration is still pending', async () => {
+    const { events, releaseShellServices } = installOrderRecordingHost();
+    const mod = await import('./createUsersAppOnDemand');
+
+    render(
+      <Suspense fallback={<div>Loading</div>}>
+        <mod.UsersAppOnDemand />
+      </Suspense>,
+    );
+
+    // Let the wrapper reach its first await without releasing the gate.
+    await vi.waitFor(() => expect(events).toContain('shell-services-load-started'));
+
+    expect(
+      events,
+      'the app module was requested before its shell services were configured',
+    ).not.toContain('UsersApp-module-factory');
+
+    releaseShellServices();
+    expect(await screen.findByTestId('users-remote-loaded')).toBeInTheDocument();
+  });
+
+  it('configures shell services strictly before the app module factory runs', async () => {
+    const { events, releaseShellServices } = installOrderRecordingHost();
+    const mod = await import('./createUsersAppOnDemand');
+
+    render(
+      <Suspense fallback={<div>Loading</div>}>
+        <mod.UsersAppOnDemand />
+      </Suspense>,
+    );
+
+    await vi.waitFor(() => expect(events).toContain('shell-services-load-started'));
+    releaseShellServices();
+    await screen.findByTestId('users-remote-loaded');
+
+    expect(events).toEqual([
+      'register',
+      'shell-services-load-started',
+      'shell-services-module-resolved',
+      'configureShellServices',
+      'UsersApp-module-factory',
+    ]);
+
+    expect(events.indexOf('configureShellServices')).toBeLessThan(
+      events.indexOf('UsersApp-module-factory'),
+    );
+  });
+
+  it('holds the ordering with no auth token present', async () => {
+    // The mocked `getSharedShellServices` carries no token, which is the cold
+    // session the prod failures came from. The route path must not consult auth
+    // state at all — if it ever gains an auth precondition, this fails.
+    const { events, releaseShellServices } = installOrderRecordingHost();
+    const mod = await import('./createUsersAppOnDemand');
+
+    render(
+      <Suspense fallback={<div>Loading</div>}>
+        <mod.UsersAppOnDemand />
+      </Suspense>,
+    );
+
+    await vi.waitFor(() => expect(events).toContain('shell-services-load-started'));
+    releaseShellServices();
+
+    expect(await screen.findByTestId('users-remote-loaded')).toBeInTheDocument();
+    expect(await isConfigured('mfe_users')).toBe(true);
+  });
+});
