@@ -1,14 +1,16 @@
 import React from 'react';
 import type { ColDef } from 'ag-grid-community';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Descriptions, DetailDrawer } from '@mfe/design-system';
 import {
-  GridShell,
   buildColDefs,
+  buildProcessCellCallback,
   type BadgeColumnMeta,
   type ColumnMeta,
 } from '@mfe/design-system/advanced/data-grid';
 import '@mfe/design-system/advanced/data-grid/setup';
 import { selectReportingCompany } from '../../components/CompanyPicker';
+import { EntityGridTemplate } from '../../grid';
 import {
   BudgetApiError,
   createProjectBinding,
@@ -103,6 +105,8 @@ const syncFailureLabel = (failureCode: string | null): string => {
 };
 
 const identityTranslate = (key: string): string => key;
+const PROJECT_ACTUALS_GRID_ID = 'reports.budget-project-actuals';
+const PROJECT_ACTUALS_GRID_SCHEMA_VERSION = 1;
 
 const STATUS_VARIANTS: BadgeColumnMeta['variantMap'] = {
   DEBIT: 'info',
@@ -144,6 +148,9 @@ const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
   TRANSFER: 'Virman',
 };
 
+const statusLabel = (value: string | null): string =>
+  value ? (STATUS_LABELS?.[value] ?? value) : '—';
+
 const SummaryCard: React.FC<{
   label: string;
   value: string;
@@ -183,6 +190,7 @@ export const BudgetWorkspace: React.FC = () => {
   const [binding, setBinding] = React.useState<ProjectBinding | null>(null);
   const [summary, setSummary] = React.useState<ProjectActualSummary | null>(null);
   const [rows, setRows] = React.useState<ProjectActualRow[]>([]);
+  const [detailRow, setDetailRow] = React.useState<ProjectActualRow | null>(null);
   const [lastSync, setLastSync] = React.useState<ProjectActualSyncResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [budgetAuthorizationRequired, setBudgetAuthorizationRequired] = React.useState(false);
@@ -191,9 +199,7 @@ export const BudgetWorkspace: React.FC = () => {
   const validSelection = Boolean(companyId && projectId && from && to && from <= to);
 
   const captureBudgetError = (reason: unknown) => {
-    setBudgetAuthorizationRequired(
-      reason instanceof BudgetApiError && reason.kind === 'FORBIDDEN',
-    );
+    setBudgetAuthorizationRequired(reason instanceof BudgetApiError && reason.kind === 'FORBIDDEN');
     setError(errorMessage(reason));
   };
 
@@ -238,6 +244,7 @@ export const BudgetWorkspace: React.FC = () => {
     setBindingMissing(false);
     setSummary(null);
     setRows([]);
+    setDetailRow(null);
     setLastSync(null);
   };
 
@@ -361,7 +368,7 @@ export const BudgetWorkspace: React.FC = () => {
     navigate(`${reportingRoot}/fin-proje-muhasebe-gercekleseni?${params.toString()}`);
   };
 
-  const columnDefs = React.useMemo<ColDef<ProjectActualRow>[]>(() => {
+  const columnArtifacts = React.useMemo(() => {
     const currency =
       summary?.currency && /^[A-Z]{3}$/.test(summary.currency) ? summary.currency : 'TRY';
     const meta: ColumnMeta[] = [
@@ -428,8 +435,44 @@ export const BudgetWorkspace: React.FC = () => {
       { field: 'costRuleVersion', headerNameKey: 'Kural sürümü', columnType: 'number', width: 120 },
       { field: 'syncedAt', headerNameKey: 'Snapshot zamanı', columnType: 'date', width: 175 },
     ];
-    return buildColDefs(meta, identityTranslate) as ColDef<ProjectActualRow>[];
+    return {
+      columnDefs: buildColDefs(meta, identityTranslate) as ColDef<ProjectActualRow>[],
+      processCellCallback: buildProcessCellCallback(meta, identityTranslate),
+    };
   }, [summary?.currency]);
+
+  const exportConfig = React.useMemo(
+    () => ({
+      fileBaseName: `butce-gerceklesen-${selectedProject?.code || projectId || 'proje'}-${from}-${to}`,
+      sheetName: 'Gerçekleşen Maliyet',
+      csvFileBaseName: `butce-gerceklesen-${selectedProject?.code || projectId || 'proje'}-${from}-${to}`,
+      csvColumnSeparator: ';',
+      csvBom: true,
+      processCellCallback: columnArtifacts.processCellCallback,
+    }),
+    [columnArtifacts.processCellCallback, from, projectId, selectedProject?.code, to],
+  );
+
+  const gridActions = (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        className="rounded-md border border-border-subtle px-3 py-2 text-sm font-semibold text-text-primary hover:bg-surface-muted disabled:opacity-50"
+        disabled={syncBusy}
+        onClick={openAccountingDetail}
+      >
+        Canlı Muhasebe Detayını aç
+      </button>
+      <button
+        type="button"
+        className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        disabled={syncBusy}
+        onClick={refreshFromErp}
+      >
+        {syncBusy ? 'ERP’den yenileniyor…' : 'ERP’den yenile'}
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-6 p-6">
@@ -658,7 +701,7 @@ export const BudgetWorkspace: React.FC = () => {
             aria-label="Gerçekleşen maliyet satırları"
             className="rounded-xl border border-border-subtle bg-surface-default p-4 shadow-sm"
           >
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-text-primary">
                   Gerçekleşen maliyet detayları
@@ -667,24 +710,9 @@ export const BudgetWorkspace: React.FC = () => {
                   Belge eşleşmesi “çözümlenmedi” ise sistem kaynak belgeyi tahmin etmez; fiş ve
                   kaynak işlem kimlikleri inceleme kanıtı olarak korunur.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-md border border-border-subtle px-3 py-2 text-sm font-semibold text-text-primary hover:bg-surface-muted disabled:opacity-50"
-                  disabled={syncBusy}
-                  onClick={openAccountingDetail}
-                >
-                  Canlı Muhasebe Detayını aç
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={syncBusy}
-                  onClick={refreshFromErp}
-                >
-                  {syncBusy ? 'ERP’den yenileniyor…' : 'ERP’den yenile'}
-                </button>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Bir satıra çift tıklayarak PostgreSQL snapshot’ındaki kaynak izini açabilirsiniz.
+                </p>
               </div>
             </div>
 
@@ -697,23 +725,33 @@ export const BudgetWorkspace: React.FC = () => {
             ) : null}
 
             {rows.length > 0 ? (
-              <GridShell<ProjectActualRow>
-                gridKey={`budget-actuals-${binding?.id ?? 'none'}-${from}-${to}`}
-                columnDefs={columnDefs}
+              <EntityGridTemplate<ProjectActualRow>
+                gridId={PROJECT_ACTUALS_GRID_ID}
+                gridSchemaVersion={PROJECT_ACTUALS_GRID_SCHEMA_VERSION}
+                columnDefs={columnArtifacts.columnDefs}
                 rowData={rows}
-                rowModelType="clientSide"
-                density="compact"
+                total={rows.length}
+                pageSize={50}
+                dataSourceMode="client"
                 access="readonly"
+                onRowDoubleClick={setDetailRow}
+                exportLeadingExtras={gridActions}
+                exportConfig={exportConfig}
+                quickFilterPlaceholder="Tüm gerçekleşen maliyet sütunlarında ara..."
+                messages={{
+                  resetFiltersLabel: 'Filtreleri sıfırla',
+                  fullscreenTooltip: 'Tam ekran',
+                  excelLabel: 'Excel indir',
+                  csvLabel: 'CSV indir',
+                }}
                 defaultColDef={{ minWidth: 95, resizable: true, sortable: true, filter: true }}
                 gridOptions={{
                   pagination: true,
                   paginationPageSize: 50,
-                  suppressPaginationPanel: false,
                   animateRows: false,
+                  multiSortKey: 'ctrl',
                   getRowId: (params) => params.data.id,
                 }}
-                animateRows={false}
-                height={560}
               />
             ) : (
               <div className="rounded-lg border border-dashed border-border-subtle p-10 text-center text-sm text-text-secondary">
@@ -722,6 +760,125 @@ export const BudgetWorkspace: React.FC = () => {
               </div>
             )}
           </section>
+
+          <DetailDrawer
+            open={detailRow !== null}
+            onClose={() => setDetailRow(null)}
+            title="Gerçekleşen maliyet satırı"
+            subtitle={detailRow?.documentNo ? `Belge: ${detailRow.documentNo}` : undefined}
+            size="xl"
+            closeOnBackdrop
+            footer={
+              <button
+                type="button"
+                className="rounded-md border border-border-subtle px-3 py-2 text-sm font-semibold text-text-primary hover:bg-surface-muted"
+                onClick={openAccountingDetail}
+              >
+                Canlı Muhasebe Detayını aç
+              </button>
+            }
+          >
+            {detailRow ? (
+              <div className="space-y-6">
+                <Descriptions
+                  title="Muhasebe"
+                  columns={3}
+                  density="compact"
+                  bordered
+                  fullWidth
+                  items={[
+                    { key: 'postingDate', label: 'Tarih', value: detailRow.postingDate },
+                    { key: 'accountCode', label: 'Hesap kodu', value: detailRow.accountCode },
+                    {
+                      key: 'debitCredit',
+                      label: 'Yön',
+                      value: statusLabel(detailRow.debitCredit),
+                    },
+                    {
+                      key: 'accountingAmount',
+                      label: 'Muhasebe tutarı',
+                      value: amountLabel(detailRow.accountingAmount, detailRow.currency),
+                    },
+                    {
+                      key: 'classifiedCostAmount',
+                      label: 'Sınıflanmış maliyet',
+                      value: amountLabel(detailRow.classifiedCostAmount, detailRow.currency),
+                    },
+                    { key: 'currency', label: 'Para birimi', value: detailRow.currency },
+                  ]}
+                />
+                <Descriptions
+                  title="Maliyet sınıflandırması"
+                  columns={3}
+                  density="compact"
+                  bordered
+                  fullWidth
+                  items={[
+                    {
+                      key: 'costTreatment',
+                      label: 'Maliyet sınıfı',
+                      value: statusLabel(detailRow.costTreatment),
+                    },
+                    {
+                      key: 'costRuleVersion',
+                      label: 'Kural sürümü',
+                      value: detailRow.costRuleVersion,
+                    },
+                    {
+                      key: 'cancelled',
+                      label: 'İptal durumu',
+                      value: detailRow.cancelled ? 'İptal' : 'Aktif',
+                      tone: detailRow.cancelled ? 'warning' : 'success',
+                    },
+                  ]}
+                />
+                <Descriptions
+                  title="Kaynak belge izi"
+                  description="Bu alanlar W3 salt-okunur kaynağından alınan ve Budget PostgreSQL snapshot’ında korunan izleme kimlikleridir."
+                  columns={3}
+                  density="compact"
+                  bordered
+                  fullWidth
+                  items={[
+                    {
+                      key: 'documentType',
+                      label: 'Kaynak belge',
+                      value: statusLabel(detailRow.documentType),
+                    },
+                    { key: 'documentNo', label: 'Belge no', value: detailRow.documentNo },
+                    {
+                      key: 'resolutionStatus',
+                      label: 'Belge eşleşmesi',
+                      value: statusLabel(detailRow.resolutionStatus),
+                      tone: detailRow.resolutionStatus === 'EXACT_LINE' ? 'success' : 'warning',
+                    },
+                    {
+                      key: 'journalCardId',
+                      label: 'Fiş kimliği',
+                      value: detailRow.journalCardId,
+                    },
+                    {
+                      key: 'journalRowId',
+                      label: 'Fiş satırı',
+                      value: detailRow.journalRowId,
+                    },
+                    {
+                      key: 'sourceLedgerYear',
+                      label: 'Defter yılı',
+                      value: detailRow.sourceLedgerYear,
+                    },
+                    { key: 'actionType', label: 'İşlem tipi', value: detailRow.actionType },
+                    { key: 'actionId', label: 'Kaynak işlem', value: detailRow.actionId },
+                    {
+                      key: 'syncedAt',
+                      label: 'Snapshot zamanı',
+                      value: dateTimeLabel(detailRow.syncedAt),
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
+          </DetailDrawer>
         </>
       ) : null}
 
