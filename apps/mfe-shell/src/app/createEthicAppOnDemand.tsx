@@ -71,7 +71,7 @@ let ethicRegistered = false;
  * `MFE_ETHIC_URL` env that `vite.config.ts` reads for the
  * eager mode federation manifest.
  */
-function resolveEthicRemoteEntry(): string {
+export function resolveEthicRemoteEntry(): string {
   if (typeof window !== 'undefined') {
     const w = window as Window & { __env__?: Record<string, string> };
     const url = w.__env__?.MFE_ETHIC_URL ?? w.__env__?.VITE_MFE_ETHIC_URL ?? null;
