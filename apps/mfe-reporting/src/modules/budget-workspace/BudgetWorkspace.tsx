@@ -16,6 +16,8 @@ import {
   createProjectBinding,
   fetchCompanies,
   fetchProjectActualRows,
+  fetchProjectActualSourceDocument,
+  fetchProjectActualSourceLines,
   fetchProjectActualSummary,
   fetchProjects,
   findProjectBinding,
@@ -24,11 +26,40 @@ import {
 import type {
   CompanyOption,
   ProjectActualRow,
+  ProjectActualSourceDocumentDetail,
+  ProjectActualSourceLineRow,
   ProjectActualSummary,
   ProjectActualSyncResult,
   ProjectBinding,
   ProjectOption,
 } from './types';
+
+type CostReviewRow = {
+  id: string;
+  origin: 'SOURCE_LINE' | 'ACCOUNTING_FALLBACK';
+  date: string;
+  documentType: string | null;
+  documentKind: string | null;
+  documentNo: string | null;
+  productName: string | null;
+  description: string | null;
+  quantity: number | null;
+  unit: string | null;
+  unitPrice: number | null;
+  netAmount: number | null;
+  taxRate: number | null;
+  taxAmount: number | null;
+  grossAmount: number | null;
+  costBasisAmount: number;
+  currency: string;
+  accountCode: string | null;
+  costStatus: string;
+  lineMatchStatus: string | null;
+  documentReconciliationStatus: string | null;
+  sourceDocumentId: string | null;
+  sourceLine: ProjectActualSourceLineRow | null;
+  accountingRow: ProjectActualRow | null;
+};
 
 const today = new Date();
 const isoDate = (date: Date): string => date.toISOString().slice(0, 10);
@@ -106,7 +137,7 @@ const syncFailureLabel = (failureCode: string | null): string => {
 
 const identityTranslate = (key: string): string => key;
 const PROJECT_ACTUALS_GRID_ID = 'reports.budget-project-actuals';
-const PROJECT_ACTUALS_GRID_SCHEMA_VERSION = 1;
+const PROJECT_ACTUALS_GRID_SCHEMA_VERSION = 2;
 
 const STATUS_VARIANTS: BadgeColumnMeta['variantMap'] = {
   DEBIT: 'info',
@@ -117,6 +148,10 @@ const STATUS_VARIANTS: BadgeColumnMeta['variantMap'] = {
   EXCLUDE_TRANSFER: 'muted',
   REQUIRES_REVIEW: 'warning',
   EXACT_LINE: 'success',
+  EXACT_SOURCE_LINE: 'success',
+  RECONCILED: 'success',
+  DIFFERENCE: 'warning',
+  NO_ACCOUNTING: 'warning',
   HEADER_ONLY: 'info',
   PARTIAL: 'warning',
   UNRESOLVED: 'error',
@@ -126,6 +161,17 @@ const STATUS_VARIANTS: BadgeColumnMeta['variantMap'] = {
   BANK: 'info',
   CURRENT_ACCOUNT: 'info',
   TRANSFER: 'muted',
+  SOURCE_LINE: 'success',
+  ACCOUNTING_FALLBACK: 'warning',
+  PURCHASE_INVOICE: 'info',
+  PURCHASE_RETURN: 'warning',
+  SALES_INVOICE: 'muted',
+  SALES_RETURN: 'muted',
+  OTHER_INVOICE: 'muted',
+  STOCK_CONSUMPTION: 'info',
+  DEPRECIATION: 'info',
+  PAYROLL: 'info',
+  OTHER_SOURCE: 'muted',
 };
 
 const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
@@ -137,6 +183,10 @@ const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
   EXCLUDE_TRANSFER: 'Virman hariç',
   REQUIRES_REVIEW: 'İncelenecek',
   EXACT_LINE: 'Satır eşleşti',
+  EXACT_SOURCE_LINE: 'Kaynak satır eşleşti',
+  RECONCILED: 'Belge toplamı mutabık',
+  DIFFERENCE: 'Belge toplamında fark',
+  NO_ACCOUNTING: 'Muhasebe bağı yok',
   HEADER_ONLY: 'Belge başlığı',
   PARTIAL: 'Kısmi',
   UNRESOLVED: 'Çözümlenmedi',
@@ -146,10 +196,39 @@ const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
   BANK: 'Banka',
   CURRENT_ACCOUNT: 'Cari hareket',
   TRANSFER: 'Virman',
+  SOURCE_LINE: 'Kaynak işlem satırı',
+  ACCOUNTING_FALLBACK: 'Kaynak satırı bekliyor',
+  PURCHASE_INVOICE: 'Alış faturası',
+  PURCHASE_RETURN: 'Alış iadesi',
+  SALES_INVOICE: 'Satış faturası',
+  SALES_RETURN: 'Satış iadesi',
+  OTHER_INVOICE: 'Diğer fatura',
+  STOCK_CONSUMPTION: 'Stok sarfı',
+  DEPRECIATION: 'Amortisman',
+  PAYROLL: 'Bordro',
+  OTHER_SOURCE: 'Diğer kaynak',
 };
 
 const statusLabel = (value: string | null): string =>
   value ? (STATUS_LABELS?.[value] ?? value) : '—';
+
+const sourceCostStatus = (documentKind: ProjectActualSourceLineRow['documentKind']): string => {
+  switch (documentKind) {
+    case 'PURCHASE_INVOICE':
+    case 'EXPENSE':
+    case 'STOCK_CONSUMPTION':
+    case 'DEPRECIATION':
+    case 'PAYROLL':
+      return 'INCLUDE_COST';
+    case 'PURCHASE_RETURN':
+      return 'INCLUDE_NEGATIVE_COST';
+    case 'SALES_INVOICE':
+    case 'SALES_RETURN':
+      return 'EXCLUDE_COUNTERPART';
+    default:
+      return 'REQUIRES_REVIEW';
+  }
+};
 
 const SummaryCard: React.FC<{
   label: string;
@@ -189,8 +268,12 @@ export const BudgetWorkspace: React.FC = () => {
   const [bindingMissing, setBindingMissing] = React.useState(false);
   const [binding, setBinding] = React.useState<ProjectBinding | null>(null);
   const [summary, setSummary] = React.useState<ProjectActualSummary | null>(null);
-  const [rows, setRows] = React.useState<ProjectActualRow[]>([]);
-  const [detailRow, setDetailRow] = React.useState<ProjectActualRow | null>(null);
+  const [accountingRows, setAccountingRows] = React.useState<ProjectActualRow[]>([]);
+  const [sourceLines, setSourceLines] = React.useState<ProjectActualSourceLineRow[]>([]);
+  const [detailRow, setDetailRow] = React.useState<CostReviewRow | null>(null);
+  const [sourceDocumentDetail, setSourceDocumentDetail] =
+    React.useState<ProjectActualSourceDocumentDetail | null>(null);
+  const [sourceDocumentBusy, setSourceDocumentBusy] = React.useState(false);
   const [lastSync, setLastSync] = React.useState<ProjectActualSyncResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [budgetAuthorizationRequired, setBudgetAuthorizationRequired] = React.useState(false);
@@ -243,8 +326,10 @@ export const BudgetWorkspace: React.FC = () => {
     setBinding(null);
     setBindingMissing(false);
     setSummary(null);
-    setRows([]);
+    setAccountingRows([]);
+    setSourceLines([]);
     setDetailRow(null);
+    setSourceDocumentDetail(null);
     setLastSync(null);
   };
 
@@ -278,13 +363,15 @@ export const BudgetWorkspace: React.FC = () => {
   const loadSnapshot = React.useCallback(
     async (activeBinding: ProjectBinding) => {
       const numericCompany = Number(companyId);
-      const [nextSummary, nextRows] = await Promise.all([
+      const [nextSummary, nextRows, nextSourceLines] = await Promise.all([
         fetchProjectActualSummary(numericCompany, activeBinding.id, from, to),
         fetchProjectActualRows(numericCompany, activeBinding.id, from, to),
+        fetchProjectActualSourceLines(numericCompany, activeBinding.id, from, to),
       ]);
       setBinding(activeBinding);
       setSummary(nextSummary);
-      setRows(nextRows);
+      setAccountingRows(nextRows);
+      setSourceLines(nextSourceLines);
       setBindingMissing(false);
     },
     [companyId, from, to],
@@ -368,40 +455,166 @@ export const BudgetWorkspace: React.FC = () => {
     navigate(`${reportingRoot}/fin-proje-muhasebe-gercekleseni?${params.toString()}`);
   };
 
+  const reviewRows = React.useMemo<CostReviewRow[]>(() => {
+    const representedSourceKeys = new Set(
+      sourceLines.map((line) => `${line.documentType}:${line.externalDocumentId}`),
+    );
+    const sourceRows = sourceLines.map<CostReviewRow>((line) => ({
+      id: `source-line:${line.id}`,
+      origin: 'SOURCE_LINE',
+      date: line.documentDate,
+      documentType: line.documentType,
+      documentKind: line.documentKind,
+      documentNo: line.documentNo,
+      productName: line.productName,
+      description: line.description,
+      quantity: line.quantity,
+      unit: line.unit,
+      unitPrice: line.unitPrice,
+      netAmount: line.netAmount,
+      taxRate: line.taxRate,
+      taxAmount: line.taxAmount,
+      grossAmount: line.grossAmount,
+      costBasisAmount: line.costBasisAmount,
+      currency: line.currency,
+      accountCode: line.accountCode,
+      costStatus: sourceCostStatus(line.documentKind),
+      lineMatchStatus: line.lineMatchStatus,
+      documentReconciliationStatus: line.documentReconciliationStatus,
+      sourceDocumentId: line.sourceDocumentId,
+      sourceLine: line,
+      accountingRow: null,
+    }));
+    const fallbackRows = accountingRows
+      .filter(
+        (row) =>
+          row.documentType === null ||
+          row.actionId === null ||
+          !representedSourceKeys.has(`${row.documentType}:${row.actionId}`),
+      )
+      .map<CostReviewRow>((row) => ({
+        id: `accounting:${row.id}`,
+        origin: 'ACCOUNTING_FALLBACK',
+        date: row.postingDate,
+        documentType: row.documentType,
+        documentKind: null,
+        documentNo: row.documentNo,
+        productName: row.documentType
+          ? `${statusLabel(row.documentType)} kaynak satırı henüz bağlanmamış`
+          : 'Kaynak türü çözümlenmemiş muhasebe kaydı',
+        description: row.accountCode ? `Hesap: ${row.accountCode}` : null,
+        quantity: null,
+        unit: null,
+        unitPrice: null,
+        netAmount: null,
+        taxRate: null,
+        taxAmount: null,
+        grossAmount: null,
+        costBasisAmount: row.classifiedCostAmount,
+        currency: row.currency,
+        accountCode: row.accountCode,
+        costStatus: row.costTreatment,
+        lineMatchStatus: row.resolutionStatus,
+        documentReconciliationStatus: null,
+        sourceDocumentId: null,
+        sourceLine: null,
+        accountingRow: row,
+      }));
+    return [...sourceRows, ...fallbackRows];
+  }, [accountingRows, sourceLines]);
+
+  const openReviewDetail = async (row: CostReviewRow) => {
+    setDetailRow(row);
+    setSourceDocumentDetail(null);
+    if (!row.sourceDocumentId || !binding) return;
+    setSourceDocumentBusy(true);
+    try {
+      setSourceDocumentDetail(
+        await fetchProjectActualSourceDocument(
+          Number(companyId),
+          binding.id,
+          row.sourceDocumentId,
+        ),
+      );
+    } catch (reason) {
+      captureBudgetError(reason);
+    } finally {
+      setSourceDocumentBusy(false);
+    }
+  };
+
   const columnArtifacts = React.useMemo(() => {
     const currency =
       summary?.currency && /^[A-Z]{3}$/.test(summary.currency) ? summary.currency : 'TRY';
     const meta: ColumnMeta[] = [
-      { field: 'postingDate', headerNameKey: 'Tarih', columnType: 'date', width: 125 },
-      { field: 'accountCode', headerNameKey: 'Hesap kodu', columnType: 'text', width: 135 },
       {
-        field: 'debitCredit',
-        headerNameKey: 'Yön',
+        field: 'origin',
+        headerNameKey: 'Kayıt kaynağı',
         columnType: 'badge',
         variantMap: STATUS_VARIANTS,
         labelMap: STATUS_LABELS,
         defaultVariant: 'muted',
-        width: 105,
+        width: 155,
       },
+      { field: 'date', headerNameKey: 'Belge tarihi', columnType: 'date', width: 130 },
       {
-        field: 'accountingAmount',
-        headerNameKey: 'Muhasebe tutarı',
+        field: 'documentKind',
+        headerNameKey: 'Belge türü',
+        columnType: 'badge',
+        variantMap: STATUS_VARIANTS,
+        labelMap: STATUS_LABELS,
+        defaultVariant: 'muted',
+        width: 150,
+      },
+      { field: 'documentNo', headerNameKey: 'Belge no', columnType: 'text', width: 145 },
+      { field: 'productName', headerNameKey: 'Kaynak kalemi', columnType: 'text', width: 250 },
+      { field: 'description', headerNameKey: 'Açıklama', columnType: 'text', width: 210 },
+      { field: 'quantity', headerNameKey: 'Miktar', columnType: 'number', width: 105 },
+      { field: 'unit', headerNameKey: 'Birim', columnType: 'text', width: 85 },
+      {
+        field: 'unitPrice',
+        headerNameKey: 'Birim fiyat',
         columnType: 'currency',
         currencyCode: currency,
         decimals: 2,
-        width: 160,
+        width: 135,
       },
       {
-        field: 'classifiedCostAmount',
-        headerNameKey: 'Sınıflanmış maliyet',
+        field: 'netAmount',
+        headerNameKey: 'Net tutar',
         columnType: 'currency',
         currencyCode: currency,
         decimals: 2,
-        width: 175,
+        width: 135,
+      },
+      { field: 'taxRate', headerNameKey: 'KDV %', columnType: 'number', width: 95 },
+      {
+        field: 'taxAmount',
+        headerNameKey: 'KDV tutarı',
+        columnType: 'currency',
+        currencyCode: currency,
+        decimals: 2,
+        width: 130,
       },
       {
-        field: 'costTreatment',
-        headerNameKey: 'Maliyet sınıfı',
+        field: 'grossAmount',
+        headerNameKey: 'Brüt tutar',
+        columnType: 'currency',
+        currencyCode: currency,
+        decimals: 2,
+        width: 135,
+      },
+      {
+        field: 'costBasisAmount',
+        headerNameKey: 'Maliyet esası',
+        columnType: 'currency',
+        currencyCode: currency,
+        decimals: 2,
+        width: 145,
+      },
+      {
+        field: 'costStatus',
+        headerNameKey: 'Maliyet durumu',
         columnType: 'badge',
         variantMap: STATUS_VARIANTS,
         labelMap: STATUS_LABELS,
@@ -409,34 +622,27 @@ export const BudgetWorkspace: React.FC = () => {
         width: 180,
       },
       {
-        field: 'documentType',
-        headerNameKey: 'Kaynak belge',
+        field: 'lineMatchStatus',
+        headerNameKey: 'Satır eşleşmesi',
         columnType: 'badge',
         variantMap: STATUS_VARIANTS,
         labelMap: STATUS_LABELS,
         defaultVariant: 'muted',
-        width: 145,
+        width: 165,
       },
-      { field: 'documentNo', headerNameKey: 'Belge no', columnType: 'text', width: 145 },
       {
-        field: 'resolutionStatus',
-        headerNameKey: 'Belge eşleşmesi',
+        field: 'documentReconciliationStatus',
+        headerNameKey: 'Belge mutabakatı',
         columnType: 'badge',
         variantMap: STATUS_VARIANTS,
         labelMap: STATUS_LABELS,
         defaultVariant: 'muted',
-        width: 155,
+        width: 175,
       },
-      { field: 'journalCardId', headerNameKey: 'Fiş kimliği', columnType: 'number', width: 130 },
-      { field: 'journalRowId', headerNameKey: 'Fiş satırı', columnType: 'number', width: 125 },
-      { field: 'actionType', headerNameKey: 'İşlem tipi', columnType: 'number', width: 115 },
-      { field: 'actionId', headerNameKey: 'Kaynak işlem', columnType: 'number', width: 135 },
-      { field: 'sourceLedgerYear', headerNameKey: 'Defter yılı', columnType: 'number', width: 110 },
-      { field: 'costRuleVersion', headerNameKey: 'Kural sürümü', columnType: 'number', width: 120 },
-      { field: 'syncedAt', headerNameKey: 'Snapshot zamanı', columnType: 'date', width: 175 },
+      { field: 'accountCode', headerNameKey: 'Hesap kodu', columnType: 'text', width: 135 },
     ];
     return {
-      columnDefs: buildColDefs(meta, identityTranslate) as ColDef<ProjectActualRow>[],
+      columnDefs: buildColDefs(meta, identityTranslate) as ColDef<CostReviewRow>[],
       processCellCallback: buildProcessCellCallback(meta, identityTranslate),
     };
   }, [summary?.currency]);
@@ -492,8 +698,9 @@ export const BudgetWorkspace: React.FC = () => {
             Proje bazlı gerçekleşen maliyet
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-            Şirketi adıyla, projeyi kodu ve adıyla seçin. Gerçekleşen muhasebe tutarını, maliyet
-            sınıflamasını ve kanıtlanabilen kaynak belge bağını tek görünümde inceleyin.
+            Şirketi adıyla, projeyi kodu ve adıyla seçin. Gerçekleşen maliyeti muhasebe fişini
+            oluşturan fatura, sarf, masraf, amortisman ve diğer operasyonel kaynak satırından
+            inceleyin.
           </p>
         </div>
         <span className="rounded-full border border-state-success-text/30 bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
@@ -648,7 +855,9 @@ export const BudgetWorkspace: React.FC = () => {
               : 'ERP ve snapshot arasında fark var.'}
           </strong>{' '}
           {lastSync.sourceRowCount} kaynak satırı okundu, {lastSync.changedRowCount} satır
-          güncellendi, {lastSync.tombstoneRowCount} satır iptal işaretlendi.
+          güncellendi, {lastSync.tombstoneRowCount} satır iptal işaretlendi.{' '}
+          {lastSync.sourceLineCount} kaynak işlem satırı ve {lastSync.sourceDocumentCount} kaynak
+          belge snapshot’a alındı.
         </div>
       ) : null}
 
@@ -656,32 +865,37 @@ export const BudgetWorkspace: React.FC = () => {
         <>
           <section
             aria-label="Gerçekleşen maliyet özeti"
-            className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-6"
           >
             <SummaryCard
-              label="Muhasebe gerçekleşeni"
-              value={amountLabel(summary.accountingActual, summary.currency)}
-              detail={
-                summary.snapshotRowCount === summary.rowCount
-                  ? `${summary.rowCount} muhasebe satırı`
-                  : `${summary.rowCount} aktif · ${summary.snapshotRowCount} toplam snapshot satırı`
-              }
+              label="Gerçekleşen maliyet"
+              value={amountLabel(summary.actualCost, summary.currency)}
+              detail="Kaynak işlem satırları + henüz bağlanmamış kayıtlar"
             />
             <SummaryCard
-              label="Sınıflanmış maliyet"
+              label="Kaynak satırı maliyeti"
+              value={amountLabel(summary.sourceLineActual, summary.currency)}
+              detail={`${summary.sourceLineCount} satır · ${summary.sourceDocumentCount} belge`}
+            />
+            <SummaryCard
+              label="Kaynak satırı bekleyen"
+              value={amountLabel(summary.unlinkedAccountingActual, summary.currency)}
+              detail="Masraf, sarf, amortisman ve diğer adaptörler"
+            />
+            <SummaryCard
+              label="Muhasebe kontrol toplamı"
               value={amountLabel(summary.classifiedCost, summary.currency)}
-              detail="Aktif kural setine göre"
+              detail={`${summary.rowCount} aktif muhasebe satırı`}
             />
             <SummaryCard
-              label="Hariç tutulan"
-              value={amountLabel(summary.excludedAmount, summary.currency)}
-              detail="Karşı hesap ve virman"
-            />
-            <SummaryCard
-              label="İncelenecek"
-              value={amountLabel(summary.requiresReviewAmount, summary.currency)}
-              detail={`${summary.requiresReviewCount} satır`}
-              tone={summary.requiresReviewCount > 0 ? 'warning' : 'default'}
+              label="Eşleşmesi incelenecek"
+              value={`${summary.unresolvedSourceLineCount} satır`}
+              detail={amountLabel(summary.requiresReviewAmount, summary.currency)}
+              tone={
+                summary.unresolvedSourceLineCount > 0 || summary.requiresReviewCount > 0
+                  ? 'warning'
+                  : 'default'
+              }
             />
             <SummaryCard
               label="Son başarılı senkron"
@@ -704,36 +918,38 @@ export const BudgetWorkspace: React.FC = () => {
             <div className="mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-text-primary">
-                  Gerçekleşen maliyet detayları
+                  Gerçekleşen maliyet · kaynak satırları
                 </h2>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Belge eşleşmesi “çözümlenmedi” ise sistem kaynak belgeyi tahmin etmez; fiş ve
-                  kaynak işlem kimlikleri inceleme kanıtı olarak korunur.
+                  Ana kayıt muhasebe fişini oluşturan operasyonel satırdır: fatura, sarf, masraf,
+                  amortisman veya ilgili diğer kaynak. Faturada net tutar maliyet esası; KDV ve
+                  brüt ödeme tutarı ayrı alanlardır.
                 </p>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Bir satıra çift tıklayarak PostgreSQL snapshot’ındaki kaynak izini açabilirsiniz.
+                  Çift tıklayarak kaynak belgenin bütün satırlarını, muhasebe dağılımını ve
+                  mutabakat farkını birlikte açabilirsiniz.
                 </p>
               </div>
             </div>
 
-            {summary.snapshotRowCount > rows.length ? (
+            {summary.sourceLineCount > sourceLines.length ||
+            summary.snapshotRowCount > accountingRows.length ? (
               <div className="mb-4 rounded-lg border border-state-warning-text/30 bg-state-warning-bg p-3 text-sm text-text-primary">
-                Snapshot’ta {summary.snapshotRowCount.toLocaleString('tr-TR')} satır var; bu hızlı
-                görünüm en güncel {rows.length.toLocaleString('tr-TR')} satırı gösteriyor. Tam
-                kapsam için “Canlı Muhasebe Detayını aç” eylemini kullanın.
+                Kayıt sayısı hızlı görünüm sınırını aşıyor. Tam muhasebe kapsamı için “Canlı
+                Muhasebe Detayını aç” eylemini kullanın.
               </div>
             ) : null}
 
-            {rows.length > 0 ? (
-              <EntityGridTemplate<ProjectActualRow>
+            {reviewRows.length > 0 ? (
+              <EntityGridTemplate<CostReviewRow>
                 gridId={PROJECT_ACTUALS_GRID_ID}
                 gridSchemaVersion={PROJECT_ACTUALS_GRID_SCHEMA_VERSION}
                 columnDefs={columnArtifacts.columnDefs}
-                rowData={rows}
-                total={rows.length}
+                rowData={reviewRows}
+                total={reviewRows.length}
                 pageSize={50}
                 dataSourceMode="client"
-                onRowDoubleClick={setDetailRow}
+                onRowDoubleClick={(row) => void openReviewDetail(row)}
                 exportLeadingExtras={gridActions}
                 exportConfig={exportConfig}
                 quickFilterPlaceholder="Tüm gerçekleşen maliyet sütunlarında ara..."
@@ -754,16 +970,24 @@ export const BudgetWorkspace: React.FC = () => {
               />
             ) : (
               <div className="rounded-lg border border-dashed border-border-subtle p-10 text-center text-sm text-text-secondary">
-                Seçilen tarih aralığında snapshot satırı bulunamadı. Bu sonuç sıfır maliyet anlamına
-                gelmez; son başarılı senkron zamanını ve mutabakat durumunu kontrol edin.
+                Seçilen tarih aralığında kaynak işlem satırı veya diğer gerçekleşen maliyet kaydı
+                bulunamadı. Bu sonuç sıfır maliyet anlamına gelmez; son başarılı senkronu kontrol
+                edin.
               </div>
             )}
           </section>
 
           <DetailDrawer
             open={detailRow !== null}
-            onClose={() => setDetailRow(null)}
-            title="Gerçekleşen maliyet satırı"
+            onClose={() => {
+              setDetailRow(null);
+              setSourceDocumentDetail(null);
+            }}
+            title={
+              detailRow?.origin === 'SOURCE_LINE'
+                ? 'Kaynak belge ve maliyet satırları'
+                : 'Kaynak satırı henüz bağlanmamış gerçekleşen'
+            }
             subtitle={detailRow?.documentNo ? `Belge: ${detailRow.documentNo}` : undefined}
             size="xl"
             closeOnBackdrop
@@ -779,102 +1003,234 @@ export const BudgetWorkspace: React.FC = () => {
           >
             {detailRow ? (
               <div className="space-y-6">
-                <Descriptions
-                  title="Muhasebe"
-                  columns={3}
-                  density="compact"
-                  bordered
-                  fullWidth
-                  items={[
-                    { key: 'postingDate', label: 'Tarih', value: detailRow.postingDate },
-                    { key: 'accountCode', label: 'Hesap kodu', value: detailRow.accountCode },
-                    {
-                      key: 'debitCredit',
-                      label: 'Yön',
-                      value: statusLabel(detailRow.debitCredit),
-                    },
-                    {
-                      key: 'accountingAmount',
-                      label: 'Muhasebe tutarı',
-                      value: amountLabel(detailRow.accountingAmount, detailRow.currency),
-                    },
-                    {
-                      key: 'classifiedCostAmount',
-                      label: 'Sınıflanmış maliyet',
-                      value: amountLabel(detailRow.classifiedCostAmount, detailRow.currency),
-                    },
-                    { key: 'currency', label: 'Para birimi', value: detailRow.currency },
-                  ]}
-                />
-                <Descriptions
-                  title="Maliyet sınıflandırması"
-                  columns={3}
-                  density="compact"
-                  bordered
-                  fullWidth
-                  items={[
-                    {
-                      key: 'costTreatment',
-                      label: 'Maliyet sınıfı',
-                      value: statusLabel(detailRow.costTreatment),
-                    },
-                    {
-                      key: 'costRuleVersion',
-                      label: 'Kural sürümü',
-                      value: detailRow.costRuleVersion,
-                    },
-                    {
-                      key: 'cancelled',
-                      label: 'İptal durumu',
-                      value: detailRow.cancelled ? 'İptal' : 'Aktif',
-                      tone: detailRow.cancelled ? 'warning' : 'success',
-                    },
-                  ]}
-                />
-                <Descriptions
-                  title="Kaynak belge izi"
-                  description="Bu alanlar W3 salt-okunur kaynağından alınan ve Budget PostgreSQL snapshot’ında korunan izleme kimlikleridir."
-                  columns={3}
-                  density="compact"
-                  bordered
-                  fullWidth
-                  items={[
-                    {
-                      key: 'documentType',
-                      label: 'Kaynak belge',
-                      value: statusLabel(detailRow.documentType),
-                    },
-                    { key: 'documentNo', label: 'Belge no', value: detailRow.documentNo },
-                    {
-                      key: 'resolutionStatus',
-                      label: 'Belge eşleşmesi',
-                      value: statusLabel(detailRow.resolutionStatus),
-                      tone: detailRow.resolutionStatus === 'EXACT_LINE' ? 'success' : 'warning',
-                    },
-                    {
-                      key: 'journalCardId',
-                      label: 'Fiş kimliği',
-                      value: detailRow.journalCardId,
-                    },
-                    {
-                      key: 'journalRowId',
-                      label: 'Fiş satırı',
-                      value: detailRow.journalRowId,
-                    },
-                    {
-                      key: 'sourceLedgerYear',
-                      label: 'Defter yılı',
-                      value: detailRow.sourceLedgerYear,
-                    },
-                    { key: 'actionType', label: 'İşlem tipi', value: detailRow.actionType },
-                    { key: 'actionId', label: 'Kaynak işlem', value: detailRow.actionId },
-                    {
-                      key: 'syncedAt',
-                      label: 'Snapshot zamanı',
-                      value: dateTimeLabel(detailRow.syncedAt),
-                    },
-                  ]}
-                />
+                {detailRow.origin === 'SOURCE_LINE' ? (
+                  <>
+                    {sourceDocumentBusy ? (
+                      <p role="status" className="text-sm text-text-secondary">
+                        Kaynak belge detayı yükleniyor…
+                      </p>
+                    ) : null}
+                    {sourceDocumentDetail ? (
+                      <>
+                        <Descriptions
+                          title="Belge özeti"
+                          description="Belge toplamı mutabakatı, satırların tek tek aynı muhasebe satırına bağlandığı anlamına gelmez."
+                          columns={3}
+                          density="compact"
+                          bordered
+                          fullWidth
+                          items={[
+                            {
+                              key: 'documentDate',
+                              label: 'Belge tarihi',
+                              value: sourceDocumentDetail.documentDate,
+                            },
+                            {
+                              key: 'documentKind',
+                              label: 'Belge türü',
+                              value: statusLabel(sourceDocumentDetail.documentKind),
+                            },
+                            {
+                              key: 'reconciliationStatus',
+                              label: 'Belge mutabakatı',
+                              value: statusLabel(sourceDocumentDetail.reconciliationStatus),
+                              tone:
+                                sourceDocumentDetail.reconciliationStatus === 'RECONCILED'
+                                  ? 'success'
+                                  : 'warning',
+                            },
+                            {
+                              key: 'sourceLineTotal',
+                              label: 'Kaynak satırları maliyet toplamı',
+                              value: amountLabel(
+                                sourceDocumentDetail.sourceLineTotal,
+                                sourceDocumentDetail.currency,
+                              ),
+                            },
+                            {
+                              key: 'accountingCostTotal',
+                              label: 'Muhasebe maliyet toplamı',
+                              value: amountLabel(
+                                sourceDocumentDetail.accountingCostTotal,
+                                sourceDocumentDetail.currency,
+                              ),
+                            },
+                            {
+                              key: 'reconciliationDifference',
+                              label: 'Mutabakat farkı',
+                              value: amountLabel(
+                                sourceDocumentDetail.reconciliationDifference,
+                                sourceDocumentDetail.currency,
+                              ),
+                            },
+                          ]}
+                        />
+
+                        <section aria-label="Kaynak işlem satırları">
+                          <h3 className="text-sm font-semibold text-text-primary">
+                            Kaynak işlem satırları
+                          </h3>
+                          <div className="mt-2 overflow-x-auto rounded-lg border border-border-subtle">
+                            <table className="min-w-full text-left text-xs">
+                              <thead className="bg-surface-muted text-text-secondary">
+                                <tr>
+                                  <th className="px-3 py-2">#</th>
+                                  <th className="px-3 py-2">Kaynak kalemi</th>
+                                  <th className="px-3 py-2">Miktar</th>
+                                  <th className="px-3 py-2">Net</th>
+                                  <th className="px-3 py-2">Vergi / KDV</th>
+                                  <th className="px-3 py-2">Brüt</th>
+                                  <th className="px-3 py-2">Eşleşme</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sourceDocumentDetail.lines.map((line) => (
+                                  <tr key={line.id} className="border-t border-border-subtle">
+                                    <td className="px-3 py-2">{line.lineOrdinal}</td>
+                                    <td className="px-3 py-2">
+                                      <span className="font-medium text-text-primary">
+                                        {line.productName ?? '—'}
+                                      </span>
+                                      {line.description ? (
+                                        <span className="mt-1 block text-text-secondary">
+                                          {line.description}
+                                        </span>
+                                      ) : null}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {line.quantity ?? '—'} {line.unit ?? ''}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {amountLabel(line.netAmount, line.currency)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {amountLabel(line.taxAmount, line.currency)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {amountLabel(line.grossAmount, line.currency)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {statusLabel(line.lineMatchStatus)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+
+                        <section aria-label="Muhasebe dağılımı">
+                          <h3 className="text-sm font-semibold text-text-primary">
+                            Muhasebe dağılımı
+                          </h3>
+                          <p className="mt-1 text-xs text-text-secondary">
+                            Karşı hesap ve KDV satırları maliyet toplamına ikinci kez eklenmez.
+                          </p>
+                          <div className="mt-2 overflow-x-auto rounded-lg border border-border-subtle">
+                            <table className="min-w-full text-left text-xs">
+                              <thead className="bg-surface-muted text-text-secondary">
+                                <tr>
+                                  <th className="px-3 py-2">Hesap</th>
+                                  <th className="px-3 py-2">Yön</th>
+                                  <th className="px-3 py-2">Muhasebe tutarı</th>
+                                  <th className="px-3 py-2">Maliyet tutarı</th>
+                                  <th className="px-3 py-2">Kural</th>
+                                  <th className="px-3 py-2">Kaynak bağı</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sourceDocumentDetail.accountingRows.map((row) => (
+                                  <tr key={row.id} className="border-t border-border-subtle">
+                                    <td className="px-3 py-2">{row.accountCode ?? '—'}</td>
+                                    <td className="px-3 py-2">
+                                      {statusLabel(row.debitCredit)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {amountLabel(row.accountingAmount, row.currency)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {amountLabel(row.classifiedCostAmount, row.currency)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {statusLabel(row.costTreatment)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {statusLabel(row.resolutionStatus)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                      </>
+                    ) : null}
+                  </>
+                ) : detailRow.accountingRow ? (
+                  <>
+                    <Descriptions
+                      title="Muhasebe kaynağı"
+                      description="Bu kayıt için kaynak belge satırı snapshot’ı yoktur; kanıtlanmayan belge bağı üretilmez."
+                      columns={3}
+                      density="compact"
+                      bordered
+                      fullWidth
+                      items={[
+                        {
+                          key: 'postingDate',
+                          label: 'Tarih',
+                          value: detailRow.accountingRow.postingDate,
+                        },
+                        {
+                          key: 'accountCode',
+                          label: 'Hesap kodu',
+                          value: detailRow.accountingRow.accountCode,
+                        },
+                        {
+                          key: 'documentType',
+                          label: 'Kaynak türü',
+                          value: statusLabel(detailRow.accountingRow.documentType),
+                        },
+                        {
+                          key: 'accountingAmount',
+                          label: 'Muhasebe tutarı',
+                          value: amountLabel(
+                            detailRow.accountingRow.accountingAmount,
+                            detailRow.accountingRow.currency,
+                          ),
+                        },
+                        {
+                          key: 'classifiedCostAmount',
+                          label: 'Maliyet tutarı',
+                          value: amountLabel(
+                            detailRow.accountingRow.classifiedCostAmount,
+                            detailRow.accountingRow.currency,
+                          ),
+                        },
+                        {
+                          key: 'costTreatment',
+                          label: 'Maliyet durumu',
+                          value: statusLabel(detailRow.accountingRow.costTreatment),
+                        },
+                        {
+                          key: 'journalCardId',
+                          label: 'Fiş kimliği',
+                          value: detailRow.accountingRow.journalCardId,
+                        },
+                        {
+                          key: 'journalRowId',
+                          label: 'Fiş satırı',
+                          value: detailRow.accountingRow.journalRowId,
+                        },
+                        {
+                          key: 'resolutionStatus',
+                          label: 'Kaynak çözümleme',
+                          value: statusLabel(detailRow.accountingRow.resolutionStatus),
+                        },
+                      ]}
+                    />
+                  </>
+                ) : null}
               </div>
             ) : null}
           </DetailDrawer>
