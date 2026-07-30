@@ -168,6 +168,10 @@ const STATUS_VARIANTS: BadgeColumnMeta['variantMap'] = {
   SALES_INVOICE: 'muted',
   SALES_RETURN: 'muted',
   OTHER_INVOICE: 'muted',
+  STOCK_CONSUMPTION: 'info',
+  DEPRECIATION: 'info',
+  PAYROLL: 'info',
+  OTHER_SOURCE: 'muted',
 };
 
 const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
@@ -192,13 +196,17 @@ const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
   BANK: 'Banka',
   CURRENT_ACCOUNT: 'Cari hareket',
   TRANSFER: 'Virman',
-  SOURCE_LINE: 'Fatura satırı',
-  ACCOUNTING_FALLBACK: 'Diğer muhasebe kaydı',
+  SOURCE_LINE: 'Kaynak işlem satırı',
+  ACCOUNTING_FALLBACK: 'Kaynak satırı bekliyor',
   PURCHASE_INVOICE: 'Alış faturası',
   PURCHASE_RETURN: 'Alış iadesi',
   SALES_INVOICE: 'Satış faturası',
   SALES_RETURN: 'Satış iadesi',
   OTHER_INVOICE: 'Diğer fatura',
+  STOCK_CONSUMPTION: 'Stok sarfı',
+  DEPRECIATION: 'Amortisman',
+  PAYROLL: 'Bordro',
+  OTHER_SOURCE: 'Diğer kaynak',
 };
 
 const statusLabel = (value: string | null): string =>
@@ -207,6 +215,10 @@ const statusLabel = (value: string | null): string =>
 const sourceCostStatus = (documentKind: ProjectActualSourceLineRow['documentKind']): string => {
   switch (documentKind) {
     case 'PURCHASE_INVOICE':
+    case 'EXPENSE':
+    case 'STOCK_CONSUMPTION':
+    case 'DEPRECIATION':
+    case 'PAYROLL':
       return 'INCLUDE_COST';
     case 'PURCHASE_RETURN':
       return 'INCLUDE_NEGATIVE_COST';
@@ -444,7 +456,9 @@ export const BudgetWorkspace: React.FC = () => {
   };
 
   const reviewRows = React.useMemo<CostReviewRow[]>(() => {
-    const representedInvoiceIds = new Set(sourceLines.map((line) => line.externalDocumentId));
+    const representedSourceKeys = new Set(
+      sourceLines.map((line) => `${line.documentType}:${line.externalDocumentId}`),
+    );
     const sourceRows = sourceLines.map<CostReviewRow>((line) => ({
       id: `source-line:${line.id}`,
       origin: 'SOURCE_LINE',
@@ -474,9 +488,9 @@ export const BudgetWorkspace: React.FC = () => {
     const fallbackRows = accountingRows
       .filter(
         (row) =>
-          row.documentType !== 'INVOICE' ||
+          row.documentType === null ||
           row.actionId === null ||
-          !representedInvoiceIds.has(row.actionId),
+          !representedSourceKeys.has(`${row.documentType}:${row.actionId}`),
       )
       .map<CostReviewRow>((row) => ({
         id: `accounting:${row.id}`,
@@ -486,7 +500,7 @@ export const BudgetWorkspace: React.FC = () => {
         documentKind: null,
         documentNo: row.documentNo,
         productName: row.documentType
-          ? `${statusLabel(row.documentType)} kaynaklı muhasebe kaydı`
+          ? `${statusLabel(row.documentType)} kaynak satırı henüz bağlanmamış`
           : 'Kaynak türü çözümlenmemiş muhasebe kaydı',
         description: row.accountCode ? `Hesap: ${row.accountCode}` : null,
         quantity: null,
@@ -553,7 +567,7 @@ export const BudgetWorkspace: React.FC = () => {
         width: 150,
       },
       { field: 'documentNo', headerNameKey: 'Belge no', columnType: 'text', width: 145 },
-      { field: 'productName', headerNameKey: 'Ürün / hizmet', columnType: 'text', width: 250 },
+      { field: 'productName', headerNameKey: 'Kaynak kalemi', columnType: 'text', width: 250 },
       { field: 'description', headerNameKey: 'Açıklama', columnType: 'text', width: 210 },
       { field: 'quantity', headerNameKey: 'Miktar', columnType: 'number', width: 105 },
       { field: 'unit', headerNameKey: 'Birim', columnType: 'text', width: 85 },
@@ -684,8 +698,9 @@ export const BudgetWorkspace: React.FC = () => {
             Proje bazlı gerçekleşen maliyet
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-            Şirketi adıyla, projeyi kodu ve adıyla seçin. Fatura kaynaklı gerçekleşenleri ürün ve
-            hizmet satırı düzeyinde; diğer kayıtları muhasebe kaynağı düzeyinde inceleyin.
+            Şirketi adıyla, projeyi kodu ve adıyla seçin. Gerçekleşen maliyeti muhasebe fişini
+            oluşturan fatura, sarf, masraf, amortisman ve diğer operasyonel kaynak satırından
+            inceleyin.
           </p>
         </div>
         <span className="rounded-full border border-state-success-text/30 bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
@@ -841,8 +856,8 @@ export const BudgetWorkspace: React.FC = () => {
           </strong>{' '}
           {lastSync.sourceRowCount} kaynak satırı okundu, {lastSync.changedRowCount} satır
           güncellendi, {lastSync.tombstoneRowCount} satır iptal işaretlendi.{' '}
-          {lastSync.sourceLineCount} fatura satırı ve {lastSync.sourceDocumentCount} kaynak belge
-          snapshot’a alındı.
+          {lastSync.sourceLineCount} kaynak işlem satırı ve {lastSync.sourceDocumentCount} kaynak
+          belge snapshot’a alındı.
         </div>
       ) : null}
 
@@ -855,17 +870,17 @@ export const BudgetWorkspace: React.FC = () => {
             <SummaryCard
               label="Gerçekleşen maliyet"
               value={amountLabel(summary.actualCost, summary.currency)}
-              detail="Fatura satırları + fatura dışı maliyet"
+              detail="Kaynak işlem satırları + henüz bağlanmamış kayıtlar"
             />
             <SummaryCard
-              label="Fatura satırı maliyeti"
+              label="Kaynak satırı maliyeti"
               value={amountLabel(summary.sourceLineActual, summary.currency)}
               detail={`${summary.sourceLineCount} satır · ${summary.sourceDocumentCount} belge`}
             />
             <SummaryCard
-              label="Fatura dışı maliyet"
-              value={amountLabel(summary.nonInvoiceActual, summary.currency)}
-              detail="Masraf, stok ve diğer kaynaklar"
+              label="Kaynak satırı bekleyen"
+              value={amountLabel(summary.unlinkedAccountingActual, summary.currency)}
+              detail="Masraf, sarf, amortisman ve diğer adaptörler"
             />
             <SummaryCard
               label="Muhasebe kontrol toplamı"
@@ -906,12 +921,13 @@ export const BudgetWorkspace: React.FC = () => {
                   Gerçekleşen maliyet · kaynak satırları
                 </h2>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Fatura varsa ana kayıt ürün/hizmet satırıdır. Net tutar maliyet esası; KDV ve
+                  Ana kayıt muhasebe fişini oluşturan operasyonel satırdır: fatura, sarf, masraf,
+                  amortisman veya ilgili diğer kaynak. Faturada net tutar maliyet esası; KDV ve
                   brüt ödeme tutarı ayrı alanlardır.
                 </p>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Çift tıklayarak faturanın bütün satırlarını, muhasebe dağılımını ve mutabakat
-                  farkını birlikte açabilirsiniz.
+                  Çift tıklayarak kaynak belgenin bütün satırlarını, muhasebe dağılımını ve
+                  mutabakat farkını birlikte açabilirsiniz.
                 </p>
               </div>
             </div>
@@ -954,7 +970,7 @@ export const BudgetWorkspace: React.FC = () => {
               />
             ) : (
               <div className="rounded-lg border border-dashed border-border-subtle p-10 text-center text-sm text-text-secondary">
-                Seçilen tarih aralığında fatura satırı veya diğer gerçekleşen maliyet kaydı
+                Seçilen tarih aralığında kaynak işlem satırı veya diğer gerçekleşen maliyet kaydı
                 bulunamadı. Bu sonuç sıfır maliyet anlamına gelmez; son başarılı senkronu kontrol
                 edin.
               </div>
@@ -970,7 +986,7 @@ export const BudgetWorkspace: React.FC = () => {
             title={
               detailRow?.origin === 'SOURCE_LINE'
                 ? 'Kaynak belge ve maliyet satırları'
-                : 'Diğer muhasebe gerçekleşeni'
+                : 'Kaynak satırı henüz bağlanmamış gerçekleşen'
             }
             subtitle={detailRow?.documentNo ? `Belge: ${detailRow.documentNo}` : undefined}
             size="xl"
@@ -1025,7 +1041,7 @@ export const BudgetWorkspace: React.FC = () => {
                             },
                             {
                               key: 'sourceLineTotal',
-                              label: 'Fatura satırları net toplamı',
+                              label: 'Kaynak satırları maliyet toplamı',
                               value: amountLabel(
                                 sourceDocumentDetail.sourceLineTotal,
                                 sourceDocumentDetail.currency,
@@ -1050,17 +1066,19 @@ export const BudgetWorkspace: React.FC = () => {
                           ]}
                         />
 
-                        <section aria-label="Fatura satırları">
-                          <h3 className="text-sm font-semibold text-text-primary">Fatura satırları</h3>
+                        <section aria-label="Kaynak işlem satırları">
+                          <h3 className="text-sm font-semibold text-text-primary">
+                            Kaynak işlem satırları
+                          </h3>
                           <div className="mt-2 overflow-x-auto rounded-lg border border-border-subtle">
                             <table className="min-w-full text-left text-xs">
                               <thead className="bg-surface-muted text-text-secondary">
                                 <tr>
                                   <th className="px-3 py-2">#</th>
-                                  <th className="px-3 py-2">Ürün / hizmet</th>
+                                  <th className="px-3 py-2">Kaynak kalemi</th>
                                   <th className="px-3 py-2">Miktar</th>
                                   <th className="px-3 py-2">Net</th>
-                                  <th className="px-3 py-2">KDV</th>
+                                  <th className="px-3 py-2">Vergi / KDV</th>
                                   <th className="px-3 py-2">Brüt</th>
                                   <th className="px-3 py-2">Eşleşme</th>
                                 </tr>

@@ -179,7 +179,7 @@ const summary = {
   reconciliationDifference: 0,
   lastSyncAt: '2026-07-28T03:00:00+03:00',
   sourceLineActual: 900,
-  nonInvoiceActual: 0,
+  unlinkedAccountingActual: 0,
   actualCost: 900,
   sourceDocumentCount: 1,
   sourceLineCount: 2,
@@ -457,7 +457,7 @@ describe('BudgetWorkspace project actuals', () => {
       name: 'Kaynak belge ve maliyet satırları',
     });
     expect(within(drawer).getByText('Belge özeti')).toBeInTheDocument();
-    expect(within(drawer).getByText('Fatura satırları')).toBeInTheDocument();
+    expect(within(drawer).getByText('Kaynak işlem satırları')).toBeInTheDocument();
     expect(within(drawer).getByText('Muhasebe dağılımı')).toBeInTheDocument();
     expect(within(drawer).getByText('Elektrik giderleri')).toBeInTheDocument();
     expect(within(drawer).getByText('Temizlik giderleri')).toBeInTheDocument();

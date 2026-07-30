@@ -66,7 +66,7 @@ export type ProjectActualSummary = {
   reconciliationDifference: number | null;
   lastSyncAt: string | null;
   sourceLineActual: number;
-  nonInvoiceActual: number;
+  unlinkedAccountingActual: number;
   actualCost: number;
   sourceDocumentCount: number;
   sourceLineCount: number;
@@ -101,7 +101,13 @@ export type ProjectActualSourceLineRow = {
     | 'PURCHASE_RETURN'
     | 'SALES_INVOICE'
     | 'SALES_RETURN'
-    | 'OTHER_INVOICE';
+    | 'OTHER_INVOICE'
+    | 'EXPENSE'
+    | 'STOCK_CONSUMPTION'
+    | 'DEPRECIATION'
+    | 'PAYROLL'
+    | 'TRANSFER'
+    | 'OTHER_SOURCE';
   documentNo: string | null;
   externalDocumentId: number;
   externalLineId: number;
