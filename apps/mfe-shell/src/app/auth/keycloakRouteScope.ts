@@ -13,6 +13,13 @@ export const resolveKeycloakRouteScope = (redirectUri: string): string | undefin
     if (path === '/ethic' || path.startsWith('/ethic/')) {
       return ETHICS_MANAGER_ROUTE_SCOPE;
     }
+    // Kabuk-içi Etik Speak rotası (platform-web #1083). Sahip ekranında ilk
+    // canlı belirti "Oturum doğrulanamadı" idi: rota kabuğa taşındı ama bu
+    // çözücü yalnız kenar yolunu tanıyordu, token etik sözleşmesini
+    // (aud=ethics-manager + ethics:case:manage + realm rolü) hiç almıyordu.
+    if (path === '/admin/ethics' || path.startsWith('/admin/ethics/')) {
+      return ETHICS_MANAGER_ROUTE_SCOPE;
+    }
     if (
       path === '/admin/reports/budget-control' ||
       path.startsWith('/admin/reports/budget-control/') ||
