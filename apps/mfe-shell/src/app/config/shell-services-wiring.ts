@@ -42,6 +42,7 @@ import { isEndpointAdminRemoteEnabled,
 } from '../shell-navigation';
 import { scheduleOnIdle } from '../../lib/idle-scheduler';
 import { ensureRemoteShellServicesConfigured } from './ensure-remote-shell-services';
+import { resolveEthicRemoteEntry } from '../createEthicAppOnDemand';
 
 /**
  * Build-time constant injected by Vite's `define` config (see
@@ -73,6 +74,7 @@ declare const __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: boolean;
  * (no regression).
  */
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
+declare const __MFE_ETHIC_ON_DEMAND__: boolean;
 
 /* ---- Notification dispatcher ---- */
 
@@ -688,18 +690,36 @@ export const wireRemoteShellServices = () => {
   // at runtime via env flag (legacy contract preserved).
   // Faz 35 (#885 UX): Etik Speak kabuk içinde mount edilince (platform-web
   // #1083) remote'un kendi shared-http örneğine token çözücüsü kaydedilmesi
-  // gerekiyor — kabuğun kaydı oraya ulaşmaz. Bu satır olmadan vaka listesi
-  // isteği Authorization başlıksız çıkıyor ve ethics-service 401 döndürüyordu.
-  // Aynı `isEthicRemoteEnabled()` kapısı arkasında: remote kapalıysa modül
-  // yüklenmez.
+  // gerekiyor — kabuğun kaydı oraya ulaşmaz. Bu olmadan vaka listesi isteği
+  // Authorization başlıksız çıkıyor ve ethics-service 401 döndürüyordu.
+  //
+  // İki dal, endpoint-admin'in 2026-05-08'de öğrettiği sebeple: on-demand
+  // bayrağı AÇIKKEN `mfe_ethic` federation manifest'inden çıkarılır ve
+  // Rolldown statik `import('mfe_ethic/shell-services')` specifier'ını
+  // ÇÖZEMEZ — çalışma-zamanı kapısı build'i kurtarmaz. Derleme-zamanı sabiti
+  // dalı komple eleyince specifier bundle'a hiç girmez; o modda kayıt, admin
+  // remote'larıyla aynı host-MF yolundan (`ensureRemoteShellServicesConfigured`)
+  // yapılır.
   if (isEthicRemoteEnabled()) {
-    import('mfe_ethic/shell-services')
-      .then((module) => module.configureShellServices(sharedServices))
-      .catch((error) => {
+    if (__MFE_ETHIC_ON_DEMAND__) {
+      ensureRemoteShellServicesConfigured(
+        'mfe_ethic',
+        resolveEthicRemoteEntry(),
+        sharedServices,
+      ).catch((error) => {
         if (process.env.NODE_ENV !== 'production') {
-          console.debug('[shell] mfe_ethic shell-services konfigurasyonu atlandı', error);
+          console.debug('[shell] mfe_ethic shell-services (on-demand) atlandı', error);
         }
       });
+    } else {
+      import('mfe_ethic/shell-services')
+        .then((module) => module.configureShellServices(sharedServices))
+        .catch((error) => {
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('[shell] mfe_ethic shell-services konfigurasyonu atlandı', error);
+          }
+        });
+    }
   }
   if (__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__ && isEndpointAdminRemoteEnabled()) {
     import('mfe_endpoint_admin/shell-services')
