@@ -46,24 +46,17 @@ declare const __MFE_ETHIC_ON_DEMAND__: boolean;
 declare const __MFE_SCHEMA_EXPLORER_ON_DEMAND__: boolean;
 
 /**
- * PERF-INIT-V2 PR-B5b2-prep-2 (Codex thread `019e2358` AGREE Option B):
- * single build-time flag gates the 4 admin remotes
- * (users / audit / access / reporting) on-demand path.  When TRUE:
+ * `__MFE_ADMIN_REMOTES_ON_DEMAND__` is deliberately NOT declared here any more.
  *
- *   1. `vite.config.ts buildRemotes()` omits the 4 admin manifest
- *      entries.
- *   2. `shell-services-wiring.ts` static-import 4-remote contract
- *      block is DCE'd; idle batch uses
- *      `ensureRemoteShellServicesConfigured` helper instead.
- *   3. The static `import('mfe_<admin>/...App')` specifiers below are
- *      DCE'd and the route renders the on-demand wrappers instead.
- *
- * Same pattern as `__MFE_SUGGESTIONS_ON_DEMAND__` (B5b1) /
- * `__MFE_ETHIC_ON_DEMAND__` (B5b1.5) / `__MFE_SCHEMA_EXPLORER_ON_DEMAND__`
- * (B5b2a) — single `VITE_MFE_ON_DEMAND_BOOTSTRAP` master toggle
- * drives all via `readSuggestionsOnDemandBuildFlag()` reader.
+ * It still exists and still does its build-time job elsewhere — whether
+ * `vite.config.ts buildRemotes()` declares the four admin remotes in the
+ * federation manifest, and which prewarm branch `shell-services-wiring.ts`
+ * takes. What it must never do again is decide, in this file, whether the route
+ * awaits `ensureRemoteShellServicesConfigured()` before mounting the remote:
+ * that is a correctness invariant, not a loading strategy. Removing the
+ * declaration is what makes a reintroduced branch a compile error rather than a
+ * silent regression.
  */
-declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
 export const SuggestionsApp: React.ComponentType = __MFE_SUGGESTIONS_ON_DEMAND__
   ? SuggestionsAppOnDemand
@@ -73,21 +66,54 @@ export const EthicApp: React.ComponentType = __MFE_ETHIC_ON_DEMAND__
   ? EthicAppOnDemand
   : createLazyRemoteModule('Ethic', () => import('mfe_ethic/EthicApp'));
 
-export const AccessModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
-  ? AccessAppOnDemand
-  : createLazyRemoteModule('Access', () => import('mfe_access/AccessApp'));
+/**
+ * The four admin remotes take the wrapper path in EVERY build, regardless of
+ * `__MFE_ADMIN_REMOTES_ON_DEMAND__`.
+ *
+ * These used to branch on that define, and the eager branch handed
+ * `createLazyRemoteModule` a bare dynamic import of the remote's App expose
+ * (the specifier is deliberately not spelled out here — `on-demand-federation-guard.mjs`
+ * S3 greps this file for it, and prose would trip the guard). That
+ * mounts the remote app with no ordering guarantee against the work that
+ * configures it: `wireRemoteShellServices()` is idle-deferred AND gated on
+ * `authState.token` via `shouldWireRemoteShellServices()`. On a cold session the
+ * token is not in the store at route render, so the configure is not late — it
+ * is unscheduled. `getShellServices()` then throws inside the remote and the
+ * surface renders an error having issued no request at all.
+ *
+ * Measured on ai.acik.com 2026-07-30 with the eager build: 2 of 3 cold loads of
+ * `/admin/users` rendered `[mfe-users] Shell servisleri konfigüre edilmedi.`
+ * with zero `/api/v1/users` traffic — corroborated server-side, where prod
+ * user-service logged no such request across 25 minutes while the admin was
+ * retrying. Grants were never missing; the request was never made.
+ *
+ * The wrappers await `ensureRemoteShellServicesConfigured()` before they
+ * `loadRemote` the App expose, and that helper reads no auth state, so the
+ * ordering holds whether or not a token exists yet. Injecting before auth is
+ * safe because the shared facade hands over live store closures
+ * (`getToken: () => store.getState().auth.token ?? null`).
+ *
+ * `__MFE_ADMIN_REMOTES_ON_DEMAND__` keeps its build-time job — whether
+ * `buildRemotes()` declares these four in the federation manifest — but it no
+ * longer decides whether configure-before-mount happens. In a manifest build
+ * the wrapper's `registerRemotes` call is a name-based no-op (see
+ * `ensure-remote-shell-services.ts`), so the static entry stays authoritative.
+ *
+ * Enforced by `createUsersAppOnDemand.test.tsx` (module-factory call order via
+ * the real `UsersModule` export) and by `scripts/ci/on-demand-federation-guard.mjs`
+ * S3 (no eager admin App import specifier may return to this file).
+ *
+ * Cross-AI: Codex thread 019fb1f7 D1 — collapse rather than wrapping both
+ * branches, because two paths that must stay in sync is the condition that
+ * produced this bug.
+ */
+export const AccessModule: React.ComponentType = AccessAppOnDemand;
 
-export const AuditModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
-  ? AuditAppOnDemand
-  : createLazyRemoteModule('Audit', () => import('mfe_audit/AuditApp'));
+export const AuditModule: React.ComponentType = AuditAppOnDemand;
 
-export const UsersModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
-  ? UsersAppOnDemand
-  : createLazyRemoteModule('Users', () => import('mfe_users/UsersApp'));
+export const UsersModule: React.ComponentType = UsersAppOnDemand;
 
-export const ReportingModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
-  ? ReportingAppOnDemand
-  : createLazyRemoteModule('Reporting', () => import('mfe_reporting/ReportingApp'));
+export const ReportingModule: React.ComponentType = ReportingAppOnDemand;
 
 export const SchemaExplorerModule: React.ComponentType = __MFE_SCHEMA_EXPLORER_ON_DEMAND__
   ? SchemaExplorerAppOnDemand

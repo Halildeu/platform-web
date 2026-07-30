@@ -4,31 +4,31 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Holds the image matrix to the configure-before-mount invariant.
+ * Keeps the image matrix consistent about federation bootstrap across variants.
  *
- * For the four admin remotes (`users`, `access`, `audit`, `reporting`) the
- * `mfe_on_demand_bootstrap` build arg does not choose a loading strategy — it
- * chooses whether the shell guarantees that a remote's `configureShellServices`
- * has run before its app is mounted.
+ * Read the scope carefully, because it changed. When this test was written the
+ * `mfe_on_demand_bootstrap` build arg still decided whether the four admin
+ * remotes got a configure-before-mount guarantee at all, so this file was a
+ * correctness guard. It is **no longer that**. `lazy-routes.ts` now binds those
+ * routes to their on-demand wrappers unconditionally, so the ordering holds in
+ * every build regardless of this flag. Correctness is enforced by
+ * `createUsersAppOnDemand.test.tsx` (module-factory call order) and by
+ * `scripts/ci/on-demand-federation-guard.mjs` S3 (no eager admin App import may
+ * return to the route file).
  *
- * The eager branch in `lazy-routes.ts` mounts the remote app directly, while the
- * work that configures it (`wireRemoteShellServices`) is idle-deferred *and*
- * gated on `authState.token`. On a cold session that configure is not late, it
- * is unscheduled, so `getShellServices()` throws in production and the surface
- * renders an error having issued no request. The on-demand branch awaits
- * `ensureRemoteShellServicesConfigured()` before `loadRemote(...)` and consults
- * no auth state, which is what closes the window.
+ * What remains here is worth keeping but is narrower: the flag still controls
+ * whether `buildRemotes()` declares those remotes in the federation manifest,
+ * i.e. whether host bootstrap pays for their remote entries up front. Shipping
+ * one variant eager and another on-demand means prod and testai no longer share
+ * a bootstrap shape, and a defect measured on one stops being evidence about the
+ * other — which is exactly how the original bug survived: it was reproducible on
+ * prod and invisible on testai.
  *
- * Measured on ai.acik.com 2026-07-30 while the prod row was still `'false'`:
- * 2 of 3 cold loads of `/admin/users` showed the literal
- * `[mfe-users] Shell servisleri konfigüre edilmedi.` and produced zero
- * `/api/v1/users` traffic. So a regression here is customer-visible, not a
- * latency regression.
- *
- * Unifying the eager path onto the same invariant is the durable fix and is
- * tracked separately. Until that lands, this test is what stops the eager
- * ordering from being shipped again — by a revert, by a merge, or by a new
- * variant row that simply forgets the key.
+ * Historical note for whoever reads this after a revert: measured on
+ * ai.acik.com 2026-07-30 with the eager route binding, 2 of 3 cold loads of
+ * `/admin/users` rendered `[mfe-users] Shell servisleri konfigüre edilmedi.` and
+ * produced zero `/api/v1/users` traffic. Do not treat this file as the thing
+ * that prevents that; it is not.
  */
 
 const WORKFLOW_PATH = path.resolve(
