@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,20 +16,96 @@ const apiMocks = vi.hoisted(() => ({
 
 const gridMocks = vi.hoisted(() => ({
   buildColDefs: vi.fn((meta: unknown[]) => meta),
+  buildProcessCellCallback: vi.fn(() => () => ''),
+  latestEntityGridProps: null as Record<string, unknown> | null,
 }));
 const budgetLogin = vi.fn(() => Promise.resolve());
 
 vi.mock('@mfe/design-system/advanced/data-grid', () => ({
   buildColDefs: gridMocks.buildColDefs,
-  GridShell: ({ rowData }: { rowData: Array<Record<string, unknown>> }) => (
-    <div data-testid="actuals-grid">
-      {rowData.map((row) => (
-        <p key={String(row.id)}>
-          {String(row.accountCode)} · {String(row.documentType)} · {String(row.documentNo)}
-        </p>
-      ))}
-    </div>
+  buildProcessCellCallback: gridMocks.buildProcessCellCallback,
+}));
+
+vi.mock('../../grid', () => ({
+  EntityGridTemplate: ({
+    rowData,
+    exportLeadingExtras,
+    onRowDoubleClick,
+    ...props
+  }: {
+    rowData: Array<Record<string, unknown>>;
+    exportLeadingExtras?: React.ReactNode;
+    onRowDoubleClick?: (row: Record<string, unknown>) => void;
+    [key: string]: unknown;
+  }) => {
+    gridMocks.latestEntityGridProps = {
+      ...props,
+      rowData,
+      exportLeadingExtras,
+      onRowDoubleClick,
+    };
+    return (
+      <div data-testid="actuals-grid">
+        {exportLeadingExtras}
+        {rowData.map((row) => (
+          <button
+            key={String(row.id)}
+            type="button"
+            aria-label={`Kaynak izini aç ${String(row.id)}`}
+            onDoubleClick={() => onRowDoubleClick?.(row)}
+          >
+            {String(row.accountCode)} · {String(row.documentType)} · {String(row.documentNo)}
+          </button>
+        ))}
+      </div>
+    );
+  },
+}));
+
+vi.mock('@mfe/design-system', () => ({
+  Descriptions: ({
+    title,
+    description,
+    items,
+  }: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    items: Array<{ key: string; label: React.ReactNode; value?: React.ReactNode }>;
+  }) => (
+    <section>
+      {title ? <h3>{title}</h3> : null}
+      {description ? <p>{description}</p> : null}
+      <dl>
+        {items.map((item) => (
+          <React.Fragment key={item.key}>
+            <dt>{item.label}</dt>
+            <dd>{item.value ?? '—'}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+    </section>
   ),
+  DetailDrawer: ({
+    open,
+    title,
+    subtitle,
+    children,
+    footer,
+  }: {
+    open: boolean;
+    title: React.ReactNode;
+    subtitle?: React.ReactNode;
+    children?: React.ReactNode;
+    footer?: React.ReactNode;
+  }) =>
+    open ? (
+      <aside role="dialog" aria-label={typeof title === 'string' ? title : undefined}>
+        <h2>{title}</h2>
+        {subtitle ? <p>{subtitle}</p> : null}
+        {children}
+        {footer}
+      </aside>
+    ) : null,
 }));
 
 vi.mock('@mfe/design-system/advanced/data-grid/setup', () => ({}));
@@ -159,6 +235,7 @@ const chooseIdc1 = async () => {
 describe('BudgetWorkspace project actuals', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    gridMocks.latestEntityGridProps = null;
     (
       window as typeof window & {
         __startKeycloakLogin?: (options: { redirectUri: string }) => Promise<void>;
@@ -209,12 +286,7 @@ describe('BudgetWorkspace project actuals', () => {
     const companySelect = await screen.findByLabelText('Şirket adı');
     expect(
       Array.from(companySelect.querySelectorAll('option')).map((option) => option.textContent),
-    ).toEqual([
-      'Şirket seçin',
-      'Açık — Açık Holding A.Ş.',
-      'İnci — İnci A.Ş.',
-      'Zulu — Zulu A.Ş.',
-    ]);
+    ).toEqual(['Şirket seçin', 'Açık — Açık Holding A.Ş.', 'İnci — İnci A.Ş.', 'Zulu — Zulu A.Ş.']);
 
     fireEvent.change(companySelect, { target: { value: '1' } });
     const projectSelect = screen.getByLabelText('Proje');
@@ -241,6 +313,44 @@ describe('BudgetWorkspace project actuals', () => {
     expect(apiMocks.findProjectBinding).toHaveBeenCalledWith(35, 44200);
     expect(apiMocks.syncProjectActuals).not.toHaveBeenCalled();
     expect(apiMocks.selectReportingCompany).toHaveBeenCalledWith('35');
+  });
+
+  it('uses the shared reporting grid template with a stable saved-view contract', async () => {
+    renderWorkspace();
+    await chooseIdc1();
+    fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
+    await screen.findByTestId('actuals-grid');
+
+    expect(gridMocks.latestEntityGridProps).toMatchObject({
+      gridId: 'reports.budget-project-actuals',
+      gridSchemaVersion: 1,
+      dataSourceMode: 'client',
+      total: 1,
+      pageSize: 50,
+      access: 'readonly',
+    });
+    expect(gridMocks.latestEntityGridProps?.exportConfig).toMatchObject({
+      fileBaseName: 'butce-gerceklesen-IDC1-2026-01-01-2026-07-28',
+      sheetName: 'Gerçekleşen Maliyet',
+      csvColumnSeparator: ';',
+      csvBom: true,
+    });
+    expect(screen.getByRole('button', { name: 'ERP’den yenile' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Canlı Muhasebe Detayını aç' })).toBeInTheDocument();
+  });
+
+  it('opens the snapshot source trace from a row double click', async () => {
+    renderWorkspace();
+    await chooseIdc1();
+    fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
+    fireEvent.doubleClick(await screen.findByRole('button', { name: 'Kaynak izini aç row-1' }));
+
+    const drawer = await screen.findByRole('dialog', { name: 'Gerçekleşen maliyet satırı' });
+    expect(within(drawer).getByText('Kaynak belge izi')).toBeInTheDocument();
+    expect(within(drawer).getByText('Fatura')).toBeInTheDocument();
+    expect(within(drawer).getByText('Satır eşleşti')).toBeInTheDocument();
+    expect(within(drawer).getByText('Belge: INV-2026-1')).toBeInTheDocument();
+    expect(within(drawer).getByText('Snapshot zamanı')).toBeInTheDocument();
   });
 
   it('discloses when the bounded grid does not contain every snapshot row', async () => {
