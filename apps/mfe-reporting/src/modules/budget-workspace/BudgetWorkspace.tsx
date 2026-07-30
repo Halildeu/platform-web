@@ -733,7 +733,6 @@ export const BudgetWorkspace: React.FC = () => {
                 total={rows.length}
                 pageSize={50}
                 dataSourceMode="client"
-                access="readonly"
                 onRowDoubleClick={setDetailRow}
                 exportLeadingExtras={gridActions}
                 exportConfig={exportConfig}
