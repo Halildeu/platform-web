@@ -212,6 +212,34 @@ const STATUS_LABELS: BadgeColumnMeta['labelMap'] = {
 const statusLabel = (value: string | null): string =>
   value ? (STATUS_LABELS?.[value] ?? value) : '—';
 
+const LOCALIZED_QUICK_FILTER_FIELDS = new Set([
+  'origin',
+  'documentKind',
+  'costStatus',
+  'lineMatchStatus',
+  'documentReconciliationStatus',
+]);
+
+const withLocalizedBadgeQuickFilter = <TRow,>(
+  columnDefs: ColDef<TRow>[],
+): ColDef<TRow>[] =>
+  columnDefs.map<ColDef<TRow>>((column) => {
+    if (!column.field || !LOCALIZED_QUICK_FILTER_FIELDS.has(column.field)) {
+      return column;
+    }
+    return {
+      ...column,
+      getQuickFilterText: (params) => {
+        if (params.value === null || params.value === undefined) {
+          return '';
+        }
+        const raw = String(params.value);
+        const label = statusLabel(raw);
+        return label === raw ? raw : `${raw} ${label}`;
+      },
+    };
+  });
+
 const sourceCostStatus = (documentKind: ProjectActualSourceLineRow['documentKind']): string => {
   switch (documentKind) {
     case 'PURCHASE_INVOICE':
@@ -641,8 +669,9 @@ export const BudgetWorkspace: React.FC = () => {
       },
       { field: 'accountCode', headerNameKey: 'Hesap kodu', columnType: 'text', width: 135 },
     ];
+    const columnDefs = buildColDefs(meta, identityTranslate) as ColDef<CostReviewRow>[];
     return {
-      columnDefs: buildColDefs(meta, identityTranslate) as ColDef<CostReviewRow>[],
+      columnDefs: withLocalizedBadgeQuickFilter(columnDefs),
       processCellCallback: buildProcessCellCallback(meta, identityTranslate),
     };
   }, [summary?.currency]);

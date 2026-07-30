@@ -443,6 +443,29 @@ describe('BudgetWorkspace project actuals', () => {
     expect(screen.getByRole('button', { name: 'Canlı Muhasebe Detayını aç' })).toBeInTheDocument();
   });
 
+  it('includes localized badge labels in the shared grid quick filter text', async () => {
+    renderWorkspace();
+    await chooseIdc1();
+    fireEvent.click(screen.getByRole('button', { name: 'Gerçekleşeni göster' }));
+    await screen.findByTestId('actuals-grid');
+
+    const columnDefs = gridMocks.latestEntityGridProps?.columnDefs as
+      | Array<{
+          field?: string;
+          getQuickFilterText?: (params: { value: unknown }) => string;
+        }>
+      | undefined;
+    const documentKind = columnDefs?.find((column) => column.field === 'documentKind');
+    const costStatus = columnDefs?.find((column) => column.field === 'costStatus');
+
+    expect(documentKind?.getQuickFilterText?.({ value: 'PURCHASE_INVOICE' })).toBe(
+      'PURCHASE_INVOICE Alış faturası',
+    );
+    expect(costStatus?.getQuickFilterText?.({ value: 'INCLUDE_COST' })).toBe(
+      'INCLUDE_COST Maliyete dahil',
+    );
+  });
+
   it('opens the snapshot source trace from a row double click', async () => {
     renderWorkspace();
     await chooseIdc1();
