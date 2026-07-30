@@ -37,7 +37,9 @@ import {
 } from './impersonation-orchestration';
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
-import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
+import { isEndpointAdminRemoteEnabled,
+  isEthicRemoteEnabled,
+} from '../shell-navigation';
 import { scheduleOnIdle } from '../../lib/idle-scheduler';
 import { ensureRemoteShellServicesConfigured } from './ensure-remote-shell-services';
 
@@ -684,6 +686,21 @@ export const wireRemoteShellServices = () => {
   // Runtime `isEndpointAdminRemoteEnabled()` stays as the second
   // gate so a build-time-enabled bundle can still hide the remote
   // at runtime via env flag (legacy contract preserved).
+  // Faz 35 (#885 UX): Etik Speak kabuk içinde mount edilince (platform-web
+  // #1083) remote'un kendi shared-http örneğine token çözücüsü kaydedilmesi
+  // gerekiyor — kabuğun kaydı oraya ulaşmaz. Bu satır olmadan vaka listesi
+  // isteği Authorization başlıksız çıkıyor ve ethics-service 401 döndürüyordu.
+  // Aynı `isEthicRemoteEnabled()` kapısı arkasında: remote kapalıysa modül
+  // yüklenmez.
+  if (isEthicRemoteEnabled()) {
+    import('mfe_ethic/shell-services')
+      .then((module) => module.configureShellServices(sharedServices))
+      .catch((error) => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[shell] mfe_ethic shell-services konfigurasyonu atlandı', error);
+        }
+      });
+  }
   if (__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__ && isEndpointAdminRemoteEnabled()) {
     import('mfe_endpoint_admin/shell-services')
       .then((module) => module.configureShellServices(sharedServices))

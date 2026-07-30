@@ -77,6 +77,9 @@ export default defineConfig(({ mode }) => ({
             remotes: {},
             exposes: {
               './EthicApp': './src/App.tsx',
+              // Kabuk bu modülü yükleyip canlı token getter'ını enjekte eder.
+              // Olmadığında remote kendi shared-http örneğiyle token'sız kalır.
+              './shell-services': './src/app/services/shell-services.ts',
             },
             shared: {
               ...sharedCore,
