@@ -37,6 +37,7 @@ import {
   isMeetingRemoteEnabled,
 } from '../shell-navigation';
 import { navigateIfStandaloneApp } from '../standalone-apps';
+import { resolveKeycloakRouteScope } from '../auth/keycloakRouteScope';
 import { Badge } from '@mfe/design-system/primitives';
 import {
   ATS_PRODUCT_HUB_ENTRY,
@@ -283,6 +284,15 @@ export const Sidebar: React.FC = () => {
         // Kenarda yayınlanan ürünler (ör. Etik Speak) kabuk route'u değildir;
         // SPA gezinmesi onları açamaz — tam sayfa gerekir.
         if (navigateIfStandaloneApp(item.href)) return;
+        // Rota-kapsamlı ürünler (ör. /admin/ethics): kapsam yalnız sayfa
+        // yüklenişinde (AuthBootstrapper) istenir; SPA geçişi eski token'la
+        // gider ve ürün API'si 401 döner — sahibin ekranında "Oturum
+        // doğrulanamadı" tam buydu. Tam sayfa geçiş aynı kabuğa döner ama
+        // sessiz SSO kapsamlı token'ı basar; login ekranı görünmez.
+        if (resolveKeycloakRouteScope(item.href)) {
+          window.location.assign(item.href);
+          return;
+        }
         if (item.href !== location.pathname) {
           navigate(item.href);
         }

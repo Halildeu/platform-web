@@ -33,4 +33,18 @@ describe('resolveKeycloakRouteScope', () => {
     );
     expect(resolveKeycloakRouteScope('https://testai.acik.com/ethical-decoy')).toBeUndefined();
   });
+
+  it('grants the ethics manager scope on the in-shell /admin/ethics route', () => {
+    expect(resolveKeycloakRouteScope('https://testai.acik.com/admin/ethics')).toBe(
+      'openid ethics-manager-audience ethics:case:manage',
+    );
+    expect(resolveKeycloakRouteScope('https://testai.acik.com/admin/ethics/cases')).toBe(
+      'openid ethics-manager-audience ethics:case:manage',
+    );
+  });
+
+  it('does not leak the ethics scope onto neighbouring admin routes', () => {
+    expect(resolveKeycloakRouteScope('https://testai.acik.com/admin/ethicsish')).toBeUndefined();
+    expect(resolveKeycloakRouteScope('https://testai.acik.com/admin')).toBeUndefined();
+  });
 });
