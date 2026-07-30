@@ -56,11 +56,48 @@ jobs:
             # → permissions: [] → header'da modüller görünmüyor "henüz hiçbir rol atanmamış").
             # Doğru: https://ai.acik.com/api → resolve = /api/v1/authz/me → backend OK.
             gateway: https://ai.acik.com/api
-            # PERF-INIT-V2 B5b1: prod stays on default eager bootstrap (no
-            # canary risk on production); flip to "true" only when B5b1 is
-            # ready for prod rollout (post-canary measurement + B5b2 admin
-            # ramp closure).
-            mfe_on_demand_bootstrap: 'false'
+            # PERF-INIT-V2 B5b1 — prod joins the on-demand path (2026-07-30).
+            #
+            # The previous value was 'false' with the note "no canary risk on
+            # production". Live measurement inverted that premise: eager is the
+            # mode that breaks. On ai.acik.com `/admin/users`, 2 of 3 cold loads
+            # rendered `[mfe-users] Shell servisleri konfigüre edilmedi.` and
+            # zero `/api/v1/users` requests reached the backend — confirmed from
+            # the other side too: prod user-service logged no such request in 25
+            # minutes while the admin was retrying. The one clean load rendered
+            # the full grid (pagination total 1.204, matching the prod DB count),
+            # so data and grants were never the problem.
+            #
+            # Mechanism, from source rather than inference. In the eager branch
+            # `lazy-routes.ts` mounts `mfe_users/UsersApp` with no ordering
+            # guarantee against `wireRemoteShellServices()`, which is itself
+            # idle-deferred AND gated on `authState.token`
+            # (`shouldWireRemoteShellServices()`). With a cold session the token
+            # is not in the store at route render, so the configure work is not
+            # merely late — it is not scheduled yet. `getShellServices()` then
+            # throws in production and the grid latches its `network-error`
+            # state without ever issuing a request. The on-demand branch is not
+            # subject to that gate: `createUsersAppOnDemand` awaits
+            # `ensureRemoteShellServicesConfigured()` (load remote + call
+            # `configureShellServices`) BEFORE `loadRemote('.../UsersApp')`, and
+            # that helper reads no auth state at all. Injecting before auth is
+            # safe because the shared facade hands over live store closures
+            # (`getToken: () => store.getState().auth.token ?? null`), so the
+            # already-configured remote sees the token once it lands.
+            #
+            # So this flag is not a perf toggle here — for these four remotes it
+            # selects whether a correctness invariant (configure-before-mount)
+            # is enforced. Unifying the eager path onto the same invariant is
+            # the durable fix and is tracked separately; until then no variant
+            # should ship the eager ordering. `ci-image-matrix.contract.test.ts`
+            # holds that line.
+            #
+            # Cross-AI: Codex thread 019fb185 — REVISE then PARTIAL. It corrected
+            # two of my claims (eager does not "initialize all remotes at
+            # startup"; the flip is not symptom-avoidance because on-demand IS
+            # the configure-before-mount implementation) and confirmed the
+            # auth-gate independence above by reading the source itself.
+            mfe_on_demand_bootstrap: 'true'
             # Faz 22.5 endpoint-admin GA (owner 2026-06-10 "ga açalım"): include
             # the endpoint-admin MFE in the prod eager build (buildRemotes +
             # define + env-config). Backplane (gitops#1436) + modal (#1438) live.
