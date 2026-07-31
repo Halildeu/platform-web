@@ -331,6 +331,91 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText('Başvuru bulunamadı')).toBeVisible();
   });
 
+  it('drills from a summary card into exactly that set of applications', async () => {
+    // Sahip sordu: "bu kisimlar tiklanabilir olsa cok iyi olur". Kart bir sayi
+    // gosteriyorsa o sayinin arkasindaki kayitlara goturmeli — yoksa IK sayiyi
+    // gorup listeyi elle aramak zorunda kaliyor.
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [
+        { ...APPLICATION, publicRef: 'app_yenii000000000000000a', fullName: 'Yeni Aday' },
+        {
+          ...APPLICATION,
+          publicRef: 'app_aktif000000000000000b',
+          fullName: 'Aktif Aday',
+          status: 'UNDER_REVIEW',
+        },
+        {
+          ...APPLICATION,
+          publicRef: 'app_sonuc000000000000000c',
+          fullName: 'Sonuçlanan Aday',
+          status: 'HIRED',
+        },
+      ],
+      page: 0,
+      size: 50,
+      total: 3,
+    });
+    renderPage();
+    expect(await screen.findByText('Yeni Aday')).toBeVisible();
+
+    // "Aktif surec" ve "Sonuclanan" tek asama degil asama KUMESI: sayac ile
+    // tiklama sonucu ayni kumeden gelmeli.
+    const activeCard = screen.getByRole('button', { name: /İnsan eylemi devam ediyor/ });
+    expect(activeCard).toHaveAccessibleName(/^1 Aktif süreç/);
+    fireEvent.click(activeCard);
+    expect(activeCard).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Aktif Aday')).toBeVisible();
+    expect(screen.queryByText('Yeni Aday')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sonuçlanan Aday')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Kalıcı süreç sonucu/ }));
+    expect(screen.getByText('Sonuçlanan Aday')).toBeVisible();
+    expect(screen.queryByText('Aktif Aday')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Kalıcı aday kayıtları/ }));
+    expect(screen.getByText('Yeni Aday')).toBeVisible();
+    expect(screen.getByText('Aktif Aday')).toBeVisible();
+    expect(screen.getByText('Sonuçlanan Aday')).toBeVisible();
+  });
+
+  it('counts a summary card from the same set the card click will open', async () => {
+    // Sayac suzgecten GECMEMIS kumeden sayilirsa kart "2" gosterip tiklayinca
+    // 1 kayit acar. Sayi ile sonucun ayrisamamasi icin ikisi de ayni kumeden.
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [
+        {
+          ...APPLICATION,
+          publicRef: 'app_arama000000000000000d',
+          fullName: 'Aranan Aday',
+          status: 'UNDER_REVIEW',
+        },
+        {
+          ...APPLICATION,
+          publicRef: 'app_disar000000000000000e',
+          fullName: 'Dışarıda Kalan',
+          status: 'UNDER_REVIEW',
+        },
+      ],
+      page: 0,
+      size: 50,
+      total: 2,
+    });
+    renderPage();
+    await screen.findByText('Aranan Aday');
+    expect(screen.getByRole('button', { name: /İnsan eylemi devam ediyor/ })).toHaveAccessibleName(
+      /^2 Aktif süreç/,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Aday, e-posta veya beceri ara'), {
+      target: { value: 'Aranan' },
+    });
+
+    // Arama bir kaydi disarida biraktiginda kart 2 degil 1 demeli.
+    expect(screen.getByRole('button', { name: /İnsan eylemi devam ediyor/ })).toHaveAccessibleName(
+      /^1 Aktif süreç/,
+    );
+  });
+
   it('opens the application and performs a versioned human status transition', async () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));

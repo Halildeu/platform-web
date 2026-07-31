@@ -47,6 +47,26 @@ const STATUS_LABELS = Object.fromEntries(STAGES.map((stage) => [stage.id, stage.
   string
 >;
 
+// Ozet kartlari tek bir asamayi degil bir asama KUMESINI anlatir: "aktif surec"
+// = insan eylemi devam eden hatlar, "sonuclanan" = kalici sonuca ulasmis
+// hatlar. Kume tanimi burada TEK yerde durur; hem kart sayaci hem kart
+// tiklamasinin filtresi ayni sabitten beslenir, boylece sayi ile tiklama
+// sonucu ayrisamaz.
+const ACTIVE_STATUSES: ReadonlyArray<ApplicationStatus> = [
+  'UNDER_REVIEW',
+  'INTERVIEW_PENDING',
+  'OFFER_PENDING',
+  'OFFER_ACCEPTED',
+];
+
+const COMPLETED_STATUSES: ReadonlyArray<ApplicationStatus> = [
+  'HIRED',
+  'REJECTED',
+  'WITHDRAWN',
+  'OFFER_DECLINED',
+  'OFFER_WITHDRAWN',
+];
+
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
@@ -61,7 +81,14 @@ const initialsOf = (name: string) =>
     .join('');
 
 type WorkspaceTab = 'applications' | 'jobs';
-type StageFilter = 'ALL' | ApplicationStatus;
+type StageFilter = 'ALL' | 'ACTIVE' | 'COMPLETED' | ApplicationStatus;
+
+const matchesStage = (status: ApplicationStatus, stage: StageFilter) => {
+  if (stage === 'ALL') return true;
+  if (stage === 'ACTIVE') return ACTIVE_STATUSES.includes(status);
+  if (stage === 'COMPLETED') return COMPLETED_STATUSES.includes(status);
+  return status === stage;
+};
 
 const RecruiterWorkspacePage = () => {
   const permissions = usePermissions();
@@ -122,25 +149,23 @@ const RecruiterWorkspacePage = () => {
 
   const visibleApplications = useMemo(
     () =>
-      activeStage === 'ALL'
-        ? filteredApplications
-        : filteredApplications.filter((application) => application.status === activeStage),
+      filteredApplications.filter((application) => matchesStage(application.status, activeStage)),
     [activeStage, filteredApplications],
   );
 
   const selectedApplication = applications.find(
     (application) => application.publicRef === selectedRef,
   );
-  const newCount = applications.filter((application) => application.status === 'SUBMITTED').length;
-  const activeCount = applications.filter((application) =>
-    ['UNDER_REVIEW', 'INTERVIEW_PENDING', 'OFFER_PENDING', 'OFFER_ACCEPTED'].includes(
-      application.status,
-    ),
+  // Sayaclar liste ile AYNI kumeden (is ilani + arama suzgecinden gecmis)
+  // sayilir. Aksi halde kart "15" gosterip tiklayinca 3 kayit acilirdi.
+  const newCount = filteredApplications.filter(
+    (application) => application.status === 'SUBMITTED',
   ).length;
-  const completedCount = applications.filter((application) =>
-    ['HIRED', 'REJECTED', 'WITHDRAWN', 'OFFER_DECLINED', 'OFFER_WITHDRAWN'].includes(
-      application.status,
-    ),
+  const activeCount = filteredApplications.filter((application) =>
+    ACTIVE_STATUSES.includes(application.status),
+  ).length;
+  const completedCount = filteredApplications.filter((application) =>
+    COMPLETED_STATUSES.includes(application.status),
   ).length;
 
   return (
@@ -272,21 +297,64 @@ const RecruiterWorkspacePage = () => {
             className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
             aria-label="İK çalışma özeti"
           >
-            {[
-              [String(applications.length), 'Tüm başvurular', 'Kalıcı aday kayıtları'],
-              [String(newCount), 'Yeni', 'İlk inceleme bekliyor'],
-              [String(activeCount), 'Aktif süreç', 'İnsan eylemi devam ediyor'],
-              [String(completedCount), 'Sonuçlanan', 'Kalıcı süreç sonucu'],
-            ].map(([value, label, detail]) => (
-              <article
-                key={label}
-                className="rounded-2xl border border-border-subtle bg-surface-default p-5 shadow-xs"
-              >
-                <p className="text-3xl font-bold tracking-tight text-text-primary">{value}</p>
-                <h2 className="mt-2 text-sm font-semibold text-text-primary">{label}</h2>
-                <p className="mt-1 text-xs leading-5 text-text-secondary">{detail}</p>
-              </article>
-            ))}
+            {(
+              [
+                {
+                  stage: 'ALL',
+                  value: filteredApplications.length,
+                  label: 'Tüm başvurular',
+                  detail: 'Kalıcı aday kayıtları',
+                },
+                {
+                  stage: 'SUBMITTED',
+                  value: newCount,
+                  label: 'Yeni',
+                  detail: 'İlk inceleme bekliyor',
+                },
+                {
+                  stage: 'ACTIVE',
+                  value: activeCount,
+                  label: 'Aktif süreç',
+                  detail: 'İnsan eylemi devam ediyor',
+                },
+                {
+                  stage: 'COMPLETED',
+                  value: completedCount,
+                  label: 'Sonuçlanan',
+                  detail: 'Kalıcı süreç sonucu',
+                },
+              ] satisfies ReadonlyArray<{
+                stage: StageFilter;
+                value: number;
+                label: string;
+                detail: string;
+              }>
+            ).map((card) => {
+              const selected = activeStage === card.stage;
+              return (
+                <button
+                  key={card.label}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setActiveStage(card.stage)}
+                  className={`rounded-2xl border p-5 text-left shadow-xs transition hover:border-action-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary ${
+                    selected
+                      ? 'border-action-primary ring-2 ring-action-primary'
+                      : 'border-border-subtle'
+                  } bg-surface-default`}
+                >
+                  <p className="text-3xl font-bold tracking-tight text-text-primary">
+                    {card.value}
+                  </p>
+                  <span className="mt-2 block text-sm font-semibold text-text-primary">
+                    {card.label}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-text-secondary">
+                    {card.detail}
+                  </span>
+                </button>
+              );
+            })}
           </section>
 
           {error ? (
