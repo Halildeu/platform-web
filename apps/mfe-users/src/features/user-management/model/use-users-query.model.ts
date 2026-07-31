@@ -14,6 +14,7 @@ import {
   fetchUserMfaStatus,
   resetUserTotp,
   updateUserMfaPhone,
+  updateUserMfaRequired,
   UserMfaStatus,
   RequestScope,
   UsersApiResponse,
@@ -197,6 +198,11 @@ export const useUserMutations = (scope?: RequestScope) => {
     onSuccess: (_data, { userId }) => invalidateMfa(userId),
   });
 
+  const updateMfaRequiredMutation = useMutation<void, Error, { userId: string; required: boolean }>({
+    mutationFn: ({ userId, required }) => updateUserMfaRequired({ userId, required, scope }),
+    onSuccess: (_data, { userId }) => invalidateMfa(userId),
+  });
+
   return {
     updateRoleMutation,
     updateModuleMutation,
@@ -208,5 +214,6 @@ export const useUserMutations = (scope?: RequestScope) => {
     revokeSuperAdminMutation,
     resetTotpMutation,
     updateMfaPhoneMutation,
+    updateMfaRequiredMutation,
   };
 };

@@ -41,6 +41,7 @@ const mfaMocks = vi.hoisted(() => ({
   },
   resetTotp: vi.fn(async () => ({})),
   updatePhone: vi.fn(async () => ({})),
+  setRequired: vi.fn(async () => ({})),
 }));
 
 vi.mock('@mfe/auth', () => ({
@@ -73,6 +74,7 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
     updateSessionTimeoutMutation: { mutate: vi.fn(), isPending: false },
     resetTotpMutation: { mutateAsync: mfaMocks.resetTotp, isPending: false },
     updateMfaPhoneMutation: { mutateAsync: mfaMocks.updatePhone, isPending: false },
+    updateMfaRequiredMutation: { mutateAsync: mfaMocks.setRequired, isPending: false },
   }),
   useUserMfaStatus: () => mfaMocks.status,
 }));
@@ -141,6 +143,7 @@ beforeEach(() => {
   mfaMocks.status = { data: undefined, isError: false, isLoading: false };
   mfaMocks.resetTotp.mockClear();
   mfaMocks.updatePhone.mockClear();
+  mfaMocks.setRequired.mockClear();
   pushToastMock.mockClear();
   mockPermissions.isSuperAdmin.mockReset().mockReturnValue(true);
   mockPermissions.hasModule.mockReset().mockReturnValue(true);
@@ -176,7 +179,9 @@ describe('UserDetailDrawer — MFA section (gitops#3211)', () => {
     renderDrawer();
 
     await waitFor(() => expect(screen.getByTestId('mfa-required-state')).toBeTruthy());
-    expect(screen.getByTestId('mfa-required-state').textContent).toBe('users.detail.mfa.required');
+    expect(screen.getByTestId('mfa-required-state').textContent).toContain(
+      'users.detail.mfa.required',
+    );
     expect(screen.getByTestId('mfa-totp-state').textContent).toBe(
       'users.detail.mfa.totp.configured',
     );
@@ -290,5 +295,59 @@ describe('UserDetailDrawer — MFA section (gitops#3211)', () => {
     expect(input.disabled).toBe(true);
     expect(screen.getByTestId<HTMLButtonElement>('mfa-phone-save').disabled).toBe(true);
     expect(screen.getByTestId<HTMLButtonElement>('mfa-totp-reset').disabled).toBe(true);
+  });
+
+  it('the requirement is a switch: flipping it calls the endpoint with the new value', async () => {
+    // Server-side this assigns/removes a Keycloak realm role, so it is its own
+    // write rather than part of the drawer's autosaved draft.
+    mfaMocks.status = {
+      data: { requiresMfa: false, totpConfigured: false, phoneNumber: null, smsLaneReady: false },
+      isError: false,
+      isLoading: false,
+    };
+    renderDrawer();
+
+    const toggle = await screen.findByTestId<HTMLInputElement>('mfa-required-toggle');
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(mfaMocks.setRequired).toHaveBeenCalledWith({ userId: '2', required: true }),
+    );
+    await waitFor(() =>
+      expect(pushToastMock).toHaveBeenCalledWith('success', 'users.detail.mfa.required.enabled'),
+    );
+  });
+
+  it('turning it off sends required:false', async () => {
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: false, phoneNumber: null, smsLaneReady: false },
+      isError: false,
+      isLoading: false,
+    };
+    renderDrawer();
+
+    const toggle = await screen.findByTestId<HTMLInputElement>('mfa-required-toggle');
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(mfaMocks.setRequired).toHaveBeenCalledWith({ userId: '2', required: false }),
+    );
+  });
+
+  it('no edit permission → the requirement switch is disabled too', async () => {
+    mockPermissions.isSuperAdmin.mockReturnValue(false);
+    mockPermissions.hasModule.mockReturnValue(false);
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: true, phoneNumber: null, smsLaneReady: false },
+      isError: false,
+      isLoading: false,
+    };
+    renderDrawer();
+
+    const toggle = await screen.findByTestId<HTMLInputElement>('mfa-required-toggle');
+    expect(toggle.disabled).toBe(true);
+    expect(mfaMocks.setRequired).not.toHaveBeenCalled();
   });
 });
