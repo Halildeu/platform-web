@@ -149,6 +149,32 @@ const users = {
   'users.detail.quickActions.noteSoon': 'Add note (coming soon)',
 
   // Phase 2: Multi-role + tabbed scope
+  // gitops#3211 — panel MFA section.
+  'users.detail.section.mfa': 'Two-step verification',
+  'users.detail.section.mfa.subtitle':
+    'The second step asked for at sign-in. An authenticator app is the default; SMS is an alternative for users who want it.',
+  'users.detail.mfa.required': 'A second step is required for this user',
+  'users.detail.mfa.notRequired': 'No second step is required for this user',
+  'users.detail.mfa.totp.configured': 'Authenticator app enrolled',
+  'users.detail.mfa.totp.missing': 'No authenticator app enrolled',
+  'users.detail.mfa.totp.reset': 'Reset authenticator app',
+  'users.detail.mfa.totp.resetHint':
+    'For a user who lost their phone: enrolment is asked for again at the next sign-in.',
+  'users.detail.mfa.totp.resetDone': 'Authenticator app reset.',
+  'users.detail.mfa.totp.resetFailed': 'Authenticator app could not be reset.',
+  'users.detail.mfa.phone.label': 'SMS phone (E.164)',
+  'users.detail.mfa.phone.placeholder': '+905321234567',
+  'users.detail.mfa.phone.hint':
+    'Admin-only. Left empty, the SMS option is not offered to this user.',
+  'users.detail.mfa.phone.invalid': 'Phone must start with + and contain 8-15 digits.',
+  'users.detail.mfa.phone.save': 'Save phone',
+  'users.detail.mfa.phone.saved': 'Phone saved.',
+  'users.detail.mfa.phone.cleared': 'Phone removed.',
+  'users.detail.mfa.phone.saveFailed': 'Phone number could not be saved.',
+  'users.detail.mfa.smsReady': 'SMS option available',
+  'users.detail.mfa.smsUnavailable': 'SMS option unavailable (no phone set)',
+  'users.detail.mfa.unavailable':
+    'MFA management is not configured in this environment.',
   'users.detail.section.roles': 'Roles',
   'users.detail.section.roles.description':
     'Assign multiple roles to the user. Permissions are the union of all assigned roles.',

@@ -99,7 +99,14 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
   useUserMutations: () => ({
     toggleStatusMutation: { mutate: vi.fn(), isPending: false },
     updateSessionTimeoutMutation: { mutate: vi.fn(), isPending: false },
+    resetTotpMutation: { mutateAsync: vi.fn(), isPending: false },
+    updateMfaPhoneMutation: { mutateAsync: vi.fn(), isPending: false },
   }),
+  // gitops#3211 — the drawer now reads the Keycloak-side MFA state through a
+  // separate query. These specs are not about that surface, so the query is
+  // parked in its error state: the section then renders only its
+  // "unavailable" line and nothing else in the drawer shifts.
+  useUserMfaStatus: () => ({ data: undefined, isError: true, isLoading: false }),
 }));
 
 // Design-system primitives — render minimally so we can find the

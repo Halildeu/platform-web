@@ -148,6 +148,33 @@ const users = {
   'users.detail.quickActions.noteSoon': 'Not Ekle (yakında)',
 
   // Faz 2: Multi-role + tabbed scope
+  // gitops#3211 — panel MFA section. The second factor is a Keycloak
+  // credential; before this the panel could neither show nor manage it.
+  'users.detail.section.mfa': 'İki adımlı doğrulama',
+  'users.detail.section.mfa.subtitle':
+    'Girişte istenen ikinci adım. Doğrulama uygulaması varsayılan; SMS isteyen kullanıcılar için alternatiftir.',
+  'users.detail.mfa.required': 'Bu kullanıcıdan ikinci adım isteniyor',
+  'users.detail.mfa.notRequired': 'Bu kullanıcıdan ikinci adım istenmiyor',
+  'users.detail.mfa.totp.configured': 'Doğrulama uygulaması kurulu',
+  'users.detail.mfa.totp.missing': 'Doğrulama uygulaması kurulu değil',
+  'users.detail.mfa.totp.reset': 'Doğrulama uygulamasını sıfırla',
+  'users.detail.mfa.totp.resetHint':
+    'Telefonunu kaybeden kullanıcı için: kurulum bir sonraki girişte yeniden istenir.',
+  'users.detail.mfa.totp.resetDone': 'Doğrulama uygulaması sıfırlandı.',
+  'users.detail.mfa.totp.resetFailed': 'Doğrulama uygulaması sıfırlanamadı.',
+  'users.detail.mfa.phone.label': 'SMS telefonu (E.164)',
+  'users.detail.mfa.phone.placeholder': '+905321234567',
+  'users.detail.mfa.phone.hint':
+    'Yalnız yönetici düzenleyebilir. Boş bırakılırsa SMS seçeneği bu kullanıcıya sunulmaz.',
+  'users.detail.mfa.phone.invalid': 'Telefon + ile başlamalı ve 8-15 rakam içermelidir.',
+  'users.detail.mfa.phone.save': 'Telefonu kaydet',
+  'users.detail.mfa.phone.saved': 'Telefon kaydedildi.',
+  'users.detail.mfa.phone.cleared': 'Telefon kaldırıldı.',
+  'users.detail.mfa.phone.saveFailed': 'Telefon kaydedilemedi.',
+  'users.detail.mfa.smsReady': 'SMS seçeneği kullanılabilir',
+  'users.detail.mfa.smsUnavailable': 'SMS seçeneği yok (telefon tanımlı değil)',
+  'users.detail.mfa.unavailable':
+    'MFA yönetimi bu ortamda yapılandırılmamış.',
   'users.detail.section.roles': 'Roller',
   'users.detail.section.roles.description':
     'Kullanıcıya birden fazla rol atayabilirsiniz. İzinler rollerin birleşimidir.',

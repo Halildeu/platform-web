@@ -11,6 +11,10 @@ import {
   revokeUserModuleAccess,
   grantSuperAdmin,
   revokeSuperAdmin,
+  fetchUserMfaStatus,
+  resetUserTotp,
+  updateUserMfaPhone,
+  UserMfaStatus,
   RequestScope,
   UsersApiResponse,
   UserMutationAck,
@@ -65,6 +69,25 @@ export const useUserDetailQuery = (
     enabled: Boolean(user),
   });
 };
+
+/**
+ * MFA state lives in Keycloak, so it is fetched separately from the user
+ * detail rather than folded into it: the panel must be able to show the rest
+ * of a user even when the MFA surface is unavailable (it answers 503 in
+ * environments where the Keycloak admin client is not provisioned).
+ */
+export const useUserMfaStatus = (userId: string | null, scope?: RequestScope) =>
+  useQuery<UserMfaStatus, Error>({
+    queryKey: [USERS_QUERY_KEY, 'mfa', userId],
+    queryFn: () => {
+      if (!userId) {
+        return Promise.reject(new Error('Kullanıcı seçilmedi'));
+      }
+      return fetchUserMfaStatus({ userId, scope });
+    },
+    enabled: Boolean(userId),
+    retry: false,
+  });
 
 export const useUserMutations = (scope?: RequestScope) => {
   const queryClient = useQueryClient();
@@ -161,6 +184,19 @@ export const useUserMutations = (scope?: RequestScope) => {
     onSuccess: () => invalidateUsers(),
   });
 
+  const invalidateMfa = (userId: string) =>
+    queryClient.invalidateQueries({ queryKey: [USERS_QUERY_KEY, 'mfa', userId] });
+
+  const resetTotpMutation = useMutation<void, Error, { userId: string }>({
+    mutationFn: ({ userId }) => resetUserTotp({ userId, scope }),
+    onSuccess: (_data, { userId }) => invalidateMfa(userId),
+  });
+
+  const updateMfaPhoneMutation = useMutation<void, Error, { userId: string; phone: string | null }>({
+    mutationFn: ({ userId, phone }) => updateUserMfaPhone({ userId, phone, scope }),
+    onSuccess: (_data, { userId }) => invalidateMfa(userId),
+  });
+
   return {
     updateRoleMutation,
     updateModuleMutation,
@@ -170,5 +206,7 @@ export const useUserMutations = (scope?: RequestScope) => {
     resetPasswordMutation,
     grantSuperAdminMutation,
     revokeSuperAdminMutation,
+    resetTotpMutation,
+    updateMfaPhoneMutation,
   };
 };
