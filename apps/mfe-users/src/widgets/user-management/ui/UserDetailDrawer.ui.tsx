@@ -346,6 +346,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     updateSessionTimeoutMutation,
     resetTotpMutation,
     updateMfaPhoneMutation,
+    updateMfaRequiredMutation,
   } = useUserMutations({
     companyId: storedScope.companyId,
     projectId: storedScope.projectId,
@@ -1258,6 +1259,21 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     }
   };
 
+  const handleToggleMfaRequired = async (next: boolean) => {
+    if (!user) return;
+    try {
+      await updateMfaRequiredMutation.mutateAsync({ userId: String(user.id), required: next });
+      pushToast(
+        'success',
+        next
+          ? t('users.detail.mfa.required.enabled')
+          : t('users.detail.mfa.required.disabled'),
+      );
+    } catch {
+      pushToast('error', t('users.detail.mfa.required.failed'));
+    }
+  };
+
   const handleResetTotp = async () => {
     if (!user) return;
     try {
@@ -2049,9 +2065,23 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             <div className="mt-3 space-y-4">
               <ul className="space-y-1 text-sm text-text-primary">
                 <li data-testid="mfa-required-state">
-                  {mfaQuery.data.requiresMfa
-                    ? t('users.detail.mfa.required')
-                    : t('users.detail.mfa.notRequired')}
+                  {/* The requirement is a Keycloak realm role, not a column on
+                    * the user — so this is its own write, not part of the
+                    * drawer's autosaved draft. */}
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      data-testid="mfa-required-toggle"
+                      checked={mfaQuery.data.requiresMfa}
+                      disabled={!canEdit || updateMfaRequiredMutation.isPending}
+                      onChange={(event) => void handleToggleMfaRequired(event.target.checked)}
+                    />
+                    <span>
+                      {mfaQuery.data.requiresMfa
+                        ? t('users.detail.mfa.required')
+                        : t('users.detail.mfa.notRequired')}
+                    </span>
+                  </label>
                 </li>
                 <li data-testid="mfa-totp-state">
                   {mfaQuery.data.totpConfigured

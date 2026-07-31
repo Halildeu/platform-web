@@ -1488,6 +1488,30 @@ export const updateUserMfaPhone = async (args: {
   }
 };
 
+/**
+ * Turn the second-factor requirement on or off. Server-side this assigns or
+ * removes a Keycloak realm role — the privileged login flow gates on it —
+ * which is why it is a separate call rather than a field on the user.
+ */
+export const updateUserMfaRequired = async (args: {
+  userId: string;
+  required: boolean;
+  scope?: RequestScope;
+}): Promise<void> => {
+  try {
+    const client = resolveHttpClient();
+    await client.put(
+      `${USERS_RESOURCE_PATH}/${encodeURIComponent(args.userId)}/mfa/required`,
+      { required: args.required },
+      { headers: mergeHeaders(args.scope) },
+    );
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('İkinci adım zorunluluğu güncelleme', parsed);
+    throw new Error(parsed.message, { cause: error });
+  }
+};
+
 export const triggerPasswordReset = async (args: { email: string }) => {
   try {
     const client = resolveHttpClient();
