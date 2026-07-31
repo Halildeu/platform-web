@@ -1420,6 +1420,74 @@ export const revokeSuperAdmin = async (args: {
   }
 };
 
+/**
+ * MFA state for one user (gitops#3211). The second factor is a Keycloak
+ * credential, which is why the panel could not show it before: user-service
+ * proxies a narrow, admin-guarded view of it.
+ */
+export interface UserMfaStatus {
+  requiresMfa: boolean;
+  totpConfigured: boolean;
+  phoneNumber: string | null;
+  smsLaneReady: boolean;
+}
+
+export const fetchUserMfaStatus = async (args: {
+  userId: string;
+  scope?: RequestScope;
+}): Promise<UserMfaStatus> => {
+  try {
+    const client = resolveHttpClient();
+    const response = await client.get(
+      `${USERS_RESOURCE_PATH}/${encodeURIComponent(args.userId)}/mfa`,
+      { headers: mergeHeaders(args.scope) },
+    );
+    return response.data as UserMfaStatus;
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('MFA durumu okuma', parsed);
+    throw new Error(parsed.message, { cause: error });
+  }
+};
+
+/** Clears the TOTP credential; the next login re-enrols it when required. */
+export const resetUserTotp = async (args: {
+  userId: string;
+  scope?: RequestScope;
+}): Promise<void> => {
+  try {
+    const client = resolveHttpClient();
+    await client.delete(
+      `${USERS_RESOURCE_PATH}/${encodeURIComponent(args.userId)}/mfa/totp`,
+      { headers: mergeHeaders(args.scope) },
+    );
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('Doğrulama uygulaması sıfırlama', parsed);
+    throw new Error(parsed.message, { cause: error });
+  }
+};
+
+/** Sets (E.164) or clears (null) the phone the SMS second factor delivers to. */
+export const updateUserMfaPhone = async (args: {
+  userId: string;
+  phone: string | null;
+  scope?: RequestScope;
+}): Promise<void> => {
+  try {
+    const client = resolveHttpClient();
+    await client.put(
+      `${USERS_RESOURCE_PATH}/${encodeURIComponent(args.userId)}/mfa/phone`,
+      { phone: args.phone },
+      { headers: mergeHeaders(args.scope) },
+    );
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('MFA telefonu güncelleme', parsed);
+    throw new Error(parsed.message, { cause: error });
+  }
+};
+
 export const triggerPasswordReset = async (args: { email: string }) => {
   try {
     const client = resolveHttpClient();

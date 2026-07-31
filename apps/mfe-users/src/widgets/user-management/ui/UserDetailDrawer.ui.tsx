@@ -17,7 +17,10 @@ import HierarchicalScopePicker from './HierarchicalScopePicker';
 // (nested-impersonation forbidden — backend also enforces).
 import { ImpersonateAction } from './ImpersonateAction';
 import { getShellServices } from '../../../app/services/shell-services';
-import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
+import {
+  useUserMutations,
+  useUserMfaStatus,
+} from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
 // Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
 // detail) to FormDrawer (edit/create). Same slot signature (title/subtitle/
@@ -229,6 +232,10 @@ const resolveRoleMeta = (rawName: string, locale: string): RoleMeta => {
   return dict[rawName] ?? { label: rawName, description: '' };
 };
 
+// gitops#3211 — the panel mirrors the server's E.164 contract locally so a typo
+// is caught before a round-trip; the server validates it again regardless.
+const MFA_PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
+
 const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user }) => {
   const { t, locale } = useUsersI18n();
   const queryClient = useQueryClient();
@@ -334,7 +341,21 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     }
   }, []);
 
-  const { toggleStatusMutation, updateSessionTimeoutMutation } = useUserMutations({
+  const {
+    toggleStatusMutation,
+    updateSessionTimeoutMutation,
+    resetTotpMutation,
+    updateMfaPhoneMutation,
+  } = useUserMutations({
+    companyId: storedScope.companyId,
+    projectId: storedScope.projectId,
+    warehouseId: storedScope.warehouseId,
+  });
+
+  // gitops#3211: MFA state comes from Keycloak through a narrow user-service
+  // proxy, so it is its own query — a 503 here (environment without the
+  // Keycloak admin client) must not take the rest of the drawer down.
+  const mfaQuery = useUserMfaStatus(user?.id ? String(user.id) : null, {
     companyId: storedScope.companyId,
     projectId: storedScope.projectId,
     warehouseId: storedScope.warehouseId,
@@ -346,6 +367,8 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
   const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
+  const [mfaPhone, setMfaPhone] = useState<string>('');
+  const [mfaPhoneError, setMfaPhoneError] = useState<string | null>(null);
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number>(15);
   const [dirty, setDirty] = useState(false);
   // iter-37 — role list search. Only renders when there are >6 roles
@@ -1213,6 +1236,45 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     }
   };
 
+  const handleSaveMfaPhone = async () => {
+    if (!user) return;
+    const trimmed = mfaPhone.trim();
+    const nextPhone = trimmed === '' ? null : trimmed;
+    if (nextPhone !== null && !MFA_PHONE_PATTERN.test(nextPhone)) {
+      setMfaPhoneError(t('users.detail.mfa.phone.invalid'));
+      return;
+    }
+    setMfaPhoneError(null);
+    try {
+      await updateMfaPhoneMutation.mutateAsync({ userId: String(user.id), phone: nextPhone });
+      pushToast(
+        'success',
+        nextPhone === null
+          ? t('users.detail.mfa.phone.cleared')
+          : t('users.detail.mfa.phone.saved'),
+      );
+    } catch {
+      pushToast('error', t('users.detail.mfa.phone.saveFailed'));
+    }
+  };
+
+  const handleResetTotp = async () => {
+    if (!user) return;
+    try {
+      await resetTotpMutation.mutateAsync({ userId: String(user.id) });
+      pushToast('success', t('users.detail.mfa.totp.resetDone'));
+    } catch {
+      pushToast('error', t('users.detail.mfa.totp.resetFailed'));
+    }
+  };
+
+  useEffect(() => {
+    // Server value is the source of truth; local edits are discarded when the
+    // drawer switches user or the query refetches.
+    setMfaPhone(mfaQuery.data?.phoneNumber ?? '');
+    setMfaPhoneError(null);
+  }, [mfaQuery.data?.phoneNumber, user?.id]);
+
   const formattedLastLogin = useMemo(() => {
     if (!user?.lastLoginAt) return t('shell.header.neverLoggedIn');
     try {
@@ -1958,6 +2020,110 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
               </span>
             )}
           </div>
+        </section>
+
+        <hr className="border-border-subtle" />
+
+        {/* MFA Section — gitops#3211.
+         * The second factor is a Keycloak credential, which is why the panel
+         * could neither show nor manage it before. The state is fetched
+         * separately from the user detail on purpose: this surface answers 503
+         * where the Keycloak admin client is not provisioned, and the rest of
+         * the drawer must keep working there.
+         */}
+        <section data-testid="mfa-section">
+          <h3 className="text-base font-semibold text-text-primary">
+            {t('users.detail.section.mfa')}
+          </h3>
+          <p className="text-xs text-text-subtle mt-1">
+            {t('users.detail.section.mfa.subtitle')}
+          </p>
+
+          {mfaQuery.isError && (
+            <p className="mt-3 text-sm text-text-subtle" data-testid="mfa-unavailable">
+              {t('users.detail.mfa.unavailable')}
+            </p>
+          )}
+
+          {mfaQuery.data && (
+            <div className="mt-3 space-y-4">
+              <ul className="space-y-1 text-sm text-text-primary">
+                <li data-testid="mfa-required-state">
+                  {mfaQuery.data.requiresMfa
+                    ? t('users.detail.mfa.required')
+                    : t('users.detail.mfa.notRequired')}
+                </li>
+                <li data-testid="mfa-totp-state">
+                  {mfaQuery.data.totpConfigured
+                    ? t('users.detail.mfa.totp.configured')
+                    : t('users.detail.mfa.totp.missing')}
+                </li>
+                <li data-testid="mfa-sms-state">
+                  {mfaQuery.data.smsLaneReady
+                    ? t('users.detail.mfa.smsReady')
+                    : t('users.detail.mfa.smsUnavailable')}
+                </li>
+              </ul>
+
+              <div>
+                <label
+                  className="block text-sm font-medium text-text-primary"
+                  htmlFor="mfa-phone-input"
+                >
+                  {t('users.detail.mfa.phone.label')}
+                </label>
+                <div className="mt-1 flex flex-wrap items-start gap-2">
+                  <input
+                    id="mfa-phone-input"
+                    data-testid="mfa-phone-input"
+                    type="tel"
+                    inputMode="tel"
+                    className="min-w-[14rem] rounded-md border border-border-subtle px-3 py-2 text-sm"
+                    placeholder={t('users.detail.mfa.phone.placeholder')}
+                    value={mfaPhone}
+                    disabled={!canEdit || updateMfaPhoneMutation.isPending}
+                    onChange={(event) => {
+                      setMfaPhone(event.target.value);
+                      setMfaPhoneError(null);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    data-testid="mfa-phone-save"
+                    className="rounded-md bg-surface-accent px-3 py-2 text-sm font-medium text-text-inverse disabled:opacity-50"
+                    disabled={!canEdit || updateMfaPhoneMutation.isPending}
+                    onClick={() => void handleSaveMfaPhone()}
+                  >
+                    {t('users.detail.mfa.phone.save')}
+                  </button>
+                </div>
+                {mfaPhoneError ? (
+                  <p className="mt-1 text-xs text-state-danger-text" data-testid="mfa-phone-error">
+                    {mfaPhoneError}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-text-subtle">
+                    {t('users.detail.mfa.phone.hint')}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  data-testid="mfa-totp-reset"
+                  className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium disabled:opacity-50"
+                  disabled={!canEdit || !mfaQuery.data.totpConfigured || resetTotpMutation.isPending}
+                  onClick={() => void handleResetTotp()}
+                >
+                  {t('users.detail.mfa.totp.reset')}
+                </button>
+                <p className="mt-1 text-xs text-text-subtle">
+                  {t('users.detail.mfa.totp.resetHint')}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         <hr className="border-border-subtle" />
