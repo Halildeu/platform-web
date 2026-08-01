@@ -78,20 +78,45 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
     expect(hrItems()).toEqual(['suggestions']);
   });
 
-  it('shows the HR group with only Etik when ETHIC is granted', () => {
+  it('ETHIC grant shows the top-level Ethics group, not an HR line', () => {
+    // Etik moved out of İK to its own top-level group (separately-sellable
+    // product, ADR-0049); the İK dropdown no longer carries it at all.
     permissionsMock.hasModule.mockImplementation((m) => m === 'ETHIC');
-    expect(hrItems()).toEqual(['ethic']);
+    expect(hrItems()).toEqual([]);
+    expect(groupKeys()).toContain('ethics');
   });
 
   it('shows all HR items for a super admin', () => {
     permissionsMock.isSuperAdmin.mockImplementation(() => true);
     expect(hrItems()).toEqual([
       'suggestions',
-      'ethic',
       'ats-product-hub',
       'compensation',
       'demographic',
     ]);
+  });
+
+  it('the Ethics group carries its goal-shaped work queues, module-gated', () => {
+    permissionsMock.hasModule.mockImplementation((m) => m === 'ETHIC');
+    const ethics = renderHook(() => useHeaderNavigation()).result.current.groups.find(
+      (group) => group.key === 'ethics',
+    );
+    expect(ethics?.items.map((item) => item.key)).toEqual([
+      'ethics-cases',
+      'ethics-unattended',
+      'ethics-ack-due',
+    ]);
+    // The deep links are intents the case screen honours (?odak=).
+    expect(ethics?.items.map((item) => item.path)).toEqual([
+      '/admin/ethics',
+      '/admin/ethics?odak=sahipsiz',
+      '/admin/ethics?odak=teyit',
+    ]);
+  });
+
+  it('without the ETHIC module the Ethics group does not exist at all', () => {
+    permissionsMock.hasModule.mockImplementation((m) => m === 'REPORT');
+    expect(groupKeys()).not.toContain('ethics');
   });
 
   it('shows the ATS Product Hub with only its module grant and no remote-readiness gate', () => {

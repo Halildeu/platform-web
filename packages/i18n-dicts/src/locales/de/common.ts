@@ -49,6 +49,13 @@ const common = {
   'shell.launcher.users.description': 'Benutzerverwaltung',
 
   // Shell mega navigation
+  'shell.mega.ethics': 'Ethik',
+  'shell.mega.ethics.cases': 'Alle Fälle',
+  'shell.mega.ethics.cases.desc': 'Arbeitsliste, nach Dringlichkeit sortiert',
+  'shell.mega.ethics.unattended': 'Unbetreute Fälle',
+  'shell.mega.ethics.unattended.desc': 'Meldungen, die noch niemand übernommen hat',
+  'shell.mega.ethics.ackDue': 'Bestätigung überfällig',
+  'shell.mega.ethics.ackDue.desc': 'Fälle über der Sieben-Tage-Bestätigungsfrist',
   'shell.mega.hr': 'Personal',
   'shell.mega.hr.suggestions': 'Vorschläge',
   'shell.mega.hr.suggestions.desc': 'Vorschlags- und Feedback-Modul',

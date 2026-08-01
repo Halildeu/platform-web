@@ -214,6 +214,19 @@ export const EMPTY_CASE_FILTER: CaseFilter = Object.freeze({
   overdue: false,
 });
 
+/**
+ * Header sub-goals deep-link into this screen with an intent, not a state dump:
+ * ?odak=sahipsiz preselects the unattended queue, ?odak=teyit the overdue one.
+ * Unknown values fall back to the empty filter — a mistyped link must show the
+ * WHOLE queue, because a filter someone did not ask for hides cases silently.
+ */
+export function initialFilterFromQuery(search: string): CaseFilter {
+  const focus = new URLSearchParams(search).get('odak');
+  if (focus === 'sahipsiz') return { ...EMPTY_CASE_FILTER, unattended: true };
+  if (focus === 'teyit') return { ...EMPTY_CASE_FILTER, overdue: true };
+  return EMPTY_CASE_FILTER;
+}
+
 export const isFilterActive = (filter: CaseFilter) =>
   filter.query.trim() !== '' ||
   filter.status !== '' ||

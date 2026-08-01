@@ -51,6 +51,13 @@ const common = {
   'shell.launcher.users.description': 'Kullanıcı yönetimi',
 
   // Shell mega navigation
+  'shell.mega.ethics': 'Etik',
+  'shell.mega.ethics.cases': 'Tüm vakalar',
+  'shell.mega.ethics.cases.desc': 'İş kuyruğu — aciliyet sırasına göre',
+  'shell.mega.ethics.unattended': 'Sahipsiz vakalar',
+  'shell.mega.ethics.unattended.desc': 'Henüz kimsenin üstlenmediği bildirimler',
+  'shell.mega.ethics.ackDue': 'Teyit süresi geçenler',
+  'shell.mega.ethics.ackDue.desc': '7 günlük alındı teyidi sınırı aşılmış vakalar',
   'shell.mega.hr': 'İK',
   'shell.mega.hr.suggestions': 'Öneriler',
   'shell.mega.hr.suggestions.desc': 'Öneri ve fikir modülü',

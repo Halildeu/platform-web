@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { isPermitAllMode } from '../auth/auth-config';
 import { ProtectedRoute } from '../guards/ProtectedRoute';
@@ -115,6 +115,7 @@ const AuthTraceRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 export const AppRouter: React.FC = () => {
+  const location = useLocation();
   const { t } = useShellCommonI18n();
   const authState = useAppSelector((state) => state.auth);
   const { token, initialized } = authState;
@@ -188,7 +189,10 @@ export const AppRouter: React.FC = () => {
           element={
             ethicEnabled ? (
               <ProtectedRoute requiredModule="ETHIC">
-                <EthicApp />
+                {/* Keyed by the query string: the remote reads ?odak= once at mount,
+                    so switching header sub-goals while already on this screen must
+                    remount it — otherwise the second click silently does nothing. */}
+                <EthicApp key={location.search} />
               </ProtectedRoute>
             ) : (
               <Navigate to={defaultShellPath} replace />
