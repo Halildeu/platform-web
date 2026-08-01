@@ -75,7 +75,7 @@ export const MAX_EVIDENCE_BYTES = 26_214_400;
 // dedicated no-network CDR worker, which rebuilds them as flattened page images.
 // ES-104K (#2930): image/webp joined only AFTER the backend accepted it live —
 // widening this list first would let the reporter upload, wait, and get refused.
-export const SUPPORTED_EVIDENCE_MEDIA_TYPES = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
+export const SUPPORTED_EVIDENCE_MEDIA_TYPES = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'] as const;
 const FIXED_EVIDENCE_UPLOAD_PATH = `${BASE}/evidence/uploads`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
