@@ -150,6 +150,20 @@
   font-weight: 600;
 }
 
+/* The countdown before the breach. Quiet while there is time, warning-toned when two
+   days remain — never danger-toned, because red is reserved for the promise already
+   broken and a queue where everything shouts ranks nothing. */
+.ethics-tag.is-deadline {
+  border-color: var(--ethics-border);
+  color: var(--ethics-muted);
+}
+
+.ethics-tag.is-deadline-near {
+  border-color: var(--ethics-warning);
+  background: var(--ethics-warning-surface);
+  font-weight: 600;
+}
+
 .ethics-case-list-id {
   font-weight: 700;
 }

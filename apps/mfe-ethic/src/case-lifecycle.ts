@@ -230,6 +230,77 @@ export const isFilterActive = (filter: CaseFilter) =>
  * a reason to look at it; dropping it because it has no text to match would hide exactly
  * the record that needs attention.
  */
+/**
+ * Queue order — the list is a WORK QUEUE, not an archive.
+ *
+ * <p>The screen's job is "what needs me next", and until now it answered with
+ * `updatedAt`, which is recency, not urgency: a case one day from its statutory
+ * acknowledgement deadline sat below whatever was touched last. Rank, ascending:
+ *
+ * <ol>
+ *   <li>acknowledgement overdue — the promise is already broken; fix first</li>
+ *   <li>unacknowledged, nearest deadline first — still savable, days decide</li>
+ *   <li>unattended (nobody on the case) — unworked without anyone deciding so</li>
+ *   <li>everything else, most recently updated first</li>
+ * </ol>
+ *
+ * <p>Unknown acknowledgement state sorts with rank 3, never rank 0-2: a frontend
+ * deployed ahead of the service must not scream urgency it cannot substantiate.
+ */
+export function queueRank(
+  item: {
+    createdAt: string;
+    acknowledgedAt?: string | null;
+    participantCount?: number;
+    updatedAt: string;
+  },
+  now: number = Date.now(),
+): number {
+  const ack = acknowledgementState(item, now);
+  if (ack.known && !item.acknowledgedAt) {
+    if (ack.overdue) return 0;
+    return 1;
+  }
+  if (item.participantCount === 0) return 2;
+  return 3;
+}
+
+export function sortForQueue<
+  T extends {
+    createdAt: string;
+    acknowledgedAt?: string | null;
+    participantCount?: number;
+    updatedAt: string;
+  },
+>(items: readonly T[], now: number = Date.now()): T[] {
+  return [...items].sort((a, b) => {
+    const rankDifference = queueRank(a, now) - queueRank(b, now);
+    if (rankDifference !== 0) return rankDifference;
+    const rank = queueRank(a, now);
+    // Within the deadline band the clock decides; elsewhere recency does.
+    if (rank <= 1) return Date.parse(a.createdAt) - Date.parse(b.createdAt);
+    return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+  });
+}
+
+/**
+ * The countdown chip: urgency BEFORE the breach, not only the red tag after it.
+ * Returns null when there is nothing to count — acknowledged, unknown, or overdue
+ * (overdue already has its own, louder chip; two chips saying it twice is noise).
+ */
+export function acknowledgementCountdown(
+  item: { createdAt: string; acknowledgedAt?: string | null },
+  now: number = Date.now(),
+): { text: string; urgent: boolean } | null {
+  const state = acknowledgementState(item, now);
+  if (!state.known || item.acknowledgedAt || state.overdue) return null;
+  const created = Date.parse(item.createdAt);
+  const elapsed = Math.floor((now - created) / DAY_MS);
+  const remaining = ACKNOWLEDGEMENT_DEADLINE_DAYS - elapsed;
+  if (remaining <= 1) return { text: 'Teyit için son gün', urgent: true };
+  return { text: `Teyit: ${remaining} gün kaldı`, urgent: remaining <= 2 };
+}
+
 export function filterCases<
   T extends {
     subject: string | null;

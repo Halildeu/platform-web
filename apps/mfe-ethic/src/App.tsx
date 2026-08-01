@@ -21,6 +21,7 @@ import {
 } from './ethics-api';
 import { timelineDetailLabel, timelineEventLabel, timelineMoment } from './case-timeline';
 import {
+  acknowledgementCountdown,
   acknowledgementDraft,
   acknowledgementState,
   categoryLabel,
@@ -29,6 +30,7 @@ import {
   EMPTY_CASE_FILTER,
   filterCases,
   isFilterActive,
+  sortForQueue,
   isAnonymous,
   NEXT_STATUSES,
   OUTCOME_OPTIONS,
@@ -56,7 +58,9 @@ export default function App() {
   const [filter, setFilter] = useState<CaseFilter>(EMPTY_CASE_FILTER);
   // Derived, not stored: a second copy of the list would drift from the first the moment
   // a refresh lands while a filter is on.
-  const visibleItems = filterCases(items, filter);
+  // Queue order, not recency: the case one day from its statutory deadline outranks
+  // whatever was touched last.
+  const visibleItems = sortForQueue(filterCases(items, filter));
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
   const [internalNote, setInternalNote] = useState('');
@@ -567,6 +571,22 @@ export default function App() {
                         {acknowledgementState(item).overdue && (
                           <span className="ethics-tag is-overdue">Teyit süresi geçti</span>
                         )}
+                        {(() => {
+                          // Urgency BEFORE the breach: the red tag above only exists
+                          // after the promise is already broken.
+                          const countdown = acknowledgementCountdown(item);
+                          return countdown ? (
+                            <span
+                              className={
+                                countdown.urgent
+                                  ? 'ethics-tag is-deadline-near'
+                                  : 'ethics-tag is-deadline'
+                              }
+                            >
+                              {countdown.text}
+                            </span>
+                          ) : null;
+                        })()}
                       </small>
                       <small className="ethics-case-foot">
                         <span className="ethics-case-list-id">{shortId(item.id)}</span>
