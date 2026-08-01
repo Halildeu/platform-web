@@ -1430,6 +1430,12 @@ export interface UserMfaStatus {
   totpConfigured: boolean;
   phoneNumber: string | null;
   smsLaneReady: boolean;
+  /**
+   * Delivery methods this account may use. Empty means unrestricted — the
+   * server reads an absent attribute the same way, so the two ends agree
+   * without a second convention.
+   */
+  allowedMethods: string[];
 }
 
 export const fetchUserMfaStatus = async (args: {
@@ -1508,6 +1514,30 @@ export const updateUserMfaRequired = async (args: {
   } catch (error: unknown) {
     const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
     reportError('İkinci adım zorunluluğu güncelleme', parsed);
+    throw new Error(parsed.message, { cause: error });
+  }
+};
+
+/**
+ * Restrict the delivery methods, or lift the restriction with an empty list.
+ * Only the lanes the platform owns are governed; the authenticator app is
+ * stock Keycloak and does not consult this.
+ */
+export const updateUserMfaMethods = async (args: {
+  userId: string;
+  methods: string[];
+  scope?: RequestScope;
+}): Promise<void> => {
+  try {
+    const client = resolveHttpClient();
+    await client.put(
+      `${USERS_RESOURCE_PATH}/${encodeURIComponent(args.userId)}/mfa/methods`,
+      { methods: args.methods },
+      { headers: mergeHeaders(args.scope) },
+    );
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('İkinci adım yöntemleri güncelleme', parsed);
     throw new Error(parsed.message, { cause: error });
   }
 };

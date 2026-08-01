@@ -102,6 +102,7 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
     resetTotpMutation: { mutateAsync: vi.fn(), isPending: false },
     updateMfaPhoneMutation: { mutateAsync: vi.fn(), isPending: false },
     updateMfaRequiredMutation: { mutateAsync: vi.fn(), isPending: false },
+    updateMfaMethodsMutation: { mutateAsync: vi.fn(), isPending: false },
   }),
   // gitops#3211 — the drawer now reads the Keycloak-side MFA state through a
   // separate query. These specs are not about that surface, so the query is

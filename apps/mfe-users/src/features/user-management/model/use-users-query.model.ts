@@ -15,6 +15,7 @@ import {
   resetUserTotp,
   updateUserMfaPhone,
   updateUserMfaRequired,
+  updateUserMfaMethods,
   UserMfaStatus,
   RequestScope,
   UsersApiResponse,
@@ -203,6 +204,11 @@ export const useUserMutations = (scope?: RequestScope) => {
     onSuccess: (_data, { userId }) => invalidateMfa(userId),
   });
 
+  const updateMfaMethodsMutation = useMutation<void, Error, { userId: string; methods: string[] }>({
+    mutationFn: ({ userId, methods }) => updateUserMfaMethods({ userId, methods, scope }),
+    onSuccess: (_data, { userId }) => invalidateMfa(userId),
+  });
+
   return {
     updateRoleMutation,
     updateModuleMutation,
@@ -215,5 +221,6 @@ export const useUserMutations = (scope?: RequestScope) => {
     resetTotpMutation,
     updateMfaPhoneMutation,
     updateMfaRequiredMutation,
+    updateMfaMethodsMutation,
   };
 };

@@ -42,6 +42,7 @@ const mfaMocks = vi.hoisted(() => ({
   resetTotp: vi.fn(async () => ({})),
   updatePhone: vi.fn(async () => ({})),
   setRequired: vi.fn(async () => ({})),
+  setMethods: vi.fn(async () => ({})),
 }));
 
 vi.mock('@mfe/auth', () => ({
@@ -75,6 +76,7 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
     resetTotpMutation: { mutateAsync: mfaMocks.resetTotp, isPending: false },
     updateMfaPhoneMutation: { mutateAsync: mfaMocks.updatePhone, isPending: false },
     updateMfaRequiredMutation: { mutateAsync: mfaMocks.setRequired, isPending: false },
+    updateMfaMethodsMutation: { mutateAsync: mfaMocks.setMethods, isPending: false },
   }),
   useUserMfaStatus: () => mfaMocks.status,
 }));
@@ -144,6 +146,7 @@ beforeEach(() => {
   mfaMocks.resetTotp.mockClear();
   mfaMocks.updatePhone.mockClear();
   mfaMocks.setRequired.mockClear();
+  mfaMocks.setMethods.mockClear();
   pushToastMock.mockClear();
   mockPermissions.isSuperAdmin.mockReset().mockReturnValue(true);
   mockPermissions.hasModule.mockReset().mockReturnValue(true);
@@ -349,5 +352,55 @@ describe('UserDetailDrawer — MFA section (gitops#3211)', () => {
     const toggle = await screen.findByTestId<HTMLInputElement>('mfa-required-toggle');
     expect(toggle.disabled).toBe(true);
     expect(mfaMocks.setRequired).not.toHaveBeenCalled();
+  });
+
+  it('checking a method adds it; the list starts empty meaning unrestricted', async () => {
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: false, phoneNumber: null,
+              smsLaneReady: false, allowedMethods: [] },
+      isError: false, isLoading: false,
+    };
+    renderDrawer();
+
+    const sms = await screen.findByTestId<HTMLInputElement>('mfa-method-sms');
+    expect(sms.checked).toBe(false);
+    fireEvent.click(sms);
+
+    await waitFor(() =>
+      expect(mfaMocks.setMethods).toHaveBeenCalledWith({ userId: '2', methods: ['sms'] }),
+    );
+  });
+
+  it('unchecking the last method sends an empty list, which lifts the restriction', async () => {
+    // Not "no methods at all" — an account with no way in is the one outcome
+    // this control must not be able to produce by accident.
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: false, phoneNumber: null,
+              smsLaneReady: false, allowedMethods: ['sms'] },
+      isError: false, isLoading: false,
+    };
+    renderDrawer();
+
+    const sms = await screen.findByTestId<HTMLInputElement>('mfa-method-sms');
+    expect(sms.checked).toBe(true);
+    fireEvent.click(sms);
+
+    await waitFor(() =>
+      expect(mfaMocks.setMethods).toHaveBeenCalledWith({ userId: '2', methods: [] }),
+    );
+  });
+
+  it('says plainly that the authenticator app is not governed here', async () => {
+    // A third checkbox would silently do nothing: OTP Form is stock Keycloak
+    // and never reads the allow-list.
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: true, phoneNumber: null,
+              smsLaneReady: false, allowedMethods: [] },
+      isError: false, isLoading: false,
+    };
+    renderDrawer();
+
+    expect(await screen.findByTestId('mfa-methods-totp-note')).toBeTruthy();
+    expect(screen.queryByTestId('mfa-method-totp')).toBeNull();
   });
 });
