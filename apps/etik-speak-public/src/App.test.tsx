@@ -47,6 +47,46 @@ describe('Etik Speak public reporter', () => {
     });
     vi.mocked(api.validateEvidenceFile).mockReturnValue(undefined);
   });
+  test('lapsed tenant: refusal opens the channel-inactive view, mailbox stays reachable', async () => {
+    // ES-403 (#885): only NEW intake closes. The specific refusal code routes to a view
+    // that keeps the two promises — existing report reachable + external avenues named.
+    const refusal = Object.assign(new Error('INTAKE_CHANNEL_INACTIVE'), {
+      status: 403,
+      code: 'INTAKE_CHANNEL_INACTIVE',
+    });
+    vi.mocked(api.createReport).mockRejectedValue(refusal);
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Yeni bildirim yap' }));
+    await userEvent.selectOptions(screen.getByLabelText('Kategori'), 'WORKPLACE_CONDUCT');
+    await userEvent.type(screen.getByLabelText('Kısa konu'), 'Sentetik bildirim');
+    await userEvent.type(screen.getByLabelText('Ne oldu?'), 'Sentetik anlatım');
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Bildirimi gönder' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Bu kanal şu an yeni bildirim almıyor.' }),
+    ).toBeInTheDocument();
+    // The refusal is a state, not an error line — no alert box.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // The surface that stays open is one click away.
+    await userEvent.click(screen.getByRole('button', { name: 'Mevcut bildirimimi takip et' }));
+    expect(screen.getByLabelText('Bildirim numarası')).toBeInTheDocument();
+  });
+
+  test('any other intake failure still renders the plain error line', async () => {
+    // Guards the routing itself: only the specific machine-readable code changes views.
+    vi.mocked(api.createReport).mockRejectedValue(
+      Object.assign(new Error('İstek sıklığı sınırı aşıldı.'), { status: 429, code: 'RATE_LIMITED' }),
+    );
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Yeni bildirim yap' }));
+    await userEvent.selectOptions(screen.getByLabelText('Kategori'), 'WORKPLACE_CONDUCT');
+    await userEvent.type(screen.getByLabelText('Kısa konu'), 'Sentetik bildirim');
+    await userEvent.type(screen.getByLabelText('Ne oldu?'), 'Sentetik anlatım');
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Bildirimi gönder' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('İstek sıklığı sınırı aşıldı.');
+  });
+
   test('anonymous intake shows receipt only after durable API success', async () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Yeni bildirim yap' }));
