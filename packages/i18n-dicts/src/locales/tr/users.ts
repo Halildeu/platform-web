@@ -53,6 +53,7 @@ const users = {
 
   // Grid columns
   'users.grid.columns.fullName': 'Ad Soyad',
+  'users.grid.columns.username': 'Kullanıcı Adı',
   'users.grid.columns.email': 'E-posta',
   'users.grid.columns.role': 'Rol',
   'users.grid.columns.status': 'Durum',

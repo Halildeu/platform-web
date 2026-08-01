@@ -97,6 +97,8 @@ type UsersResponseWire = {
 type UserSummaryWire = {
   id?: unknown;
   email?: unknown;
+  /** Keycloak login name (gitops#3291) — null until user-service reconciles. */
+  username?: unknown;
   fullName?: unknown;
   name?: unknown;
   modulePermissions?: unknown;
@@ -1128,6 +1130,10 @@ export const fetchUsers = async (
             'Bilinmeyen Kullanıcı',
           ),
           email: toStringOrFallback(user.email, ''),
+          // Left null rather than falling back to the e-mail: an unreconciled
+          // row genuinely has no known login name, and showing the address in
+          // its place would resurrect exactly the conflation gitops#3245 undid.
+          username: typeof user.username === 'string' ? user.username : null,
           role,
           status: user.enabled === false ? 'INACTIVE' : 'ACTIVE',
           lastLoginAt: (user.lastLogin ?? user.lastLoginAt ?? null) as string | null,

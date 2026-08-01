@@ -53,6 +53,7 @@ const users = {
   'users.filters.reset': 'Zurücksetzen',
 
   'users.grid.columns.fullName': 'Vollständiger Name',
+  'users.grid.columns.username': 'Benutzername',
   'users.grid.columns.email': 'E-Mail',
   'users.grid.columns.role': 'Rolle',
   'users.grid.columns.status': 'Status',
