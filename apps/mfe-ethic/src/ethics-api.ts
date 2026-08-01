@@ -167,6 +167,38 @@ export async function replyToReporter(
   );
   return response.data;
 }
+// ES-2 (#3271): the acknowledgement draft is SERVER truth — tenant-parametric,
+// category-variant, versioned templates. The template identity travels back with the
+// dispatch so the ledger records which words, which version, and what an edit removed.
+export interface AcknowledgementDraft {
+  body: string;
+  templateId: string;
+  templateVersion: number;
+  alreadyAcknowledged: boolean;
+}
+
+export async function fetchAcknowledgementDraft(caseId: string): Promise<AcknowledgementDraft> {
+  const response = await api.get<AcknowledgementDraft>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/acknowledgement-draft`,
+  );
+  return response.data;
+}
+
+export async function dispatchAcknowledgement(
+  caseId: string,
+  body: string,
+  templateId: string,
+  templateVersion: number,
+  idempotencyKey: string,
+): Promise<{ messageId: string; missingSections: string[] }> {
+  const response = await api.post<{ messageId: string; missingSections: string[] }>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/acknowledgement`,
+    { body, templateId, templateVersion },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return response.data;
+}
+
 export async function addInternalNote(
   id: string,
   body: string,

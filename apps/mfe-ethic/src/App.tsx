@@ -20,10 +20,12 @@ import {
   type StaffEvidence,
 } from './ethics-api';
 import { timelineDetailLabel, timelineEventLabel, timelineMoment } from './case-timeline';
+import { dispatchAcknowledgement, fetchAcknowledgementDraft } from './ethics-api';
 import {
   acknowledgementCountdown,
   acknowledgementDraft,
   acknowledgementState,
+  missingAcknowledgementSections,
   categoryLabel,
   CASE_CATEGORIES,
   CASE_STATUSES,
@@ -63,6 +65,10 @@ export default function App() {
   const visibleItems = sortForQueue(filterCases(items, filter));
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
+  // ES-2 (#3271): when the textarea holds an acknowledgement draft, the template
+  // identity it was drafted from rides along to the ledger. Null means the textarea
+  // is an ordinary reply and the ordinary message path applies.
+  const [ackTemplate, setAckTemplate] = useState<{ id: string; version: number } | null>(null);
   const [internalNote, setInternalNote] = useState('');
   // ES-203 — participants are handle-named. The free-text assignment label is
   // gone from this surface and refused by the server (slice 2), so the case
@@ -97,6 +103,7 @@ export default function App() {
     setEvidenceError('');
     setDownloadingEvidenceId('');
     setReply('');
+    setAckTemplate(null);
     setInternalNote('');
     setParticipants([]);
     setParticipantsError('');
@@ -240,6 +247,7 @@ export default function App() {
     const requestSequence = ++selectionSequence.current;
     setError('');
     setReply('');
+    setAckTemplate(null);
     setInternalNote('');
     setEvidence([]);
     setEvidenceError('');
@@ -358,6 +366,32 @@ export default function App() {
     }
   };
 
+  /**
+   * ES-2 (#3271): the draft is SERVER truth — the tenant's template, the case's
+   * category variant, placeholders filled, identity versioned. The local generator
+   * stays only as the honest fallback for a frontend deployed ahead of the service:
+   * it produces a plain reply (no template identity), exactly what it always was.
+   */
+  const prepareAcknowledgement = async () => {
+    if (!selected) return;
+    const requestSequence = ++selectionSequence.current;
+    setBusy(true);
+    setError('');
+    try {
+      const draft = await fetchAcknowledgementDraft(selected.id);
+      if (requestSequence !== selectionSequence.current) return;
+      setReply(draft.body);
+      setAckTemplate({ id: draft.templateId, version: draft.templateVersion });
+    } catch {
+      if (requestSequence !== selectionSequence.current) return;
+      setReply(acknowledgementDraft(selected.id, selected.createdAt));
+      setAckTemplate(null);
+      setError('Sunucu taslağı alınamadı; yerel taslak kullanıldı. Gönderim sıradan yanıt olarak gider.');
+    } finally {
+      if (requestSequence === selectionSequence.current) setBusy(false);
+    }
+  };
+
   const sendReply = async () => {
     if (!selected || !reply.trim()) return;
     const requestSequence = ++selectionSequence.current;
@@ -365,12 +399,19 @@ export default function App() {
     setBusy(true);
     setError('');
     const body = reply.trim();
-    const operation = operationKey('reporter-reply', caseId, body);
+    const template = ackTemplate;
+    const operation = operationKey(
+      template ? 'acknowledgement' : 'reporter-reply', caseId, body);
     try {
-      await replyToReporter(caseId, body, operation.key);
+      if (template) {
+        await dispatchAcknowledgement(caseId, body, template.id, template.version, operation.key);
+      } else {
+        await replyToReporter(caseId, body, operation.key);
+      }
       if (requestSequence !== selectionSequence.current) return;
       operationKeys.current.delete(operation.identity);
       setReply('');
+      setAckTemplate(null);
       try {
         const fresh = await getCase(caseId);
         if (requestSequence !== selectionSequence.current) return;
@@ -905,9 +946,7 @@ export default function App() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() =>
-                          setReply(acknowledgementDraft(selected.id, selected.createdAt))
-                        }
+                        onClick={() => void prepareAcknowledgement()}
                       >
                         Alındı teyidi hazırla
                       </Button>
@@ -926,8 +965,18 @@ export default function App() {
                     onChange={(event) => setReply(event.target.value)}
                     maxLength={16000}
                   />
+                  {ackTemplate && reply.trim() && (() => {
+                    const missing = missingAcknowledgementSections(reply);
+                    return missing.length > 0 ? (
+                      <p className="ethics-ack-warning" role="alert">
+                        Taslaktan zorunlu bölümler çıkarılmış:{' '}
+                        {missing.map((section) => section.label).join(', ')}. Yine de
+                        gönderebilirsiniz; eksik denetim kaydına işlenir.
+                      </p>
+                    ) : null;
+                  })()}
                   <Button disabled={busy || !reply.trim()} onClick={() => void sendReply()}>
-                    Yanıtı gönder
+                    {ackTemplate ? 'Alındı teyidini gönder' : 'Yanıtı gönder'}
                   </Button>
                 </section>
                 <section aria-labelledby="timeline-heading">

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACK_MANDATORY_SECTIONS,
   acknowledgementCountdown,
+  missingAcknowledgementSections,
   sortForQueue,
   CASE_STATUSES,
   isHistoricalStatus,
@@ -145,5 +147,36 @@ describe('iş kuyruğu sırası (ES-2 — liste arşiv değil kuyruktur)', () =>
     ).toBeNull();
     // Overdue already has its own, louder chip — two chips saying it twice is noise.
     expect(acknowledgementCountdown(caseAt(9), now)).toBeNull();
+  });
+});
+
+describe('alındı teyidi zorunlu bölümleri (ES-2 — uyarı düzenlerken görünür)', () => {
+  it('tam taslakta eksik yok; budanmış taslakta budananlar adlandırılır', () => {
+    const full = [
+      'Süreç nasıl işleyecek: ...',
+      'geri bildirimi en geç ... alacaksınız',
+      'Gizlilik: ...',
+      'Misilleme yasağı: ...',
+      'Dış kanallar: ...',
+      'her zaman dönebilirsiniz.',
+    ].join('\n');
+    expect(missingAcknowledgementSections(full)).toEqual([]);
+
+    const gutted = full.replace('Misilleme yasağı: ...', '').replace('Dış kanallar: ...', '');
+    expect(missingAcknowledgementSections(gutted).map((s) => s.code)).toEqual([
+      'RETALIATION_BAN',
+      'EXTERNAL_CHANNELS',
+    ]);
+  });
+
+  it('eşleşme Türkçe locale ile harf duyarsız — sunucuyla aynı sözlük', () => {
+    // Dotted/dotless i: "GİZLİLİK" must still match the "Gizlilik" marker.
+    expect(
+      missingAcknowledgementSections('GİZLİLİK: korunur').some((s) => s.code === 'CONFIDENTIALITY'),
+    ).toBe(false);
+    expect(ACK_MANDATORY_SECTIONS.map((s) => s.code)).toEqual([
+      'PROCESS', 'FEEDBACK_WINDOW', 'CONFIDENTIALITY',
+      'RETALIATION_BAN', 'EXTERNAL_CHANNELS', 'RETURN_PATH',
+    ]);
   });
 });

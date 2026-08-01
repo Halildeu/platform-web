@@ -353,6 +353,35 @@ export const CASE_STATUSES: readonly CaseStatus[] = ['NEW', 'ASSESSING', 'INVEST
  * a case that later closes as unsubstantiated must not read as a broken promise, and
  * nothing on this screen can commit to a schedule the investigation does not control.
  */
+/**
+ * ES-2 (#3271) — the mandatory sections of an acknowledgement, mirrored from the
+ * server's vocabulary so the warning appears WHILE the handler edits, not after the
+ * send. The server remains the authority (it records what was actually missing on the
+ * ledger); this list exists so the person sees the same verdict before committing.
+ * Marker strings are matched case-insensitively in Turkish locale, same as the server.
+ */
+export const ACK_MANDATORY_SECTIONS: ReadonlyArray<{
+  code: string;
+  marker: string;
+  label: string;
+}> = Object.freeze([
+  { code: 'PROCESS', marker: 'Süreç nasıl işleyecek', label: 'süreç açıklaması' },
+  { code: 'FEEDBACK_WINDOW', marker: 'geri bildirim', label: 'geri bildirim süresi' },
+  { code: 'CONFIDENTIALITY', marker: 'Gizlilik', label: 'gizlilik güvencesi' },
+  { code: 'RETALIATION_BAN', marker: 'Misilleme', label: 'misilleme yasağı' },
+  { code: 'EXTERNAL_CHANNELS', marker: 'Dış kanal', label: 'dış kanal bilgisi' },
+  { code: 'RETURN_PATH', marker: 'dönebilirsiniz', label: 'dönüş yolu' },
+]);
+
+export function missingAcknowledgementSections(
+  body: string,
+): ReadonlyArray<{ code: string; label: string }> {
+  const haystack = body.toLocaleLowerCase('tr');
+  return ACK_MANDATORY_SECTIONS.filter(
+    (section) => !haystack.includes(section.marker.toLocaleLowerCase('tr')),
+  ).map(({ code, label }) => ({ code, label }));
+}
+
 export function acknowledgementDraft(caseId: string, filedAt: string): string {
   const filed = Date.parse(filedAt);
   const filedText = Number.isNaN(filed)
