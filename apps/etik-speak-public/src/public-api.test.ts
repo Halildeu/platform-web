@@ -5,6 +5,7 @@ import {
   declareEvidence,
   listEvidence,
   uploadEvidence,
+  validateEvidenceFile,
   type EvidenceDeclaration,
   type EvidenceState,
   type EvidenceStatus,
@@ -44,6 +45,15 @@ const quarantined: EvidenceStatus = {
 describe('Etik Speak public evidence boundary', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('accepts a PDF and still refuses types outside the allowlist (ES-104J)', () => {
+    const pdf = new File([new Uint8Array(16)], 'kanit.pdf', { type: 'application/pdf' });
+    expect(() => validateEvidenceFile(pdf)).not.toThrow();
+    const docx = new File([new Uint8Array(16)], 'kanit.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    expect(() => validateEvidenceFile(docx)).toThrow('PDF');
   });
 
   it('declares only allowlisted metadata and never sends the local filename', async () => {

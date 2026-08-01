@@ -71,7 +71,9 @@ export interface EvidenceDeclaration {
 }
 
 export const MAX_EVIDENCE_BYTES = 26_214_400;
-export const SUPPORTED_EVIDENCE_MEDIA_TYPES = ['text/plain', 'image/jpeg', 'image/png'] as const;
+// application/pdf joined with ES-104J (#2929): the backend routes PDFs to the
+// dedicated no-network CDR worker, which rebuilds them as flattened page images.
+export const SUPPORTED_EVIDENCE_MEDIA_TYPES = ['text/plain', 'image/jpeg', 'image/png', 'application/pdf'] as const;
 const FIXED_EVIDENCE_UPLOAD_PATH = `${BASE}/evidence/uploads`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -199,7 +201,7 @@ export const validateEvidenceFile = (file: File) => {
       file.type as (typeof SUPPORTED_EVIDENCE_MEDIA_TYPES)[number],
     )
   )
-    throw new Error('Yalnız UTF-8 TXT, JPEG veya PNG kanıt dosyası yüklenebilir.');
+    throw new Error('Yalnız UTF-8 TXT, JPEG, PNG veya PDF kanıt dosyası yüklenebilir.');
   if (file.size < 1 || file.size > MAX_EVIDENCE_BYTES)
     throw new Error('Kanıt dosyası boş olamaz ve 25 MiB sınırını aşamaz.');
 };
