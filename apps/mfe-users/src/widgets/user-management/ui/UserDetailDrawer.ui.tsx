@@ -347,6 +347,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     resetTotpMutation,
     updateMfaPhoneMutation,
     updateMfaRequiredMutation,
+    updateMfaMethodsMutation,
   } = useUserMutations({
     companyId: storedScope.companyId,
     projectId: storedScope.projectId,
@@ -1259,6 +1260,22 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     }
   };
 
+  const handleToggleMfaMethod = async (method: string, next: boolean) => {
+    if (!user) return;
+    const current = mfaQuery.data?.allowedMethods ?? [];
+    // Empty means unrestricted, so unchecking the last box lifts the
+    // restriction rather than leaving an account with no way in.
+    const methods = next
+      ? Array.from(new Set([...current, method]))
+      : current.filter((m) => m !== method);
+    try {
+      await updateMfaMethodsMutation.mutateAsync({ userId: String(user.id), methods });
+      pushToast('success', t('users.detail.mfa.methods.saved'));
+    } catch {
+      pushToast('error', t('users.detail.mfa.methods.failed'));
+    }
+  };
+
   const handleToggleMfaRequired = async (next: boolean) => {
     if (!user) return;
     try {
@@ -2094,6 +2111,37 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
                     : t('users.detail.mfa.smsUnavailable')}
                 </li>
               </ul>
+
+              <div data-testid="mfa-methods">
+                <p className="text-sm font-medium text-text-primary">
+                  {t('users.detail.mfa.methods.title')}
+                </p>
+                <div className="mt-1 flex flex-wrap gap-4">
+                  {(['sms', 'email'] as const).map((method) => (
+                    <label key={method} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        data-testid={`mfa-method-${method}`}
+                        checked={(mfaQuery.data?.allowedMethods ?? []).includes(method)}
+                        disabled={!canEdit || updateMfaMethodsMutation.isPending}
+                        onChange={(event) =>
+                          void handleToggleMfaMethod(method, event.target.checked)
+                        }
+                      />
+                      <span>{t(`users.detail.mfa.methods.${method}`)}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-text-subtle">
+                  {t('users.detail.mfa.methods.hint')}
+                </p>
+                {/* Said plainly rather than shown as a third checkbox that
+                  * would silently do nothing: OTP Form is stock Keycloak and
+                  * does not read the allow-list. */}
+                <p className="mt-1 text-xs text-text-subtle" data-testid="mfa-methods-totp-note">
+                  {t('users.detail.mfa.methods.totpNote')}
+                </p>
+              </div>
 
               <div>
                 <label
