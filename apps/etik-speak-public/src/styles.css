@@ -40,6 +40,11 @@
 body {
   margin: 0;
   min-width: 320px;
+
+  /* Last-resort guard, not the fix: the fix is the content-first type scale above. If a
+     future size regresses past its container, the page must not grow a sideways scroll
+     or crop words off-canvas — the invariant test pins the scale itself. */
+  overflow-x: clip;
 }
 
 .public-shell {
@@ -92,7 +97,12 @@ body {
 .hero {
   width: min(1080px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: clamp(4rem, 10vw, 8rem) 0;
+
+  /* Was clamp(4rem, 10vw, 8rem): at 1280x720 the padding alone spent a fifth of the
+     viewport before a word appeared, and the actions fell below the fold. The reporter
+     this page exists for is anxious and often on a phone; the first screen must show
+     what to DO, not only how the product feels. */
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(2rem, 5vw, 3.5rem);
 }
 
 .eyebrow {
@@ -105,11 +115,19 @@ body {
 
 .hero h1 {
   max-width: 760px;
+
+  /* Measured defects, not taste: at clamp(2.8rem, 8vw, 6.5rem)/0.98 the heading filled
+     the fold on desktop and, on the closed-channel screen, the long Turkish line cropped
+     mid-word ("...almıyor." rendered as "aımıyor."). Content-first ceiling: two lines of
+     a real sentence stay whole and leave the fold to the lead and the actions. The 0.98
+     line-height also clipped descenders — never below 1.1 for multi-line headings. */
   font:
-    700 clamp(2.8rem, 8vw, 6.5rem)/0.98 Georgia,
+    700 clamp(2rem, 1.2rem + 3.2vw, 3.5rem)/1.12 Georgia,
     serif;
-  letter-spacing: -0.045em;
-  margin: 0.6rem 0 1.5rem;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  margin: 0.6rem 0 1.25rem;
   color: var(--etik-ink-strong);
 }
 
@@ -124,7 +142,7 @@ body {
   display: flex;
   gap: 0.8rem;
   flex-wrap: wrap;
-  margin: 2rem 0 4rem;
+  margin: 1.75rem 0 3rem;
 }
 
 .primary,
@@ -214,9 +232,9 @@ body {
 
 .panel h1 {
   font-family: Georgia, serif;
-  font-size: clamp(2rem, 5vw, 3.3rem);
+  font-size: clamp(1.6rem, 1.1rem + 2vw, 2.4rem);
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1.15;
   margin: 0.5rem 0 1rem;
 }
 
@@ -529,11 +547,7 @@ footer a {
   }
 
   .hero {
-    padding-top: 3.5rem;
-  }
-
-  .hero h1 {
-    font-size: 3.4rem;
+    padding-top: 2.5rem;
   }
 
   footer {
