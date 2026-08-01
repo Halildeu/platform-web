@@ -14,7 +14,13 @@ COPY apps/mfe-shell/src/styles ./apps/mfe-shell/src/styles
 RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter etik-speak-manager build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
+# ES-306 (#2665): ayni bulgu bu imaj icin de gecerliydi — 1.27-alpine tabani
+# 13 Critical + 56 High tasiyor. Yeni taban (nginx 1.30.4 / stable-alpine)
+# grype ile tarandi: Critical 0, High 2 (ikisi libtiff, fix'i yok, statik
+# dosya sunan nginx onu cagirmiyor). Etiket + digest yerine SADECE digest:
+# ikisini birlikte yazmak, etiket hareket ettiginde ikisinin ayni seyi
+# gosterdigi yanilsamasini birakiyordu.
+FROM nginxinc/nginx-unprivileged@sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
 ARG BUILD_SHA=""
 LABEL org.opencontainers.image.revision="${BUILD_SHA}"
 COPY --from=builder /app/apps/etik-speak-manager/dist /usr/share/nginx/html/ethic
