@@ -90,9 +90,29 @@ export interface MeetingAction {
   label: string;
   owner: string;
   due: string;
-  state: 'open' | 'waiting' | 'done';
+  state: 'open' | 'in-progress' | 'waiting' | 'done' | 'cancelled';
   citations: EvidenceCitation[];
   confidence: number;
+  version?: number;
+  source?: 'canonical' | 'intelligence';
+}
+
+export type MeetingAgendaItemStatus =
+  | 'pending'
+  | 'in-progress'
+  | 'discussed'
+  | 'deferred'
+  | 'skipped';
+
+export interface MeetingAgendaItem {
+  id: string;
+  position: number;
+  title: string;
+  detail: string;
+  owner: string;
+  plannedDurationMinutes: number | null;
+  status: MeetingAgendaItemStatus;
+  version: number;
 }
 
 export interface MeetingGate {
@@ -131,6 +151,7 @@ export interface MeetingRecord {
   transcript: TranscriptSegment[];
   summary: SourcedOutput;
   decisions: MeetingDecision[];
+  agenda: MeetingAgendaItem[];
   actions: MeetingAction[];
   gates: MeetingGate[];
   policyActions: MeetingPolicyAction[];
@@ -215,6 +236,28 @@ export const meetings: MeetingRecord[] = [
             confidence: 'medium',
           },
         ],
+      },
+    ],
+    agenda: [
+      {
+        id: 'agenda-demo-1',
+        position: 0,
+        title: 'Faz 24 ilerleme ve açık kapılar',
+        detail: 'Müşteri yolculuğu kanıtlarını gözden geçir.',
+        owner: 'Platform ekibi',
+        plannedDurationMinutes: 15,
+        status: 'discussed',
+        version: 0,
+      },
+      {
+        id: 'agenda-demo-2',
+        position: 1,
+        title: 'Direct-STT bağımlılıkları',
+        detail: 'mTLS ve runtime kabul kapılarını netleştir.',
+        owner: 'AI/Backend',
+        plannedDurationMinutes: 20,
+        status: 'in-progress',
+        version: 0,
       },
     ],
     actions: [
@@ -307,6 +350,7 @@ export const meetings: MeetingRecord[] = [
       citations: [],
     },
     decisions: [],
+    agenda: [],
     actions: [
       {
         id: 'act-3',
@@ -396,6 +440,7 @@ export const meetings: MeetingRecord[] = [
         citations: [],
       },
     ],
+    agenda: [],
     actions: [
       {
         id: 'act-4',

@@ -6,7 +6,9 @@ import {
   Download,
   FileText,
   Link2,
+  ListChecks,
   Mic,
+  Plus,
   Radio,
   RefreshCw,
   Search,
@@ -14,15 +16,23 @@ import {
   ShieldAlert,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import './styles.css';
 import {
   createPendingWorkbenchData,
+  createMeetingAction,
+  createMeetingAgendaItem,
   describeMeetingDetailError,
   loadMeetingById,
   loadMeetingDetail,
+  loadMeetingOperations,
   loadMeetingWorkbenchData,
+  updateMeetingAction,
+  updateMeetingAgendaItem,
+  type MeetingActionDraft,
+  type MeetingAgendaItemDraft,
+  type MeetingOperations,
   type MeetingWorkbenchData,
 } from './meeting-api';
 import {
@@ -49,6 +59,9 @@ import {
   statusLabel,
   type EvidenceCitation,
   type MeetingDetailStatus,
+  type MeetingAction,
+  type MeetingAgendaItem,
+  type MeetingAgendaItemStatus,
   type MeetingRecord,
   type MeetingStatus,
 } from './meeting-workbench';
@@ -68,6 +81,14 @@ export interface MeetingAppProps {
   loadWorkbench?: () => Promise<MeetingWorkbenchData>;
   loadMeeting?: (meetingId: string) => Promise<MeetingRecord>;
   loadDetail?: (meeting: MeetingRecord) => Promise<MeetingRecord>;
+  loadOperations?: (meetingId: string) => Promise<MeetingOperations>;
+  createAgendaItem?: (
+    meetingId: string,
+    draft: MeetingAgendaItemDraft,
+  ) => Promise<MeetingAgendaItem>;
+  updateAgendaItem?: (meetingId: string, item: MeetingAgendaItem) => Promise<MeetingAgendaItem>;
+  createAction?: (meetingId: string, draft: MeetingActionDraft) => Promise<MeetingAction>;
+  updateAction?: (meetingId: string, action: MeetingAction) => Promise<MeetingAction>;
   subscribeAuthChanges?: (listener: () => void) => () => void;
   resolveLiveStreamEndpoint?: (meeting: MeetingRecord) => string | null;
   webSocketFactory?: (endpoint: string) => MeetingWebSocket;
@@ -348,6 +369,7 @@ function DetailStatusPanel({
 }
 
 function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
+  const intelligenceActions = meeting.actions.filter((action) => action.source !== 'canonical');
   return (
     <section className="insight-panel" aria-label="Toplantı çıktıları">
       {meeting.intelligence?.state === 'ready' ? (
@@ -404,9 +426,9 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
 
         <section aria-labelledby="actions-title">
           <h3 id="actions-title">Aksiyonlar</h3>
-          {meeting.actions.length > 0 ? (
+          {intelligenceActions.length > 0 ? (
             <ul className="output-list">
-              {meeting.actions.map((action) => (
+              {intelligenceActions.map((action) => (
                 <li key={action.id}>
                   <Clock3 size={16} aria-hidden="true" />
                   <span className="output-copy">
@@ -443,10 +465,253 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   );
 }
 
+const agendaStatusOptions: Array<{ value: MeetingAgendaItemStatus; label: string }> = [
+  { value: 'pending', label: 'Bekliyor' },
+  { value: 'in-progress', label: 'Görüşülüyor' },
+  { value: 'discussed', label: 'Görüşüldü' },
+  { value: 'deferred', label: 'Ertelendi' },
+  { value: 'skipped', label: 'Atlandı' },
+];
+
+const actionStatusOptions: Array<{ value: MeetingAction['state']; label: string }> = [
+  { value: 'open', label: 'Açık' },
+  { value: 'in-progress', label: 'Devam ediyor' },
+  { value: 'done', label: 'Tamamlandı' },
+  { value: 'cancelled', label: 'İptal edildi' },
+];
+
+interface MeetingOperationsPanelProps {
+  meeting: MeetingRecord;
+  enabled: boolean;
+  busy: boolean;
+  status: string;
+  onCreateAgenda: (draft: MeetingAgendaItemDraft) => Promise<void>;
+  onUpdateAgenda: (item: MeetingAgendaItem) => Promise<void>;
+  onCreateAction: (draft: MeetingActionDraft) => Promise<void>;
+  onUpdateAction: (action: MeetingAction) => Promise<void>;
+}
+
+function MeetingOperationsPanel({
+  meeting,
+  enabled,
+  busy,
+  status,
+  onCreateAgenda,
+  onUpdateAgenda,
+  onCreateAction,
+  onUpdateAction,
+}: MeetingOperationsPanelProps) {
+  const [agendaTitle, setAgendaTitle] = useState('');
+  const [agendaOwner, setAgendaOwner] = useState('');
+  const [agendaMinutes, setAgendaMinutes] = useState('15');
+  const [actionLabel, setActionLabel] = useState('');
+  const [actionOwner, setActionOwner] = useState('');
+  const [actionDue, setActionDue] = useState('');
+  const canonicalActions = meeting.actions.filter((action) => action.source === 'canonical');
+
+  const submitAgenda = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const title = agendaTitle.trim();
+    const minutes = Number.parseInt(agendaMinutes, 10);
+    if (!title || !Number.isInteger(minutes) || minutes <= 0) return;
+    try {
+      await onCreateAgenda({
+        position: meeting.agenda.length,
+        title,
+        ownerSubject: agendaOwner.trim() || undefined,
+        plannedDurationMinutes: minutes,
+      });
+      setAgendaTitle('');
+      setAgendaOwner('');
+    } catch {
+      // Parent keeps the failure visible and leaves the draft intact.
+    }
+  };
+
+  const submitAction = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const description = actionLabel.trim();
+    if (!description) return;
+    try {
+      await onCreateAction({
+        description,
+        assigneeSubject: actionOwner.trim() || undefined,
+        dueAt: actionDue ? `${actionDue}T23:59:59Z` : undefined,
+      });
+      setActionLabel('');
+      setActionOwner('');
+      setActionDue('');
+    } catch {
+      // Parent keeps the failure visible and leaves the draft intact.
+    }
+  };
+
+  return (
+    <section className="meeting-operations" aria-label="Toplantı planı ve görevleri">
+      <div className="operations-heading">
+        <span>
+          <ListChecks size={18} aria-hidden="true" />
+          <span>
+            <strong>Toplantı planı</strong>
+            <small>Gündem ve atanmış görevler canonical meeting-service üzerinde saklanır.</small>
+          </span>
+        </span>
+        <small aria-live="polite">{status}</small>
+      </div>
+
+      <div className="operations-columns">
+        <section aria-labelledby="agenda-workbench-title">
+          <h3 id="agenda-workbench-title">Gündem</h3>
+          {meeting.agenda.length > 0 ? (
+            <ol className="operations-list agenda-list">
+              {[...meeting.agenda]
+                .sort((a, b) => a.position - b.position)
+                .map((item) => (
+                  <li key={item.id}>
+                    <span className="agenda-position">{item.position + 1}</span>
+                    <span className="operations-copy">
+                      <strong>{item.title}</strong>
+                      <small>
+                        {item.owner}
+                        {item.plannedDurationMinutes
+                          ? ` · ${item.plannedDurationMinutes} dakika`
+                          : ''}
+                      </small>
+                    </span>
+                    <select
+                      aria-label={`${item.title} gündem durumu`}
+                      value={item.status}
+                      disabled={!enabled || busy}
+                      onChange={(event) =>
+                        void onUpdateAgenda({
+                          ...item,
+                          status: event.target.value as MeetingAgendaItemStatus,
+                        })
+                      }
+                    >
+                      {agendaStatusOptions.map((option) => (
+                        <option value={option.value} key={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </li>
+                ))}
+            </ol>
+          ) : (
+            <p className="quiet-copy">Bu toplantı için gündem maddesi yok.</p>
+          )}
+          <form className="operations-form" onSubmit={(event) => void submitAgenda(event)}>
+            <input
+              aria-label="Gündem başlığı"
+              placeholder="Gündem maddesi"
+              value={agendaTitle}
+              disabled={!enabled || busy}
+              onChange={(event) => setAgendaTitle(event.target.value)}
+              required
+            />
+            <input
+              aria-label="Gündem sorumlusu"
+              placeholder="Sorumlu"
+              value={agendaOwner}
+              disabled={!enabled || busy}
+              onChange={(event) => setAgendaOwner(event.target.value)}
+            />
+            <input
+              aria-label="Planlanan süre"
+              type="number"
+              min="1"
+              value={agendaMinutes}
+              disabled={!enabled || busy}
+              onChange={(event) => setAgendaMinutes(event.target.value)}
+              required
+            />
+            <button type="submit" disabled={!enabled || busy || !agendaTitle.trim()}>
+              <Plus size={15} aria-hidden="true" />
+              Gündeme ekle
+            </button>
+          </form>
+        </section>
+
+        <section aria-labelledby="assigned-actions-title">
+          <h3 id="assigned-actions-title">Atanmış görevler</h3>
+          {canonicalActions.length > 0 ? (
+            <ul className="operations-list">
+              {canonicalActions.map((action) => (
+                <li key={action.id}>
+                  <Clock3 size={16} aria-hidden="true" />
+                  <span className="operations-copy">
+                    <strong>{action.label}</strong>
+                    <small>
+                      {action.owner} · {action.due}
+                    </small>
+                  </span>
+                  <select
+                    aria-label={`${action.label} görev durumu`}
+                    value={action.state === 'waiting' ? 'open' : action.state}
+                    disabled={!enabled || busy}
+                    onChange={(event) =>
+                      void onUpdateAction({
+                        ...action,
+                        state: event.target.value as MeetingAction['state'],
+                      })
+                    }
+                  >
+                    {actionStatusOptions.map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="quiet-copy">Atanmış canonical görev yok.</p>
+          )}
+          <form className="operations-form" onSubmit={(event) => void submitAction(event)}>
+            <input
+              aria-label="Görev açıklaması"
+              placeholder="Görev"
+              value={actionLabel}
+              disabled={!enabled || busy}
+              onChange={(event) => setActionLabel(event.target.value)}
+              required
+            />
+            <input
+              aria-label="Görev sorumlusu"
+              placeholder="Sorumlu"
+              value={actionOwner}
+              disabled={!enabled || busy}
+              onChange={(event) => setActionOwner(event.target.value)}
+            />
+            <input
+              aria-label="Görev termin tarihi"
+              type="date"
+              value={actionDue}
+              disabled={!enabled || busy}
+              onChange={(event) => setActionDue(event.target.value)}
+            />
+            <button type="submit" disabled={!enabled || busy || !actionLabel.trim()}>
+              <Plus size={15} aria-hidden="true" />
+              Görev ata
+            </button>
+          </form>
+        </section>
+      </div>
+    </section>
+  );
+}
+
 export default function MeetingApp({
   loadWorkbench = loadMeetingWorkbenchData,
   loadMeeting = loadMeetingById,
   loadDetail = loadMeetingDetail,
+  loadOperations = loadMeetingOperations,
+  createAgendaItem = createMeetingAgendaItem,
+  updateAgendaItem = updateMeetingAgendaItem,
+  createAction = createMeetingAction,
+  updateAction = updateMeetingAction,
   subscribeAuthChanges = defaultSubscribeAuthChanges,
   resolveLiveStreamEndpoint = defaultResolveLiveStreamEndpoint,
   webSocketFactory,
@@ -459,6 +724,9 @@ export default function MeetingApp({
   const [isLoading, setIsLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [detailReloadToken, setDetailReloadToken] = useState(0);
+  const [operationsReloadToken, setOperationsReloadToken] = useState(0);
+  const [operationsBusy, setOperationsBusy] = useState(false);
+  const [operationsStatus, setOperationsStatus] = useState('');
   const [authRevision, setAuthRevision] = useState(0);
   const [selectedId, setSelectedId] = useState(() => readMeetingSelection());
   const [selectionStatus, setSelectionStatus] = useState<MeetingDetailStatus | null>(null);
@@ -605,7 +873,19 @@ export default function MeetingApp({
         setWorkbench((current) => ({
           ...current,
           records: current.records.map((meeting) =>
-            meeting.id === hydrated.id ? hydrated : meeting,
+            meeting.id === hydrated.id
+              ? {
+                  ...hydrated,
+                  agenda: meeting.agenda,
+                  actions: [
+                    ...meeting.actions.filter((action) => action.source === 'canonical'),
+                    ...hydrated.actions.map((action) => ({
+                      ...action,
+                      source: action.source ?? ('intelligence' as const),
+                    })),
+                  ],
+                }
+              : meeting,
           ),
         }));
       })
@@ -630,6 +910,60 @@ export default function MeetingApp({
     };
   }, [detailReloadToken, loadDetail, reloadToken, selectedId, workbench.source.mode]);
 
+  useEffect(() => {
+    if (!['api', 'empty'].includes(workbench.source.mode) || !selectedId) {
+      setOperationsStatus(
+        workbench.source.mode === 'demo' ? 'Demo modunda değişiklik yapılmaz.' : '',
+      );
+      return;
+    }
+    if (!workbench.records.some((meeting) => meeting.id === selectedId)) return;
+
+    let cancelled = false;
+    setOperationsStatus('Toplantı planı yükleniyor.');
+    loadOperations(selectedId)
+      .then((operations) => {
+        if (cancelled) return;
+        setWorkbench((current) => ({
+          ...current,
+          records: current.records.map((meeting) =>
+            meeting.id === selectedId
+              ? {
+                  ...meeting,
+                  agenda: operations.agenda,
+                  actions: [
+                    ...operations.actions,
+                    ...meeting.actions.filter((action) => action.source !== 'canonical'),
+                  ],
+                }
+              : meeting,
+          ),
+        }));
+        setOperationsStatus('Canonical plan güncel.');
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const status =
+          typeof error === 'object' &&
+          error !== null &&
+          'response' in error &&
+          typeof error.response === 'object' &&
+          error.response !== null &&
+          'status' in error.response
+            ? error.response.status
+            : null;
+        setOperationsStatus(
+          status === 403
+            ? 'Toplantı planını görüntüleme yetkisi doğrulanamadı.'
+            : 'Toplantı planı şu anda okunamıyor.',
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadOperations, operationsReloadToken, selectedId, workbench.source.mode]);
+
   const filteredMeetings = useMemo(
     () => filterMeetings(workbench.records, { query, status: statusFilter }),
     [query, statusFilter, workbench.records],
@@ -646,22 +980,23 @@ export default function MeetingApp({
   const liveTranscriptSseChunks = liveTranscriptSse?.chunks ?? [];
   const hasLiveSegments =
     !!selectedMeeting && (liveStream.segments.length > 0 || liveTranscriptSseChunks.length > 0);
-  const renderedSelectedMeeting = hasLiveSegments && selectedMeeting
-    ? {
-        ...selectedMeeting,
-        status: 'live' as const,
-        transcriptFeed: {
-          state: 'live' as const,
-          label: liveStream.label,
-          detail: liveStream.detail,
-        },
-        transcript: [
-          ...selectedMeeting.transcript,
-          ...liveStream.segments,
-          ...liveTranscriptSseChunks,
-        ],
-      }
-    : selectedMeeting;
+  const renderedSelectedMeeting =
+    hasLiveSegments && selectedMeeting
+      ? {
+          ...selectedMeeting,
+          status: 'live' as const,
+          transcriptFeed: {
+            state: 'live' as const,
+            label: liveStream.label,
+            detail: liveStream.detail,
+          },
+          transcript: [
+            ...selectedMeeting.transcript,
+            ...liveStream.segments,
+            ...liveTranscriptSseChunks,
+          ],
+        }
+      : selectedMeeting;
   const stats = computeStats(workbench.records);
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedId(meetingId);
@@ -687,6 +1022,103 @@ export default function MeetingApp({
     }));
     setDetailReloadToken((value) => value + 1);
   };
+
+  const runOperation = async (
+    operation: () => Promise<void>,
+    successMessage: string,
+  ): Promise<void> => {
+    if (!selectedId || operationsBusy) return;
+    setOperationsBusy(true);
+    setOperationsStatus('Değişiklik kaydediliyor.');
+    try {
+      await operation();
+      setOperationsStatus(successMessage);
+      setOperationsReloadToken((value) => value + 1);
+    } catch (error: unknown) {
+      const status =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof error.response === 'object' &&
+        error.response !== null &&
+        'status' in error.response
+          ? error.response.status
+          : null;
+      setOperationsStatus(
+        status === 409
+          ? 'Kayıt başka bir kullanıcı tarafından değiştirildi; canonical plan yenileniyor.'
+          : status === 403
+            ? 'Bu değişiklik için yönetici yetkisi doğrulanamadı.'
+            : 'Değişiklik kaydedilemedi; mevcut kayıt korunuyor.',
+      );
+      setOperationsReloadToken((value) => value + 1);
+      throw error;
+    } finally {
+      setOperationsBusy(false);
+    }
+  };
+
+  const handleCreateAgenda = (draft: MeetingAgendaItemDraft) =>
+    runOperation(async () => {
+      const created = await createAgendaItem(selectedId, draft);
+      setWorkbench((current) => ({
+        ...current,
+        records: current.records.map((meeting) =>
+          meeting.id === selectedId
+            ? { ...meeting, agenda: [...meeting.agenda, created] }
+            : meeting,
+        ),
+      }));
+    }, 'Gündem maddesi kaydedildi; canonical plan yeniden okundu.');
+
+  const handleUpdateAgenda = (item: MeetingAgendaItem) =>
+    runOperation(async () => {
+      const updated = await updateAgendaItem(selectedId, item);
+      setWorkbench((current) => ({
+        ...current,
+        records: current.records.map((meeting) =>
+          meeting.id === selectedId
+            ? {
+                ...meeting,
+                agenda: meeting.agenda.map((agendaItem) =>
+                  agendaItem.id === updated.id ? updated : agendaItem,
+                ),
+              }
+            : meeting,
+        ),
+      }));
+    }, 'Gündem durumu kaydedildi; canonical plan yeniden okundu.');
+
+  const handleCreateAction = (draft: MeetingActionDraft) =>
+    runOperation(async () => {
+      const created = await createAction(selectedId, draft);
+      setWorkbench((current) => ({
+        ...current,
+        records: current.records.map((meeting) =>
+          meeting.id === selectedId
+            ? { ...meeting, actions: [created, ...meeting.actions] }
+            : meeting,
+        ),
+      }));
+    }, 'Görev atandı; canonical plan yeniden okundu.');
+
+  const handleUpdateAction = (action: MeetingAction) =>
+    runOperation(async () => {
+      const updated = await updateAction(selectedId, action);
+      setWorkbench((current) => ({
+        ...current,
+        records: current.records.map((meeting) =>
+          meeting.id === selectedId
+            ? {
+                ...meeting,
+                actions: meeting.actions.map((currentAction) =>
+                  currentAction.id === updated.id ? updated : currentAction,
+                ),
+              }
+            : meeting,
+        ),
+      }));
+    }, 'Görev durumu kaydedildi; canonical plan yeniden okundu.');
 
   useEffect(() => {
     if (!selectedMeeting) {
@@ -938,6 +1370,17 @@ export default function MeetingApp({
                 onRetry={handleRetryDetail}
               />
             ) : null}
+
+            <MeetingOperationsPanel
+              meeting={renderedSelectedMeeting}
+              enabled={['api', 'empty'].includes(workbench.source.mode)}
+              busy={operationsBusy}
+              status={operationsStatus}
+              onCreateAgenda={handleCreateAgenda}
+              onUpdateAgenda={handleUpdateAgenda}
+              onCreateAction={handleCreateAction}
+              onUpdateAction={handleUpdateAction}
+            />
 
             <div className="detail-grid">
               <section className="transcript-panel" aria-labelledby="transcript-title">
