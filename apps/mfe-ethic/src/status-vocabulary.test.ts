@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  acknowledgementCountdown,
+  sortForQueue,
   CASE_STATUSES,
   isHistoricalStatus,
   KNOWN_STATUS_VALUES,
@@ -69,5 +71,79 @@ describe('vaka durumu sözlüğü', () => {
   // onu düşüren bir geçmiş, olan bir şeyi olmamış gösterir.
   it('tanınmayan değer ham adıyla görünür', () => {
     expect(statusLabel('ETIK_SPEAK_GELECEK_DURUM')).toBe('ETIK_SPEAK_GELECEK_DURUM');
+  });
+});
+
+describe('iş kuyruğu sırası (ES-2 — liste arşiv değil kuyruktur)', () => {
+  // Frozen clock: 2026-08-01T12:00Z. Day arithmetic must not depend on when CI runs.
+  const now = Date.parse('2026-08-01T12:00:00Z');
+  const day = 24 * 60 * 60 * 1000;
+  const caseAt = (
+    createdDaysAgo: number,
+    overrides: Partial<{
+      acknowledgedAt: string | null;
+      participantCount: number;
+      updatedAt: string;
+    }> = {},
+  ) => ({
+    createdAt: new Date(now - createdDaysAgo * day).toISOString(),
+    acknowledgedAt: null as string | null,
+    participantCount: 1,
+    updatedAt: new Date(now - day).toISOString(),
+    ...overrides,
+  });
+
+  it('süresi geçmiş teyit her şeyin önüne geçer; son güne yaklaşan onu izler', () => {
+    const acknowledged = caseAt(1, {
+      acknowledgedAt: new Date(now - day / 2).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+    });
+    const nearDeadline = caseAt(6);
+    const fresh = caseAt(1);
+    const overdue = caseAt(9);
+    const sorted = sortForQueue([acknowledged, nearDeadline, fresh, overdue], now);
+    expect(sorted[0]).toBe(overdue);
+    expect(sorted[1]).toBe(nearDeadline);
+    expect(sorted[2]).toBe(fresh);
+    expect(sorted[3]).toBe(acknowledged);
+  });
+
+  it('sahipsiz vaka, teyidi verilmiş güncel vakanın önünde durur', () => {
+    const unattended = caseAt(2, {
+      acknowledgedAt: new Date(now - day).toISOString(),
+      participantCount: 0,
+    });
+    const attended = caseAt(2, {
+      acknowledgedAt: new Date(now - day).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+    });
+    expect(sortForQueue([attended, unattended], now)[0]).toBe(unattended);
+  });
+
+  it('bilinmeyen teyit durumu aciliyet ÇIĞLIĞI atamaz', () => {
+    // A frontend deployed ahead of the service must not scream urgency it cannot
+    // substantiate: absent acknowledgedAt sorts as ordinary, never as overdue.
+    const unknown = { ...caseAt(9), acknowledgedAt: undefined } as never;
+    const overdue = caseAt(9);
+    expect(sortForQueue([unknown, overdue], now)[0]).toBe(overdue);
+  });
+
+  it('geri sayım: bugün-son-gün acil; teyit verilmişse ve süre geçmişse çip yok', () => {
+    expect(acknowledgementCountdown(caseAt(6), now)).toEqual({
+      text: 'Teyit için son gün',
+      urgent: true,
+    });
+    expect(acknowledgementCountdown(caseAt(2), now)).toEqual({
+      text: 'Teyit: 5 gün kaldı',
+      urgent: false,
+    });
+    expect(
+      acknowledgementCountdown(
+        caseAt(2, { acknowledgedAt: new Date(now - day).toISOString() }),
+        now,
+      ),
+    ).toBeNull();
+    // Overdue already has its own, louder chip — two chips saying it twice is noise.
+    expect(acknowledgementCountdown(caseAt(9), now)).toBeNull();
   });
 });
