@@ -23,6 +23,7 @@ type View =
   | 'receipt'
   | 'mailbox-login'
   | 'mailbox'
+  | 'channel-inactive'
   | 'privacy'
   | 'accessibility';
 
@@ -124,7 +125,15 @@ export default function App() {
       intakeOperation.current = { key: crypto.randomUUID(), secret: newAccessSecret() };
       setView('receipt');
     } catch (e) {
-      setError(message(e));
+      // ES-403 (#885): a lapsed subscription closes ONLY new intake. The refusal gets its
+      // own view rather than an error line, because the reporter needs the two facts an
+      // alert cannot carry: their existing report is still reachable, and where else they
+      // can turn (Directive 2019/1937 Art. 9(1)(g) requires that information regardless).
+      if ((e as { code?: string }).code === 'INTAKE_CHANNEL_INACTIVE') {
+        setView('channel-inactive');
+      } else {
+        setError(message(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -259,6 +268,15 @@ export default function App() {
         {view === 'report' && (
           <ReportForm busy={busy} onSubmit={submit} onBack={() => setView('home')} />
         )}{' '}
+        {view === 'channel-inactive' && (
+          <ChannelInactive
+            onMailbox={() => {
+              setError('');
+              setView('mailbox-login');
+            }}
+            onBack={() => setView('home')}
+          />
+        )}{' '}
         {view === 'receipt' && receipt && (
           <ReceiptView
             receipt={receipt}
@@ -353,6 +371,44 @@ function Home({ onReport, onMailbox }: { onReport: () => void; onMailbox: () => 
     </section>
   );
 }
+/**
+ * ES-403 (#885) — shown when the organisation's subscription has lapsed beyond grace and
+ * the backend refused a new report with INTAKE_CHANNEL_INACTIVE.
+ *
+ * <p>Two promises this screen must keep, in this order: the reporter's existing report is
+ * still fully reachable (only NEW intake closed — owner decision 2026-08-01), and the
+ * reporter is told where else to turn. Directive 2019/1937 Art. 9(1)(g) obliges the channel
+ * to provide external-avenue information anyway; a closed internal form does not suspend
+ * that duty, it is the moment the duty matters most.
+ */
+function ChannelInactive({ onMailbox, onBack }: { onMailbox: () => void; onBack: () => void }) {
+  return (
+    <section className="hero" aria-labelledby="channel-inactive-title">
+      <div className="eyebrow">Bildirim kanalı</div>
+      <h1 id="channel-inactive-title">Bu kanal şu an yeni bildirim almıyor.</h1>
+      <p className="lead">
+        Kuruluşun bu bildirim kanalı aboneliği sona erdiği için yeni bildirim alımı geçici
+        olarak durduruldu. <strong>Daha önce yaptığınız bildirimler kapanmadı</strong> —
+        takip, yanıt ve ek gönderimi açık kalır; bildirim numaranız ve erişim sırrınızla
+        her zaman ulaşabilirsiniz.
+      </p>
+      <p className="lead">
+        Yeni bir bildiriminiz varsa kuruluşun diğer iç kanallarına (ör. İK, iç denetim) veya
+        yetkili resmî makamlara başvurabilirsiniz. Bildirim hakkınız bu kanalın durumundan
+        bağımsız olarak devam eder.
+      </p>
+      <div className="hero-actions">
+        <button className="primary" onClick={onMailbox}>
+          Mevcut bildirimimi takip et
+        </button>
+        <button className="secondary" onClick={onBack}>
+          Ana sayfaya dön
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ReportForm({
   busy,
   onSubmit,

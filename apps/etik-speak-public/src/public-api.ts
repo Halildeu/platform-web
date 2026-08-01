@@ -93,7 +93,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     : null;
   if (!response.ok) {
     const error = new Error(data?.error?.message ?? 'İşlem tamamlanamadı.');
-    (error as Error & { status?: number }).status = response.status;
+    (error as Error & { status?: number; code?: string }).status = response.status;
+    // The machine-readable code travels with the error so the UI can react to a
+    // specific refusal (e.g. INTAKE_CHANNEL_INACTIVE) without matching on Turkish
+    // message text that is free to change.
+    (error as Error & { code?: string }).code = data?.error?.code;
     throw error;
   }
   if (data === null) throw new Error('Servis yanıtı doğrulanamadı; işlem sonucunu kontrol edin.');
