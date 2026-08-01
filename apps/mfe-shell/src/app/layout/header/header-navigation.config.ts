@@ -1,6 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  AlarmClock,
+  Inbox,
   Users,
+  UserX,
   Settings,
   Shield,
   FileSearch,
@@ -87,15 +90,6 @@ export const NAV_GROUPS: NavGroup[] = [
         module: MODULE_KEYS.SUGGESTIONS,
       },
       {
-        key: 'ethic',
-        labelKey: 'shell.mega.hr.ethic',
-        descriptionKey: 'shell.mega.hr.ethic.desc',
-        path: '/ethic',
-        icon: Scale,
-        module: MODULE_KEYS.ETHIC,
-        remoteFlag: 'ethic',
-      },
-      {
         key: ATS_PRODUCT_HUB_ENTRY.id,
         labelKey: 'shell.mega.hr.atsProductHub',
         descriptionKey: 'shell.mega.hr.atsProductHub.desc',
@@ -123,6 +117,44 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: PieChart,
         module: MODULE_KEYS.REPORT,
         /* permission field removed — module field drives access check */
+      },
+    ],
+  },
+  {
+    // Etik Speak is a separately-sellable product (ADR-0049); burying it as one
+    // line inside İK undersold both facts. Top level, with GOAL-shaped children:
+    // the sub-items are work queues ("what needs me"), not site sections.
+    key: 'ethics',
+    labelKey: 'shell.mega.ethics',
+    icon: Scale,
+    permission: 'any-child',
+    items: [
+      {
+        key: 'ethics-cases',
+        labelKey: 'shell.mega.ethics.cases',
+        descriptionKey: 'shell.mega.ethics.cases.desc',
+        path: '/admin/ethics',
+        icon: Inbox,
+        module: MODULE_KEYS.ETHIC,
+        remoteFlag: 'ethic',
+      },
+      {
+        key: 'ethics-unattended',
+        labelKey: 'shell.mega.ethics.unattended',
+        descriptionKey: 'shell.mega.ethics.unattended.desc',
+        path: '/admin/ethics?odak=sahipsiz',
+        icon: UserX,
+        module: MODULE_KEYS.ETHIC,
+        remoteFlag: 'ethic',
+      },
+      {
+        key: 'ethics-ack-due',
+        labelKey: 'shell.mega.ethics.ackDue',
+        descriptionKey: 'shell.mega.ethics.ackDue.desc',
+        path: '/admin/ethics?odak=teyit',
+        icon: AlarmClock,
+        module: MODULE_KEYS.ETHIC,
+        remoteFlag: 'ethic',
       },
     ],
   },

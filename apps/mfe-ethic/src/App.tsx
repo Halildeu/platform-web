@@ -31,6 +31,7 @@ import {
   CASE_STATUSES,
   EMPTY_CASE_FILTER,
   filterCases,
+  initialFilterFromQuery,
   isFilterActive,
   sortForQueue,
   isAnonymous,
@@ -57,7 +58,9 @@ export default function App() {
   const [evidenceError, setEvidenceError] = useState('');
   const [downloadingEvidenceId, setDownloadingEvidenceId] = useState('');
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [filter, setFilter] = useState<CaseFilter>(EMPTY_CASE_FILTER);
+  const [filter, setFilter] = useState<CaseFilter>(() =>
+    initialFilterFromQuery(typeof window === 'undefined' ? '' : window.location.search),
+  );
   // Derived, not stored: a second copy of the list would drift from the first the moment
   // a refresh lands while a filter is on.
   // Queue order, not recency: the case one day from its statutory deadline outranks

@@ -51,6 +51,13 @@ const common = {
   'shell.launcher.users.description': 'User management',
 
   // Shell mega navigation
+  'shell.mega.ethics': 'Ethics',
+  'shell.mega.ethics.cases': 'All cases',
+  'shell.mega.ethics.cases.desc': 'Work queue, ordered by urgency',
+  'shell.mega.ethics.unattended': 'Unattended cases',
+  'shell.mega.ethics.unattended.desc': 'Reports nobody has picked up yet',
+  'shell.mega.ethics.ackDue': 'Acknowledgement overdue',
+  'shell.mega.ethics.ackDue.desc': 'Cases past the seven-day acknowledgement window',
   'shell.mega.hr': 'HR',
   'shell.mega.hr.suggestions': 'Suggestions',
   'shell.mega.hr.suggestions.desc': 'Suggestion & feedback module',

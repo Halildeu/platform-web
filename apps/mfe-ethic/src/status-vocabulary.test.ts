@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACK_MANDATORY_SECTIONS,
+  EMPTY_CASE_FILTER,
+  initialFilterFromQuery,
   acknowledgementCountdown,
   missingAcknowledgementSections,
   sortForQueue,
@@ -178,5 +180,21 @@ describe('alındı teyidi zorunlu bölümleri (ES-2 — uyarı düzenlerken gör
       'PROCESS', 'FEEDBACK_WINDOW', 'CONFIDENTIALITY',
       'RETALIATION_BAN', 'EXTERNAL_CHANNELS', 'RETURN_PATH',
     ]);
+  });
+});
+
+describe('başlık alt-hedef derin bağlantıları (?odak=)', () => {
+  it('sahipsiz ve teyit odakları doğru süzgeci ön-ayarlar; bilinmeyen odak TÜM kuyruğu gösterir', () => {
+    expect(initialFilterFromQuery('?odak=sahipsiz')).toEqual({
+      ...EMPTY_CASE_FILTER,
+      unattended: true,
+    });
+    expect(initialFilterFromQuery('?odak=teyit')).toEqual({
+      ...EMPTY_CASE_FILTER,
+      overdue: true,
+    });
+    // A mistyped link must not silently hide cases behind a filter nobody chose.
+    expect(initialFilterFromQuery('?odak=yanlis')).toEqual(EMPTY_CASE_FILTER);
+    expect(initialFilterFromQuery('')).toEqual(EMPTY_CASE_FILTER);
   });
 });
