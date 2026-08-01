@@ -236,6 +236,25 @@ const resolveRoleMeta = (rawName: string, locale: string): RoleMeta => {
 // is caught before a round-trip; the server validates it again regardless.
 const MFA_PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 
+// gitops#3251 — every second factor an operator can allow or withhold per user.
+// `totp` joined once the privileged flow started running an OTP form that reads
+// the allow-list; before that, offering the box would have been a control that
+// silently did nothing.
+const MFA_METHODS = ['sms', 'email', 'totp'] as const;
+
+/**
+ * What the boxes show: the methods this account will actually be OFFERED, not
+ * the raw attribute.
+ *
+ * The stored value is a restriction, and an absent one means "no restriction" —
+ * so rendering it directly leaves every box empty on an unrestricted account,
+ * which reads as "nothing is enabled" while the truth is the exact opposite.
+ * Showing the effective set makes the control answer one question, the one an
+ * operator actually has: will this method be offered to this person?
+ */
+const effectiveMfaMethods = (allowed: string[] | undefined): string[] =>
+  allowed && allowed.length > 0 ? allowed : [...MFA_METHODS];
+
 const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user }) => {
   const { t, locale } = useUsersI18n();
   const queryClient = useQueryClient();
@@ -1262,12 +1281,16 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
 
   const handleToggleMfaMethod = async (method: string, next: boolean) => {
     if (!user) return;
-    const current = mfaQuery.data?.allowedMethods ?? [];
-    // Empty means unrestricted, so unchecking the last box lifts the
-    // restriction rather than leaving an account with no way in.
-    const methods = next
+    // The boxes show what is OFFERED, not the raw attribute, so the write has
+    // to start from the same effective set the operator is looking at.
+    const current = effectiveMfaMethods(mfaQuery.data?.allowedMethods);
+    const chosen = next
       ? Array.from(new Set([...current, method]))
       : current.filter((m) => m !== method);
+    // Every box ticked is not a restriction — it is the absence of one. Storing
+    // the full list instead would mean an account silently stops following the
+    // deployment whenever a fourth method is added.
+    const methods = MFA_METHODS.every((m) => chosen.includes(m)) ? [] : chosen;
     try {
       await updateMfaMethodsMutation.mutateAsync({ userId: String(user.id), methods });
       pushToast('success', t('users.detail.mfa.methods.saved'));
@@ -2117,12 +2140,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
                   {t('users.detail.mfa.methods.title')}
                 </p>
                 <div className="mt-1 flex flex-wrap gap-4">
-                  {(['sms', 'email'] as const).map((method) => (
+                  {MFA_METHODS.map((method) => (
                     <label key={method} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         data-testid={`mfa-method-${method}`}
-                        checked={(mfaQuery.data?.allowedMethods ?? []).includes(method)}
+                        checked={effectiveMfaMethods(mfaQuery.data?.allowedMethods).includes(
+                          method,
+                        )}
                         disabled={!canEdit || updateMfaMethodsMutation.isPending}
                         onChange={(event) =>
                           void handleToggleMfaMethod(method, event.target.checked)
@@ -2135,9 +2160,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
                 <p className="mt-1 text-xs text-text-subtle">
                   {t('users.detail.mfa.methods.hint')}
                 </p>
-                {/* Said plainly rather than shown as a third checkbox that
-                  * would silently do nothing: OTP Form is stock Keycloak and
-                  * does not read the allow-list. */}
+                {/* The one case where a ticked box and reality can differ, so it
+                  * is stated rather than left for someone to discover: a
+                  * restriction is not allowed to close the last door. */}
                 <p className="mt-1 text-xs text-text-subtle" data-testid="mfa-methods-totp-note">
                   {t('users.detail.mfa.methods.totpNote')}
                 </p>

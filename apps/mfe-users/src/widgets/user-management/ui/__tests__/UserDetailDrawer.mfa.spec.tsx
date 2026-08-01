@@ -354,7 +354,11 @@ describe('UserDetailDrawer — MFA section (gitops#3211)', () => {
     expect(mfaMocks.setRequired).not.toHaveBeenCalled();
   });
 
-  it('checking a method adds it; the list starts empty meaning unrestricted', async () => {
+  it('an unrestricted account shows every method ticked, not an empty row', async () => {
+    // The stored value is a restriction and an absent one means "none", so
+    // rendering it raw left every box empty on an account where in fact every
+    // method was on offer — the display said the opposite of the truth
+    // (gitops#3251).
     mfaMocks.status = {
       data: { requiresMfa: true, totpConfigured: false, phoneNumber: null,
               smsLaneReady: false, allowedMethods: [] },
@@ -362,12 +366,45 @@ describe('UserDetailDrawer — MFA section (gitops#3211)', () => {
     };
     renderDrawer();
 
-    const sms = await screen.findByTestId<HTMLInputElement>('mfa-method-sms');
-    expect(sms.checked).toBe(false);
-    fireEvent.click(sms);
+    for (const method of ['sms', 'email', 'totp']) {
+      const box = await screen.findByTestId<HTMLInputElement>(`mfa-method-${method}`);
+      expect(box.checked).toBe(true);
+    }
+  });
+
+  it('unticking one from an unrestricted account writes the remaining methods', async () => {
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: false, phoneNumber: null,
+              smsLaneReady: false, allowedMethods: [] },
+      isError: false, isLoading: false,
+    };
+    renderDrawer();
+
+    const email = await screen.findByTestId<HTMLInputElement>('mfa-method-email');
+    fireEvent.click(email);
 
     await waitFor(() =>
-      expect(mfaMocks.setMethods).toHaveBeenCalledWith({ userId: '2', methods: ['sms'] }),
+      expect(mfaMocks.setMethods).toHaveBeenCalledWith({ userId: '2', methods: ['sms', 'totp'] }),
+    );
+  });
+
+  it('ticking the last missing method clears the attribute instead of storing all three', async () => {
+    // Every box ticked is the absence of a restriction, not a restriction that
+    // happens to list everything. Storing the full list would quietly freeze
+    // the account against any method added later.
+    mfaMocks.status = {
+      data: { requiresMfa: true, totpConfigured: false, phoneNumber: null,
+              smsLaneReady: false, allowedMethods: ['sms', 'email'] },
+      isError: false, isLoading: false,
+    };
+    renderDrawer();
+
+    const totp = await screen.findByTestId<HTMLInputElement>('mfa-method-totp');
+    expect(totp.checked).toBe(false);
+    fireEvent.click(totp);
+
+    await waitFor(() =>
+      expect(mfaMocks.setMethods).toHaveBeenCalledWith({ userId: '2', methods: [] }),
     );
   });
 
@@ -390,17 +427,21 @@ describe('UserDetailDrawer — MFA section (gitops#3211)', () => {
     );
   });
 
-  it('says plainly that the authenticator app is not governed here', async () => {
-    // A third checkbox would silently do nothing: OTP Form is stock Keycloak
-    // and never reads the allow-list.
+  it('the authenticator app is a real checkbox now, and its one exception is stated', async () => {
+    // It was deliberately absent while `auth-otp-form` ran the lane, because a
+    // box in front of something that never reads the attribute is a control
+    // that lies. gitops#3251 put a gate behind it; the note that remains is the
+    // one case where a ticked box and reality can still differ — a restriction
+    // is not allowed to close the last door.
     mfaMocks.status = {
       data: { requiresMfa: true, totpConfigured: true, phoneNumber: null,
-              smsLaneReady: false, allowedMethods: [] },
+              smsLaneReady: false, allowedMethods: ['sms'] },
       isError: false, isLoading: false,
     };
     renderDrawer();
 
-    expect(await screen.findByTestId('mfa-methods-totp-note')).toBeTruthy();
-    expect(screen.queryByTestId('mfa-method-totp')).toBeNull();
+    const totp = await screen.findByTestId<HTMLInputElement>('mfa-method-totp');
+    expect(totp.checked).toBe(false);
+    expect(screen.getByTestId('mfa-methods-totp-note')).toBeTruthy();
   });
 });
