@@ -105,6 +105,12 @@ export interface UserSummary {
   id: string;
   fullName: string;
   email: string;
+  /**
+   * Keycloak login name (gitops#3291). Distinct from `email` — they coincided
+   * only while every username happened to be an e-mail address. Undefined
+   * until user-service has reconciled the row against Keycloak.
+   */
+  username?: string | null;
   role: string;
   status: UserAccountStatus;
   lastLoginAt?: string | null;

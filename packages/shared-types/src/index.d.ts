@@ -73,6 +73,8 @@ export interface UserSummary {
   id: string;
   fullName: string;
   email: string;
+  /** Keycloak login name (gitops#3291); distinct from `email`. */
+  username?: string | null;
   role: string;
   status: UserAccountStatus;
   lastLoginAt?: string | null;

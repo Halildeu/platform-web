@@ -25,6 +25,17 @@ export interface BuildEntityGridQueryParamsOptions {
   mapFilterModel?: (model: IServerSideGetRowsRequest['filterModel']) => Partial<EntityGridQueryParams>;
   /** Per-column pipe-separated values for backend multiSearch (from gridApi.__multiSearchParams). */
   multiSearchParams?: Record<string, string>;
+  /**
+   * `colId` → backend sort field, for grids whose column ids differ from the
+   * names their backend will accept.
+   *
+   * Without it the column id goes on the wire verbatim, and a backend that
+   * validates sort fields against an allow-list drops anything it does not
+   * recognise — silently, since an ignored sort still returns rows, just in the
+   * default order. Columns absent from the map pass through unchanged, so
+   * existing callers are unaffected.
+   */
+  sortFieldMap?: Record<string, string>;
 }
 
 /**
@@ -39,20 +50,30 @@ const isAdvancedFilterModel = (model: unknown): model is AgAdvancedFilterModel =
   return 'filterType' in model;
 };
 
-const toSortParam = (sortModel: SortModelItem[] | undefined): string | undefined => {
+const toSortParam = (
+  sortModel: SortModelItem[] | undefined,
+  sortFieldMap?: Record<string, string>,
+): string | undefined => {
   if (!Array.isArray(sortModel) || sortModel.length === 0) {
     return undefined;
   }
   const parts = sortModel
     .filter((item) => item && item.colId && item.sort)
-    .map((item) => `${item.colId},${item.sort}`);
+    .map((item) => `${sortFieldMap?.[item.colId] ?? item.colId},${item.sort}`);
   return parts.length > 0 ? parts.join(';') : undefined;
 };
 
 export const buildEntityGridQueryParams = (
   options: BuildEntityGridQueryParamsOptions,
 ): EntityGridQueryParams => {
-  const { request, quickFilterText = '', mapAdvancedFilter, mapFilterModel, multiSearchParams } = options;
+  const {
+    request,
+    quickFilterText = '',
+    mapAdvancedFilter,
+    mapFilterModel,
+    multiSearchParams,
+    sortFieldMap,
+  } = options;
   const blockSize = Math.max(1, (request.endRow ?? 0) - (request.startRow ?? 0));
   const startRow = request.startRow ?? 0;
   const page = Math.floor(startRow / blockSize) + 1;
@@ -68,7 +89,10 @@ export const buildEntityGridQueryParams = (
     params.search = normalizedQuick;
   }
 
-  const sortParam = toSortParam((request as { sortModel?: SortModelItem[] }).sortModel);
+  const sortParam = toSortParam(
+    (request as { sortModel?: SortModelItem[] }).sortModel,
+    sortFieldMap,
+  );
   if (sortParam) {
     params.sort = sortParam;
   }

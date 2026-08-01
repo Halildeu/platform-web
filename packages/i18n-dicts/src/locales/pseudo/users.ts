@@ -41,6 +41,7 @@ const pseudo = {
   'users.filters.apply': 'Ápply',
   'users.filters.reset': 'Rését',
   'users.grid.columns.fullName': 'Fúll ñámé',
+  'users.grid.columns.username': 'Úsérnámé',
   'users.grid.columns.email': 'Émáíl',
   'users.grid.columns.role': 'Rólé',
   'users.grid.columns.status': 'Státús',

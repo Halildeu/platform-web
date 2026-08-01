@@ -53,6 +53,7 @@ const users = {
 
   // Grid columns
   'users.grid.columns.fullName': 'Full name',
+  'users.grid.columns.username': 'Username',
   'users.grid.columns.email': 'Email',
   'users.grid.columns.role': 'Role',
   'users.grid.columns.status': 'Status',

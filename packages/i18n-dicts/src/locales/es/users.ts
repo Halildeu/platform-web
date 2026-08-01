@@ -53,6 +53,7 @@ const users = {
   'users.filters.reset': 'Restablecer',
 
   'users.grid.columns.fullName': 'Nombre completo',
+  'users.grid.columns.username': 'Nombre de usuario',
   'users.grid.columns.email': 'Correo electrónico',
   'users.grid.columns.role': 'Rol',
   'users.grid.columns.status': 'Estado',

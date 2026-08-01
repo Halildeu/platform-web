@@ -68,6 +68,38 @@ const SERVER_CACHE_BLOCK_SIZE = 50;
 const GRID_VARIANT_ID = 'mfe-users/users-grid';
 const GRID_VARIANT_SCHEMA_VERSION = 1;
 
+/**
+ * Grid column id → the field name user-service accepts.
+ *
+ * These are not the same vocabulary: the grid names columns for what they show
+ * (`fullName`, `lastLoginAt`), the backend names them after JPA fields (`name`,
+ * `lastLogin`) and validates both `sort` and `advancedFilter` against an
+ * allow-list. A column id that misses the allow-list is dropped in silence —
+ * rows still come back, merely in the default order — so the map has to be
+ * applied on BOTH paths. It previously covered only the advanced filter, which
+ * is why sorting by name, last login, status or session timeout did nothing.
+ */
+const BACKEND_FIELD_BY_COL_ID: Record<string, string> = {
+  fullName: 'name',
+  username: 'kcUsername',
+  email: 'email',
+  role: 'role',
+  lastLoginAt: 'lastLogin',
+  sessionTimeoutMinutes: 'sessionTimeoutMinutes',
+};
+
+/**
+ * Sort understands one column the advanced filter deliberately does not.
+ * `status` sorts on the boolean `enabled`, but FILTERING on it goes through the
+ * dedicated `status` query parameter, which speaks ACTIVE/INACTIVE — routing a
+ * status filter to `enabled` would send a string where the backend types a
+ * boolean and earn a 400.
+ */
+const SORT_FIELD_BY_COL_ID: Record<string, string> = {
+  ...BACKEND_FIELD_BY_COL_ID,
+  status: 'enabled',
+};
+
 type GridApiWithOptions = GridApi<UserSummary> & {
   getGridOption?: (key: string) => unknown;
   setGridOption?: (key: string, value: unknown) => void;
@@ -211,8 +243,13 @@ const UsersGrid: React.FC<UsersGridProps> = ({
    * responsive priority discussed in `docs/datagrid-mobile-audit.md`
    * §3.2:
    *   - essential (always visible): fullName — primary identity
+   *   - sm+:                       username — the login identity (gitops#3291)
    *   - md+:                       email, role, status (core triage)
    *   - lg+:                       sessionTimeoutMinutes, lastLoginAt
+   *
+   * `username` sits above `email` in that order on purpose: since gitops#3245
+   * they are no longer the same string, and the login name is the one an
+   * operator needs to reach for when something has to be done to the account.
    *
    * `useResponsiveColumnDefs` (PR #236) re-derives `metaDefs` when the
    * viewport crosses one of the bucket boundaries (640 / 768 / 1024 /
@@ -226,6 +263,13 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         columnType: 'bold-text',
         minWidth: 180,
         essential: true,
+      },
+      {
+        field: 'username',
+        headerNameKey: 'users.grid.columns.username',
+        columnType: 'text',
+        minWidth: 160,
+        responsive: { hideBelow: 'sm' },
       },
       {
         field: 'email',
@@ -420,13 +464,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   const mapAdvancedFilterModel = useCallback((model: AgAdvancedFilterModel | null | undefined) => {
     if (!model) return null;
 
-    const fieldMap: Record<string, string> = {
-      fullName: 'name',
-      email: 'email',
-      role: 'role',
-      lastLoginAt: 'lastLogin',
-      sessionTimeoutMinutes: 'sessionTimeoutMinutes',
-    };
+    const fieldMap = BACKEND_FIELD_BY_COL_ID;
 
     type BackendOp =
       | 'equals'
@@ -587,6 +625,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             const baseParams = buildEntityGridQueryParams({
               request: params.request,
               quickFilterText,
+              sortFieldMap: SORT_FIELD_BY_COL_ID,
               mapAdvancedFilter: mapAdvancedFilterModel,
               multiSearchParams: (gridApi as unknown as Record<string, unknown>)
                 .__multiSearchParams as Record<string, string> | undefined,
@@ -897,7 +936,15 @@ const UsersGrid: React.FC<UsersGridProps> = ({
       // Sort
       const sortModel = params.sortModel as Array<{ colId: string; sort: string }>;
       if (sortModel.length > 0) {
-        qs.set('sort', sortModel.map((c) => `${c.colId},${c.sort}`).join(';'));
+        // Same colId → backend field translation the grid fetch does; without
+        // it an export silently comes out in the default order rather than the
+        // one the operator sorted by on screen.
+        qs.set(
+          'sort',
+          sortModel
+            .map((c) => `${SORT_FIELD_BY_COL_ID[c.colId] ?? c.colId},${c.sort}`)
+            .join(';'),
+        );
       }
       // Column filters
       for (const [colId, model] of Object.entries(params.filterModel)) {
