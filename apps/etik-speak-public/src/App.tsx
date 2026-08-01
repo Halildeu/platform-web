@@ -711,15 +711,15 @@ function Mailbox({
       <section className="mailbox-evidence" aria-labelledby="mailbox-evidence-title">
         <h2 id="mailbox-evidence-title">Kanıt dosyaları</h2>
         <p className="help">
-          Yalnız sentetik UTF-8 TXT, JPEG, PNG veya PDF; en fazla 25 MiB. PDF, güvenlik için
-          sayfa görüntülerine düzleştirilerek saklanır. Dosya adı sunucuya gönderilmez.
+          Yalnız sentetik UTF-8 TXT, JPEG, PNG, WebP veya PDF; en fazla 25 MiB. Güvenlik için PDF
+          sayfa görüntülerine, WebP tek görsele düzleştirilerek saklanır. Dosya adı sunucuya gönderilmez.
           Yönetici yalnız taranmış ve metadata’dan arındırılmış türevi görebilir.
         </p>
         <label className="evidence-picker">
           {attachments.length === 0 ? 'Kanıt dosyası seç' : 'Başka bir kanıt dosyası ekle'}
           <input
             type="file"
-            accept=".txt,text/plain,.jpg,.jpeg,image/jpeg,.png,image/png,.pdf,application/pdf"
+            accept=".txt,text/plain,.jpg,.jpeg,image/jpeg,.png,image/png,.webp,image/webp,.pdf,application/pdf"
             // Several files at once, and the picker stays open afterwards: a
             // reporter usually has more than one page of evidence, and deciding
             // when the set is complete belongs to them, not to the first upload.
@@ -820,7 +820,7 @@ function evidenceStateLabel(state: EvidenceStatus['state']) {
 }
 
 const evidenceMediaLabel = (mediaType: string) =>
-  ({ 'text/plain': 'Metin', 'image/jpeg': 'JPEG görsel', 'image/png': 'PNG görsel', 'application/pdf': 'PDF belge' })[mediaType] ??
+  ({ 'text/plain': 'Metin', 'image/jpeg': 'JPEG görsel', 'image/png': 'PNG görsel', 'image/webp': 'WebP görsel', 'application/pdf': 'PDF belge' })[mediaType] ??
   'Dosya';
 
 const formatBytes = (size: number) =>
