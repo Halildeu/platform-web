@@ -711,14 +711,15 @@ function Mailbox({
       <section className="mailbox-evidence" aria-labelledby="mailbox-evidence-title">
         <h2 id="mailbox-evidence-title">Kanıt dosyaları</h2>
         <p className="help">
-          Yalnız sentetik UTF-8 TXT, JPEG veya PNG; en fazla 25 MiB. Dosya adı sunucuya gönderilmez.
+          Yalnız sentetik UTF-8 TXT, JPEG, PNG veya PDF; en fazla 25 MiB. PDF, güvenlik için
+          sayfa görüntülerine düzleştirilerek saklanır. Dosya adı sunucuya gönderilmez.
           Yönetici yalnız taranmış ve metadata’dan arındırılmış türevi görebilir.
         </p>
         <label className="evidence-picker">
           {attachments.length === 0 ? 'Kanıt dosyası seç' : 'Başka bir kanıt dosyası ekle'}
           <input
             type="file"
-            accept=".txt,text/plain,.jpg,.jpeg,image/jpeg,.png,image/png"
+            accept=".txt,text/plain,.jpg,.jpeg,image/jpeg,.png,image/png,.pdf,application/pdf"
             // Several files at once, and the picker stays open afterwards: a
             // reporter usually has more than one page of evidence, and deciding
             // when the set is complete belongs to them, not to the first upload.
@@ -819,7 +820,7 @@ function evidenceStateLabel(state: EvidenceStatus['state']) {
 }
 
 const evidenceMediaLabel = (mediaType: string) =>
-  ({ 'text/plain': 'Metin', 'image/jpeg': 'JPEG görsel', 'image/png': 'PNG görsel' })[mediaType] ??
+  ({ 'text/plain': 'Metin', 'image/jpeg': 'JPEG görsel', 'image/png': 'PNG görsel', 'application/pdf': 'PDF belge' })[mediaType] ??
   'Dosya';
 
 const formatBytes = (size: number) =>
@@ -948,7 +949,7 @@ function PrivacyNotice() {
         <li>Tek yönlü hash ile korunan erişim sırrı ve kısa süreli mailbox oturumu</li>
         <li>Reporter/staff mesajları ile işlem audit kayıtları</li>
         <li>
-          İsteğe bağlı sentetik TXT/JPEG/PNG kanıt dosyası; karantina, bütünlük doğrulama ve zararlı
+          İsteğe bağlı sentetik TXT/JPEG/PNG/PDF kanıt dosyası; karantina, bütünlük doğrulama ve zararlı
           içerik taramasından sonra mühürlü orijinal ile metadata’dan arındırılmış güvenli türev
           ayrı tutulur. Yöneticiye yalnız güvenli türev açılır.
         </li>
