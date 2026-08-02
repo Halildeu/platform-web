@@ -16,6 +16,22 @@
   max-width: 1440px;
   margin: 0 auto;
   color: var(--ethics-ink);
+
+  /* The layout below asks how much room THIS panel has, not how wide the window is.
+     Inside the platform shell the sidebar and padding take ~170px, so a viewport-keyed
+     breakpoint fires long after the detail pane has already become unusable: measured
+     live at 853px viewport the pane was 305px wide while the old `@media (width <=
+     800px)` was still waiting. Standalone at /ethic the container is nearly the
+     viewport, so the same rule serves both surfaces. */
+  container-type: inline-size;
+  container-name: ethics-manager;
+
+  /* Load-bearing, and not obviously so. Inline-size containment means this element's
+     contents no longer contribute to its own intrinsic width — and in the shell it is a
+     flex item, whose base size comes from exactly that contribution. Without a definite
+     width the box collapses to its own padding: measured at 48px, i.e. the panel
+     disappears. Do not remove this line while `container-type` is set above. */
+  width: 100%;
 }
 
 .ethics-manager-header,
@@ -297,6 +313,71 @@
   background: var(--ethics-warning-surface);
 }
 
+/* ES-213 (#3375) — the three lifecycle forms: record a sanction, apply it, conclude a
+   retaliation check. They shipped with this class and nothing behind it, so the labels
+   kept `display: inline` and each one flowed around its own control like running text:
+   in the detail pane "Yaptırım türü" and "Seçin" and the next label's opening words all
+   landed on one line. Wide enough and it passes for deliberate, which is why it survived
+   review; at the width the pane actually has it is unreadable.
+
+   Grid rather than flex so a label and its control are one row and cannot be separated
+   by wrapping. */
+.ethics-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.ethics-form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  /* Without this a long option string sets the column's minimum and the whole pane
+     grows a horizontal scrollbar instead of the select shrinking. */
+  min-width: 0;
+}
+
+.ethics-form input,
+.ethics-form select {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 0.4rem;
+  font: inherit;
+  /* The label is bold; the value the user typed is not. */
+  font-weight: 400;
+  background: inherit;
+  color: var(--ethics-ink);
+}
+
+/* The shared `.ethics-manager textarea` rule adds its own vertical margin, which inside
+   this grid would double the gap it already provides. */
+.ethics-form textarea {
+  margin: 0;
+  resize: vertical;
+}
+
+.ethics-form .ethics-muted {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+/* A full-width action reads as the end of the form; side by side at 300px they would
+   each be too narrow to carry their own label, and these buttons are deliberately
+   verbose because an abbreviated one would lie about what it does. */
+.ethics-form button {
+  justify-self: start;
+}
+
+.ethics-form input:focus,
+.ethics-form select:focus {
+  outline: 3px solid var(--ethics-focus);
+  border-color: var(--ethics-brand);
+}
+
 .ethics-muted {
   color: var(--ethics-muted);
 }
@@ -370,7 +451,7 @@
   border-color: var(--ethics-brand);
 }
 
-@media (width <= 800px) {
+@container ethics-manager (width <= 720px) {
   .ethics-manager-grid {
     grid-template-columns: 1fr;
   }
