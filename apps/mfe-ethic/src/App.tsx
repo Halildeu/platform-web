@@ -14,6 +14,8 @@ import {
   concludeRetaliationCheck,
   markCheckAsked,
   recordSanction,
+  VIOLATION_CATEGORIES,
+  AUTOMATIC_ESCALATIONS,
   applySanction,
   moveSanctionAppeal,
   bandForScore,
@@ -133,6 +135,7 @@ export default function App() {
   // should let a handler conclude that nothing was decided.
   const [sanctionScore, setSanctionScore] = useState('');
   const [sanctionType, setSanctionType] = useState('');
+  const [violationCategory, setViolationCategory] = useState('');
   const [escalationReason, setEscalationReason] = useState('');
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [verificationNote, setVerificationNote] = useState('');
@@ -246,13 +249,23 @@ export default function App() {
    * requires it — and that needs a reason, which is why the field appears only then.
    */
   const derivedBand = bandForScore(Number(sanctionScore));
-  const escalating = derivedBand !== null && derivedBand !== 'COK_AGIR' && escalationReason.trim().length > 0;
+  // The scale's automatic list is not advice. Choosing one of those categories fixes the
+  // band at ÇOK AĞIR no matter what the ten criteria totalled, so the form stops offering
+  // the handler a choice it would only have to reject on submit.
+  const automatic = AUTOMATIC_ESCALATIONS.has(violationCategory);
+  const escalating = automatic
+    || (derivedBand !== null && derivedBand !== 'COK_AGIR' && escalationReason.trim().length > 0);
+  // A reason is still required when the number underneath the floor disagrees with it —
+  // the two rules compose, and this is exactly the case an auditor reads first.
+  const reasonRequired = escalating && derivedBand !== 'COK_AGIR';
+  const reasonMissing = reasonRequired && escalationReason.trim().length === 0;
 
   const submitSanction = async () => {
-    if (!selected || !derivedBand || !sanctionType) return;
+    if (!selected || !derivedBand || !sanctionType || !violationCategory || reasonMissing) return;
     setBusy(true);
     try {
       await recordSanction(selected.id, {
+        violationCategory,
         severityScore: Number(sanctionScore),
         severityBand: escalating ? 'COK_AGIR' : derivedBand,
         escalationReason: escalating ? escalationReason.trim() : undefined,
@@ -260,6 +273,7 @@ export default function App() {
       });
       setSanctionScore('');
       setSanctionType('');
+      setViolationCategory('');
       setEscalationReason('');
       await loadSanctions(selected.id, selectionSequence.current);
     } catch (requestError) {
@@ -1283,6 +1297,21 @@ export default function App() {
                   )}
                   {selected.status === 'CLOSED' ? (
                     <div className="ethics-form" data-testid="sanction-form">
+                      <label htmlFor="violation-category">
+                        İhlal kategorisi
+                        <select
+                          id="violation-category"
+                          value={violationCategory}
+                          onChange={(e) => setViolationCategory(e.target.value)}
+                        >
+                          <option value="">Seçin</option>
+                          {VIOLATION_CATEGORIES.map(({ code, label }) => (
+                            <option key={code} value={code}>
+                              {AUTOMATIC_ESCALATIONS.has(code) ? `${label} (otomatik ÇOK AĞIR)` : label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <label htmlFor="sanction-score">
                         Ağırlık puanı (1–40)
                         <input
@@ -1298,9 +1327,11 @@ export default function App() {
                           handler picking both would let two similar violations land in
                           different bands. */}
                       <p className="ethics-muted" data-testid="derived-band">
-                        {derivedBand
-                          ? `Cetvele göre bant: ${BAND_LABELS[derivedBand]}`
-                          : 'Puan 1–40 aralığında olmalı.'}
+                        {!derivedBand
+                          ? 'Puan 1–40 aralığında olmalı.'
+                          : automatic
+                            ? `Cetvele göre bant: ${BAND_LABELS[derivedBand]} → otomatik yükseltme listesi nedeniyle ${BAND_LABELS.COK_AGIR}`
+                            : `Cetvele göre bant: ${BAND_LABELS[derivedBand]}`}
                       </p>
                       <label htmlFor="sanction-type">
                         Yaptırım türü
@@ -1329,7 +1360,7 @@ export default function App() {
                         />
                       </label>
                       <Button
-                        disabled={busy || !derivedBand || !sanctionType}
+                        disabled={busy || !derivedBand || !sanctionType || !violationCategory || reasonMissing}
                         onClick={() => void submitSanction()}
                       >
                         Yaptırımı kaydet

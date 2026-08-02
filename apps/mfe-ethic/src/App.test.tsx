@@ -58,6 +58,25 @@ describe('Etik Speak manager MFE', () => {
     // this is purely the auto-mock's shape.
     vi.mocked(api.listCaseSanctions).mockResolvedValue([]);
     vi.mocked(api.listRetaliationChecks).mockResolvedValue([]);
+    // The two constants are not functions, and vi.mock empties the array and hollows out
+    // the Set. Left alone, AUTOMATIC_ESCALATIONS.has() answers undefined and every
+    // assertion about the escalation floor passes for the wrong reason — which is how the
+    // rule went dormant in the first place, so it is restored explicitly here.
+    vi.spyOn(api, 'VIOLATION_CATEGORIES', 'get').mockReturnValue([
+      { code: 'PUBLIC_OFFICIAL_BRIBERY', label: 'Kamu görevlisine rüşvet' },
+      { code: 'EXPENSE_IRREGULARITY', label: 'Masraf/harcama usulsüzlüğü' },
+    ]);
+    vi.spyOn(api, 'AUTOMATIC_ESCALATIONS', 'get')
+      .mockReturnValue(new Set(['PUBLIC_OFFICIAL_BRIBERY']));
+    // bandForScore is auto-mocked too, so it has been answering undefined all along: the
+    // derived-band line reads "Puan 1–40 aralığında olmalı" in every test that has ever
+    // rendered the sanction form. Restored to the real mapping so assertions about the
+    // band mean something.
+    vi.mocked(api.bandForScore).mockImplementation((score: number) =>
+      score >= 1 && score <= 10 ? 'HAFIF'
+        : score >= 11 && score <= 20 ? 'ORTA'
+          : score >= 21 && score <= 30 ? 'AGIR'
+            : score >= 31 && score <= 40 ? 'COK_AGIR' : null);
     vi.mocked(api.downloadCaseEvidence).mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
     vi.mocked(api.updateCase).mockResolvedValue(summary);
     vi.mocked(api.replyToReporter).mockResolvedValue({
@@ -725,4 +744,41 @@ describe('Etik Speak manager MFE', () => {
     expect(within(history).getByRole('listitem')).toHaveTextContent('İhbar alındı');
     expect(within(history).queryByText('Ayşe Yılmaz')).not.toBeInTheDocument();
   });
+  it('bir kategori otomatik listedeyse bandı ÇOK AĞIR\'a sabitler ve gerekçe ister', async () => {
+    const closed: api.EthicsCaseDetail = { ...detail, status: 'CLOSED', closedAt: '2026-08-01T09:00:00Z' };
+    vi.mocked(api.listCases).mockResolvedValue([{ ...summary, status: 'CLOSED' }]);
+    vi.mocked(api.getCase).mockResolvedValue(closed);
+    vi.mocked(api.recordSanction).mockResolvedValue({
+      id: 's1', violationCategory: 'PUBLIC_OFFICIAL_BRIBERY', severityScore: 6,
+      severityBand: 'COK_AGIR', escalationReason: 'cetvel', sanctionType: 'TERMINATION',
+      decidedAt: '2026-08-01T10:00:00Z', appliedAt: null, verificationNote: null,
+      appealState: 'NONE',
+    });
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /Sentetik bildirim/ }));
+    const form = await screen.findByTestId('sanction-form');
+
+    // Düşük puan: cetvel HAFİF derdi. Kategori otomatik listede olduğu için form ÇOK AĞIR
+    // demeli — "kullanıcı doğru bandı seçer" varsayımı bu kuralın işlemediği hâlin ta kendisi.
+    await userEvent.selectOptions(within(form).getByLabelText('İhlal kategorisi'), 'PUBLIC_OFFICIAL_BRIBERY');
+    await userEvent.type(within(form).getByLabelText(/Ağırlık puanı/), '6');
+    await userEvent.selectOptions(within(form).getByLabelText('Yaptırım türü'), 'TERMINATION');
+
+    expect(screen.getByTestId('derived-band')).toHaveTextContent('otomatik yükseltme listesi');
+
+    // Puan bandın altında kaldığı için gerekçe zorunlu: iki kural birlikte işler.
+    const submit = within(form).getByRole('button', { name: 'Yaptırımı kaydet' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(form).getByLabelText(/yükseltme gerekçesi/), 'Kamu görevlisine rüşvet.');
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+
+    expect(vi.mocked(api.recordSanction)).toHaveBeenCalledWith(closed.id, expect.objectContaining({
+      violationCategory: 'PUBLIC_OFFICIAL_BRIBERY',
+      severityBand: 'COK_AGIR',
+    }));
+  });
+
 });
