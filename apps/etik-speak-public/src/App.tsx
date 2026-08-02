@@ -3,6 +3,7 @@ import {
   closeMailbox,
   createReport,
   declareEvidence,
+  fetchIntakeOptions,
   getMailbox,
   listEvidence,
   newAccessSecret,
@@ -15,6 +16,7 @@ import {
   type Message,
   type ReporterCaseStatus,
   type Receipt,
+  type ReportMode,
 } from './public-api';
 
 type View =
@@ -49,6 +51,23 @@ export default function App() {
   const [mailboxReply, setMailboxReply] = useState('');
   const [receiptSaved, setReceiptSaved] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
+  // ES-212. Starts at anonymous-only and widens once the server answers, so the form is
+  // usable from the first paint and never briefly offers a mode this tenant does not run.
+  const [modes, setModes] = useState<ReportMode[]>(['ANONYMOUS']);
+
+  useEffect(() => {
+    let live = true;
+    // fetchIntakeOptions never rejects; on any failure it answers anonymous-only, which is
+    // the same floor the server falls back to. No error state here on purpose — a banner
+    // saying "could not load reporting options" would tell the reporter something is wrong
+    // with the channel when in fact they can still report.
+    void fetchIntakeOptions().then((available) => {
+      if (live) setModes(available);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const intakeOperation = useRef({ key: crypto.randomUUID(), secret: newAccessSecret() });
   const replyOperation = useRef<{ body: string; key: string } | null>(null);
   const attachmentOperation = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -109,13 +128,27 @@ export default function App() {
     const form = new FormData(event.currentTarget);
     try {
       const operation = intakeOperation.current;
+      const mode = form.get('mode');
+      // ES-212: only sent for the two modes that collect it. Anonymous must carry no
+      // identity key at all — the server refuses a request that does, rather than ignoring
+      // the field, so sending an empty object here would break anonymous reporting.
+      const identity =
+        mode === 'ANONYMOUS'
+          ? undefined
+          : {
+              fullName: String(form.get('fullName') ?? '').trim(),
+              email: emptyToUndefined(form.get('email')),
+              phone: emptyToUndefined(form.get('phone')),
+              unit: emptyToUndefined(form.get('unit')),
+            };
       const result = await createReport(
         {
-          mode: form.get('mode'),
+          mode,
           category: form.get('category'),
           subject: form.get('subject'),
           description: form.get('description'),
           locale: 'tr',
+          ...(identity ? { reporterIdentity: identity } : {}),
         },
         operation.key,
         operation.secret,
@@ -266,7 +299,7 @@ export default function App() {
           />
         )}
         {view === 'report' && (
-          <ReportForm busy={busy} onSubmit={submit} onBack={() => setView('home')} />
+          <ReportForm busy={busy} onSubmit={submit} onBack={() => setView('home')} modes={modes} />
         )}{' '}
         {view === 'channel-inactive' && (
           <ChannelInactive
@@ -334,6 +367,15 @@ export default function App() {
   );
 }
 
+/**
+ * A blank optional field means "not given", not "given as empty string". Sending "" would
+ * store an empty contact detail that reads, later, as though the reporter supplied one.
+ */
+const emptyToUndefined = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? '').trim();
+  return text.length > 0 ? text : undefined;
+};
+
 function Home({ onReport, onMailbox }: { onReport: () => void; onMailbox: () => void }) {
   return (
     <section className="hero" aria-labelledby="hero-title">
@@ -354,8 +396,8 @@ function Home({ onReport, onMailbox }: { onReport: () => void; onMailbox: () => 
       <div className="trust-grid">
         <article>
           <span aria-hidden="true">◌</span>
-          <h2>İlk dilim anonimdir</h2>
-          <p>Kimlik kasası onaylanana kadar gizli ve isimli modlar veri toplamaz.</p>
+          <h2>Anonim kalabilirsiniz</h2>
+          <p>Kimlik vermeden bildirim yapabilir, yanıtları makbuz numaranızla okuyabilirsiniz.</p>
         </article>
         <article>
           <span aria-hidden="true">↔</span>
@@ -409,15 +451,34 @@ function ChannelInactive({ onMailbox, onBack }: { onMailbox: () => void; onBack:
   );
 }
 
+const MODE_COPY: Record<ReportMode, { label: string; hint: string }> = {
+  ANONYMOUS: {
+    label: 'Anonim',
+    hint: 'Kimlik bilgisi istemez. Yanıtları makbuz numaranızla okursunuz.',
+  },
+  CONFIDENTIAL: {
+    label: 'Gizli',
+    hint: 'Kimliğiniz kaydedilir ve şifrelenir; vakayı inceleyen ekip göremez. Yalnız yasal bir talep üzerine, iki ayrı yetkilinin onayıyla açılabilir.',
+  },
+  NAMED: {
+    label: 'İsimli',
+    hint: 'Kimliğiniz vakayı inceleyen ekiple paylaşılır; doğrudan iletişim kurabilirler.',
+  },
+};
+
 function ReportForm({
   busy,
   onSubmit,
   onBack,
+  modes,
 }: {
   busy: boolean;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
+  modes: ReportMode[];
 }) {
+  const [mode, setMode] = useState<ReportMode>('ANONYMOUS');
+  const collectsIdentity = mode !== 'ANONYMOUS';
   return (
     <section className="panel" aria-labelledby="report-title">
       <button className="back" onClick={onBack}>
@@ -425,28 +486,55 @@ function ReportForm({
       </button>
       <div className="step">1 / 1</div>
       <h1 id="report-title">Yeni etik bildirimi</h1>
-      <p>İlk test dilimi anonim bildirim içindir; yalnız gerekli bilgileri yazın.</p>
+      <p>Bildirim biçimini siz seçersiniz; yalnız gerekli bilgileri yazın.</p>
       <form onSubmit={onSubmit}>
         <fieldset>
           <legend>Bildirim biçimi</legend>
           <div className="radio-grid">
-            <label>
-              <input type="radio" name="mode" value="ANONYMOUS" defaultChecked />
-              <strong>Anonim</strong>
-              <span>Kimlik bilgisi istemez.</span>
-            </label>
-            <label aria-disabled="true">
-              <input type="radio" name="mode" value="CONFIDENTIAL" disabled />
-              <strong>Gizli · sonraki dilim</strong>
-              <span>Kimlik kasası etkinleşmeden veri toplanmaz.</span>
-            </label>
-            <label aria-disabled="true">
-              <input type="radio" name="mode" value="NAMED" disabled />
-              <strong>İsimli · sonraki dilim</strong>
-              <span>Kimlik kasası etkinleşmeden veri toplanmaz.</span>
-            </label>
+            {/* Only the modes this organisation runs are rendered. A disabled option would
+                still tell the reporter that confidential reporting exists somewhere and is
+                being withheld from them, which invites the wrong conclusion about why. */}
+            {modes.map((available) => (
+              <label key={available}>
+                <input
+                  type="radio"
+                  name="mode"
+                  value={available}
+                  checked={mode === available}
+                  onChange={() => setMode(available)}
+                />
+                <strong>{MODE_COPY[available].label}</strong>
+                <span>{MODE_COPY[available].hint}</span>
+              </label>
+            ))}
           </div>
         </fieldset>
+        {collectsIdentity && (
+          <fieldset>
+            <legend>Kimlik bilgileriniz</legend>
+            <p className="field-hint">
+              {mode === 'CONFIDENTIAL'
+                ? 'Bu bilgiler şifrelenerek saklanır ve vakayı inceleyen ekibe gösterilmez.'
+                : 'Bu bilgiler vakayı inceleyen ekiple paylaşılır.'}
+            </p>
+            <label>
+              Ad soyad
+              <input name="fullName" required maxLength={200} autoComplete="name" />
+            </label>
+            <label>
+              E-posta <span className="optional">(isteğe bağlı)</span>
+              <input name="email" type="email" maxLength={320} autoComplete="email" />
+            </label>
+            <label>
+              Telefon <span className="optional">(isteğe bağlı)</span>
+              <input name="phone" type="tel" maxLength={40} autoComplete="tel" />
+            </label>
+            <label>
+              Birim <span className="optional">(isteğe bağlı)</span>
+              <input name="unit" maxLength={200} />
+            </label>
+          </fieldset>
+        )}
         <label>
           Kategori
           <select name="category" required defaultValue="">

@@ -118,6 +118,36 @@ export const newAccessSecret = () => {
   bytes.forEach((value) => (binary += String.fromCharCode(value)));
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 };
+export type ReportMode = 'ANONYMOUS' | 'CONFIDENTIAL' | 'NAMED';
+
+export interface ReporterIdentity {
+  fullName: string;
+  email?: string;
+  phone?: string;
+  unit?: string;
+  note?: string;
+}
+
+/**
+ * Which reporting modes this tenant offers (ES-212).
+ *
+ * <p>Falls back to anonymous-only on any failure, mirroring the server's own floor: a
+ * reachable form that can only take anonymous reports is a working form, while a form that
+ * offers confidential and then refuses on submit has already made the reporter type out the
+ * thing they were afraid to say. Never throws — the caller renders a form either way.
+ */
+export async function fetchIntakeOptions(): Promise<ReportMode[]> {
+  try {
+    const result = await request<{ modes?: string[] }>('/intake-options');
+    const modes = (result.modes ?? []).filter((mode): mode is ReportMode =>
+      mode === 'ANONYMOUS' || mode === 'CONFIDENTIAL' || mode === 'NAMED',
+    );
+    return modes.includes('ANONYMOUS') ? modes : ['ANONYMOUS', ...modes];
+  } catch {
+    return ['ANONYMOUS'];
+  }
+}
+
 export async function createReport(body: object, idempotencyKey: string, accessSecret: string) {
   const result = await request<Omit<Receipt, 'accessSecret'>>('/reports', {
     method: 'POST',

@@ -7,6 +7,7 @@ vi.mock('./public-api');
 describe('Etik Speak public reporter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.fetchIntakeOptions).mockResolvedValue(['ANONYMOUS']);
     vi.mocked(api.newAccessSecret).mockReturnValue('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdef');
     vi.mocked(api.createReport).mockResolvedValue({
       receiptId: 'r-1',
@@ -122,10 +123,16 @@ describe('Etik Speak public reporter', () => {
     );
     expect(screen.getByText('Sentetik yetkili yanıtı')).toBeInTheDocument();
   });
-  test('unsupported identity path remains disabled and attachment starts only after durable receipt', async () => {
+  test('a mode this tenant does not run is absent, and attachment starts only after durable receipt', async () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Yeni bildirim yap' }));
-    expect(screen.getByRole('radio', { name: /Gizli/ })).toBeDisabled();
+    // ES-212 (#3370) changed this from disabled to absent. The old assertion pinned a
+    // greyed-out "Gizli · sonraki dilim" radio; now the form renders exactly the modes the
+    // organisation enabled (this suite's tenant runs anonymous only). A disabled control
+    // still announces to a screen reader that confidential reporting exists and is being
+    // withheld, which invites the wrong conclusion about why. Coverage for the enabled
+    // case lives in report-modes.test.tsx.
+    expect(screen.queryByRole('radio', { name: /Gizli/ })).not.toBeInTheDocument();
     // The intake form must not present a file control at all. A disabled one is
     // still announced as a file picker, so it reads as a broken feature rather
     // than a later step — and uploading is genuinely impossible until a receipt

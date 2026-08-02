@@ -27,6 +27,7 @@ vi.mock('./public-api');
  */
 describe('erişim sırrı — erişilebilir kimlik doğrulama (3.3.8)', () => {
   beforeEach(() => {
+    vi.mocked(api.fetchIntakeOptions).mockResolvedValue(['ANONYMOUS']);
     vi.mocked(api.openMailbox).mockResolvedValue({ expiresAt: '2026-08-01T00:00:00Z' });
     vi.mocked(api.getMailbox).mockResolvedValue({ status: 'NEW', messages: [] });
   });
