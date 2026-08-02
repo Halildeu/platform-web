@@ -358,3 +358,136 @@ export async function listCaseTimeline(caseId: string): Promise<CaseTimelineEntr
     throw new Error('Vaka geçmişi sözleşmesi geçersiz');
   return rows as CaseTimelineEntry[];
 }
+
+// ---- ES-213 (#3375): sanctions and retaliation monitoring -------------------
+
+/**
+ * Directive 2019/1937 art. 19's own enumeration of retaliation, in the article's order.
+ *
+ * <p>Closed on purpose. A handler who can type their own category will, and then the
+ * question a monitoring programme exists to answer — how often does this happen, and
+ * where — becomes unanswerable across cases and years. The labels are the Turkish
+ * renderings the intake notice already uses.
+ */
+export const RETALIATION_INDICATORS = [
+  ['SUSPENSION', 'Askıya alma, işten çıkarma veya eşdeğeri'],
+  ['DEMOTION', 'Rütbe indirimi veya terfi engelleme'],
+  ['DUTY_TRANSFER', 'Görev değişikliği, yer değiştirme, ücret indirimi'],
+  ['TRAINING_WITHHELD', 'Eğitimden mahrum bırakma'],
+  ['NEGATIVE_APPRAISAL', 'Olumsuz performans değerlendirmesi veya referans'],
+  ['DISCIPLINARY_MEASURE', 'Disiplin cezası, kınama veya yaptırım'],
+  ['COERCION', 'Zorlama, yıldırma, taciz veya dışlama'],
+  ['DISCRIMINATION', 'Ayrımcılık, dezavantajlı veya adaletsiz muamele'],
+  ['CONTRACT_NOT_CONVERTED', 'Geçici sözleşmenin sürekliye çevrilmemesi'],
+  ['CONTRACT_NOT_RENEWED', 'Sözleşmenin yenilenmemesi veya erken feshi'],
+  ['REPUTATION_HARM', 'İtibar zedeleme, özellikle sosyal medyada'],
+  ['BLACKLISTING', 'Sektörel kara liste veya gayriresmî anlaşma'],
+  ['CONTRACT_TERMINATION', 'Mal veya hizmet sözleşmesinin feshi'],
+  ['LICENCE_REVOCATION', 'Lisans veya izin iptali'],
+  ['PSYCHIATRIC_REFERRAL', 'Psikiyatrik veya tıbbi sevk'],
+] as const;
+
+export type SeverityBand = 'HAFIF' | 'ORTA' | 'AGIR' | 'COK_AGIR';
+export type RetaliationRisk = 'NONE' | 'SUSPECTED' | 'CONFIRMED';
+
+/** The score ranges the İHLAL AĞIRLIK CETVELİ defines, mirrored so the form can warn early. */
+export const BAND_RANGES: Record<SeverityBand, [number, number]> = {
+  HAFIF: [1, 10],
+  ORTA: [11, 20],
+  AGIR: [21, 30],
+  COK_AGIR: [31, 40],
+};
+
+export const bandForScore = (score: number): SeverityBand | null =>
+  (Object.entries(BAND_RANGES) as [SeverityBand, [number, number]][])
+    .find(([, [min, max]]) => score >= min && score <= max)?.[0] ?? null;
+
+export interface Sanction {
+  id: string;
+  severityScore: number;
+  severityBand: SeverityBand;
+  escalationReason: string | null;
+  sanctionType: string;
+  decidedAt: string;
+  appliedAt: string | null;
+  verificationNote: string | null;
+  appealState: 'NONE' | 'REQUESTED' | 'UPHELD' | 'OVERTURNED';
+}
+
+export interface RetaliationCheck {
+  id: string;
+  periodMonths: number;
+  dueAt: string;
+  askedAt: string | null;
+  observation: string | null;
+  risk: RetaliationRisk | null;
+  action: string | null;
+  closedAt: string | null;
+}
+
+export async function listCaseSanctions(caseId: string): Promise<Sanction[]> {
+  const response = await api.get<unknown>(`/v1/ethics/cases/${encodeURIComponent(caseId)}/sanctions`);
+  const rows = response.data;
+  if (!Array.isArray(rows) || !rows.every((r) => {
+    const s = r as Partial<Sanction> | null;
+    return !!s && typeof s.id === 'string' && typeof s.severityScore === 'number'
+      && typeof s.severityBand === 'string' && typeof s.sanctionType === 'string';
+  })) throw new Error('Yaptırım listesi sözleşmesi geçersiz');
+  return rows as Sanction[];
+}
+
+export async function recordSanction(
+  caseId: string,
+  body: { severityScore: number; severityBand: SeverityBand; escalationReason?: string; sanctionType: string },
+): Promise<Sanction> {
+  const response = await api.post<Sanction>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/sanctions`, body,
+  );
+  return response.data;
+}
+
+export async function applySanction(sanctionId: string, verificationNote: string): Promise<Sanction> {
+  const response = await api.post<Sanction>(
+    `/v1/ethics/cases/sanctions/${encodeURIComponent(sanctionId)}/application`, { verificationNote },
+  );
+  return response.data;
+}
+
+export async function moveSanctionAppeal(
+  sanctionId: string, appealState: 'REQUESTED' | 'UPHELD' | 'OVERTURNED',
+): Promise<Sanction> {
+  const response = await api.post<Sanction>(
+    `/v1/ethics/cases/sanctions/${encodeURIComponent(sanctionId)}/appeal`, { appealState },
+  );
+  return response.data;
+}
+
+export async function listRetaliationChecks(caseId: string): Promise<RetaliationCheck[]> {
+  const response = await api.get<unknown>(
+    `/v1/ethics/cases/${encodeURIComponent(caseId)}/retaliation-checks`,
+  );
+  const rows = response.data;
+  if (!Array.isArray(rows) || !rows.every((r) => {
+    const c = r as Partial<RetaliationCheck> | null;
+    return !!c && typeof c.id === 'string' && typeof c.periodMonths === 'number'
+      && typeof c.dueAt === 'string';
+  })) throw new Error('Misilleme kontrol listesi sözleşmesi geçersiz');
+  return rows as RetaliationCheck[];
+}
+
+export async function markCheckAsked(checkId: string): Promise<RetaliationCheck> {
+  const response = await api.post<RetaliationCheck>(
+    `/v1/ethics/cases/retaliation-checks/${encodeURIComponent(checkId)}/asked`, {},
+  );
+  return response.data;
+}
+
+export async function concludeRetaliationCheck(
+  checkId: string,
+  body: { observation: string; risk: RetaliationRisk; action?: string; indicators: string[] },
+): Promise<RetaliationCheck> {
+  const response = await api.post<RetaliationCheck>(
+    `/v1/ethics/cases/retaliation-checks/${encodeURIComponent(checkId)}/conclusion`, body,
+  );
+  return response.data;
+}
