@@ -204,6 +204,17 @@ export interface CaseFilter {
   category: string;
   unattended: boolean;
   overdue: boolean;
+  /**
+   * Faz 35 case workspace — three additive fields, defaults preserve every
+   * existing behaviour. `mode` narrows by how the reporter chose to file
+   * (anonymous / confidential / named); `openOnly` is the "Açık vaka" KPI's
+   * predicate (everything not CLOSED); `feedbackOverdue` is the three-month
+   * feedback clock's breach, mirroring how `overdue` carries the seven-day
+   * acknowledgement breach.
+   */
+  mode: string;
+  openOnly: boolean;
+  feedbackOverdue: boolean;
 }
 
 export const EMPTY_CASE_FILTER: CaseFilter = Object.freeze({
@@ -212,6 +223,9 @@ export const EMPTY_CASE_FILTER: CaseFilter = Object.freeze({
   category: '',
   unattended: false,
   overdue: false,
+  mode: '',
+  openOnly: false,
+  feedbackOverdue: false,
 });
 
 /**
@@ -232,7 +246,10 @@ export const isFilterActive = (filter: CaseFilter) =>
   filter.status !== '' ||
   filter.category !== '' ||
   filter.unattended ||
-  filter.overdue;
+  filter.overdue ||
+  filter.mode !== '' ||
+  filter.openOnly ||
+  filter.feedbackOverdue;
 
 /**
  * Narrow a loaded list. Filtering happens here rather than on the server because the whole
@@ -314,6 +331,67 @@ export function acknowledgementCountdown(
   return { text: `Teyit: ${remaining} gün kaldı`, urgent: remaining <= 2 };
 }
 
+/** EU 2019/1937 art. 9(1)(f): feedback within three months of the acknowledgement. */
+export const FEEDBACK_DEADLINE_MONTHS = 3;
+
+const addCalendarMonths = (ms: number, months: number): number => {
+  const date = new Date(ms);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.getTime();
+};
+
+/**
+ * How the three-month feedback clock stands on this case.
+ *
+ * <p>The directive's own rule, mirrored rather than reinvented: feedback is due three
+ * months from the acknowledgement, or — when none was ever sent — three months from the
+ * expiry of the seven-day acknowledgement window. The server does not carry a feedback
+ * timestamp, but it does carry the closure: the closing message is the reporter-visible
+ * statement of how the report ended, so a CLOSED case has had its feedback and the clock
+ * stops claiming anything about it.
+ *
+ * <p>Same honesty contract as {@link acknowledgementState}: a frontend deployed ahead of
+ * the service (no `acknowledgedAt` field at all) cannot compute this deadline, and a
+ * deadline it cannot compute is not shown as a compliance statement.
+ */
+export function feedbackState(
+  item: { createdAt: string; acknowledgedAt?: string | null; status: string },
+  now: number = Date.now(),
+): { known: boolean; overdue: boolean; dueAt: number | null; text: string } {
+  const created = Date.parse(item.createdAt);
+  if (item.acknowledgedAt === undefined || Number.isNaN(created)) {
+    return { known: false, overdue: false, dueAt: null, text: 'Geri bildirim durumu okunamadı' };
+  }
+  if (item.status === 'CLOSED') {
+    return { known: true, overdue: false, dueAt: null, text: 'Kapanışta verildi' };
+  }
+  let base = created + ACKNOWLEDGEMENT_DEADLINE_DAYS * DAY_MS;
+  if (item.acknowledgedAt) {
+    const acknowledged = Date.parse(item.acknowledgedAt);
+    if (Number.isNaN(acknowledged)) {
+      return { known: false, overdue: false, dueAt: null, text: 'Geri bildirim durumu okunamadı' };
+    }
+    base = acknowledged;
+  }
+  const dueAt = addCalendarMonths(base, FEEDBACK_DEADLINE_MONTHS);
+  if (now >= dueAt) {
+    const late = Math.floor((now - dueAt) / DAY_MS);
+    return {
+      known: true,
+      overdue: true,
+      dueAt,
+      text: late === 0 ? 'Geri bildirim süresi bugün doldu' : `Geri bildirim ${late} gün gecikti`,
+    };
+  }
+  const remaining = Math.floor((dueAt - now) / DAY_MS);
+  return {
+    known: true,
+    overdue: false,
+    dueAt,
+    text: remaining === 0 ? 'Geri bildirim için son gün' : `Geri bildirim: ${remaining} gün kaldı`,
+  };
+}
+
 export function filterCases<
   T extends {
     subject: string | null;
@@ -322,6 +400,7 @@ export function filterCases<
     participantCount: number;
     createdAt: string;
     acknowledgedAt?: string | null;
+    mode?: string | null;
   },
 >(items: readonly T[], filter: CaseFilter, now: number = Date.now()): T[] {
   const needle = filter.query.trim().toLocaleLowerCase('tr');
@@ -332,6 +411,9 @@ export function filterCases<
     if (filter.category && item.category !== filter.category) return false;
     if (filter.unattended && item.participantCount !== 0) return false;
     if (filter.overdue && !acknowledgementState(item, now).overdue) return false;
+    if (filter.mode && item.mode !== filter.mode) return false;
+    if (filter.openOnly && item.status === 'CLOSED') return false;
+    if (filter.feedbackOverdue && !feedbackState(item, now).overdue) return false;
     return true;
   });
 }

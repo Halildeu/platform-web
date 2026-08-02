@@ -37,19 +37,10 @@ import {
 import { timelineDetailLabel, timelineEventLabel, timelineMoment } from './case-timeline';
 import { dispatchAcknowledgement, fetchAcknowledgementDraft } from './ethics-api';
 import {
-  acknowledgementCountdown,
   acknowledgementDraft,
   acknowledgementState,
   missingAcknowledgementSections,
-  categoryLabel,
-  CASE_CATEGORIES,
-  CASE_STATUSES,
-  EMPTY_CASE_FILTER,
-  filterCases,
   initialFilterFromQuery,
-  isFilterActive,
-  sortForQueue,
-  isAnonymous,
   NEXT_STATUSES,
   OUTCOME_OPTIONS,
   outcomeLabel,
@@ -62,6 +53,7 @@ import {
   type CaseStatus,
   type ParticipantRole,
 } from './case-lifecycle';
+import CaseListWorkspace from './CaseListWorkspace';
 import './ethics.css';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -113,11 +105,6 @@ export default function App() {
   const [filter, setFilter] = useState<CaseFilter>(() =>
     initialFilterFromQuery(typeof window === 'undefined' ? '' : window.location.search),
   );
-  // Derived, not stored: a second copy of the list would drift from the first the moment
-  // a refresh lands while a filter is on.
-  // Queue order, not recency: the case one day from its statutory deadline outranks
-  // whatever was touched last.
-  const visibleItems = sortForQueue(filterCases(items, filter));
   const [error, setError] = useState('');
   const [reply, setReply] = useState('');
   // ES-2 (#3271): when the textarea holds an acknowledgement draft, the template
@@ -167,6 +154,9 @@ export default function App() {
   const [reopenReason, setReopenReason] = useState('');
   const selectionSequence = useRef(0);
   const operationKeys = useRef(new Map<string, string>());
+  // ?vaka= deep link is honoured exactly once, on the first successful list
+  // load — a later Yenile must not re-open a case the reader already left.
+  const deepLinkConsumed = useRef(false);
 
   const clearSensitiveState = () => {
     selectionSequence.current += 1;
@@ -425,6 +415,14 @@ export default function App() {
       if (requestSequence !== selectionSequence.current) return;
       setItems(next);
       setLoadState('ready');
+      if (!deepLinkConsumed.current) {
+        deepLinkConsumed.current = true;
+        const linkedCaseId = new URLSearchParams(window.location.search).get('vaka');
+        if (!selectedId && linkedCaseId) {
+          void openCaseRef.current(linkedCaseId);
+          return;
+        }
+      }
       if (selectedId) {
         const fresh = await getCase(selectedId);
         if (requestSequence === selectionSequence.current) {
@@ -448,7 +446,7 @@ export default function App() {
     void refresh();
   }, []);
 
-  const openCase = async (item: EthicsCaseSummary) => {
+  const openCase = async (caseId: string) => {
     const requestSequence = ++selectionSequence.current;
     setError('');
     setReply('');
@@ -464,20 +462,63 @@ export default function App() {
     setStaffState('loading');
     setPickerHandle('');
     try {
-      const next = await getCase(item.id);
+      const next = await getCase(caseId);
       if (requestSequence === selectionSequence.current) {
         setSelected(next);
-        await loadCaseEvidence(item.id, requestSequence);
-        await loadParticipants(item.id, requestSequence);
-        await loadAssignableStaff(item.id, requestSequence);
-        await loadCaseTimeline(item.id, requestSequence);
-        await loadSanctions(item.id, requestSequence);
-        await loadChecks(item.id, requestSequence);
+        await loadCaseEvidence(caseId, requestSequence);
+        await loadParticipants(caseId, requestSequence);
+        await loadAssignableStaff(caseId, requestSequence);
+        await loadCaseTimeline(caseId, requestSequence);
+        await loadSanctions(caseId, requestSequence);
+        await loadChecks(caseId, requestSequence);
       }
     } catch (requestError) {
       if (requestSequence === selectionSequence.current) showRequestError(requestError);
     }
   };
+
+  // ── Faz 35: full-width view switch, addressable through the URL ──────────
+  // ?vaka=<id> is the selection. It travels through pushState so browser
+  // back/forward move between the list and the detail (and between two
+  // details) the way they move between pages.
+  const writeVakaParam = (caseId: string | null) => {
+    const url = new URL(window.location.href);
+    if (caseId) url.searchParams.set('vaka', caseId);
+    else url.searchParams.delete('vaka');
+    window.history.pushState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const selectCase = (item: EthicsCaseSummary) => {
+    writeVakaParam(item.id);
+    void openCase(item.id);
+  };
+
+  const backToList = () => {
+    writeVakaParam(null);
+    // Invalidate any in-flight detail load so a late response cannot pull the
+    // reader back into the case they just left.
+    selectionSequence.current += 1;
+    setSelected(null);
+  };
+
+  // The listener reads the URL, never component state — so it stays valid for
+  // the component's whole life while openCase is recreated every render.
+  const openCaseRef = useRef(openCase);
+  openCaseRef.current = openCase;
+
+  useEffect(() => {
+    const onPopState = () => {
+      const caseId = new URLSearchParams(window.location.search).get('vaka');
+      if (!caseId) {
+        selectionSequence.current += 1;
+        setSelected(null);
+        return;
+      }
+      void openCaseRef.current(caseId);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const changeStatus = async (status: CaseStatus) => {
     if (!selected) return;
@@ -686,178 +727,50 @@ export default function App() {
           </div>
         )}
 
-        <div className="ethics-manager-grid">
-          <Card variant="outlined" padding="md">
-            <Stack direction="column" gap={3}>
-              <div className="ethics-section-title">
-                <Text as="h2" size="lg" weight="bold">
-                  Vakalar
-                </Text>
-                <Button variant="secondary" size="sm" onClick={() => void refresh()}>
-                  Yenile
-                </Button>
-              </div>
-              {loadState === 'loading' && <p role="status">Vakalar yükleniyor…</p>}
-              {loadState === 'error' && <p>Vaka listesi alınamadı.</p>}
-              {loadState === 'ready' && items.length === 0 && (
-                <p>Yetkiniz kapsamında açık vaka yok.</p>
-              )}
-              {loadState === 'ready' && items.length > 0 && (
-                <div className="ethics-filters">
-                  <label className="ethics-filter-search">
-                    <span>Konu ara</span>
-                    <input
-                      type="search"
-                      value={filter.query}
-                      onChange={(e) => setFilter({ ...filter, query: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    <span>Durum</span>
-                    <select
-                      value={filter.status}
-                      onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-                    >
-                      <option value="">Hepsi</option>
-                      {CASE_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {statusLabel(s)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Kategori</span>
-                    <select
-                      value={filter.category}
-                      onChange={(e) => setFilter({ ...filter, category: e.target.value })}
-                    >
-                      <option value="">Hepsi</option>
-                      {CASE_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {categoryLabel(c)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {/* The two questions triage exists to answer, as one click each. */}
-                  <label className="ethics-filter-toggle">
-                    <input
-                      type="checkbox"
-                      checked={filter.unattended}
-                      onChange={(e) => setFilter({ ...filter, unattended: e.target.checked })}
-                    />
-                    <span>Sahipsiz</span>
-                  </label>
-                  <label className="ethics-filter-toggle">
-                    <input
-                      type="checkbox"
-                      checked={filter.overdue}
-                      onChange={(e) => setFilter({ ...filter, overdue: e.target.checked })}
-                    />
-                    <span>Teyit süresi geçti</span>
-                  </label>
+        {selected === null ? (
+          /* LIST view — full width. KPIs, filter toolbar and the entity grid live in
+             CaseListWorkspace; this shell keeps what was already here: the load states
+             and the refresh action. */
+          <div className="ethics-manager-list">
+            <Card variant="outlined" padding="md">
+              <Stack direction="column" gap={3}>
+                <div className="ethics-section-title">
+                  <Text as="h2" size="lg" weight="bold">
+                    Vakalar
+                  </Text>
+                  <Button variant="secondary" size="sm" onClick={() => void refresh()}>
+                    Yenile
+                  </Button>
                 </div>
-              )}
-              {/* A filtered list must never look like the whole list. A filter left on from
-                  an earlier question silently hides cases, and on this screen a hidden case
-                  is a report nobody is working. The count says what is being withheld and
-                  the button undoes it in one move. */}
-              {loadState === 'ready' && isFilterActive(filter) && (
-                <p className="ethics-filter-summary" role="status">
-                  <span>
-                    <strong>{visibleItems.length}</strong> / {items.length} vaka gösteriliyor
-                  </span>
-                  <button type="button" onClick={() => setFilter(EMPTY_CASE_FILTER)}>
-                    Süzmeyi kaldır
-                  </button>
-                </p>
-              )}
-              {loadState === 'ready' && items.length > 0 && visibleItems.length === 0 && (
-                <p>Bu süzgeçle eşleşen vaka yok.</p>
-              )}
-              <ul className="ethics-case-list" aria-label="Etik vakaları">
-                {visibleItems.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      className={selected?.id === item.id ? 'is-selected' : ''}
-                      // Read aloud in the order it is read on screen: what the case is
-                      // first, then the flags that change how it is handled. The id stays
-                      // because it is how a case is referred to outside this screen.
-                      aria-label={[
-                        item.subject ?? 'Konu okunamadı',
-                        statusLabel(item.status),
-                        isAnonymous(item.mode) ? 'anonim' : null,
-                        item.participantCount === 0 ? 'sahipsiz' : null,
-                        acknowledgementState(item).overdue ? 'teyit süresi geçti' : null,
-                        `Vaka #${item.id.toUpperCase()}`,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                      onClick={() => void openCase(item)}
-                    >
-                      {/* The subject leads, because it is the only thing that says what
-                          the case is. The row used to open with an id fragment, which
-                          distinguishes cases from each other but describes none of them. */}
-                      <span className="ethics-case-subject">
-                        {item.subject ?? 'Konu okunamadı'}
-                      </span>
-                      <span className="ethics-case-status">{statusLabel(item.status)}</span>
-                      <small className="ethics-case-meta">
-                        {isAnonymous(item.mode) && (
-                          <span className="ethics-tag is-anonymous">Anonim</span>
-                        )}
-                        {categoryLabel(item.category) && (
-                          <span className="ethics-tag">{categoryLabel(item.category)}</span>
-                        )}
-                        {/* Nobody on the case is the state that most needs to be seen from
-                            the list: it is how a report goes unworked without anyone
-                            deciding that it should. */}
-                        {item.participantCount === 0 && (
-                          <span className="ethics-tag is-unattended">Sahipsiz</span>
-                        )}
-                        {acknowledgementState(item).overdue && (
-                          <span className="ethics-tag is-overdue">Teyit süresi geçti</span>
-                        )}
-                        {(() => {
-                          // Urgency BEFORE the breach: the red tag above only exists
-                          // after the promise is already broken.
-                          const countdown = acknowledgementCountdown(item);
-                          return countdown ? (
-                            <span
-                              className={
-                                countdown.urgent
-                                  ? 'ethics-tag is-deadline-near'
-                                  : 'ethics-tag is-deadline'
-                              }
-                            >
-                              {countdown.text}
-                            </span>
-                          ) : null;
-                        })()}
-                      </small>
-                      <small className="ethics-case-foot">
-                        <span className="ethics-case-list-id">{shortId(item.id)}</span>
-                        <time dateTime={item.updatedAt}>
-                          {new Date(item.updatedAt).toLocaleString('tr-TR')}
-                        </time>
-                      </small>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Stack>
-          </Card>
-
-          <Card variant="outlined" padding="md" className="ethics-detail-pane">
-            {!selected ? (
-              <div className="ethics-empty">
-                <Text as="h2" size="lg" weight="bold">
-                  Vaka ayrıntısı
-                </Text>
-                <p>İncelemek için yetkiniz kapsamındaki bir vakayı seçin.</p>
-              </div>
-            ) : (
+                {loadState === 'loading' && <p role="status">Vakalar yükleniyor…</p>}
+                {loadState === 'error' && <p>Vaka listesi alınamadı.</p>}
+                {loadState === 'ready' && items.length === 0 && (
+                  <p>Yetkiniz kapsamında açık vaka yok.</p>
+                )}
+                {loadState === 'ready' && items.length > 0 && (
+                  <CaseListWorkspace
+                    items={items}
+                    filter={filter}
+                    onFilterChange={setFilter}
+                    onSelect={selectCase}
+                  />
+                )}
+              </Stack>
+            </Card>
+          </div>
+        ) : (
+          /* DETAIL view — full width. The content below is the manager surface as it
+             was; only the frame changed (no side-by-side list, an explicit way back). */
+          <div className="ethics-manager-detail">
+            <div className="ethics-detail-topbar">
+              <Button variant="secondary" size="sm" onClick={backToList}>
+                ← Vaka listesine dön
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => void refresh()}>
+                Yenile
+              </Button>
+            </div>
+            <Card variant="outlined" padding="md" className="ethics-detail-pane">
               <Stack direction="column" gap={4}>
                 <div className="ethics-section-title">
                   <div>
@@ -1582,9 +1495,9 @@ export default function App() {
                   )}
                 </section>
               </Stack>
-            )}
-          </Card>
-        </div>
+            </Card>
+          </div>
+        )}
       </Stack>
     </main>
   );
@@ -1644,8 +1557,6 @@ function showRequestErrorAfterWrite(
     'İşlem kaydedildi ancak ekran yenilenemedi. Yeniden göndermeyin; Yenile ile durumu kontrol edin.',
   );
 }
-const shortId = (id: string) => `#${id.slice(0, 8).toUpperCase()}`;
-
 // ES-203/C — the last characters of the case-scoped handle. Enough to tell two
 // same-named colleagues apart within this case; useless as a correlation key
 // across cases, because the handle itself changes per case.

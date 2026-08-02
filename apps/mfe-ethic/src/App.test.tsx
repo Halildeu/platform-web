@@ -6,6 +6,53 @@ import { acknowledgementDraft } from './case-lifecycle';
 import * as api from './ethics-api';
 
 vi.mock('./ethics-api');
+
+// Faz 35 — the workspace's grid, reduced to what these tests exercise: it
+// renders each row's derived cells and forwards single/double click the way the
+// real EntityGridTemplate does. The accessible name mirrors the old list's
+// aria-label vocabulary (subject … Vaka #ID) so the selection tests keep
+// addressing cases the same way. `case-grid.ts` itself is deliberately NOT
+// mocked: rows and KPIs are real derivations, only the grid chrome is stubbed.
+vi.mock('@mfe/design-system/advanced/data-grid', () => ({
+  EntityGridTemplate: ({
+    rowData,
+    gridId,
+    gridOptions,
+    onRowDoubleClick,
+  }: {
+    rowData?: Array<Record<string, unknown>>;
+    gridId?: string;
+    gridOptions?: { onRowClicked?: (event: unknown) => void };
+    onRowDoubleClick?: (row: Record<string, unknown>) => void;
+  }) => (
+    <div data-testid="mock-entity-grid" data-grid-id={gridId}>
+      {(rowData ?? []).map((row) => (
+        <button
+          key={String(row.id)}
+          type="button"
+          aria-label={`${String(row.subject)} · ${String(row.statusText)} · Vaka ${String(row.shortId)}`}
+          onClick={() =>
+            gridOptions?.onRowClicked?.({
+              data: row,
+              event: { button: 0, defaultPrevented: false, target: null },
+            })
+          }
+          onDoubleClick={() => onRowDoubleClick?.(row)}
+        >
+          <span>{String(row.subject)}</span>
+          <span>{String(row.statusText)}</span>
+          <span>{String(row.category)}</span>
+          <span>{String(row.mode)}</span>
+          <span>{String(row.owner)}</span>
+          <span>{String(row.ackSlaText)}</span>
+          <span>{String(row.feedbackSlaText)}</span>
+          <span>{String(row.shortId)}</span>
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
 const summary: api.EthicsCaseSummary = {
   id: '11111111-1111-1111-1111-111111111111',
   status: 'NEW',
@@ -49,6 +96,10 @@ const availableEvidence = {
 
 describe('Etik Speak manager MFE', () => {
   beforeEach(() => {
+    // ?vaka= selection now rides on the URL (pushState). jsdom keeps one
+    // window per file, so a selection left by the previous test would auto-open
+    // that case on the next mount unless the URL is reset here.
+    window.history.replaceState(null, '', '/');
     vi.mocked(api.listCases).mockResolvedValue([summary]);
     vi.mocked(api.getCase).mockResolvedValue(detail);
     vi.mocked(api.listCaseEvidence).mockResolvedValue([]);
@@ -145,7 +196,8 @@ describe('Etik Speak manager MFE', () => {
     expect(within(row).getByText('Anonim')).toBeInTheDocument();
     // Nobody is on it. This is how a report goes unworked without anyone deciding so.
     expect(within(row).getByText('Sahipsiz')).toBeInTheDocument();
-    expect(within(row).getByText('Teyit süresi geçti')).toBeInTheDocument();
+    // The breach is said in words, not only in colour: the SLA cell counts the days.
+    expect(within(row).getByText(/gün gecikti/)).toBeInTheDocument();
     // Still addressable by id: that is how a case is referred to off this screen.
     expect(within(row).getByText(/33333333/i)).toBeInTheDocument();
   });
@@ -165,7 +217,10 @@ describe('Etik Speak manager MFE', () => {
     const row = await screen.findByRole('button', { name: /Tedarikçi hediyesi/ });
 
     expect(within(row).queryByText('Sahipsiz')).not.toBeInTheDocument();
-    expect(within(row).queryByText('Teyit süresi geçti')).not.toBeInTheDocument();
+    expect(within(row).queryByText(/gün gecikti/)).not.toBeInTheDocument();
+    // Owned and answered, in words: the row says both instead of staying silent.
+    expect(within(row).getByText('2 katılımcı')).toBeInTheDocument();
+    expect(within(row).getByText('Verildi')).toBeInTheDocument();
   });
 
   // A malformed case — one with no report row behind it — is exactly the case that needs
@@ -179,11 +234,11 @@ describe('Etik Speak manager MFE', () => {
     expect(await screen.findByRole('button', { name: /Konu okunamadı/ })).toBeInTheDocument();
   });
 
-  // The stylesheet pins the detail pane so a long case list can be scrolled without
-  // losing sight of the case that was just opened. That rule keys off this class, and
-  // a class that quietly stops being applied leaves no trace: the markup still renders,
-  // the tests still pass, and the pane silently scrolls away again.
-  test('the detail pane stays addressable by the rule that pins it', async () => {
+  // Faz 35 — the detail is no longer a sibling pane beside a scrolling list; it
+  // REPLACES the list at full width. The class stays addressable because the
+  // full-width layout rule keys off it, and the way back must exist: a detail
+  // with no exit is a reader trapped in one case.
+  test('opening a case replaces the list with a full-width detail and offers the way back', async () => {
     const { container } = render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
     await screen.findByRole('heading', { name: 'Sentetik bildirim' });
@@ -191,8 +246,23 @@ describe('Etik Speak manager MFE', () => {
     const pane = container.querySelector('.ethics-detail-pane');
     expect(pane).not.toBeNull();
     expect(pane).toContainElement(screen.getByRole('heading', { name: 'Sentetik bildirim' }));
-    // Pinning only works against a scrolling sibling, so the list must stay outside it.
-    expect(pane).not.toContainElement(screen.getByRole('button', { name: /#11111111/ }));
+    // The list is gone — the detail owns the whole panel now.
+    expect(screen.queryByRole('button', { name: /Vaka #11111111/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Vaka listesine dön/ })).toBeInTheDocument();
+  });
+
+  test('vaka listesine dön düğmesi listeyi geri getirir ve URL seçimini temizler', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+    await screen.findByRole('heading', { name: 'Sentetik bildirim' });
+    // The selection is addressable: back/forward and a shared link both work off this.
+    expect(window.location.search).toContain('vaka=');
+
+    await userEvent.click(screen.getByRole('button', { name: /Vaka listesine dön/ }));
+
+    expect(await screen.findByRole('button', { name: /#11111111/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sentetik bildirim' })).not.toBeInTheDocument();
+    expect(window.location.search).not.toContain('vaka=');
   });
   test('only an available sanitized derivative can be downloaded', async () => {
     vi.mocked(api.listCaseEvidence).mockResolvedValueOnce([scanningEvidence, availableEvidence]);
@@ -533,6 +603,43 @@ describe('Etik Speak manager MFE', () => {
     expect(summaryLine).toHaveTextContent('1 / 2 vaka gösteriliyor');
 
     await userEvent.click(screen.getByRole('button', { name: 'Süzmeyi kaldır' }));
+    expect(screen.getByRole('button', { name: /Sahipli vaka/ })).toBeInTheDocument();
+  });
+
+  // Faz 35 — a KPI card is a filter with a number on it. Its count and its click
+  // must agree: pressing "Sahipsiz" narrows the grid to exactly the cases the
+  // number counted, and the pressed state says the narrowing is on.
+  test('KPI kartı tıklanınca ilgili süzgeci uygular ve aktifken vurgulanır', async () => {
+    const owned = {
+      ...summary,
+      id: '55555555-5555-5555-5555-555555555555',
+      subject: 'Sahipli vaka',
+      participantCount: 2,
+    };
+    const orphan = {
+      ...summary,
+      id: '66666666-6666-6666-6666-666666666666',
+      subject: 'Sahipsiz vaka',
+      participantCount: 0,
+    };
+    vi.mocked(api.listCases).mockResolvedValueOnce([owned, orphan]);
+    render(<App />);
+    await screen.findByRole('button', { name: /Sahipli vaka/ });
+
+    const kpi = screen.getByTestId('kpi-unattended');
+    expect(kpi).toHaveAttribute('aria-pressed', 'false');
+    expect(kpi).toHaveTextContent('1');
+
+    await userEvent.click(kpi);
+
+    expect(kpi).toHaveAttribute('aria-pressed', 'true');
+    // The card writes the SAME filter the toolbar toggle reads — one state, two handles.
+    expect(screen.getByRole('checkbox', { name: 'Sahipsiz' })).toBeChecked();
+    expect(screen.queryByRole('button', { name: /Sahipli vaka/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sahipsiz vaka/ })).toBeInTheDocument();
+
+    await userEvent.click(kpi);
+    expect(kpi).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: /Sahipli vaka/ })).toBeInTheDocument();
   });
 

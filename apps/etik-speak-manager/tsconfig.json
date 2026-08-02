@@ -19,6 +19,15 @@
     "paths": {
       "@mfe/shared-http": [
         "src/standalone-http.ts"
+      ],
+      // #1122: mfe-ethic pulls the platform grid from the design system's
+      // advanced subpath, which the package export map does not list. ONLY
+      // this subpath is mapped to src — a blanket @mfe/design-system/* map
+      // would drag the whole design-system + x-charts source tree into this
+      // cell's compilation and surface eight pre-existing type debts that
+      // belong to those packages, not to this cell.
+      "@mfe/design-system/advanced/data-grid": [
+        "../../packages/design-system/src/advanced/data-grid"
       ]
     },
     "resolveJsonModule": true,
