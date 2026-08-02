@@ -45,6 +45,7 @@ async function scan(label: string) {
 
 describe('ihbarcı yolculuğu — axe (jsdom)', () => {
   beforeEach(() => {
+    vi.mocked(api.fetchIntakeOptions).mockResolvedValue(['ANONYMOUS']);
     vi.mocked(api.newAccessSecret).mockReturnValue('sentetik-eris-sirri-test-icin-kullanilir');
     vi.mocked(api.createReport).mockResolvedValue({
       receiptId: '11111111-1111-1111-1111-111111111111',
