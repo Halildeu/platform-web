@@ -134,6 +134,8 @@ export default function App() {
   const [sanctionScore, setSanctionScore] = useState('');
   const [sanctionType, setSanctionType] = useState('');
   const [escalationReason, setEscalationReason] = useState('');
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [verificationNote, setVerificationNote] = useState('');
   const [concludingId, setConcludingId] = useState<string | null>(null);
   const [observation, setObservation] = useState('');
   const [risk, setRisk] = useState<RetaliationRisk>('NONE');
@@ -259,6 +261,21 @@ export default function App() {
       setSanctionScore('');
       setSanctionType('');
       setEscalationReason('');
+      await loadSanctions(selected.id, selectionSequence.current);
+    } catch (requestError) {
+      showRequestError(requestError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitApplication = async () => {
+    if (!selected || !applyingId || !verificationNote.trim()) return;
+    setBusy(true);
+    try {
+      await applySanction(applyingId, verificationNote.trim());
+      setApplyingId(null);
+      setVerificationNote('');
       await loadSanctions(selected.id, selectionSequence.current);
     } catch (requestError) {
       showRequestError(requestError);
@@ -1193,6 +1210,73 @@ export default function App() {
                               : 'Karar verildi, henüz uygulanmadı'}
                             {s.appealState !== 'NONE' ? ` · temyiz: ${APPEAL_LABELS[s.appealState]}` : ''}
                           </div>
+                          <div className="ethics-actions">
+                            {!s.appliedAt && s.appealState !== 'OVERTURNED' ? (
+                              <Button
+                                disabled={busy}
+                                onClick={() => setApplyingId(applyingId === s.id ? null : s.id)}
+                              >
+                                {applyingId === s.id ? 'Vazgeç' : 'Uygulandı olarak kaydet'}
+                              </Button>
+                            ) : null}
+                            {s.appealState === 'NONE' ? (
+                              <Button
+                                disabled={busy}
+                                onClick={() =>
+                                  void runCheckAction(() => moveSanctionAppeal(s.id, 'REQUESTED'))
+                                }
+                              >
+                                Temyiz talebi geldi
+                              </Button>
+                            ) : null}
+                            {s.appealState === 'REQUESTED' ? (
+                              <>
+                                {/* Both outcomes, side by side and equally weighted. A screen
+                                    that made upholding the easier click would put a thumb on
+                                    the scale of somebody's appeal. */}
+                                <Button
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void runCheckAction(() => moveSanctionAppeal(s.id, 'UPHELD'))
+                                  }
+                                >
+                                  Temyiz reddedildi
+                                </Button>
+                                <Button
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void runCheckAction(() => moveSanctionAppeal(s.id, 'OVERTURNED'))
+                                  }
+                                >
+                                  Temyiz kabul edildi
+                                </Button>
+                              </>
+                            ) : null}
+                          </div>
+                          {applyingId === s.id ? (
+                            <div className="ethics-form" data-testid="apply-form">
+                              <label htmlFor="verification-note">
+                                Doğrulama notu{' '}
+                                <span className="ethics-muted">(nasıl teyit edildi)</span>
+                                {/* Required, because "applied" with nothing behind it is the
+                                    state that makes a sanctions register worthless — the
+                                    same reason a case cannot close without a finding. */}
+                                <textarea
+                                  id="verification-note"
+                                  rows={2}
+                                  value={verificationNote}
+                                  onChange={(e) => setVerificationNote(e.target.value)}
+                                  placeholder="Örn. İK dosyasında imzalı tebliğ; bordroya işlendi"
+                                />
+                              </label>
+                              <Button
+                                disabled={busy || !verificationNote.trim()}
+                                onClick={() => void submitApplication()}
+                              >
+                                Kaydet
+                              </Button>
+                            </div>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
