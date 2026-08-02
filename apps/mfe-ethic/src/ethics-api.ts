@@ -387,6 +387,38 @@ export const RETALIATION_INDICATORS = [
   ['PSYCHIATRIC_REFERRAL', 'Psikiyatrik veya tıbbi sevk'],
 ] as const;
 
+/**
+ * The violation categories the İHLAL AĞIRLIK CETVELİ escalates to ÇOK AĞIR whatever the ten
+ * criteria total to. The server refuses a lower band for these (and so does the database);
+ * the form mirrors the set so a handler is stopped before they type a score, rather than
+ * after.
+ */
+export const AUTOMATIC_ESCALATIONS: ReadonlySet<string> = new Set([
+  'PUBLIC_OFFICIAL_BRIBERY',
+  'SEXUAL_HARASSMENT',
+  'CHILD_LABOUR',
+  'FORCED_LABOUR',
+  'CONCEALED_FATAL_ACCIDENT',
+  'INSIDER_TRADING',
+  'FORGED_IDENTITY',
+]);
+
+export const VIOLATION_CATEGORIES: ReadonlyArray<{ code: string; label: string }> = [
+  { code: 'PUBLIC_OFFICIAL_BRIBERY', label: 'Kamu görevlisine rüşvet' },
+  { code: 'SEXUAL_HARASSMENT', label: 'Cinsel taciz' },
+  { code: 'CHILD_LABOUR', label: 'Çocuk işçi çalıştırma' },
+  { code: 'FORCED_LABOUR', label: 'Zorla çalıştırma' },
+  { code: 'CONCEALED_FATAL_ACCIDENT', label: 'Ölümlü kazanın gizlenmesi' },
+  { code: 'INSIDER_TRADING', label: 'İçeriden öğrenenlerin ticareti' },
+  { code: 'FORGED_IDENTITY', label: 'Belge/kimlik sahteciliği' },
+  { code: 'EXPENSE_IRREGULARITY', label: 'Masraf/harcama usulsüzlüğü' },
+  { code: 'CONFLICT_OF_INTEREST', label: 'Çıkar çatışması' },
+  { code: 'WORKPLACE_BULLYING', label: 'İşyerinde yıldırma' },
+  { code: 'DATA_MISUSE', label: 'Veri kötüye kullanımı' },
+  { code: 'PROCUREMENT_IRREGULARITY', label: 'Satın alma usulsüzlüğü' },
+  { code: 'OTHER', label: 'Diğer' },
+];
+
 export type SeverityBand = 'HAFIF' | 'ORTA' | 'AGIR' | 'COK_AGIR';
 export type RetaliationRisk = 'NONE' | 'SUSPECTED' | 'CONFIRMED';
 
@@ -404,6 +436,7 @@ export const bandForScore = (score: number): SeverityBand | null =>
 
 export interface Sanction {
   id: string;
+  violationCategory: string;
   severityScore: number;
   severityBand: SeverityBand;
   escalationReason: string | null;
@@ -438,7 +471,10 @@ export async function listCaseSanctions(caseId: string): Promise<Sanction[]> {
 
 export async function recordSanction(
   caseId: string,
-  body: { severityScore: number; severityBand: SeverityBand; escalationReason?: string; sanctionType: string },
+  body: {
+    violationCategory: string; severityScore: number; severityBand: SeverityBand;
+    escalationReason?: string; sanctionType: string;
+  },
 ): Promise<Sanction> {
   const response = await api.post<Sanction>(
     `/v1/ethics/cases/${encodeURIComponent(caseId)}/sanctions`, body,
