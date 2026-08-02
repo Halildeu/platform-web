@@ -1,19 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getSharedReport } from '@platform/capabilities';
-import {
-  BarChart3,
-  Folder,
-  Home,
-  LayoutDashboard,
-  LifeBuoy,
-  MessagesSquare,
-  Server,
-  Settings,
-  Database,
-  FileText,
-  Scale,
-} from 'lucide-react';
+import { Home, LifeBuoy, Settings } from 'lucide-react';
 // PERF-INIT-V2 PR-B5a: consumer-side subpath migration. Sidebar is on
 // every authenticated route's critical render path. ShellSidebar + its
 // types live in the patterns barrel; this aligns the call site for the
@@ -31,143 +18,123 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
-import {
-  isEthicRemoteEnabled,
-  isInterviewEvidenceRemoteEnabled,
-  isMeetingRemoteEnabled,
-} from '../shell-navigation';
 import { navigateIfStandaloneApp } from '../standalone-apps';
 import { resolveKeycloakRouteScope } from '../auth/keycloakRouteScope';
-import { Badge } from '@mfe/design-system/primitives';
-import {
-  ATS_PRODUCT_HUB_ENTRY,
-  INTERVIEW_EVIDENCE_ENTRY,
-} from '../../features/ats-product-catalog/model/ats-capability-registry';
+import { useShellCommonI18n } from '../i18n';
+import { useHeaderNavigation } from './header/useHeaderNavigation';
+import type { ResolvedNavGroup } from './header/useHeaderNavigation';
 
 const STORAGE_KEY = 'shell.sidebar.mode';
-const defaultReportingRoute = getSharedReport('users-overview').webRoute;
 
 /**
- * Pure, testable builder for the sidebar navigation items.
+ * The sidebar is context-sensitive, not a mirror of the header.
  *
- * Every privileged item is gated by an OpenFGA module: when the gate is
- * closed the item renders {@code disabled} with no {@code href}, so an
- * unauthorized user cannot click through to a route guard rejection
- * ({@code /unauthorized}). The {@code schema-explorer} item is gated by
- * {@code THEME} to match the {@code /admin/schema-explorer} route guard
- * (AppRouter {@code requiredModule="THEME"}). Keeping this a standalone
- * function lets the gating contract be unit-tested without mounting the
- * federated ShellSidebar (which needs JSDOM observer shims).
+ * The header answers "which product am I in"; the sidebar answers "where am I
+ * inside it". Mirroring the same module list in both places (the previous flat
+ * list did a version of this) duplicates one question and leaves the other
+ * unanswered — the cross-AI review (issue #1120) called this out and it stands.
+ *
+ * Two modes, both fed by useHeaderNavigation() so entitlement filtering, remote
+ * gating, i18n and the initialized guard live in exactly one place:
+ *
+ * - module mode: the current route belongs to a group with items — the sidebar
+ *   shows that module's internal destinations, plus one exit back to the hub.
+ * - global mode: no module owns the route (/home, or a direct-path product
+ *   like Meetings with no internal nav yet) — the sidebar is the module
+ *   launcher, one entry per product the user can actually open.
+ *
+ * Fail-closed by construction: until entitlements are initialized the hook
+ * returns no groups, so nothing privileged ever flashes and then disappears.
+ * The items are static config labels — an ethics case title can never appear
+ * here, which is a confidentiality requirement, not a styling choice.
  */
-export const buildSidebarNavItems = (
-  sa: boolean,
-  hasModule: (moduleKey: string) => boolean,
-  meetingEnabled = true,
-  interviewEvidenceEnabled = false,
-  ethicEnabled = true,
+export const buildGlobalSidebarItems = (
+  groups: ResolvedNavGroup[],
+  homeLabel: string,
 ): ShellSidebarNavItem[] => {
-  const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
-  const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
-  const canReport = sa || hasModule(MODULE_KEYS.REPORT);
-  const canMeeting = sa || hasModule(MODULE_KEYS.MEETING) || hasModule(MODULE_KEYS.TRANSCRIPT);
-  const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
-  const canUseMeeting = meetingEnabled && canMeeting;
-  // FULLATS-WEB-ACCESS-01: authorization and remote readiness are separate.
-  // Authorized users keep a stable product destination when the remote is OFF;
-  // the guarded route renders a shell-owned safe catalog instead of a dead nav.
-  const canUseAtsProductHub = sa || hasModule(ATS_PRODUCT_HUB_ENTRY.requiredModule);
-  // Faz 35 ES: Etik Speak, header launcher'da zaten vardı ama sol panelde
-  // yoktu — yetkili kullanıcı ürünü ancak menüyü açıp arayarak buluyordu.
-  // Meetings ile simetrik: modül yetkisi VE remote hazır olmalı.
-  const canEthic = sa || hasModule(MODULE_KEYS.ETHIC);
-  const canUseEthic = ethicEnabled && canEthic;
-  const homePath = '/home';
-
-  return [
+  const items: ShellSidebarNavItem[] = [
     {
       key: 'home',
-      label: 'Home',
-      href: homePath,
+      label: homeLabel,
+      href: '/home',
       icon: <Home aria-hidden />,
       dataTestId: 'nav-home',
     },
+  ];
+  for (const group of groups) {
+    // A group with neither a direct path nor a visible item has nowhere to
+    // land; the hook has already dropped unauthorized ones.
+    const href = group.directPath ?? group.items?.[0]?.path;
+    if (!href) continue;
+    const Icon = group.icon;
+    items.push({
+      key: group.key,
+      label: group.label,
+      href,
+      icon: <Icon aria-hidden />,
+      dataTestId: `nav-module-${group.key}`,
+    });
+  }
+  return items;
+};
+
+export const buildModuleSidebarItems = (
+  group: ResolvedNavGroup,
+  allModulesLabel: string,
+): ShellSidebarNavItem[] => {
+  const items: ShellSidebarNavItem[] = [
     {
-      key: 'dashboard',
-      label: 'Dashboard',
-      href: canAudit ? '/audit/events' : undefined,
-      icon: <LayoutDashboard aria-hidden />,
-      dataTestId: 'nav-dashboard',
-      disabled: !canAudit,
-    },
-    {
-      key: 'projects',
-      label: 'Projects',
-      href: canAccess ? '/access/roles' : undefined,
-      icon: <Folder aria-hidden />,
-      dataTestId: 'nav-projects',
-      disabled: !canAccess,
-    },
-    {
-      key: 'reporting',
-      label: 'Reporting',
-      href: canReport ? defaultReportingRoute : undefined,
-      icon: <BarChart3 aria-hidden />,
-      dataTestId: 'nav-reporting',
-      disabled: !canReport,
-    },
-    {
-      key: 'meetings',
-      label: 'Meetings',
-      href: canUseMeeting ? '/admin/meetings' : undefined,
-      icon: <MessagesSquare aria-hidden />,
-      dataTestId: 'nav-meetings',
-      disabled: !canUseMeeting,
-    },
-    {
-      key: 'ethic',
-      label: 'Etik Speak',
-      // Sahip geri bildirimi (2026-07-30): "burası neden başka bir uygulama
-      // gibi — aynı kabuk olmalı." Suite kullanıcısı için Etik Speak artık
-      // Meetings gibi KABUK İÇİ bir rotadır: aynı header, aynı sol ray, aynı
-      // oturum; ikinci uygulamaya tam sayfa atlama yok. Kenardaki bağımsız
-      // hücre (/ethic) ayrı satış senaryosu için aynen yaşıyor — bu iki yol
-      // farklı olduğu için 2026-07-26'daki çift-kapı yarışı da geri gelmez.
-      href: canUseEthic ? '/admin/ethics' : undefined,
-      icon: <Scale aria-hidden />,
-      dataTestId: 'nav-ethic',
-      disabled: !canUseEthic,
-    },
-    {
-      key: ATS_PRODUCT_HUB_ENTRY.id,
-      label: ATS_PRODUCT_HUB_ENTRY.label,
-      href: canUseAtsProductHub ? ATS_PRODUCT_HUB_ENTRY.route : undefined,
-      icon: <FileText aria-hidden />,
-      dataTestId: 'nav-ats-product-hub',
-      disabled: !canUseAtsProductHub,
-      badge:
-        canUseAtsProductHub && !interviewEvidenceEnabled ? (
-          <Badge variant="info" size="sm">
-            Güvenli önizleme
-          </Badge>
-        ) : undefined,
-    },
-    {
-      key: 'services',
-      label: 'Services',
-      href: canThemeAdmin ? '/admin/services' : undefined,
-      icon: <Server aria-hidden />,
-      dataTestId: 'nav-services',
-      disabled: !canThemeAdmin,
-    },
-    {
-      key: 'schema-explorer',
-      label: 'Schema Explorer',
-      href: canThemeAdmin ? '/admin/schema-explorer' : undefined,
-      icon: <Database aria-hidden />,
-      dataTestId: 'nav-schema-explorer',
-      disabled: !canThemeAdmin,
+      key: 'all-modules',
+      label: allModulesLabel,
+      href: '/home',
+      icon: <Home aria-hidden />,
+      dataTestId: 'nav-all-modules',
     },
   ];
+  for (const item of group.items ?? []) {
+    const Icon = item.icon;
+    items.push({
+      key: item.key,
+      label: item.label,
+      href: item.path,
+      icon: <Icon aria-hidden />,
+      dataTestId: `nav-${item.key}`,
+    });
+  }
+  return items;
+};
+
+/**
+ * Which of the module's destinations is the one the reader is on.
+ *
+ * The header hook matches on pathname alone, which cannot tell the ethics work
+ * queues apart — all three live at /admin/ethics and differ only in the query.
+ * Here the full path (pathname + search) is tried first; only when no
+ * query-carrying destination matches does the longest query-less prefix win,
+ * so "Tüm vakalar" does not light up while the reader is in "Sahipsiz".
+ */
+export const resolveModuleActiveKey = (
+  group: ResolvedNavGroup,
+  pathname: string,
+  search: string,
+): string | undefined => {
+  const items = group.items ?? [];
+  const full = pathname + search;
+  const exact = items.find((item) => item.path === full);
+  if (exact) return exact.key;
+
+  let bestKey: string | undefined;
+  let bestLength = -1;
+  for (const item of items) {
+    if (item.path.includes('?')) continue;
+    for (const prefix of [item.path, ...(item.activePathPrefixes ?? [])]) {
+      if (pathname.startsWith(prefix) && prefix.length > bestLength) {
+        bestKey = item.key;
+        bestLength = prefix.length;
+      }
+    }
+  }
+  return bestKey;
 };
 
 export const Sidebar: React.FC = () => {
@@ -176,6 +143,8 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { hasModule, isSuperAdmin } = usePermissions();
   const sa = isSuperAdmin();
+  const { t } = useShellCommonI18n();
+  const { groups, activeGroupKey } = useHeaderNavigation();
 
   /* ---- Online status ---- */
   const [isOnline, setIsOnline] = useState<boolean>(() =>
@@ -192,35 +161,27 @@ export const Sidebar: React.FC = () => {
     };
   }, []);
 
-  /* ---- Navigation items ---- */
+  /* ---- Mode + items ---- */
+  const activeGroup = useMemo(
+    () => groups.find((group) => group.key === activeGroupKey),
+    [groups, activeGroupKey],
+  );
+  const moduleMode = Boolean(activeGroup?.items?.length);
+
   const navItems: ShellSidebarNavItem[] = useMemo(
     () =>
-      buildSidebarNavItems(
-        sa,
-        hasModule,
-        isMeetingRemoteEnabled(),
-        isInterviewEvidenceRemoteEnabled(),
-        isEthicRemoteEnabled(),
-      ),
-    [hasModule, sa],
+      moduleMode && activeGroup
+        ? buildModuleSidebarItems(activeGroup, t('shell.sidebar.allModules'))
+        : buildGlobalSidebarItems(groups, t('shell.breadcrumb.home')),
+    [moduleMode, activeGroup, groups, t],
   );
 
-  /* ---- Active key resolution ---- */
-  const homePath = navItems.find((item) => item.key === 'home')?.href;
-
   const activeKey = useMemo(() => {
-    const p = location.pathname || '/';
-    if (homePath && p === homePath) return 'home';
-    if (p.startsWith('/audit')) return 'dashboard';
-    if (p.startsWith('/access')) return homePath === '/access/roles' ? 'home' : 'projects';
-    if (p.startsWith('/admin/reports')) return 'reporting';
-    if (p.startsWith('/admin/meetings') || p.startsWith('/meetings')) return 'meetings';
-    if (p.startsWith(ATS_PRODUCT_HUB_ENTRY.route) || p.startsWith(INTERVIEW_EVIDENCE_ENTRY.route))
-      return ATS_PRODUCT_HUB_ENTRY.id;
-    if (p.startsWith('/admin/services')) return 'services';
-    if (p.startsWith('/admin/schema-explorer')) return 'schema-explorer';
-    return 'home';
-  }, [homePath, location.pathname]);
+    if (moduleMode && activeGroup) {
+      return resolveModuleActiveKey(activeGroup, location.pathname, location.search) ?? 'all-modules';
+    }
+    return activeGroupKey ?? 'home';
+  }, [moduleMode, activeGroup, activeGroupKey, location.pathname, location.search]);
 
   /* ---- Footer actions ---- */
   const footerActions: ShellSidebarFooterActionItem[] = useMemo(
@@ -255,17 +216,6 @@ export const Sidebar: React.FC = () => {
     [hasModule, sa, dispatch],
   );
 
-  /* ---- Folder items ---- */
-  const folderItems = useMemo(
-    () => [
-      { key: 'all', label: 'View all', count: 0, dataTestId: 'nav-folders-all' },
-      { key: 'recent', label: 'Recent', count: 0, dataTestId: 'nav-folders-recent' },
-      { key: 'favorites', label: 'Favorites', count: 0, dataTestId: 'nav-folders-favorites' },
-      { key: 'shared', label: 'Shared', count: 0, dataTestId: 'nav-folders-shared' },
-    ],
-    [],
-  );
-
   /* ---- Search ---- */
   const openCommandPalette = () => {
     if (location.pathname.startsWith('/admin/design-lab')) {
@@ -293,15 +243,15 @@ export const Sidebar: React.FC = () => {
           window.location.assign(item.href);
           return;
         }
-        if (item.href !== location.pathname) {
+        const target = item.href.split('?')[0];
+        if (item.href !== location.pathname + location.search && target !== undefined) {
           navigate(item.href);
         }
       }}
-      brandTitle="Platform"
-      brandSubtitle={location.pathname}
+      brandTitle={moduleMode && activeGroup ? activeGroup.label : 'Platform'}
+      brandSubtitle={moduleMode ? 'Platform' : undefined}
       onSearch={openCommandPalette}
       searchShortcut="Ctrl+K"
-      folderItems={folderItems}
       footerActions={footerActions}
       statusIndicator={{ status: isOnline ? 'online' : 'offline' }}
       storageKey={STORAGE_KEY}

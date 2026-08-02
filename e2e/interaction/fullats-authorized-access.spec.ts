@@ -43,7 +43,13 @@ test.describe('Full ATS authorized product access', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto('/home', { waitUntil: 'domcontentloaded' });
 
-    const navigationLink = page.getByRole('link', { name: /ATS Ürün Merkezi|ATS Product Hub/ });
+    // #1120: the sidebar is context-sensitive now. On /home it is the module
+    // launcher — one entry per module group, not one per product. ATS lives
+    // under İK, and in this remote-off harness the suggestions item is
+    // filtered, so İK's landing destination IS the ATS hub. The product's own
+    // name is still discoverable through the command palette below, which is
+    // the flow this test exercises anyway.
+    const navigationLink = page.getByTestId('nav-module-hr');
     await expect(navigationLink).toBeVisible();
     await expect(navigationLink).toHaveAttribute('href', ATS_ROUTE);
 

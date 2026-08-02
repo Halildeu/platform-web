@@ -18,6 +18,7 @@ import {
   Scale,
   Monitor,
   FileText,
+  MessagesSquare,
 } from 'lucide-react';
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
 import {
@@ -40,7 +41,13 @@ export interface NavGroupItem {
   /** OpenFGA module key — preferred over permission. */
   module?: string;
   /** If true, item is only shown when the corresponding remote is enabled. */
-  remoteFlag?: 'suggestions' | 'ethic' | 'endpointAdmin';
+  remoteFlag?: 'suggestions' | 'ethic' | 'endpointAdmin' | 'meeting';
+  /**
+   * Any-of module gate for products whose access is granted by more than one
+   * module (Meetings: MEETING covers the admin, TRANSCRIPT the analyst — either
+   * one is a legitimate way in). Mutually exclusive with {@link module}.
+   */
+  modulesAnyOf?: readonly string[];
   /** Additional routes that keep this navigation item active. */
   activePathPrefixes?: readonly string[];
 }
@@ -57,6 +64,10 @@ export interface NavGroup {
   items?: NavGroupItem[];
   /** Direct navigation path (no dropdown). Mutually exclusive with items. */
   directPath?: string;
+  /** Remote/deploy gate for direct-path groups (same semantics as item-level). */
+  remoteFlag?: 'suggestions' | 'ethic' | 'endpointAdmin' | 'meeting';
+  /** Any-of module gate for direct-path groups. */
+  modulesAnyOf?: readonly string[];
 }
 
 export interface BreadcrumbRoute {
@@ -157,6 +168,18 @@ export const NAV_GROUPS: NavGroup[] = [
         remoteFlag: 'ethic',
       },
     ],
+  },
+  {
+    // Meetings was reachable ONLY from the old flat sidebar — the header had no
+    // entry at all, so the module-grouped navigation was silently incomplete.
+    // With the sidebar becoming context-sensitive this config is the single
+    // source for both surfaces, and a product missing here vanishes entirely.
+    key: 'meetings',
+    labelKey: 'shell.mega.meetings',
+    icon: MessagesSquare,
+    directPath: '/admin/meetings',
+    modulesAnyOf: [MODULE_KEYS.MEETING, MODULE_KEYS.TRANSCRIPT],
+    remoteFlag: 'meeting',
   },
   {
     key: 'admin',

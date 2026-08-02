@@ -106,6 +106,12 @@ export interface AppSidebarNavItemProps {
   onClick?: () => void;
   /** Tooltip text shown when the sidebar is collapsed. */
   tooltip?: string;
+  /**
+   * Rendered as data-testid on the anchor/button. ShellSidebar has been
+   * forwarding a dataTestId into a className ternary since the flat-sidebar
+   * days — the type promised a hook for tests and the DOM never carried it.
+   */
+  dataTestId?: string;
   /** Nested nav items (up to 3 levels deep). */
   children?: ReactNode;
   /** Nesting depth (0-3). Auto-calculated when omitted. */

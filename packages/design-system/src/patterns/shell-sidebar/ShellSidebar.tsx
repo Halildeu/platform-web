@@ -164,7 +164,7 @@ const ShellSidebarInner: React.FC<ShellSidebarInnerProps> = ({
             disabled={item.disabled}
             badge={item.badge}
             onClick={() => handleNavItemClick(item)}
-            className={item.dataTestId ? '' : undefined}
+            dataTestId={item.dataTestId}
           />
         ))}
 

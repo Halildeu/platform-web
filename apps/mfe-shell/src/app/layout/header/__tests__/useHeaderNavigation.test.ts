@@ -30,10 +30,12 @@ vi.mock('../../../i18n', () => ({
 let suggestionsEnabled = true;
 let ethicEnabled = true;
 let endpointAdminEnabled = true;
+let meetingEnabled = true;
 vi.mock('../../../shell-navigation', () => ({
   isSuggestionsRemoteEnabled: () => suggestionsEnabled,
   isEthicRemoteEnabled: () => ethicEnabled,
   isEndpointAdminRemoteEnabled: () => endpointAdminEnabled,
+  isMeetingRemoteEnabled: () => meetingEnabled,
 }));
 
 const groupKeys = () =>
@@ -60,6 +62,7 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
     ethicEnabled = true;
     endpointAdminEnabled = true;
     permissionsMock.hasModule.mockImplementation(() => false);
+    meetingEnabled = true;
     permissionsMock.isSuperAdmin.mockImplementation(() => false);
   });
 
@@ -185,4 +188,30 @@ describe('useHeaderNavigation — Yönetim (admin) mega-menu endpointAdmin gatin
     endpointAdminEnabled = false;
     expect(adminItems()).not.toContain('endpointAdmin');
   });
+  describe('Meetings — any-of module gating', () => {
+    // Meetings was reachable ONLY from the old flat sidebar; the header had no
+    // entry, so the grouped navigation was silently incomplete. Access is
+    // any-of: MEETING covers the admin, TRANSCRIPT the analyst.
+    it('shows the meetings group for a TRANSCRIPT-only user', () => {
+      permissionsMock.hasModule.mockImplementation((m) => m === 'TRANSCRIPT');
+      expect(groupKeys()).toContain('meetings');
+    });
+
+    it('shows the meetings group for a MEETING-only user', () => {
+      permissionsMock.hasModule.mockImplementation((m) => m === 'MEETING');
+      expect(groupKeys()).toContain('meetings');
+    });
+
+    it('hides meetings with neither module', () => {
+      permissionsMock.hasModule.mockImplementation(() => false);
+      expect(groupKeys()).not.toContain('meetings');
+    });
+
+    it('hides meetings when the remote is disabled even with the module', () => {
+      permissionsMock.hasModule.mockImplementation((m) => m === 'MEETING');
+      meetingEnabled = false;
+      expect(groupKeys()).not.toContain('meetings');
+    });
+  });
+
 });

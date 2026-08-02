@@ -37,6 +37,7 @@ export const AppSidebarNavItem = React.forwardRef<
       disabled = false,
       onClick,
       tooltip,
+      dataTestId,
       children,
       depth = 0,
       className,
@@ -136,6 +137,7 @@ export const AppSidebarNavItem = React.forwardRef<
           ref={itemRef as React.Ref<HTMLAnchorElement>}
           href={href}
           data-sidebar-item=""
+          data-testid={dataTestId}
           className={sharedClasses}
           aria-current={active ? 'page' : undefined}
           aria-disabled={disabled || undefined}
@@ -151,6 +153,7 @@ export const AppSidebarNavItem = React.forwardRef<
           ref={itemRef as React.Ref<HTMLButtonElement>}
           type="button"
           data-sidebar-item=""
+          data-testid={dataTestId}
           className={cn(sharedClasses, 'w-full text-left')}
           onClick={disabled ? undefined : onClick}
           aria-current={active ? 'page' : undefined}
