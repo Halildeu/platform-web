@@ -6,6 +6,7 @@ import {
   isSuggestionsRemoteEnabled,
   isEthicRemoteEnabled,
   isEndpointAdminRemoteEnabled,
+  isMeetingRemoteEnabled,
 } from '../../shell-navigation';
 import { useShellCommonI18n } from '../../i18n';
 import type { NavGroup, NavGroupItem } from './header-navigation.config';
@@ -51,12 +52,26 @@ export function useHeaderNavigation(): HeaderNavigationState {
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
   const endpointAdminEnabled = isEndpointAdminRemoteEnabled();
+  const meetingEnabled = isMeetingRemoteEnabled();
 
   /** Check if a nav config item is accessible. Prefers module key over legacy permission. */
-  const canAccess = (item: { module?: string; permission?: string }) => {
+  const canAccess = (item: {
+    module?: string;
+    permission?: string;
+    modulesAnyOf?: readonly string[];
+  }) => {
     if (isSuperAdmin()) return true;
+    if (item.modulesAnyOf) return item.modulesAnyOf.some((key) => hasModule(key));
     if (item.module) return hasModule(item.module);
     // No module key — always visible (e.g. schema-explorer has no permission gate)
+    return true;
+  };
+
+  const remoteAllows = (flag?: 'suggestions' | 'ethic' | 'endpointAdmin' | 'meeting') => {
+    if (flag === 'suggestions') return suggestionsEnabled;
+    if (flag === 'ethic') return ethicEnabled;
+    if (flag === 'endpointAdmin') return endpointAdminEnabled;
+    if (flag === 'meeting') return meetingEnabled;
     return true;
   };
 
@@ -64,9 +79,12 @@ export function useHeaderNavigation(): HeaderNavigationState {
     if (!initialized) return [];
 
     return NAV_GROUPS.reduce<ResolvedNavGroup[]>((acc, group) => {
-      // Direct path group — check module/permission
+      // Direct path group — check module/permission and remote readiness
       if (group.directPath) {
-        if (group.module && !canAccess(group)) {
+        if (!remoteAllows(group.remoteFlag)) {
+          return acc;
+        }
+        if ((group.module || group.modulesAnyOf) && !canAccess(group)) {
           return acc;
         }
         acc.push({
@@ -80,10 +98,8 @@ export function useHeaderNavigation(): HeaderNavigationState {
 
       // Group with items — filter items by module + remote flags
       const filteredItems = (group.items ?? []).reduce<ResolvedNavItem[]>((items, item) => {
-        if (item.remoteFlag === 'suggestions' && !suggestionsEnabled) return items;
-        if (item.remoteFlag === 'ethic' && !ethicEnabled) return items;
-        if (item.remoteFlag === 'endpointAdmin' && !endpointAdminEnabled) return items;
-        if (item.module && !canAccess(item)) return items;
+        if (!remoteAllows(item.remoteFlag)) return items;
+        if ((item.module || item.modulesAnyOf) && !canAccess(item)) return items;
         items.push({
           key: item.key,
           label: t(item.labelKey),
@@ -113,6 +129,7 @@ export function useHeaderNavigation(): HeaderNavigationState {
     suggestionsEnabled,
     ethicEnabled,
     endpointAdminEnabled,
+    meetingEnabled,
     t,
   ]);
 

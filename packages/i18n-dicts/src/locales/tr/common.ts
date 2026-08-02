@@ -51,6 +51,8 @@ const common = {
   'shell.launcher.users.description': 'Kullanıcı yönetimi',
 
   // Shell mega navigation
+  'shell.mega.meetings': 'Toplantılar',
+  'shell.sidebar.allModules': 'Tüm modüller',
   'shell.mega.ethics': 'Etik',
   'shell.mega.ethics.cases': 'Tüm vakalar',
   'shell.mega.ethics.cases.desc': 'İş kuyruğu — aciliyet sırasına göre',

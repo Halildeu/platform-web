@@ -133,6 +133,8 @@ const pseudo = {
   'auth.session.expired.description': 'Pléásé sígñ íñ ágáíñ.',
   'auth.session.expired.cta': 'Sígñ íñ ágáíñ',
   'auth.session.validating': 'Válídátíñg séssíóñ...',
+  'shell.mega.meetings': '[!! Meetings !!]',
+  'shell.sidebar.allModules': '[!! All modules !!]',
 };
 
 export default pseudo;

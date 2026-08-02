@@ -51,6 +51,8 @@ const common = {
   'shell.launcher.users.description': 'User management',
 
   // Shell mega navigation
+  'shell.mega.meetings': 'Meetings',
+  'shell.sidebar.allModules': 'All modules',
   'shell.mega.ethics': 'Ethics',
   'shell.mega.ethics.cases': 'All cases',
   'shell.mega.ethics.cases.desc': 'Work queue, ordered by urgency',

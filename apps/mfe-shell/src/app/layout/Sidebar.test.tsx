@@ -1,246 +1,130 @@
 // @vitest-environment jsdom
-import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { Sidebar, buildSidebarNavItems } from './Sidebar';
+import { describe, expect, it } from 'vitest';
+import { Home, Inbox, Scale, Settings, UserX, AlarmClock, BarChart3 } from 'lucide-react';
+import {
+  buildGlobalSidebarItems,
+  buildModuleSidebarItems,
+  resolveModuleActiveKey,
+} from './Sidebar';
+import type { ResolvedNavGroup } from './header/useHeaderNavigation';
 
-const dispatchMock = vi.fn();
-const pushNotificationMock = vi.fn((payload: Record<string, unknown>) => ({
-  type: 'notifications/push',
-  payload,
-}));
-const toggleOpenMock = vi.fn((payload: boolean) => ({ type: 'notifications/toggle', payload }));
-
-const permissionsMock = {
-  hasModule: vi.fn(() => true),
-  isSuperAdmin: vi.fn(() => false),
-  getModuleLevel: vi.fn(() => 'MANAGE'),
-  isActionAllowed: vi.fn(() => true),
-  isActionDenied: vi.fn(() => false),
-  canViewReport: vi.fn(() => true),
-  canAccessPage: vi.fn(() => true),
-  getUserRoles: vi.fn(() => []),
-  canAccessCompany: vi.fn(() => true),
-  authz: null,
-  initialized: true,
-  loading: false,
-  refresh: vi.fn(),
+/**
+ * Issue #1120 (cross-AI REVISE absorbed): the sidebar is context-sensitive —
+ * the header answers "which product", the sidebar answers "where inside it".
+ * These tests pin the two builders and the query-aware active resolution.
+ *
+ * The inputs are RESOLVED groups, i.e. what useHeaderNavigation returns after
+ * entitlement filtering, remote gating and i18n. Fail-closed behaviour
+ * (unauthorized groups never reaching the sidebar, nothing rendered before
+ * initialization) is the hook's contract; the contract under test here is:
+ * whatever survived the filter is ALL that renders.
+ */
+const ethicsGroup: ResolvedNavGroup = {
+  key: 'ethics',
+  label: 'Etik',
+  icon: Scale,
+  items: [
+    { key: 'ethics-cases', label: 'Tüm vakalar', path: '/admin/ethics', icon: Inbox },
+    {
+      key: 'ethics-unattended',
+      label: 'Sahipsiz vakalar',
+      path: '/admin/ethics?odak=sahipsiz',
+      icon: UserX,
+    },
+    {
+      key: 'ethics-ack-due',
+      label: 'Teyit süresi geçenler',
+      path: '/admin/ethics?odak=teyit',
+      icon: AlarmClock,
+    },
+  ],
 };
 
-vi.mock('../store/store.hooks', () => ({
-  useAppDispatch: () => dispatchMock,
-}));
-
-vi.mock('@mfe/auth', () => ({
-  usePermissions: () => permissionsMock,
-}));
-
-vi.mock('../../features/notifications/model/notifications.slice', () => ({
-  pushNotification: (payload: Record<string, unknown>) => pushNotificationMock(payload),
-  toggleOpen: (payload: boolean) => toggleOpenMock(payload),
-}));
-
-vi.mock('../auth/auth-config', () => ({
-  isPermitAllMode: () => false,
-}));
-
-vi.mock('../shell-navigation', () => ({
-  isSuggestionsRemoteEnabled: () => true,
-  isEthicRemoteEnabled: () => true,
-  isMeetingRemoteEnabled: () => true,
-  isInterviewEvidenceRemoteEnabled: () => false,
-}));
-
-const LocationViewer = () => {
-  const location = useLocation();
-  return <span data-testid="location-display">{location.pathname}</span>;
+const adminGroup: ResolvedNavGroup = {
+  key: 'admin',
+  label: 'Yönetim',
+  icon: Settings,
+  items: [
+    { key: 'users', label: 'Kullanıcılar', path: '/admin/users', icon: Home },
+    { key: 'audit', label: 'Denetim', path: '/audit/events', icon: Home },
+  ],
 };
 
-const renderSidebar = (initialPath = '/audit/events') =>
-  render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route
-          path="*"
-          element={
-            <>
-              <Sidebar />
-              <LocationViewer />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
-  );
+const reportsGroup: ResolvedNavGroup = {
+  key: 'reports',
+  label: 'Raporlar',
+  icon: BarChart3,
+  directPath: '/admin/reports',
+};
 
-describe('Sidebar', () => {
-  beforeEach(() => {
-    dispatchMock.mockReset();
-    pushNotificationMock.mockClear();
-    toggleOpenMock.mockClear();
-    permissionsMock.hasModule.mockImplementation(() => true);
-    permissionsMock.isSuperAdmin.mockImplementation(() => false);
-    window.localStorage.clear();
+describe('buildGlobalSidebarItems', () => {
+  it('lists home first, then one launcher entry per surviving module', () => {
+    const items = buildGlobalSidebarItems([ethicsGroup, reportsGroup], 'Ana Sayfa');
+
+    expect(items.map((i) => i.key)).toEqual(['home', 'ethics', 'reports']);
+    expect(items[0]?.href).toBe('/home');
+    // A grouped module lands on its first destination, a direct one on its path.
+    expect(items[1]?.href).toBe('/admin/ethics');
+    expect(items[2]?.href).toBe('/admin/reports');
   });
 
-  afterEach(() => {
-    cleanup();
+  it('renders nothing privileged that the hook did not pass through', () => {
+    // Pre-initialization the hook returns [] — the launcher must then be home
+    // alone, not a flash of modules that later disappear (fail-closed).
+    const items = buildGlobalSidebarItems([], 'Ana Sayfa');
+    expect(items.map((i) => i.key)).toEqual(['home']);
   });
 
-  // TODO: ShellSidebar requires ResizeObserver + IntersectionObserver mocks in JSDOM
-  it.skip('NavigationRail uzerinden route gecisi yapar ve test-id yuzeyini korur', () => {
-    renderSidebar('/audit/events');
-
-    expect(screen.getByLabelText('Sidebar')).toBeInTheDocument();
-    expect(screen.getByTestId('nav-home')).toBeInTheDocument();
-    expect(screen.getByTestId('nav-dashboard')).toHaveAttribute('aria-current', 'page');
-
-    fireEvent.click(screen.getByTestId('nav-reporting'));
-
-    expect(screen.getByTestId('location-display')).toHaveTextContent('/admin/reports/users');
-  });
-
-  it.skip('search dispatch davranisini ve collapsed folders expand akisini korur', () => {
-    window.localStorage.setItem('shell.sidebar.mode', 'collapsed');
-
-    renderSidebar('/suggestions');
-
-    fireEvent.click(screen.getByPlaceholderText(/search/i));
-
-    // openCommandPalette now navigates to design-lab with search=open param
-    // instead of dispatching pushNotification
-    expect(screen.getByTestId('location-display')).toHaveTextContent('/admin/design-lab');
-
-    // Re-render at original path to test folders
-    cleanup();
-    window.localStorage.setItem('shell.sidebar.mode', 'collapsed');
-    renderSidebar('/suggestions');
-
-    fireEvent.click(screen.getByTestId('nav-folders'));
-    expect(screen.getByTestId('nav-folders-all')).toBeInTheDocument();
+  it('skips a group that has nowhere to land', () => {
+    const empty: ResolvedNavGroup = { key: 'ghost', label: 'Ghost', icon: Home, items: [] };
+    const items = buildGlobalSidebarItems([empty, reportsGroup], 'Ana Sayfa');
+    expect(items.map((i) => i.key)).toEqual(['home', 'reports']);
   });
 });
 
-describe('buildSidebarNavItems — module gating', () => {
-  const denyAll = () => false;
-  const allow = (granted: string) => (mod: string) => mod === granted;
-  const pick = (items: ReturnType<typeof buildSidebarNavItems>, key: string) =>
-    items.find((i) => i.key === key);
+describe('buildModuleSidebarItems', () => {
+  it('shows the exit to the hub first, then the module destinations only', () => {
+    const items = buildModuleSidebarItems(ethicsGroup, 'Tüm modüller');
 
-  it('gates the schema-explorer item by the THEME module', () => {
-    // Regression: schema-explorer previously rendered with an
-    // unconditional href and no `disabled` flag, so unauthorized users
-    // saw it active and clicking landed on /unauthorized. It must be
-    // gated like every other privileged item, matching the
-    // /admin/schema-explorer route guard (AppRouter requiredModule="THEME").
-    const denied = pick(buildSidebarNavItems(false, denyAll), 'schema-explorer');
-    expect(denied?.disabled).toBe(true);
-    expect(denied?.href).toBeUndefined();
-
-    const granted = pick(buildSidebarNavItems(false, allow('THEME')), 'schema-explorer');
-    expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/admin/schema-explorer');
+    expect(items.map((i) => i.key)).toEqual([
+      'all-modules',
+      'ethics-cases',
+      'ethics-unattended',
+      'ethics-ack-due',
+    ]);
+    expect(items[0]?.href).toBe('/home');
+    // Static config labels only. An ethics case title must never be able to
+    // reach the sidebar — confidentiality, not styling.
+    expect(items.every((i) => typeof i.label === 'string')).toBe(true);
   });
+});
 
-  it('opens the schema-explorer item for super admins regardless of modules', () => {
-    const item = pick(buildSidebarNavItems(true, denyAll), 'schema-explorer');
-    expect(item?.disabled).toBe(false);
-    expect(item?.href).toBe('/admin/schema-explorer');
-  });
-
-  it('gates the ethic item by ETHIC and the ethic remote flag', () => {
-    // Faz 35 ES: Etik Speak sol panelde görünür oldu; erişim kapısı header
-    // launcher ile aynı kalmalı — modül yetkisi VE remote hazır olmalı.
-    const denied = pick(buildSidebarNavItems(false, denyAll), 'ethic');
-    expect(denied?.disabled).toBe(true);
-    expect(denied?.href).toBeUndefined();
-
-    const otherModuleOnly = pick(buildSidebarNavItems(false, allow('REPORT')), 'ethic');
-    expect(otherModuleOnly?.disabled).toBe(true);
-    expect(otherModuleOnly?.href).toBeUndefined();
-
-    const remoteDisabled = pick(
-      buildSidebarNavItems(false, allow('ETHIC'), true, false, false),
-      'ethic',
+describe('resolveModuleActiveKey', () => {
+  it('tells the ethics work queues apart by query string', () => {
+    expect(resolveModuleActiveKey(ethicsGroup, '/admin/ethics', '')).toBe('ethics-cases');
+    expect(resolveModuleActiveKey(ethicsGroup, '/admin/ethics', '?odak=sahipsiz')).toBe(
+      'ethics-unattended',
     );
-    expect(remoteDisabled?.disabled).toBe(true);
-    expect(remoteDisabled?.href).toBeUndefined();
-
-    const granted = pick(buildSidebarNavItems(false, allow('ETHIC')), 'ethic');
-    expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/admin/ethics');
-
-    const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'ethic');
-    expect(superAdmin?.disabled).toBe(false);
-    expect(superAdmin?.href).toBe('/admin/ethics');
+    expect(resolveModuleActiveKey(ethicsGroup, '/admin/ethics', '?odak=teyit')).toBe(
+      'ethics-ack-due',
+    );
   });
 
-  it('gates the meetings item by MEETING or TRANSCRIPT and the meeting remote flag', () => {
-    const denied = pick(buildSidebarNavItems(false, denyAll), 'meetings');
-    expect(denied?.disabled).toBe(true);
-    expect(denied?.href).toBeUndefined();
-
-    const reportOnly = pick(buildSidebarNavItems(false, allow('REPORT')), 'meetings');
-    expect(reportOnly?.disabled).toBe(true);
-    expect(reportOnly?.href).toBeUndefined();
-
-    const remoteDisabled = pick(buildSidebarNavItems(false, allow('MEETING'), false), 'meetings');
-    expect(remoteDisabled?.disabled).toBe(true);
-    expect(remoteDisabled?.href).toBeUndefined();
-
-    const meetingGranted = pick(buildSidebarNavItems(false, allow('MEETING')), 'meetings');
-    expect(meetingGranted?.disabled).toBe(false);
-    expect(meetingGranted?.href).toBe('/admin/meetings');
-
-    const transcriptGranted = pick(buildSidebarNavItems(false, allow('TRANSCRIPT')), 'meetings');
-    expect(transcriptGranted?.disabled).toBe(false);
-    expect(transcriptGranted?.href).toBe('/admin/meetings');
+  it('falls back to the longest query-less prefix for deep routes', () => {
+    // A case detail deep-link keeps the module's list destination lit.
+    expect(resolveModuleActiveKey(ethicsGroup, '/admin/ethics/case/123', '')).toBe('ethics-cases');
+    expect(resolveModuleActiveKey(adminGroup, '/audit/events/42', '')).toBe('audit');
   });
 
-  it('keeps the permanent ATS product hub discoverable independently of remote readiness', () => {
-    const denied = pick(buildSidebarNavItems(false, denyAll), 'ats-product-hub');
-    expect(denied?.disabled).toBe(true);
-    expect(denied?.href).toBeUndefined();
-
-    // Module granted + remote OFF → guarded safe product surface remains reachable.
-    const remoteDisabled = pick(buildSidebarNavItems(false, allow('ATS')), 'ats-product-hub');
-    expect(remoteDisabled?.disabled).toBe(false);
-    expect(remoteDisabled?.href).toBe('/admin/ats');
-    expect(remoteDisabled?.badge).toBeDefined();
-
-    // Remote ON but no module → disabled (no ungated leak through the flag).
-    const moduleMissing = pick(buildSidebarNavItems(false, denyAll, true, true), 'ats-product-hub');
-    expect(moduleMissing?.disabled).toBe(true);
-    expect(moduleMissing?.href).toBeUndefined();
-    expect(moduleMissing?.badge).toBeUndefined();
-
-    // Remote ON + module granted → active link.
-    const granted = pick(buildSidebarNavItems(false, allow('ATS'), true, true), 'ats-product-hub');
-    expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/admin/ats');
-    expect(granted?.badge).toBeUndefined();
-
-    // Super-admin remains active even when the remote is OFF and sees safe-preview status.
-    const superAdmin = pick(buildSidebarNavItems(true, denyAll), 'ats-product-hub');
-    expect(superAdmin?.disabled).toBe(false);
-    expect(superAdmin?.href).toBe('/admin/ats');
-    expect(superAdmin?.badge).toBeDefined();
+  it('keeps the case list lit for an unknown focus query', () => {
+    // Unknown query → no exact match; the query-less destination wins, which
+    // is the honest answer (the reader IS on the case list, just filtered).
+    expect(resolveModuleActiveKey(ethicsGroup, '/admin/ethics', '?odak=bilinmeyen')).toBe(
+      'ethics-cases',
+    );
   });
 
-  it('keeps every privileged item gated (no ungated leak)', () => {
-    // With no modules and no super-admin, only Home stays enabled;
-    // every other item must be disabled with no href.
-    const items = buildSidebarNavItems(false, denyAll);
-    for (const item of items) {
-      if (item.key === 'home') {
-        expect(item.disabled).toBeFalsy();
-        expect(item.href).toBe('/home');
-      } else {
-        expect(item.disabled).toBe(true);
-        expect(item.href).toBeUndefined();
-      }
-    }
+  it('answers undefined outside the module so the exit item takes over', () => {
+    expect(resolveModuleActiveKey(ethicsGroup, '/home', '')).toBeUndefined();
   });
 });
