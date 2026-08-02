@@ -2,6 +2,13 @@ type AccessTokenProvider = () => Promise<string>;
 type RequestConfig = {
   headers?: Record<string, string>;
   responseType?: 'arraybuffer';
+  /**
+   * Accepted for interface parity with the real shared-http client — the
+   * design-system grid-variant API passes it. This stub does not enforce it;
+   * variant persistence in the standalone cell degrades to the request's
+   * natural failure and the grid works without saved views.
+   */
+  timeout?: number;
 };
 type ApiResponse<T> = { data: T };
 
@@ -37,7 +44,7 @@ const safeCallerHeaders = (headers: Record<string, string> | undefined): Record<
 };
 
 const request = async <T>(
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
   config?: RequestConfig,
@@ -77,6 +84,10 @@ export const api = {
   get: <T>(path: string, config?: RequestConfig) => request<T>('GET', path, undefined, config),
   post: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>('POST', path, body, config),
+  put: <T>(path: string, body?: unknown, config?: RequestConfig) =>
+    request<T>('PUT', path, body, config),
+  delete: <T>(path: string, config?: RequestConfig) =>
+    request<T>('DELETE', path, undefined, config),
   patch: <T>(path: string, body?: unknown, config?: RequestConfig) =>
     request<T>('PATCH', path, body, config),
 };
