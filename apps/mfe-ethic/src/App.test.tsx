@@ -744,7 +744,7 @@ describe('Etik Speak manager MFE', () => {
     expect(within(history).getByRole('listitem')).toHaveTextContent('İhbar alındı');
     expect(within(history).queryByText('Ayşe Yılmaz')).not.toBeInTheDocument();
   });
-  it('bir kategori otomatik listedeyse bandı ÇOK AĞIR\'a sabitler ve gerekçe ister', async () => {
+  test('bir kategori otomatik listedeyse bandı ÇOK AĞIR\'a sabitler ve gerekçe ister', async () => {
     const closed: api.EthicsCaseDetail = { ...detail, status: 'CLOSED', closedAt: '2026-08-01T09:00:00Z' };
     vi.mocked(api.listCases).mockResolvedValue([{ ...summary, status: 'CLOSED' }]);
     vi.mocked(api.getCase).mockResolvedValue(closed);
