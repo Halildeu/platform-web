@@ -131,6 +131,14 @@ export default function App() {
   // ES-213 (#3375). Same three-state shape as the timeline and for the same reason: an
   // empty sanctions list and an unreadable one mean opposite things, and only one of them
   // should let a handler conclude that nothing was decided.
+  const [sanctionScore, setSanctionScore] = useState('');
+  const [sanctionType, setSanctionType] = useState('');
+  const [escalationReason, setEscalationReason] = useState('');
+  const [concludingId, setConcludingId] = useState<string | null>(null);
+  const [observation, setObservation] = useState('');
+  const [risk, setRisk] = useState<RetaliationRisk>('NONE');
+  const [action, setAction] = useState('');
+  const [indicators, setIndicators] = useState<string[]>([]);
   const [sanctions, setSanctions] = useState<Sanction[]>([]);
   const [sanctionsState, setSanctionsState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [checks, setChecks] = useState<RetaliationCheck[]>([]);
@@ -225,6 +233,74 @@ export default function App() {
       if (requestSequence !== selectionSequence.current) return;
       setStaffOptions([]);
       setStaffState('unavailable');
+    }
+  };
+
+  /**
+   * The band is derived from the score rather than chosen, because the scale derives it.
+   * Letting a handler pick both would reintroduce the thing the scale exists to remove:
+   * two similar violations drawing different bands because two people read the table
+   * differently. What a handler may still do is escalate — the scale's automatic list
+   * requires it — and that needs a reason, which is why the field appears only then.
+   */
+  const derivedBand = bandForScore(Number(sanctionScore));
+  const escalating = derivedBand !== null && derivedBand !== 'COK_AGIR' && escalationReason.trim().length > 0;
+
+  const submitSanction = async () => {
+    if (!selected || !derivedBand || !sanctionType) return;
+    setBusy(true);
+    try {
+      await recordSanction(selected.id, {
+        severityScore: Number(sanctionScore),
+        severityBand: escalating ? 'COK_AGIR' : derivedBand,
+        escalationReason: escalating ? escalationReason.trim() : undefined,
+        sanctionType,
+      });
+      setSanctionScore('');
+      setSanctionType('');
+      setEscalationReason('');
+      await loadSanctions(selected.id, selectionSequence.current);
+    } catch (requestError) {
+      showRequestError(requestError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitConclusion = async () => {
+    if (!selected || !concludingId || !observation.trim()) return;
+    setBusy(true);
+    try {
+      await concludeRetaliationCheck(concludingId, {
+        observation: observation.trim(),
+        risk,
+        action: action.trim() || undefined,
+        indicators,
+      });
+      setConcludingId(null);
+      setObservation('');
+      setRisk('NONE');
+      setAction('');
+      setIndicators([]);
+      await loadChecks(selected.id, selectionSequence.current);
+    } catch (requestError) {
+      showRequestError(requestError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runCheckAction = async (fn: () => Promise<unknown>) => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      await fn();
+      await loadChecks(selected.id, selectionSequence.current);
+      await loadSanctions(selected.id, selectionSequence.current);
+    } catch (requestError) {
+      showRequestError(requestError);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -1121,6 +1197,61 @@ export default function App() {
                       ))}
                     </ul>
                   )}
+                  {selected.status === 'CLOSED' ? (
+                    <div className="ethics-form" data-testid="sanction-form">
+                      <label htmlFor="sanction-score">
+                        Ağırlık puanı (1–40)
+                        <input
+                          id="sanction-score"
+                          type="number"
+                          min={1}
+                          max={40}
+                          value={sanctionScore}
+                          onChange={(e) => setSanctionScore(e.target.value)}
+                        />
+                      </label>
+                      {/* Shown, not chosen. The scale reads the band off the total, and a
+                          handler picking both would let two similar violations land in
+                          different bands. */}
+                      <p className="ethics-muted" data-testid="derived-band">
+                        {derivedBand
+                          ? `Cetvele göre bant: ${BAND_LABELS[derivedBand]}`
+                          : 'Puan 1–40 aralığında olmalı.'}
+                      </p>
+                      <label htmlFor="sanction-type">
+                        Yaptırım türü
+                        <select
+                          id="sanction-type"
+                          value={sanctionType}
+                          onChange={(e) => setSanctionType(e.target.value)}
+                        >
+                          <option value="">Seçin</option>
+                          {Object.entries(SANCTION_LABELS).map(([code, label]) => (
+                            <option key={code} value={code}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label htmlFor="escalation-reason">
+                        Çok ağıra yükseltme gerekçesi{' '}
+                        <span className="ethics-muted">(cetvelin otomatik listesi için)</span>
+                        <textarea
+                          id="escalation-reason"
+                          rows={2}
+                          value={escalationReason}
+                          onChange={(e) => setEscalationReason(e.target.value)}
+                          placeholder="Örn. kamu görevlisine rüşvet — cetvel otomatik yükseltme listesi"
+                        />
+                      </label>
+                      <Button
+                        disabled={busy || !derivedBand || !sanctionType}
+                        onClick={() => void submitSanction()}
+                      >
+                        Yaptırımı kaydet
+                      </Button>
+                    </div>
+                  ) : null}
                 </section>
                 <section aria-labelledby="retaliation-heading">
                   <h3 id="retaliation-heading">Misilleme izleme</h3>
@@ -1165,6 +1296,107 @@ export default function App() {
                                   : 'Henüz sorulmadı'}
                                 {overdue ? (
                                   <span role="status" className="ethics-overdue"> · vadesi geçti</span>
+                                ) : null}
+                                <div className="ethics-actions">
+                                  {!c.askedAt ? (
+                                    <Button
+                                      disabled={busy}
+                                      onClick={() => void runCheckAction(() => markCheckAsked(c.id))}
+                                    >
+                                      Soruldu olarak işaretle
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    disabled={busy}
+                                    onClick={() => setConcludingId(concludingId === c.id ? null : c.id)}
+                                  >
+                                    {concludingId === c.id ? 'Vazgeç' : 'Sonuçlandır'}
+                                  </Button>
+                                </div>
+                                {concludingId === c.id ? (
+                                  <div className="ethics-form" data-testid="conclude-form">
+                                    <label htmlFor="observation">
+                                      Gözlem
+                                      <textarea
+                                        id="observation"
+                                        rows={3}
+                                        value={observation}
+                                        onChange={(e) => setObservation(e.target.value)}
+                                      />
+                                    </label>
+                                    <fieldset>
+                                      <legend>
+                                        Gözlenen misilleme biçimleri{' '}
+                                        <span className="ethics-muted">(2019/1937 md. 19)</span>
+                                      </legend>
+                                      {/* A named list rather than a free-text box. The person
+                                          being pushed out rarely has the word for it, and the
+                                          manager doing the pushing never volunteers it; asking
+                                          about each form turns one vague question into fifteen
+                                          answerable ones. */}
+                                      {RETALIATION_INDICATORS.map(([code, label]) => (
+                                        <label key={code} className="ethics-check">
+                                          <input
+                                            type="checkbox"
+                                            checked={indicators.includes(code)}
+                                            onChange={(e) =>
+                                              setIndicators((prev) =>
+                                                e.target.checked
+                                                  ? [...prev, code]
+                                                  : prev.filter((x) => x !== code),
+                                              )
+                                            }
+                                          />
+                                          {label}
+                                        </label>
+                                      ))}
+                                    </fieldset>
+                                    <label htmlFor="risk">
+                                      Değerlendirme
+                                      <select
+                                        id="risk"
+                                        value={risk}
+                                        onChange={(e) => setRisk(e.target.value as RetaliationRisk)}
+                                      >
+                                        {(Object.keys(RISK_LABELS) as RetaliationRisk[]).map((r) => (
+                                          <option key={r} value={r}>
+                                            {RISK_LABELS[r]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    {indicators.length > 0 && risk === 'NONE' ? (
+                                      /* The server refuses this too. Saying it here means the
+                                         handler learns it before typing the rest, not after. */
+                                      <p role="alert">
+                                        Bir misilleme biçimi işaretlendiğinde değerlendirme
+                                        &quot;misilleme yok&quot; olamaz.
+                                      </p>
+                                    ) : null}
+                                    <label htmlFor="action">
+                                      Alınan aksiyon{' '}
+                                      <span className="ethics-muted">
+                                        (şüphe veya doğrulama varsa zorunlu)
+                                      </span>
+                                      <textarea
+                                        id="action"
+                                        rows={2}
+                                        value={action}
+                                        onChange={(e) => setAction(e.target.value)}
+                                      />
+                                    </label>
+                                    <Button
+                                      disabled={
+                                        busy ||
+                                        !observation.trim() ||
+                                        (indicators.length > 0 && risk === 'NONE') ||
+                                        (risk !== 'NONE' && !action.trim())
+                                      }
+                                      onClick={() => void submitConclusion()}
+                                    >
+                                      Kontrolü sonuçlandır
+                                    </Button>
+                                  </div>
                                 ) : null}
                               </div>
                             )}
