@@ -52,6 +52,12 @@ describe('Etik Speak manager MFE', () => {
     vi.mocked(api.listCases).mockResolvedValue([summary]);
     vi.mocked(api.getCase).mockResolvedValue(detail);
     vi.mocked(api.listCaseEvidence).mockResolvedValue([]);
+    // ES-213 (#3375). vi.mock auto-mocks the whole module, so these answer undefined
+    // unless stubbed — and the panels read .length on the result. In production the API
+    // client validates the shape and throws, so undefined can never reach state there;
+    // this is purely the auto-mock's shape.
+    vi.mocked(api.listCaseSanctions).mockResolvedValue([]);
+    vi.mocked(api.listRetaliationChecks).mockResolvedValue([]);
     vi.mocked(api.downloadCaseEvidence).mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
     vi.mocked(api.updateCase).mockResolvedValue(summary);
     vi.mocked(api.replyToReporter).mockResolvedValue({

@@ -8,13 +8,26 @@ import {
   listAssignableStaff,
   listCaseEvidence,
   listCaseParticipants,
+  listCaseSanctions,
   listCaseTimeline,
+  listRetaliationChecks,
+  concludeRetaliationCheck,
+  markCheckAsked,
+  recordSanction,
+  applySanction,
+  moveSanctionAppeal,
+  bandForScore,
+  RETALIATION_INDICATORS,
   listCases,
   replyToReporter,
   updateCase,
   type AssignableStaffEntry,
   type CaseParticipant,
   type CaseTimelineEntry,
+  type RetaliationCheck,
+  type RetaliationRisk,
+  type Sanction,
+  type SeverityBand,
   type EthicsCaseDetail,
   type EthicsCaseSummary,
   type StaffEvidence,
@@ -78,6 +91,13 @@ export default function App() {
   // cannot grow a second, rival answer to "who is on this".
   const [participants, setParticipants] = useState<CaseParticipant[]>([]);
   const [participantsError, setParticipantsError] = useState('');
+  // ES-213 (#3375). Same three-state shape as the timeline and for the same reason: an
+  // empty sanctions list and an unreadable one mean opposite things, and only one of them
+  // should let a handler conclude that nothing was decided.
+  const [sanctions, setSanctions] = useState<Sanction[]>([]);
+  const [sanctionsState, setSanctionsState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [checks, setChecks] = useState<RetaliationCheck[]>([]);
+  const [checksState, setChecksState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [timeline, setTimeline] = useState<CaseTimelineEntry[]>([]);
   // Three states, not two. "Loaded and empty" and "could not load" look identical if both
   // render an empty list, and on an audit trail those two mean opposite things.
@@ -171,6 +191,42 @@ export default function App() {
     }
   };
 
+  const loadSanctions = async (caseId: string, requestSequence: number) => {
+    setSanctionsState('loading');
+    try {
+      const next = await listCaseSanctions(caseId);
+      if (requestSequence !== selectionSequence.current) return;
+      setSanctions(next);
+      setSanctionsState('ready');
+    } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
+      if (isAuthorizationFailure(requestError)) {
+        showRequestError(requestError);
+        return;
+      }
+      setSanctions([]);
+      setSanctionsState('unavailable');
+    }
+  };
+
+  const loadChecks = async (caseId: string, requestSequence: number) => {
+    setChecksState('loading');
+    try {
+      const next = await listRetaliationChecks(caseId);
+      if (requestSequence !== selectionSequence.current) return;
+      setChecks(next);
+      setChecksState('ready');
+    } catch (requestError) {
+      if (requestSequence !== selectionSequence.current) return;
+      if (isAuthorizationFailure(requestError)) {
+        showRequestError(requestError);
+        return;
+      }
+      setChecks([]);
+      setChecksState('unavailable');
+    }
+  };
+
   /**
    * The case's history. A display surface, so it degrades — but it degrades *loudly*.
    *
@@ -233,6 +289,8 @@ export default function App() {
           await loadParticipants(selectedId, requestSequence);
           await loadAssignableStaff(selectedId, requestSequence);
           await loadCaseTimeline(selectedId, requestSequence);
+          await loadSanctions(selectedId, requestSequence);
+          await loadChecks(selectedId, requestSequence);
         }
       }
     } catch (requestError) {
@@ -269,6 +327,8 @@ export default function App() {
         await loadParticipants(item.id, requestSequence);
         await loadAssignableStaff(item.id, requestSequence);
         await loadCaseTimeline(item.id, requestSequence);
+        await loadSanctions(item.id, requestSequence);
+        await loadChecks(item.id, requestSequence);
       }
     } catch (requestError) {
       if (requestSequence === selectionSequence.current) showRequestError(requestError);
@@ -981,6 +1041,101 @@ export default function App() {
                   <Button disabled={busy || !reply.trim()} onClick={() => void sendReply()}>
                     {ackTemplate ? 'Alındı teyidini gönder' : 'Yanıtı gönder'}
                   </Button>
+                </section>
+                <section aria-labelledby="sanctions-heading">
+                  <h3 id="sanctions-heading">Yaptırım</h3>
+                  {sanctionsState === 'unavailable' ? (
+                    /* Loud, like the timeline. "No sanction was decided" and "the record
+                       could not be read" are opposite conclusions, and a handler acts on
+                       the first one. */
+                    <p role="alert" data-testid="sanctions-unavailable">
+                      Yaptırım kaydı şu anda okunamıyor. Bu, yaptırım verilmediği anlamına
+                      gelmez; yenileyip tekrar deneyin.
+                    </p>
+                  ) : sanctionsState === 'loading' ? (
+                    <p className="ethics-muted">Yaptırım kaydı yükleniyor…</p>
+                  ) : sanctions.length === 0 ? (
+                    <p className="ethics-muted">
+                      {selected.status === 'CLOSED'
+                        ? 'Bu vaka için yaptırım kaydedilmedi.'
+                        : 'Yaptırım, vaka kapandıktan sonra kaydedilir.'}
+                    </p>
+                  ) : (
+                    <ul className="ethics-list" data-testid="sanction-list">
+                      {sanctions.map((s) => (
+                        <li key={s.id}>
+                          <strong>{SANCTION_LABELS[s.sanctionType] ?? s.sanctionType}</strong>{' '}
+                          <span className={`ethics-band ethics-band-${s.severityBand.toLowerCase()}`}>
+                            {BAND_LABELS[s.severityBand]} · {s.severityScore}/40
+                          </span>
+                          {s.escalationReason ? (
+                            <span className="ethics-muted"> · yükseltme: {s.escalationReason}</span>
+                          ) : null}
+                          <div className="ethics-muted">
+                            {/* Decided-but-not-applied is the state this register exists to
+                                surface, so it is said in words rather than left as an
+                                absent date nobody scans for. */}
+                            {s.appliedAt
+                              ? `Uygulandı · ${new Date(s.appliedAt).toLocaleDateString('tr-TR')}`
+                              : 'Karar verildi, henüz uygulanmadı'}
+                            {s.appealState !== 'NONE' ? ` · temyiz: ${APPEAL_LABELS[s.appealState]}` : ''}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+                <section aria-labelledby="retaliation-heading">
+                  <h3 id="retaliation-heading">Misilleme izleme</h3>
+                  <p className="ethics-muted">
+                    İhbarcının korunması vaka kapanınca bitmez (2019/1937 md. 19, 21). Üç
+                    kontrol kapanışta açılır; soru, ihbarcının mevcut posta kutusundan
+                    sorulur — anonim ihbarcı için de.
+                  </p>
+                  {checksState === 'unavailable' ? (
+                    <p role="alert" data-testid="checks-unavailable">
+                      Misilleme kontrolleri şu anda okunamıyor. Bu, kontrol olmadığı anlamına
+                      gelmez; yenileyip tekrar deneyin.
+                    </p>
+                  ) : checksState === 'loading' ? (
+                    <p className="ethics-muted">Kontroller yükleniyor…</p>
+                  ) : checks.length === 0 ? (
+                    <p className="ethics-muted">
+                      Kontroller vaka kapandığında otomatik açılır (3, 6 ve 12. ay).
+                    </p>
+                  ) : (
+                    <ul className="ethics-list" data-testid="retaliation-list">
+                      {checks.map((c) => {
+                        const overdue = !c.closedAt && new Date(c.dueAt) <= new Date();
+                        return (
+                          <li key={c.id}>
+                            <strong>{c.periodMonths}. ay</strong>{' '}
+                            <span className="ethics-muted">
+                              vade {new Date(c.dueAt).toLocaleDateString('tr-TR')}
+                            </span>
+                            {c.closedAt ? (
+                              <div>
+                                Sonuç: <strong>{RISK_LABELS[c.risk ?? 'NONE']}</strong>
+                                {c.action ? <span className="ethics-muted"> · {c.action}</span> : null}
+                              </div>
+                            ) : (
+                              <div>
+                                {/* Asked and due are shown apart because the gap between
+                                    them is the only honest measure of whether this is
+                                    being run at all. */}
+                                {c.askedAt
+                                  ? `Soruldu · ${new Date(c.askedAt).toLocaleDateString('tr-TR')}`
+                                  : 'Henüz sorulmadı'}
+                                {overdue ? (
+                                  <span role="status" className="ethics-overdue"> · vadesi geçti</span>
+                                ) : null}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </section>
                 <section aria-labelledby="timeline-heading">
                   <h3 id="timeline-heading">Vaka geçmişi</h3>
