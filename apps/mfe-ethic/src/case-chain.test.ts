@@ -19,9 +19,13 @@ describe('case chain vocabularies', () => {
         covered.add(i);
       }
     }
-    expect(covered.size).toBe(40);
-    expect(Math.min(...covered)).toBe(1);
-    expect(Math.max(...covered)).toBe(40);
+    // Array.from rather than spreading the Set: the app's tsconfig targets below es2015
+    // for iteration, and a spread here fails the typecheck CI runs even though vitest,
+    // which does not typecheck, is perfectly happy with it.
+    const scores = Array.from(covered);
+    expect(scores.length).toBe(40);
+    expect(Math.min.apply(null, scores)).toBe(1);
+    expect(Math.max.apply(null, scores)).toBe(40);
   });
 
   test('bandForScore matches the scale at every boundary', () => {

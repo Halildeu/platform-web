@@ -64,6 +64,43 @@ import './ethics.css';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
+/**
+ * ES-213 (#3375). Turkish renderings for the server's enums. A missing entry falls back to
+ * the raw code on screen rather than breaking the render — a handler seeing SUSPENSION is
+ * worse than a handler seeing "Uzaklaştırma", but far better than an empty panel.
+ */
+const BAND_LABELS: Record<SeverityBand, string> = {
+  HAFIF: 'Hafif',
+  ORTA: 'Orta',
+  AGIR: 'Ağır',
+  COK_AGIR: 'Çok ağır',
+};
+
+const SANCTION_LABELS: Record<string, string> = {
+  NONE: 'Yaptırım yok',
+  TRAINING: 'Eğitim',
+  VERBAL_WARNING: 'Sözlü uyarı',
+  WRITTEN_WARNING: 'Yazılı uyarı',
+  SUSPENSION: 'Uzaklaştırma',
+  DEMOTION: 'Görev/kademe indirimi',
+  TERMINATION: 'İş akdi feshi',
+  LEGAL_REFERRAL: 'Adli mercie sevk',
+  CONTRACT_TERMINATION: 'Sözleşme feshi',
+};
+
+const APPEAL_LABELS: Record<string, string> = {
+  NONE: 'yok',
+  REQUESTED: 'talep edildi',
+  UPHELD: 'reddedildi',
+  OVERTURNED: 'kabul edildi',
+};
+
+const RISK_LABELS: Record<RetaliationRisk, string> = {
+  NONE: 'Misilleme yok',
+  SUSPECTED: 'Misilleme şüphesi',
+  CONFIRMED: 'Misilleme doğrulandı',
+};
+
 export default function App() {
   const [items, setItems] = useState<EthicsCaseSummary[]>([]);
   const [selected, setSelected] = useState<EthicsCaseDetail | null>(null);
