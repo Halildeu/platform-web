@@ -603,3 +603,145 @@
 .ethics-timeline-actor.is-unresolved {
   font-style: italic;
 }
+
+/* ── Faz 35: case workspace (list grid + full-width detail). Append-only — every rule
+   above this line predates the workspace and stays exactly as it was. ─────────────── */
+
+/* Both views take the full panel width; the old two-column .ethics-manager-grid rule
+   stays defined above but is no longer the frame of this screen. */
+.ethics-manager-list,
+.ethics-manager-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.ethics-workspace {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/* Full-width detail: the pane no longer shares a row with a scrolling list, so the
+   sticky/inner-scroll behaviour from the two-column layout is switched off here —
+   the page itself is the scroll container again. */
+.ethics-manager-detail .ethics-detail-pane {
+  position: static;
+  max-height: none;
+  overflow-y: visible;
+}
+
+.ethics-detail-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* The four questions triage exists to answer, as one card each. A card is a filter:
+   pressed state mirrors the toolbar (aria-pressed is the styling hook on purpose —
+   the accessible state and the visual state cannot drift apart). */
+.ethics-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.ethics-kpi {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--ethics-border);
+  border-radius: 0.75rem;
+  background: var(--ethics-surface);
+  color: var(--ethics-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ethics-kpi:hover,
+.ethics-kpi:focus-visible {
+  border-color: var(--ethics-brand);
+  box-shadow: 0 0 0 2px var(--ethics-focus);
+}
+
+.ethics-kpi[aria-pressed='true'] {
+  border-color: var(--ethics-brand);
+  background: var(--ethics-surface-muted);
+  box-shadow: 0 0 0 2px var(--ethics-focus);
+}
+
+.ethics-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ethics-kpi-label {
+  font-size: 0.8rem;
+  color: var(--ethics-muted);
+}
+
+/* Tone lives on the number, not the card: a wall of coloured cards ranks nothing. */
+.ethics-kpi.is-warn .ethics-kpi-value {
+  color: var(--state-warning-text, var(--ethics-ink));
+}
+
+.ethics-kpi.is-danger .ethics-kpi-value {
+  color: var(--ethics-danger-text);
+}
+
+/* The grid needs a definite height to virtualize rows into. */
+.ethics-case-grid {
+  height: min(68dvh, 680px);
+  min-height: 320px;
+}
+
+/* Cell tones. Colour never travels alone — each of these classes decorates a cell
+   whose TEXT already says the same thing in words (gecikti / kaldı / Verildi). */
+.ethics-grid-subject {
+  font-weight: 600;
+  color: var(--ethics-brand);
+  cursor: pointer;
+}
+
+.ethics-grid-owner.is-unattended {
+  color: var(--state-warning-text, var(--ethics-ink));
+  font-weight: 700;
+}
+
+.ethics-grid-sla.is-danger {
+  color: var(--ethics-danger-text);
+  font-weight: 600;
+}
+
+.ethics-grid-sla.is-warn {
+  color: var(--state-warning-text, var(--ethics-ink));
+  font-weight: 600;
+}
+
+.ethics-grid-sla.is-ok {
+  color: var(--state-success-text, var(--ethics-muted));
+}
+
+.ethics-grid-sla.is-muted {
+  color: var(--ethics-muted);
+}
+
+.ethics-grid-status {
+  font-weight: 600;
+}
+
+.ethics-grid-status.is-new {
+  color: var(--ethics-brand);
+}
+
+.ethics-grid-status.is-assessing,
+.ethics-grid-status.is-investigating {
+  color: var(--state-warning-text, var(--ethics-ink));
+}
+
+.ethics-grid-status.is-closed {
+  color: var(--ethics-muted);
+}
