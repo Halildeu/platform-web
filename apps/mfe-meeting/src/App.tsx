@@ -51,7 +51,9 @@ import {
   type MeetingDetailStatus,
   type MeetingRecord,
   type MeetingStatus,
+  type TranscriptSegment,
 } from './meeting-workbench';
+import { buildTranscriptFlow } from './transcript-flow';
 import { readMeetingSelection, writeMeetingSelection } from './meeting-selection';
 import { parseWsStreamEventMessage } from './ws-stream-events';
 import { getShellServices } from './shell-services';
@@ -217,6 +219,10 @@ function CitationTrail({
 }
 
 function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
+  // Akıcı görünüm default (gitops#3419): cümle-sınırlı akış + satır-içi canlı
+  // kuyruk (sektör konvansiyonu — docs/faz24-realtime-stt-industry-survey.md).
+  // 'Satırlar' segment-başına denetim kartlarını aynen korur.
+  const [view, setView] = useState<'fluent' | 'rows'>('fluent');
   const segments = orderTranscriptSegments(meeting.transcript);
   if (segments.length === 0) {
     return (
@@ -240,23 +246,103 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
         <strong>{meeting.transcriptFeed.label}</strong>
         <span>{meeting.transcriptFeed.detail}</span>
       </div>
-      <div className="transcript-timeline" aria-label="Transkript zaman çizgisi">
-        {segments.map((segment) => (
-          <article
-            className={`transcript-row segment-${segment.status}`}
-            id={`segment-${segment.id}`}
-            key={segment.id}
-          >
-            <div className="segment-meta">
-              <span>{formatOffset(segment.startedAtMs)}</span>
-              <span>{segment.speaker}</span>
-              <span>{segmentStatusLabel(segment.status)}</span>
-            </div>
-            <p>{segment.text}</p>
-          </article>
-        ))}
+      <div
+        className="transcript-view-toggle"
+        role="group"
+        aria-label="Transkript görünümü"
+        data-testid="transcript-view-toggle"
+      >
+        <button
+          type="button"
+          className={view === 'fluent' ? 'active' : ''}
+          aria-pressed={view === 'fluent'}
+          onClick={() => setView('fluent')}
+        >
+          Akıcı
+        </button>
+        <button
+          type="button"
+          className={view === 'rows' ? 'active' : ''}
+          aria-pressed={view === 'rows'}
+          onClick={() => setView('rows')}
+        >
+          Satırlar
+        </button>
       </div>
+      {view === 'fluent' ? (
+        <div
+          className="transcript-flow"
+          aria-label="Akıcı transkript"
+          data-testid="transcript-flow"
+        >
+          {buildTranscriptFlow(segments).map((group) => (
+            <article className="transcript-flow-group" key={group.id}>
+              <div className="segment-meta">
+                <span>{formatOffset(group.startedAtMs)}</span>
+                <span>{group.speaker}</span>
+              </div>
+              {group.paragraphs.map((paragraph, paragraphIndex) => (
+                <p className="transcript-flow-paragraph" key={`p-${paragraph[0].id}`}>
+                  {paragraph.map((item) => (
+                    <span
+                      id={`segment-${item.id}`}
+                      key={item.id}
+                      className={
+                        item.status === 'final' || item.status === 'revised'
+                          ? undefined
+                          : 'transcript-flow-pending'
+                      }
+                    >
+                      {item.text}{' '}
+                    </span>
+                  ))}
+                  {paragraphIndex === group.paragraphs.length - 1 && group.tail.length > 0 ? (
+                    <TranscriptFlowTail tail={group.tail} />
+                  ) : null}
+                </p>
+              ))}
+              {group.paragraphs.length === 0 && group.tail.length > 0 ? (
+                <p className="transcript-flow-paragraph">
+                  <TranscriptFlowTail tail={group.tail} />
+                </p>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="transcript-timeline" aria-label="Transkript zaman çizgisi">
+          {segments.map((segment) => (
+            <article
+              className={`transcript-row segment-${segment.status}`}
+              id={`segment-${segment.id}`}
+              key={segment.id}
+            >
+              <div className="segment-meta">
+                <span>{formatOffset(segment.startedAtMs)}</span>
+                <span>{segment.speaker}</span>
+                <span>{segmentStatusLabel(segment.status)}</span>
+              </div>
+              <p>{segment.text}</p>
+            </article>
+          ))}
+        </div>
+      )}
     </>
+  );
+}
+
+function TranscriptFlowTail({ tail }: { tail: TranscriptSegment[] }) {
+  return (
+    <span className="transcript-flow-tail" data-testid="transcript-flow-tail">
+      {tail.map((item) => (
+        <span id={`segment-${item.id}`} key={item.id}>
+          {item.text}{' '}
+        </span>
+      ))}
+      <span className="transcript-flow-caret" aria-hidden="true">
+        |
+      </span>
+    </span>
   );
 }
 
@@ -646,22 +732,23 @@ export default function MeetingApp({
   const liveTranscriptSseChunks = liveTranscriptSse?.chunks ?? [];
   const hasLiveSegments =
     !!selectedMeeting && (liveStream.segments.length > 0 || liveTranscriptSseChunks.length > 0);
-  const renderedSelectedMeeting = hasLiveSegments && selectedMeeting
-    ? {
-        ...selectedMeeting,
-        status: 'live' as const,
-        transcriptFeed: {
-          state: 'live' as const,
-          label: liveStream.label,
-          detail: liveStream.detail,
-        },
-        transcript: [
-          ...selectedMeeting.transcript,
-          ...liveStream.segments,
-          ...liveTranscriptSseChunks,
-        ],
-      }
-    : selectedMeeting;
+  const renderedSelectedMeeting =
+    hasLiveSegments && selectedMeeting
+      ? {
+          ...selectedMeeting,
+          status: 'live' as const,
+          transcriptFeed: {
+            state: 'live' as const,
+            label: liveStream.label,
+            detail: liveStream.detail,
+          },
+          transcript: [
+            ...selectedMeeting.transcript,
+            ...liveStream.segments,
+            ...liveTranscriptSseChunks,
+          ],
+        }
+      : selectedMeeting;
   const stats = computeStats(workbench.records);
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedId(meetingId);

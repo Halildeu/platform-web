@@ -1098,3 +1098,59 @@ button {
     white-space: normal;
   }
 }
+
+/* Akıcı transkript görünümü (gitops#3419) */
+.transcript-view-toggle {
+  display: inline-flex;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+
+.transcript-view-toggle button {
+  border: 1px solid var(--border, #cbd5e1);
+  background: transparent;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.transcript-view-toggle button.active {
+  background: var(--accent, #0f766e);
+  border-color: var(--accent, #0f766e);
+  color: #fff;
+}
+
+.transcript-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.transcript-flow-group .segment-meta {
+  margin-bottom: 4px;
+}
+
+.transcript-flow-paragraph {
+  margin: 0 0 6px;
+  line-height: 1.6;
+}
+
+.transcript-flow-pending {
+  opacity: 0.8;
+}
+
+.transcript-flow-tail {
+  color: var(--muted, #64748b);
+  font-style: italic;
+}
+
+.transcript-flow-caret {
+  animation: transcript-caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes transcript-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
