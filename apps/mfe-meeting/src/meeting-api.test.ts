@@ -188,6 +188,8 @@ describe('meeting canonical API boundary', () => {
   it('opens summary, decisions and actions from one canonical result with final citations', async () => {
     const get = vi.fn((url: string) => {
       if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
+      if (url.includes('/sessions?'))
+        return Promise.resolve({ data: { content: [{ id: 'session-1' }] } });
       if (url.includes('/v1/admin/transcripts?'))
         return Promise.resolve({ data: transcriptPage() });
       return Promise.reject(new Error(`unexpected endpoint: ${url}`));
@@ -195,7 +197,7 @@ describe('meeting canonical API boundary', () => {
 
     const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
 
-    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenCalledTimes(3);
     expect(get).toHaveBeenCalledWith(
       `/v1/admin/meetings/${meetingId}/intelligence/result`,
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
@@ -226,6 +228,62 @@ describe('meeting canonical API boundary', () => {
       label: 'Kaynaklı çıktılar',
       state: 'pass',
     });
+  });
+
+  it('renders every session transcript while keeping citations on the analysis session (gitops#3421)', async () => {
+    const secondSessionPage = {
+      content: [
+        {
+          id: 'segment-9',
+          speakerId: 'speaker-9',
+          startTime: 900,
+          textFinal: 'Ana oturumun 27 dakikalık içeriği burada.',
+          status: 'FINALIZED',
+        },
+      ],
+      totalElements: 1,
+      page: 0,
+      size: 200,
+    };
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
+      if (url.includes('/sessions?'))
+        return Promise.resolve({
+          data: { content: [{ id: 'session-1' }, { id: 'session-main' }] },
+        });
+      if (url.includes('sessionId=session-1')) return Promise.resolve({ data: transcriptPage() });
+      if (url.includes('sessionId=session-main'))
+        return Promise.resolve({ data: secondSessionPage });
+      return Promise.reject(new Error(`unexpected endpoint: ${url}`));
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(get).toHaveBeenCalledWith(
+      '/v1/admin/transcripts?sessionId=session-main&page=0&size=200',
+    );
+    expect(detail.transcript.map((segment) => segment.id)).toEqual(
+      expect.arrayContaining(['segment-1', 'segment-2', 'segment-3', 'segment-9']),
+    );
+    expect(detail.transcript).toHaveLength(4);
+    // Citation indeksleri analiz oturumunda kalır — birleşim kaydırmaz.
+    expect(detail.summary.citations[0]?.segmentId).toBe('segment-1');
+    expect(detail.transcriptFeed.detail).toMatch(/4 segment okundu/);
+  });
+
+  it('keeps the analysis transcript when the session list is unavailable', async () => {
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
+      if (url.includes('/sessions?')) return Promise.reject(new Error('sessions unavailable'));
+      if (url.includes('/v1/admin/transcripts?'))
+        return Promise.resolve({ data: transcriptPage() });
+      return Promise.reject(new Error(`unexpected endpoint: ${url}`));
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.transcript).toHaveLength(3);
+    expect(detail.summary.citations).toHaveLength(1);
   });
 
   it('never treats draft or mismatched transcript evidence as grounded', async () => {
@@ -320,6 +378,8 @@ describe('meeting canonical API boundary', () => {
     });
     const get = vi.fn((url: string) => {
       if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: result });
+      if (url.includes('/sessions?'))
+        return Promise.resolve({ data: { content: [{ id: 'session-1' }] } });
       if (url.includes('page=0')) {
         return Promise.resolve({
           data: {
