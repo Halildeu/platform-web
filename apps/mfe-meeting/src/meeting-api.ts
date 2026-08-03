@@ -717,7 +717,13 @@ function mapCanonicalResult(
   result: CanonicalMeetingIntelligenceResult,
   transcript: MeetingRecord['transcript'],
   transcriptComplete: boolean,
+  // Çok-oturumlu toplantı (gitops#3421): citation'lar analiz oturumunun
+  // segment indekslerine bağlıdır, bu yüzden `transcript` yalnız o oturumu
+  // taşır; ekranda ise TÜM oturumların birleşimi gösterilir. Ayrık tutulmazsa
+  // ya ana oturum içeriği görünmez ya da citation indeksleri kayar.
+  displayTranscript?: MeetingRecord['transcript'],
 ): MeetingRecord {
+  const renderedTranscript = displayTranscript ?? transcript;
   const summaryCanBeGrounded = result.summaryGroundingStatus?.toLowerCase() === 'verified';
   const summaryRawCitations = summaryCanBeGrounded ? result.summaryCitations : [];
   const summaryCitations = citationsForClaim(result.summary, summaryRawCitations, transcript);
@@ -784,14 +790,17 @@ function mapCanonicalResult(
       ungroundedCount: result.ungroundedCount,
     },
     transcriptFeed: {
-      state: transcript.length > 0 ? 'recorded' : 'blocked',
-      label: transcript.length > 0 ? 'Canonical final transkript' : 'Final transkript bulunamadı',
+      state: renderedTranscript.length > 0 ? 'recorded' : 'blocked',
+      label:
+        renderedTranscript.length > 0
+          ? 'Canonical final transkript'
+          : 'Final transkript bulunamadı',
       detail:
-        transcript.length > 0
-          ? `${transcript.length} segment okundu${transcriptComplete ? '' : '; sayfa sınırı nedeniyle devamı doğrulanmadı'}.`
+        renderedTranscript.length > 0
+          ? `${renderedTranscript.length} segment okundu${transcriptComplete ? '' : '; sayfa sınırı nedeniyle devamı doğrulanmadı'}.`
           : 'Canonical sonuç hazır; doğrulanabilir final transcript segmenti yok.',
     },
-    transcript,
+    transcript: renderedTranscript,
     summary: {
       text: summaryText || 'Canonical özet üretilmedi.',
       citations: summaryCitations,
@@ -879,11 +888,42 @@ export async function loadMeetingDetail(
       result.sessionId,
       transcriptsEndpoint,
     );
+    const analysisTranscript = mapTranscript(transcriptResponse.payload);
+    // gitops#3421: analiz sonucu yalnız SON run'ın oturumuna bağlanıyor;
+    // socket-close sonrası açılan kısa kuyruk oturumu 'son run' olunca ana
+    // oturumun içeriği ekranda hiç görünmüyordu. Diğer oturumların
+    // transkriptleri EK olarak yüklenir ve yalnız GÖRÜNTÜLEME birleşimine
+    // katılır — citation çözümü analiz oturumunun indekslerinde kalır.
+    // Oturum listesi alınamazsa analiz oturumu tek başına gösterilmeye
+    // devam eder (fail-open değil: ekstra içerik sadece eksilir).
+    const extraSegments: MeetingRecord['transcript'] = [];
+    let displayComplete = transcriptResponse.complete;
+    try {
+      const sessionsResponse = await services.http.get<unknown>(
+        `${meetingBase}/${meetingId}/sessions?page=0&size=50`,
+        { headers: { Accept: 'application/json' } },
+      );
+      const sessionIds = isRecord(sessionsResponse.data)
+        ? readArray(sessionsResponse.data.content)
+            .map((value) => (isRecord(value) ? readString(value, 'id') : ''))
+            .filter((id) => id && id !== result.sessionId)
+        : [];
+      for (const sessionId of sessionIds) {
+        const extra = await loadTranscriptPages(services, sessionId, transcriptsEndpoint);
+        extraSegments.push(...mapTranscript(extra.payload));
+        displayComplete = displayComplete && extra.complete;
+      }
+    } catch {
+      // Ek oturum okunamadı — analiz oturumunun transkripti yine gösterilir.
+    }
+    const displayTranscript =
+      extraSegments.length > 0 ? [...analysisTranscript, ...extraSegments] : analysisTranscript;
     return mapCanonicalResult(
       meeting,
       result,
-      mapTranscript(transcriptResponse.payload),
-      transcriptResponse.complete,
+      analysisTranscript,
+      displayComplete,
+      displayTranscript,
     );
   } catch {
     return mapCanonicalResult(meeting, result, [], false);
