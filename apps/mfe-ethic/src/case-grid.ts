@@ -194,6 +194,39 @@ export function buildCaseRows(
   });
 }
 
+/**
+ * ~60 characters of the subject — enough to recognise the case on a banner, not
+ * enough to republish the report there. Null keeps the malformed-case wording
+ * ({@link buildCaseRows} uses the same phrase), so a broken record can still be
+ * the next thing to look at.
+ */
+export function truncateSubject(subject: string | null, max = 60): string {
+  const text = subject ?? 'Konu okunamadı';
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+/**
+ * Why the queue's first case is first, in words. Derived from the SAME cells the
+ * grid renders ({@link ackSlaFor} / {@link feedbackSlaFor} / {@link ownerFor}),
+ * so the banner can never disagree with the row below it — and no second SLA
+ * arithmetic exists to drift from the first. The order mirrors `queueRank`:
+ * a live acknowledgement clock outranks ownership, ownership outranks the
+ * three-month feedback clock, and a case with none of those is simply the most
+ * recently updated one.
+ */
+export function nextWorkReason(item: CaseGridSource, now: number = Date.now()): string {
+  const ack = ackSlaFor(item, now);
+  // A live acknowledgement clock — neither given nor unknowable — is the
+  // loudest reason a case leads the queue.
+  if (!item.acknowledgedAt && ack.order < NO_DEADLINE - 1) {
+    return ack.tone === 'danger' ? 'Teyit süresi geçti' : `Teyit: ${ack.text}`;
+  }
+  if (ownerFor(item).unattended) return 'Sahipsiz';
+  const feedback = feedbackSlaFor(item, now);
+  if (feedback.order < NO_DEADLINE - 1) return `Geri bildirim: ${feedback.text}`;
+  return 'En son güncellenen vaka';
+}
+
 export interface CaseKpis {
   open: number;
   unattended: number;

@@ -102,6 +102,10 @@ export default function App() {
   const [evidenceError, setEvidenceError] = useState('');
   const [downloadingEvidenceId, setDownloadingEvidenceId] = useState('');
   const [loadState, setLoadState] = useState<LoadState>('loading');
+  // The moment the list last arrived successfully — page state, never persisted.
+  // Null also means "no list has ever loaded", which is how the workspace tells
+  // the initial skeleton apart from a refresh that keeps the grid on screen.
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
   const [filter, setFilter] = useState<CaseFilter>(() =>
     initialFilterFromQuery(typeof window === 'undefined' ? '' : window.location.search),
   );
@@ -161,6 +165,8 @@ export default function App() {
   const clearSensitiveState = () => {
     selectionSequence.current += 1;
     setItems([]);
+    // The freshness stamp describes a list that no longer exists after a purge.
+    setLastLoadedAt(null);
     setSelected(null);
     setEvidence([]);
     setEvidenceError('');
@@ -415,6 +421,7 @@ export default function App() {
       if (requestSequence !== selectionSequence.current) return;
       setItems(next);
       setLoadState('ready');
+      setLastLoadedAt(new Date());
       if (!deepLinkConsumed.current) {
         deepLinkConsumed.current = true;
         const linkedCaseId = new URLSearchParams(window.location.search).get('vaka');
@@ -729,8 +736,9 @@ export default function App() {
 
         {selected === null ? (
           /* LIST view — full width. KPIs, filter toolbar and the entity grid live in
-             CaseListWorkspace; this shell keeps what was already here: the load states
-             and the refresh action. */
+             CaseListWorkspace, and so do all four list states now (loading skeleton,
+             error + retry, empty, ready). The refresh action moved with them into the
+             freshness row — same refresh() path, now with a visible busy state. */
           <div className="ethics-manager-list">
             <Card variant="outlined" padding="md">
               <Stack direction="column" gap={3}>
@@ -738,23 +746,16 @@ export default function App() {
                   <Text as="h2" size="lg" weight="bold">
                     Vakalar
                   </Text>
-                  <Button variant="secondary" size="sm" onClick={() => void refresh()}>
-                    Yenile
-                  </Button>
                 </div>
-                {loadState === 'loading' && <p role="status">Vakalar yükleniyor…</p>}
-                {loadState === 'error' && <p>Vaka listesi alınamadı.</p>}
-                {loadState === 'ready' && items.length === 0 && (
-                  <p>Yetkiniz kapsamında açık vaka yok.</p>
-                )}
-                {loadState === 'ready' && items.length > 0 && (
-                  <CaseListWorkspace
-                    items={items}
-                    filter={filter}
-                    onFilterChange={setFilter}
-                    onSelect={selectCase}
-                  />
-                )}
+                <CaseListWorkspace
+                  items={items}
+                  filter={filter}
+                  onFilterChange={setFilter}
+                  onSelect={selectCase}
+                  loadState={loadState}
+                  lastLoadedAt={lastLoadedAt}
+                  onRefresh={() => void refresh()}
+                />
               </Stack>
             </Card>
           </div>

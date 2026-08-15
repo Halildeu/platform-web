@@ -36,6 +36,8 @@ import {
   CASE_GRID_SCHEMA_VERSION,
   computeKpis,
   modeLabel,
+  nextWorkReason,
+  truncateSubject,
   type CaseGridRow,
 } from './case-grid';
 
@@ -57,6 +59,16 @@ export interface CaseListWorkspaceProps {
   filter: CaseFilter;
   onFilterChange: (filter: CaseFilter) => void;
   onSelect: (item: EthicsCaseSummary) => void;
+  /**
+   * The manager screen's own load state, surfaced HERE so the workspace owns all
+   * four of its states (loading / error / empty / ready) instead of the shell
+   * swapping it out for a paragraph. No new fetch path exists: `onRefresh` is
+   * the same `refresh()` the screen has always had, and `lastLoadedAt` is the
+   * moment the list last arrived successfully — page state, nothing persisted.
+   */
+  loadState: 'loading' | 'ready' | 'error';
+  lastLoadedAt: Date | null;
+  onRefresh: () => void;
 }
 
 interface KpiCard {
@@ -74,6 +86,9 @@ export default function CaseListWorkspace({
   filter,
   onFilterChange,
   onSelect,
+  loadState,
+  lastLoadedAt,
+  onRefresh,
 }: CaseListWorkspaceProps) {
   // Derived, not stored — the same discipline the manager screen already keeps:
   // a second copy of the list would drift the moment a refresh lands.
@@ -148,25 +163,110 @@ export default function CaseListWorkspace({
     },
   ];
 
+  const refreshing = loadState === 'loading';
+  const nextItem = visibleItems[0] ?? null;
+
+  // Initial load — no list has ever arrived, so there is nothing honest to show
+  // behind a spinner. A quiet skeleton instead of the grid; the moment the first
+  // response lands, `lastLoadedAt` exists and this branch is never taken again.
+  if (refreshing && lastLoadedAt === null) {
+    return (
+      <div className="ethics-list-skeleton" role="status">
+        <p>Vakalar yükleniyor…</p>
+        <div className="ethics-skeleton-line" aria-hidden="true" />
+        <div className="ethics-skeleton-line" aria-hidden="true" />
+        <div className="ethics-skeleton-line" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  // "When is this true?" — the KPI numbers and SLA cells are clock arithmetic,
+  // so the moment they were computed is part of their meaning. The button rides
+  // the screen's one existing reload path; while it runs it says so and cannot
+  // be pressed again.
+  const freshnessRow = (
+    <p className="ethics-freshness">
+      {lastLoadedAt && (
+        <span>
+          Son güncelleme{' '}
+          {lastLoadedAt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      )}
+      <button type="button" onClick={onRefresh} disabled={refreshing} aria-busy={refreshing}>
+        {refreshing ? 'Yükleniyor…' : 'Yenile'}
+      </button>
+    </p>
+  );
+
+  // The load failed. The global alert (role="alert") already announces the
+  // readable error; this surface replaces the list — a stale grid rendered as if
+  // current would be the quiet lie — and offers the same reload path back.
+  if (loadState === 'error') {
+    return (
+      <div className="ethics-workspace">
+        <div className="ethics-list-error">
+          <span>Vaka listesi alınamadı.</span>
+          <button type="button" onClick={onRefresh}>
+            Tekrar dene
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Loaded and genuinely empty — no filter is hiding anything, there is nothing
+  // within this reader's authorization. Different words from the filtered-empty
+  // state below, because the two mean opposite things.
+  if (items.length === 0) {
+    return (
+      <div className="ethics-workspace">
+        {freshnessRow}
+        <p>Yetkiniz kapsamında açık vaka yok.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="ethics-workspace">
+      {/* The queue's own answer to "what needs me next": the FIRST case of the
+          visible, sortForQueue-ordered list, with its reason said in words (never
+          colour alone). Hidden when nothing is visible — a banner pointing at
+          nothing would be noise with a button on it. */}
+      {nextItem && (
+        <section className="ethics-next-work" aria-label="Benden beklenen sıradaki iş">
+          <p className="ethics-next-work-text">
+            <span className="ethics-next-work-label">Sıradaki iş:</span>{' '}
+            <strong className="ethics-next-work-subject">
+              {truncateSubject(nextItem.subject)}
+            </strong>
+            <span className="ethics-next-work-reason"> · {nextWorkReason(nextItem)}</span>
+          </p>
+          <button type="button" onClick={() => onSelect(nextItem)}>
+            Aç
+          </button>
+        </section>
+      )}
+
       {/* The four questions triage exists to answer, as one click each. A card is a
           filter, so its number and its click must agree — computeKpis counts exactly
           the predicate the toggle applies. */}
-      <div className="ethics-kpis" role="group" aria-label="Vaka göstergeleri">
-        {kpiCards.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            className={`ethics-kpi is-${card.tone}`}
-            aria-pressed={card.active}
-            data-testid={card.testId}
-            onClick={card.toggle}
-          >
-            <span className="ethics-kpi-value">{card.value}</span>
-            <span className="ethics-kpi-label">{card.label}</span>
-          </button>
-        ))}
+      <div className="ethics-kpi-strip">
+        <div className="ethics-kpis" role="group" aria-label="Vaka göstergeleri">
+          {kpiCards.map((card) => (
+            <button
+              key={card.key}
+              type="button"
+              className={`ethics-kpi is-${card.tone}`}
+              aria-pressed={card.active}
+              data-testid={card.testId}
+              onClick={card.toggle}
+            >
+              <span className="ethics-kpi-value">{card.value}</span>
+              <span className="ethics-kpi-label">{card.label}</span>
+            </button>
+          ))}
+        </div>
+        {freshnessRow}
       </div>
 
       <div className="ethics-filters">
@@ -251,7 +351,16 @@ export default function CaseListWorkspace({
           </button>
         </p>
       )}
-      {visibleItems.length === 0 && <p>Bu süzgeçle eşleşen vaka yok.</p>}
+      {/* Filtered to nothing ≠ nothing exists: the cases are all still there,
+          withheld by a choice — so the escape hatch sits in the same sentence. */}
+      {visibleItems.length === 0 && (
+        <p className="ethics-list-empty">
+          <span>Bu filtreyle eşleşen vaka yok</span>
+          <button type="button" onClick={() => onFilterChange(EMPTY_CASE_FILTER)}>
+            Filtreleri temizle
+          </button>
+        </p>
+      )}
 
       <section className="ethics-case-grid" aria-label="Etik vakaları">
         <EntityGridTemplate<CaseGridRow>
