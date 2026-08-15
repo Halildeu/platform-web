@@ -8,7 +8,9 @@ import {
   computeKpis,
   feedbackSlaFor,
   modeLabel,
+  nextWorkReason,
   ownerFor,
+  truncateSubject,
   type CaseGridSource,
 } from './case-grid';
 import { EMPTY_CASE_FILTER, filterCases } from './case-lifecycle';
@@ -238,5 +240,66 @@ describe('filter genişletmesi (KPI kartlarının uyguladığı süzgeçler)', (
     expect(filterCases(all, { ...EMPTY_CASE_FILTER, mode: 'CONFIDENTIAL' }, NOW)).toEqual([
       feedbackLate,
     ]);
+  });
+});
+
+// ── Faz 35 ModuleHome tamamlama: sıradaki-iş bandının gerekçesi ve konu kırpması ──
+// nextWorkReason yeni SLA aritmetiği İCAT ETMEZ: her dalı grid'in kendi hücre
+// türetimlerinden (ackSlaFor / feedbackSlaFor / ownerFor) okur. Testler bu yüzden
+// beklenen metni aynı türetimden alır — bant ile satır hiçbir saatte ayrışamaz.
+
+describe('nextWorkReason', () => {
+  test('teyidi geçmiş vaka: "Teyit süresi geçti"', () => {
+    expect(nextWorkReason({ ...base, createdAt: daysBefore(9) }, NOW)).toBe('Teyit süresi geçti');
+  });
+
+  test('teyit saati işleyen vaka: kalan süre grid hücresiyle aynı sözcüklerle', () => {
+    const item = { ...base, createdAt: daysBefore(3) };
+    expect(nextWorkReason(item, NOW)).toBe(`Teyit: ${ackSlaFor(item, NOW).text}`);
+  });
+
+  test('teyidi verilmiş sahipsiz vaka: "Sahipsiz"', () => {
+    expect(
+      nextWorkReason({ ...base, acknowledgedAt: daysBefore(1), participantCount: 0 }, NOW),
+    ).toBe('Sahipsiz');
+  });
+
+  test('sahipli ve teyitli vaka: en yakın SLA gerekçesi geri bildirim saatidir', () => {
+    const item = { ...base, acknowledgedAt: daysBefore(1), participantCount: 2 };
+    expect(nextWorkReason(item, NOW)).toBe(`Geri bildirim: ${feedbackSlaFor(item, NOW).text}`);
+  });
+
+  test('hiçbir saat işlemeyen kapalı vaka dürüst geri düşüşü alır', () => {
+    expect(
+      nextWorkReason(
+        { ...base, status: 'CLOSED', acknowledgedAt: daysBefore(1), participantCount: 1 },
+        NOW,
+      ),
+    ).toBe('En son güncellenen vaka');
+  });
+
+  test('teyit alanını göndermeyen servisle aciliyet uydurulmaz', () => {
+    const legacy = { ...base, participantCount: 1 };
+    delete (legacy as { acknowledgedAt?: string | null }).acknowledgedAt;
+    // Unknown acknowledgement must not scream a deadline it cannot substantiate;
+    // the unknown feedback clock stays silent for the same reason.
+    expect(nextWorkReason(legacy, NOW)).toBe('En son güncellenen vaka');
+  });
+});
+
+describe('truncateSubject', () => {
+  test('kısa konu olduğu gibi kalır', () => {
+    expect(truncateSubject('Kısa konu')).toBe('Kısa konu');
+  });
+
+  test('uzun konu ~60 karaktere kırpılır ve elips alır', () => {
+    const long = 'Çok uzun bir konu '.repeat(8);
+    const cut = truncateSubject(long);
+    expect(cut.length).toBeLessThanOrEqual(60);
+    expect(cut.endsWith('…')).toBe(true);
+  });
+
+  test('null konu bozuk-kayıt sözcüğünü korur', () => {
+    expect(truncateSubject(null)).toBe('Konu okunamadı');
   });
 });

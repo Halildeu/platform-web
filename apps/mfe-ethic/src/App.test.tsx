@@ -888,4 +888,119 @@ describe('Etik Speak manager MFE', () => {
     }));
   });
 
+  // ── Faz 35 ModuleHome tamamlama: sıradaki-iş bandı, tazelik satırı, durum yüzeyleri ──
+
+  // The banner answers "what needs me next" before the reader scans anything: the
+  // FIRST case of the queue-ordered visible list, with the reason in words. It must
+  // pick by queue order, not response order — a banner that repeats row one of the
+  // server's payload would just be a heading.
+  test('sıradaki iş bandı kuyruğun en acil vakasını gösterir ve Aç onu seçer', async () => {
+    const healthy = {
+      ...summary,
+      id: '44444444-4444-4444-4444-444444444444',
+      subject: 'Sağlıklı vaka',
+      participantCount: 2,
+      createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+      acknowledgedAt: new Date(Date.now() - 86_400_000).toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const urgent = {
+      ...summary,
+      id: '33333333-3333-3333-3333-333333333333',
+      subject:
+        'Depoda gece vardiyasında sistematik baskı ve mesai ücretlerinin kayıt dışı bırakılması hakkında bildirim',
+      createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+      acknowledgedAt: null,
+    };
+    // Healthy arrives first in the response on purpose.
+    vi.mocked(api.listCases).mockResolvedValueOnce([healthy, urgent]);
+    render(<App />);
+
+    const banner = await screen.findByRole('region', { name: 'Benden beklenen sıradaki iş' });
+    expect(banner).toHaveTextContent('Sıradaki iş:');
+    // The reason travels as words, never as colour alone.
+    expect(banner).toHaveTextContent('Teyit süresi geçti');
+    // The subject is recognisable but clipped to ~60 characters.
+    expect(banner).toHaveTextContent('…');
+    expect(banner).not.toHaveTextContent('hakkında bildirim');
+
+    await userEvent.click(within(banner).getByRole('button', { name: 'Aç' }));
+    // Aç routes through the existing selection path: the detail load starts for
+    // the urgent case, not for whatever sat first in the payload.
+    await waitFor(() => expect(api.getCase).toHaveBeenCalledWith(urgent.id));
+  });
+
+  test('liste boşken sıradaki iş bandı görünmez', async () => {
+    vi.mocked(api.listCases).mockResolvedValueOnce([]);
+    render(<App />);
+
+    expect(await screen.findByText('Yetkiniz kapsamında açık vaka yok.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: 'Benden beklenen sıradaki iş' }),
+    ).not.toBeInTheDocument();
+  });
+
+  // The KPI numbers and SLA cells are clock arithmetic; the moment they were
+  // computed is part of their meaning. Yenile rides the screen's ONE reload path
+  // and says so while it runs.
+  test('tazelik satırı yükleme anını gösterir; Yenile aynı yolu koşar ve koşarken kapalıdır', async () => {
+    vi.mocked(api.listCases).mockClear();
+    render(<App />);
+    await screen.findByRole('button', { name: /#11111111/ });
+
+    expect(screen.getByText(/Son güncelleme \d{2}:\d{2}/)).toBeInTheDocument();
+    expect(api.listCases).toHaveBeenCalledTimes(1);
+
+    let resolveNext!: (value: api.EthicsCaseSummary[]) => void;
+    vi.mocked(api.listCases).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveNext = resolve)),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Yenile' }));
+
+    const busy = screen.getByRole('button', { name: 'Yükleniyor…' });
+    expect(busy).toBeDisabled();
+    expect(busy).toHaveAttribute('aria-busy', 'true');
+    // A refresh over existing data keeps the grid — the skeleton is for the first load only.
+    expect(screen.getByRole('button', { name: /#11111111/ })).toBeInTheDocument();
+
+    resolveNext([summary]);
+    expect(await screen.findByRole('button', { name: 'Yenile' })).toBeInTheDocument();
+    expect(api.listCases).toHaveBeenCalledTimes(2);
+  });
+
+  // Filtered-to-nothing and nothing-exists mean opposite things; each gets its own
+  // words, and the filtered one carries its own undo.
+  test('filtreyle boşalan liste bunu söyler ve Filtreleri temizle geri getirir', async () => {
+    render(<App />);
+    await screen.findByRole('button', { name: /#11111111/ });
+
+    await userEvent.type(screen.getByLabelText('Konu ara'), 'kesinlikle-eslesmeyen-metin');
+    expect(screen.getByText('Bu filtreyle eşleşen vaka yok')).toBeInTheDocument();
+    // A banner pointing at nothing would be noise with a button on it.
+    expect(
+      screen.queryByRole('region', { name: 'Benden beklenen sıradaki iş' }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Filtreleri temizle' }));
+
+    expect(await screen.findByRole('button', { name: /#11111111/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Konu ara')).toHaveValue('');
+  });
+
+  // A failed list load replaces the grid instead of leaving a stale one rendered
+  // as if current; the retry is the same refresh() the screen has always had.
+  test('liste yüklemesi düşerse hata yüzeyi çıkar ve Tekrar dene aynı yolu koşar', async () => {
+    vi.mocked(api.listCases).mockClear().mockRejectedValueOnce({ response: { status: 500 } });
+    render(<App />);
+
+    expect(await screen.findByText('Vaka listesi alınamadı.')).toBeInTheDocument();
+    // The readable error is announced by the existing global alert — once.
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tekrar dene' }));
+
+    expect(await screen.findByRole('button', { name: /#11111111/ })).toBeInTheDocument();
+    expect(api.listCases).toHaveBeenCalledTimes(2);
+  });
+
 });

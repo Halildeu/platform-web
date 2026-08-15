@@ -745,3 +745,121 @@
 .ethics-grid-status.is-closed {
   color: var(--ethics-muted);
 }
+
+/* ── Faz 35 ModuleHome tamamlama: sıradaki-iş bandı, tazelik satırı, liste durum
+   yüzeyleri. Append-only — bu çizginin üstündeki hiçbir kural değişmedi. ─────── */
+
+/* The queue's first case, said out loud. Brand-bordered rather than danger-toned:
+   the REASON carries its own words, and a permanently red banner would teach the
+   eye to ignore red. */
+.ethics-next-work {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--ethics-brand);
+  border-left-width: 4px;
+  border-radius: 0.6rem;
+  background: var(--ethics-surface-muted);
+}
+
+.ethics-next-work-text {
+  margin: 0;
+  min-width: 0;
+}
+
+.ethics-next-work-label {
+  font-weight: 700;
+}
+
+.ethics-next-work-subject {
+  font-weight: 600;
+}
+
+.ethics-next-work-reason {
+  color: var(--ethics-muted);
+}
+
+/* One button vocabulary for the new small actions (Aç / Yenile / Tekrar dene /
+   Filtreleri temizle) — same shape the filter-summary button already has. */
+.ethics-next-work button,
+.ethics-freshness button,
+.ethics-list-error button,
+.ethics-list-empty button {
+  border: 1px solid var(--ethics-border);
+  background: var(--ethics-surface);
+  color: var(--ethics-ink);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ethics-next-work button {
+  border-color: var(--ethics-brand);
+  font-weight: 600;
+}
+
+/* KPI cards and the freshness line are one strip: the numbers and the moment
+   they were computed belong together. */
+.ethics-kpi-strip {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.ethics-freshness {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ethics-muted);
+}
+
+.ethics-freshness button[disabled] {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* Initial load only — a quiet placeholder where the grid will be, not a claim
+   about how many rows are coming. */
+.ethics-list-skeleton {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.ethics-list-skeleton p {
+  margin: 0;
+  color: var(--ethics-muted);
+}
+
+.ethics-skeleton-line {
+  height: 2.4rem;
+  border-radius: 0.5rem;
+  background: var(--ethics-surface-muted);
+}
+
+/* The list-load failure surface. The global role="alert" banner above already
+   announces the readable error; this replaces the grid and offers the retry. */
+.ethics-list-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-left: 4px solid var(--ethics-danger);
+  background: var(--ethics-danger-surface);
+  color: var(--ethics-danger-text);
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.5rem;
+}
+
+/* Filtered-to-nothing: the sentence and its undo sit together. */
+.ethics-list-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
