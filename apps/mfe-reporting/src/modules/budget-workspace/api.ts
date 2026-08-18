@@ -1,6 +1,8 @@
 import { getShellServices } from '../../app/services/shell-services';
 import type {
+  BudgetPlanView,
   CompanyOption,
+  PlanImportResult,
   ProjectActualRow,
   ProjectActualSourceDocumentDetail,
   ProjectActualSourceLineRow,
@@ -13,6 +15,7 @@ import type {
 const REPORTS_BASE = '/v1/reports';
 // Shell HTTP client already owns the external `/api` gateway prefix.
 // Keep module paths relative to that base to avoid `/api/api/...` requests.
+const BUDGETS_BASE = '/v1/budgets';
 const PROJECT_BUDGETS_BASE = '/v1/budgets/projects';
 
 export type BudgetErrorKind =
@@ -205,6 +208,43 @@ export const fetchProjectActualSourceDocument = (
       {
         headers: companyHeaders(companyId),
       },
+    ),
+  );
+
+export const importWorkcubePlan = (
+  companyId: number,
+  fiscalYear: number,
+  includeScenarios: boolean,
+): Promise<PlanImportResult> =>
+  execute(() =>
+    resolveClient().post<PlanImportResult>(
+      `${BUDGETS_BASE}/import/workcube`,
+      { fiscalYear, includeScenarios },
+      { headers: companyHeaders(companyId) },
+    ),
+  );
+
+export const fetchPlanVersion = (
+  companyId: number,
+  planId: string,
+  versionId: string,
+): Promise<BudgetPlanView> =>
+  execute(() =>
+    resolveClient().get<BudgetPlanView>(`${BUDGETS_BASE}/${planId}/versions/${versionId}`, {
+      headers: companyHeaders(companyId),
+    }),
+  );
+
+export const submitPlanVersion = (
+  companyId: number,
+  planId: string,
+  versionId: string,
+): Promise<BudgetPlanView> =>
+  execute(() =>
+    resolveClient().post<BudgetPlanView>(
+      `${BUDGETS_BASE}/${planId}/versions/${versionId}/submit`,
+      null,
+      { headers: companyHeaders(companyId) },
     ),
   );
 
