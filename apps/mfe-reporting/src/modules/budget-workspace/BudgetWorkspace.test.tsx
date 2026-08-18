@@ -6,12 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const apiMocks = vi.hoisted(() => ({
   createProjectBinding: vi.fn(),
   fetchCompanies: vi.fn(),
+  fetchPlanVersion: vi.fn(),
   fetchProjectActualRows: vi.fn(),
   fetchProjectActualSourceDocument: vi.fn(),
   fetchProjectActualSourceLines: vi.fn(),
   fetchProjectActualSummary: vi.fn(),
   fetchProjects: vi.fn(),
   findProjectBinding: vi.fn(),
+  importWorkcubePlan: vi.fn(),
+  submitPlanVersion: vi.fn(),
   syncProjectActuals: vi.fn(),
   selectReportingCompany: vi.fn(),
 }));
@@ -131,7 +134,10 @@ vi.mock('./api', () => {
     fetchProjectActualSourceLines: apiMocks.fetchProjectActualSourceLines,
     fetchProjectActualSummary: apiMocks.fetchProjectActualSummary,
     fetchProjects: apiMocks.fetchProjects,
+    fetchPlanVersion: apiMocks.fetchPlanVersion,
     findProjectBinding: apiMocks.findProjectBinding,
+    importWorkcubePlan: apiMocks.importWorkcubePlan,
+    submitPlanVersion: apiMocks.submitPlanVersion,
     syncProjectActuals: apiMocks.syncProjectActuals,
   };
 });
@@ -363,6 +369,10 @@ describe('BudgetWorkspace project actuals', () => {
     expect(await screen.findByRole('option', { name: 'SER — Serban İnşaat' })).toBeInTheDocument();
     expect(screen.getByText(/bütçe kimliği projedir/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Yeni taslak oluştur' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Workcube bütçe planı içe aktarma' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Planı içe aktar' })).toBeDisabled();
   });
 
   it('sorts companies by visible label and projects by Turkish project name', async () => {

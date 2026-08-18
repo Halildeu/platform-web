@@ -138,6 +138,59 @@ export type ProjectActualSourceLineRow = {
   syncedAt: string;
 };
 
+export type BudgetVersionStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED';
+
+export type PlanImportSkip = {
+  sourceBudgetPlanRowId: number;
+  sourceBudgetPlanId: number;
+  reason: string;
+  detail: string | null;
+};
+
+export type PlanImportResult = {
+  batchId: string;
+  planId: string | null;
+  versionId: string | null;
+  status: 'COMPLETED' | 'BLOCKED';
+  fetchedRows: number;
+  importedLines: number;
+  mergedRows: number;
+  splitRows: number;
+  scenarioRows: number;
+  skippedRows: number;
+  skipSample: PlanImportSkip[];
+  failureCode: string | null;
+  startedAt: string;
+  finishedAt: string;
+};
+
+export type BudgetLineView = {
+  id: string;
+  period: string;
+  accountCode: string;
+  costCenterCode: string | null;
+  projectCode: string | null;
+  departmentCode: string | null;
+  branchCode: string | null;
+  direction: 'EXPENSE' | 'INCOME';
+  plannedAmount: number;
+  currency: string;
+  description: string | null;
+};
+
+export type BudgetPlanView = {
+  planId: string;
+  versionId: string;
+  companyId: number;
+  fiscalYear: number;
+  baseCurrency: string;
+  versionNo: number;
+  status: BudgetVersionStatus;
+  submittedBy: string | null;
+  approvedBy: string | null;
+  lines: BudgetLineView[];
+};
+
 export type ProjectActualSourceDocumentDetail = {
   id: string;
   documentDate: string;

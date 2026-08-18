@@ -22,12 +22,15 @@ import {
   BudgetApiError,
   createProjectBinding,
   fetchCompanies,
+  fetchPlanVersion,
   fetchProjectActualRows,
   fetchProjectActualSourceDocument,
   fetchProjectActualSourceLines,
   fetchProjectActualSummary,
   fetchProjects,
   findProjectBinding,
+  importWorkcubePlan,
+  submitPlanVersion,
   syncProjectActuals,
 } from './api';
 
@@ -160,5 +163,43 @@ describe('project actuals API contract', () => {
     await expect(findProjectBinding(35, 44200)).rejects.toEqual(
       expect.objectContaining<Partial<BudgetApiError>>({ kind: 'NOT_FOUND' }),
     );
+  });
+
+  it('keeps the plan-import lane on the budget-service contract', async () => {
+    mocks.post
+      .mockResolvedValueOnce({
+        data: { batchId: 'batch-1', planId: 'plan-1', versionId: 'version-1', status: 'COMPLETED' },
+      })
+      .mockResolvedValueOnce({ data: { planId: 'plan-1', versionId: 'version-1', status: 'SUBMITTED' } });
+    mocks.get.mockResolvedValueOnce({
+      data: { planId: 'plan-1', versionId: 'version-1', status: 'DRAFT', lines: [] },
+    });
+
+    await importWorkcubePlan(1, 2026, true);
+    await fetchPlanVersion(1, 'plan-1', 'version-1');
+    await submitPlanVersion(1, 'plan-1', 'version-1');
+
+    expect(mocks.post).toHaveBeenNthCalledWith(
+      1,
+      '/v1/budgets/import/workcube',
+      { fiscalYear: 2026, includeScenarios: true },
+      { headers: { 'X-Company-Id': '1' } },
+    );
+    expect(mocks.get).toHaveBeenCalledWith('/v1/budgets/plan-1/versions/version-1', {
+      headers: { 'X-Company-Id': '1' },
+    });
+    expect(mocks.post).toHaveBeenNthCalledWith(
+      2,
+      '/v1/budgets/plan-1/versions/version-1/submit',
+      null,
+      { headers: { 'X-Company-Id': '1' } },
+    );
+  });
+
+  it('refuses a plan import without a valid company scope', async () => {
+    await expect(importWorkcubePlan(0, 2026, false)).rejects.toEqual(
+      expect.objectContaining<Partial<BudgetApiError>>({ kind: 'INVALID_REQUEST' }),
+    );
+    expect(mocks.post).not.toHaveBeenCalled();
   });
 });
