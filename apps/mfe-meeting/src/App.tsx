@@ -54,6 +54,7 @@ import {
   type TranscriptSegment,
 } from './meeting-workbench';
 import { buildTranscriptFlow } from './transcript-flow';
+import { TasksPanel } from './TasksPanel';
 import { readMeetingSelection, writeMeetingSelection } from './meeting-selection';
 import { parseWsStreamEventMessage } from './ws-stream-events';
 import { getShellServices } from './shell-services';
@@ -1044,6 +1045,13 @@ export default function MeetingApp({
               </section>
               <InsightPanel meeting={renderedSelectedMeeting} />
             </div>
+            {/* Görevler (gitops#3487): canonical (UUID) meetings only — the demo
+                dataset has no backend to talk to, so the panel stays hidden there. */}
+            {/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              renderedSelectedMeeting.id,
+            ) ? (
+              <TasksPanel key={renderedSelectedMeeting.id} meetingId={renderedSelectedMeeting.id} />
+            ) : null}
           </section>
         ) : (
           <section className="meeting-detail empty-selection" aria-label="Toplantı seçimi">

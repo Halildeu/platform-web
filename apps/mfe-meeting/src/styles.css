@@ -1154,3 +1154,205 @@ button {
     opacity: 0;
   }
 }
+
+/* ── Görevler paneli (gitops#3487) ─────────────────────────────── */
+
+.tasks-panel {
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--meeting-border-subtle);
+}
+
+.tasks-empty,
+.tasks-error {
+  font-size: 13px;
+  color: var(--meeting-text-secondary);
+}
+
+.tasks-error {
+  color: var(--meeting-danger, #b3261e);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  background: var(--meeting-surface-muted);
+}
+
+.task-row.task-status-done .task-description {
+  text-decoration: line-through;
+  color: var(--meeting-text-secondary);
+}
+
+.task-toggle {
+  border: 0;
+  background: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--meeting-accent);
+}
+
+.task-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-description {
+  font-size: 13px;
+  color: var(--meeting-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--meeting-text-secondary);
+}
+
+.task-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--meeting-border);
+  font-size: 11px;
+}
+
+.task-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--meeting-accent);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.task-status-select,
+.task-due {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 6px;
+  background: var(--meeting-surface, #fff);
+  color: var(--meeting-text-primary);
+}
+
+.task-assignee-editor {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  background: var(--meeting-surface, #fff);
+}
+
+.task-assignee-editor input[type='text'] {
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 6px;
+}
+
+.task-assignee-editor ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.task-assignee-editor ul button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 5px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--meeting-text-primary);
+}
+
+.task-assignee-editor ul button:hover {
+  background: var(--meeting-surface-muted);
+}
+
+.task-assignee-hint {
+  color: var(--meeting-text-secondary);
+}
+
+.task-assignee-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.task-create {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.task-create input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 7px 10px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+}
+
+.task-create button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--meeting-accent);
+  color: #fff;
+}
+
+.task-create button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .task-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .task-status-select,
+  .task-due {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
