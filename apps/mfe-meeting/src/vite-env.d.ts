@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_MEETING_WORKBENCH_API_URL?: string;
   readonly VITE_MEETING_LIVE_STREAM_WS_URL?: string;
+  readonly VITE_MEETING_LIVE_TRANSCRIPT_SSE_URL?: string;
+  readonly VITE_MEETING_DATA_MODE?: string;
 }
 
 interface ImportMeta {
