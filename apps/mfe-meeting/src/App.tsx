@@ -55,6 +55,7 @@ import {
 } from './meeting-workbench';
 import { buildTranscriptFlow } from './transcript-flow';
 import { TasksPanel } from './TasksPanel';
+import { MyTasksPanel } from './MyTasksPanel';
 import { readMeetingSelection, writeMeetingSelection } from './meeting-selection';
 import { parseWsStreamEventMessage } from './ws-stream-events';
 import { getShellServices } from './shell-services';
@@ -970,6 +971,8 @@ export default function MeetingApp({
 
       <section className="meeting-workbench">
         <aside className="meeting-sidebar" aria-label="Toplantılar">
+          {/* Görevlerim (gitops#3494): çapraz-toplantı kişisel görev bloğu */}
+          <MyTasksPanel onOpenMeeting={handleSelectMeeting} />
           <div className="search-box">
             <Search size={16} aria-hidden="true" />
             <input

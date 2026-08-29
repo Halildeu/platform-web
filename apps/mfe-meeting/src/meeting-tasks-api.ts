@@ -151,3 +151,29 @@ export async function searchAssignees(query: string): Promise<UserOption[]> {
   }
   return options;
 }
+
+/** Cross-meeting "Görevlerim" row (gitops#3494) — MeetingTask + owning title. */
+export interface MyTask extends MeetingTask {
+  meetingTitle: string;
+}
+
+const toMyTask = (raw: unknown): MyTask | null => {
+  const base = toTask(raw);
+  if (!base || !isRecord(raw)) return null;
+  return { ...base, meetingTitle: str(raw, 'meetingTitle') ?? '' };
+};
+
+/**
+ * Caller's own tasks across meetings. No filter → backend's ACTIVE set
+ * (OPEN+IN_PROGRESS); pass statuses to widen (e.g. ['DONE']).
+ */
+export async function listMyTasks(statuses?: MeetingTaskStatus[]): Promise<MyTask[]> {
+  const { http } = getShellServices();
+  const params = new URLSearchParams();
+  for (const s of statuses ?? []) params.append('status', s);
+  const qs = params.toString();
+  const response = await http.get(`/v1/admin/my/actions${qs ? `?${qs}` : ''}`);
+  const body: unknown = response.data;
+  if (!Array.isArray(body)) return [];
+  return body.map(toMyTask).filter((t): t is MyTask => t !== null);
+}
