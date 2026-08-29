@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createMeetingAgendaItem,
   createDemoWorkbenchData,
   describeMeetingDetailError,
   loadMeetingById,
   loadMeetingDetail,
+  loadMeetingOperations,
   loadMeetingWorkbenchData,
+  normalizeCanonicalActions,
+  normalizeCanonicalAgendaItems,
   normalizeCanonicalIntelligenceResult,
   normalizeWorkbenchPayload,
+  updateMeetingAction,
 } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 import type { MeetingShellServices } from './shell-services';
@@ -155,6 +160,74 @@ describe('meeting canonical API boundary', () => {
     );
     expect(data.source.mode).toBe('api');
     expect(direct.id).toBe(meetingId);
+  });
+
+  it('reads and mutates canonical agenda and assigned-action resources with versions', async () => {
+    const agenda = {
+      id: 'agenda-1',
+      position: 0,
+      title: 'Bütçe durumu',
+      detail: 'Sapmaları görüş',
+      ownerSubject: 'user-2',
+      plannedDurationMinutes: 15,
+      status: 'PENDING',
+      version: 4,
+    };
+    const action = {
+      id: 'action-1',
+      description: 'Revize bütçeyi paylaş',
+      assigneeSubject: 'user-3',
+      status: 'IN_PROGRESS',
+      dueAt: '2026-08-05T12:00:00Z',
+      version: 7,
+    };
+    const get = vi.fn((url: string) =>
+      Promise.resolve({ data: url.endsWith('/agenda-items') ? [agenda] : [action] }),
+    );
+    const post = vi.fn().mockResolvedValue({ data: agenda });
+    const put = vi.fn().mockResolvedValue({ data: { ...action, status: 'DONE', version: 8 } });
+    const services: MeetingShellServices = {
+      ...createServices(get),
+      http: { get, post, put } as unknown as MeetingShellServices['http'],
+    };
+
+    const operations = await loadMeetingOperations(meetingId, { services });
+    const created = await createMeetingAgendaItem(
+      meetingId,
+      {
+        position: 0,
+        title: 'Bütçe durumu',
+        ownerSubject: 'user-2',
+        plannedDurationMinutes: 15,
+      },
+      { services },
+    );
+    const updated = await updateMeetingAction(
+      meetingId,
+      { ...operations.actions[0]!, state: 'done' },
+      { services },
+    );
+
+    expect(operations.agenda).toEqual([
+      expect.objectContaining({ id: 'agenda-1', status: 'pending', version: 4 }),
+    ]);
+    expect(operations.actions).toEqual([
+      expect.objectContaining({ id: 'action-1', state: 'in-progress', version: 7 }),
+    ]);
+    expect(created.title).toBe('Bütçe durumu');
+    expect(post).toHaveBeenCalledWith(
+      `/v1/admin/meetings/${meetingId}/agenda-items`,
+      expect.objectContaining({ title: 'Bütçe durumu' }),
+      expect.any(Object),
+    );
+    expect(put).toHaveBeenCalledWith(
+      `/v1/admin/meetings/${meetingId}/actions/action-1`,
+      expect.objectContaining({ status: 'DONE', expectedVersion: 7 }),
+      expect.any(Object),
+    );
+    expect(updated).toMatchObject({ state: 'done', version: 8 });
+    expect(normalizeCanonicalAgendaItems([agenda])).toHaveLength(1);
+    expect(normalizeCanonicalActions([action])).toHaveLength(1);
   });
 
   it('fails closed without demo fallback when the canonical list is unavailable', async () => {

@@ -3,6 +3,9 @@ import {
   orderTranscriptSegments,
   type EvidenceCitation,
   type MeetingDetailStatus,
+  type MeetingAgendaItem,
+  type MeetingAgendaItemStatus,
+  type MeetingAction,
   type MeetingIntelligenceState,
   type MeetingRecord,
 } from './meeting-workbench';
@@ -41,6 +44,25 @@ export interface LoadMeetingByIdOptions {
 
 export interface LoadMeetingDetailOptions extends LoadMeetingByIdOptions {
   transcriptsEndpoint?: string;
+}
+
+export interface MeetingOperations {
+  agenda: MeetingAgendaItem[];
+  actions: MeetingAction[];
+}
+
+export interface MeetingAgendaItemDraft {
+  position: number;
+  title: string;
+  detail?: string;
+  ownerSubject?: string;
+  plannedDurationMinutes?: number;
+}
+
+export interface MeetingActionDraft {
+  description: string;
+  assigneeSubject?: string;
+  dueAt?: string;
 }
 
 export interface CanonicalMeetingIntelligenceCitation {
@@ -267,6 +289,7 @@ function mapCanonicalMeeting(value: unknown): MeetingRecord {
       kind: 'canonical-description',
     },
     decisions: [],
+    agenda: [],
     actions: [],
     gates: [
       { id: 'canonical-meeting', label: 'Canonical meeting', state: 'pass' },
@@ -276,6 +299,92 @@ function mapCanonicalMeeting(value: unknown): MeetingRecord {
     ],
     policyActions: unavailablePolicyActions(),
   };
+}
+
+function mapAgendaStatus(status: string): MeetingAgendaItemStatus {
+  switch (status.toUpperCase()) {
+    case 'IN_PROGRESS':
+      return 'in-progress';
+    case 'DISCUSSED':
+      return 'discussed';
+    case 'DEFERRED':
+      return 'deferred';
+    case 'SKIPPED':
+      return 'skipped';
+    case 'PENDING':
+    default:
+      return 'pending';
+  }
+}
+
+function mapActionStatus(status: string): MeetingAction['state'] {
+  switch (status.toUpperCase()) {
+    case 'IN_PROGRESS':
+      return 'in-progress';
+    case 'DONE':
+      return 'done';
+    case 'CANCELLED':
+      return 'cancelled';
+    case 'OPEN':
+    default:
+      return 'open';
+  }
+}
+
+function canonicalAgendaStatus(status: MeetingAgendaItemStatus): string {
+  return status.replace('-', '_').toUpperCase();
+}
+
+function canonicalActionStatus(status: MeetingAction['state']): string {
+  if (status === 'waiting') return 'OPEN';
+  return status.replace('-', '_').toUpperCase();
+}
+
+export function normalizeCanonicalAgendaItems(payload: unknown): MeetingAgendaItem[] {
+  if (!Array.isArray(payload)) throw new Error('invalid-agenda-items');
+  return payload.map((value) => {
+    if (!isRecord(value)) throw new Error('invalid-agenda-item');
+    const id = requiredString(value, 'id');
+    const position = requiredNonNegativeInteger(value, 'position');
+    const version = requiredNonNegativeInteger(value, 'version');
+    const duration = value.plannedDurationMinutes;
+    if (
+      duration !== null &&
+      duration !== undefined &&
+      (typeof duration !== 'number' || !Number.isInteger(duration) || duration <= 0)
+    ) {
+      throw new Error('invalid-agenda-item:plannedDurationMinutes');
+    }
+    return {
+      id,
+      position,
+      title: requiredString(value, 'title'),
+      detail: readString(value, 'detail'),
+      owner: readNullableString(value, 'ownerSubject') ?? 'Atanmamış',
+      plannedDurationMinutes: typeof duration === 'number' ? duration : null,
+      status: mapAgendaStatus(requiredString(value, 'status')),
+      version,
+    };
+  });
+}
+
+export function normalizeCanonicalActions(payload: unknown): MeetingAction[] {
+  if (!Array.isArray(payload)) throw new Error('invalid-meeting-actions');
+  return payload.map((value) => {
+    if (!isRecord(value)) throw new Error('invalid-meeting-action');
+    const dueAt = readNullableString(value, 'dueAt');
+    return {
+      id: requiredString(value, 'id'),
+      label: requiredString(value, 'description'),
+      owner: readNullableString(value, 'assigneeSubject') ?? 'Atanmamış',
+      due: dueAt?.slice(0, 10) ?? '-',
+      state: mapActionStatus(requiredString(value, 'status')),
+      citations: [],
+      confidence: 1,
+      version: requiredNonNegativeInteger(value, 'version'),
+      source: 'canonical',
+    };
+  });
 }
 
 export function normalizeWorkbenchPayload(payload: unknown): MeetingRecord[] {
@@ -441,6 +550,98 @@ export async function loadMeetingById(
   const meeting = mapCanonicalMeeting(response.data);
   if (meeting.id !== meetingId) throw new Error('meeting-id-mismatch');
   return meeting;
+}
+
+export async function loadMeetingOperations(
+  meetingId: string,
+  options: LoadMeetingByIdOptions = {},
+): Promise<MeetingOperations> {
+  const services = await resolveServices(options.services);
+  const base = (options.meetingsEndpoint ?? CANONICAL_MEETINGS_ENDPOINT).split('?')[0];
+  const meetingPath = `${base}/${encodeURIComponent(meetingId)}`;
+  const headers = { Accept: 'application/json' };
+  const [agendaResponse, actionsResponse] = await Promise.all([
+    services.http.get<unknown>(`${meetingPath}/agenda-items`, { headers }),
+    services.http.get<unknown>(`${meetingPath}/actions`, { headers }),
+  ]);
+  return {
+    agenda: normalizeCanonicalAgendaItems(agendaResponse.data),
+    actions: normalizeCanonicalActions(actionsResponse.data),
+  };
+}
+
+export async function createMeetingAgendaItem(
+  meetingId: string,
+  draft: MeetingAgendaItemDraft,
+  options: LoadMeetingByIdOptions = {},
+): Promise<MeetingAgendaItem> {
+  const services = await resolveServices(options.services);
+  const base = (options.meetingsEndpoint ?? CANONICAL_MEETINGS_ENDPOINT).split('?')[0];
+  const response = await services.http.post<unknown>(
+    `${base}/${encodeURIComponent(meetingId)}/agenda-items`,
+    draft,
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } },
+  );
+  return normalizeCanonicalAgendaItems([response.data])[0] as MeetingAgendaItem;
+}
+
+export async function updateMeetingAgendaItem(
+  meetingId: string,
+  item: MeetingAgendaItem,
+  options: LoadMeetingByIdOptions = {},
+): Promise<MeetingAgendaItem> {
+  const services = await resolveServices(options.services);
+  const base = (options.meetingsEndpoint ?? CANONICAL_MEETINGS_ENDPOINT).split('?')[0];
+  const response = await services.http.put<unknown>(
+    `${base}/${encodeURIComponent(meetingId)}/agenda-items/${encodeURIComponent(item.id)}`,
+    {
+      position: item.position,
+      title: item.title,
+      detail: item.detail || null,
+      ownerSubject: item.owner === 'Atanmamış' ? null : item.owner,
+      plannedDurationMinutes: item.plannedDurationMinutes,
+      status: canonicalAgendaStatus(item.status),
+      expectedVersion: item.version,
+    },
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } },
+  );
+  return normalizeCanonicalAgendaItems([response.data])[0] as MeetingAgendaItem;
+}
+
+export async function createMeetingAction(
+  meetingId: string,
+  draft: MeetingActionDraft,
+  options: LoadMeetingByIdOptions = {},
+): Promise<MeetingAction> {
+  const services = await resolveServices(options.services);
+  const base = (options.meetingsEndpoint ?? CANONICAL_MEETINGS_ENDPOINT).split('?')[0];
+  const response = await services.http.post<unknown>(
+    `${base}/${encodeURIComponent(meetingId)}/actions`,
+    draft,
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } },
+  );
+  return normalizeCanonicalActions([response.data])[0] as MeetingAction;
+}
+
+export async function updateMeetingAction(
+  meetingId: string,
+  action: MeetingAction,
+  options: LoadMeetingByIdOptions = {},
+): Promise<MeetingAction> {
+  const services = await resolveServices(options.services);
+  const base = (options.meetingsEndpoint ?? CANONICAL_MEETINGS_ENDPOINT).split('?')[0];
+  const response = await services.http.put<unknown>(
+    `${base}/${encodeURIComponent(meetingId)}/actions/${encodeURIComponent(action.id)}`,
+    {
+      description: action.label,
+      assigneeSubject: action.owner === 'Atanmamış' ? null : action.owner,
+      status: canonicalActionStatus(action.state),
+      dueAt: action.due === '-' ? null : `${action.due}T23:59:59Z`,
+      expectedVersion: action.version,
+    },
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } },
+  );
+  return normalizeCanonicalActions([response.data])[0] as MeetingAction;
 }
 
 function mapTranscript(payload: unknown): MeetingRecord['transcript'] {
@@ -752,6 +953,7 @@ function mapCanonicalResult(
       state: 'open' as const,
       citations: citationsForClaim(action.text, rawCitations, transcript),
       confidence: confidenceOf(rawCitations),
+      source: 'intelligence' as const,
     };
   });
   const outputCitations = [

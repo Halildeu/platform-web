@@ -653,6 +653,147 @@ describe('MeetingApp', () => {
     );
   });
 
+  it('creates and re-reads canonical agenda and assigned actions from the workbench', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: 'meeting-operations',
+          title: 'Operasyon toplantısı',
+          description: 'Gündem ve görev takibi',
+          status: 'IN_PROGRESS',
+          scheduledStart: '2026-08-01T08:00:00Z',
+          scheduledEnd: '2026-08-01T09:00:00Z',
+          organizerSubject: 'organizer-1',
+        },
+      ],
+    })[0] as MeetingRecord;
+    const agenda = [
+      {
+        id: 'agenda-existing',
+        position: 0,
+        title: 'Açılış',
+        detail: '',
+        owner: 'organizer-1',
+        plannedDurationMinutes: 5,
+        status: 'pending' as const,
+        version: 0,
+      },
+    ];
+    const actions = [
+      {
+        id: 'action-existing',
+        label: 'Önceki kararı doğrula',
+        owner: 'user-1',
+        due: '2026-08-02',
+        state: 'open' as const,
+        citations: [],
+        confidence: 1,
+        version: 0,
+        source: 'canonical' as const,
+      },
+    ];
+    const loadOperations = vi.fn(async () => ({ agenda: [...agenda], actions: [...actions] }));
+    const createAgendaItem = vi.fn(async (_meetingId, draft) => {
+      const created = {
+        id: 'agenda-created',
+        position: draft.position,
+        title: draft.title,
+        detail: '',
+        owner: draft.ownerSubject ?? 'Atanmamış',
+        plannedDurationMinutes: draft.plannedDurationMinutes ?? null,
+        status: 'pending' as const,
+        version: 0,
+      };
+      agenda.push(created);
+      return created;
+    });
+    const createAction = vi.fn(async (_meetingId, draft) => {
+      const created = {
+        id: 'action-created',
+        label: draft.description,
+        owner: draft.assigneeSubject ?? 'Atanmamış',
+        due: draft.dueAt?.slice(0, 10) ?? '-',
+        state: 'open' as const,
+        citations: [],
+        confidence: 1,
+        version: 0,
+        source: 'canonical' as const,
+      };
+      actions.push(created);
+      return created;
+    });
+    const updateAction = vi.fn(async (_meetingId, action) => ({ ...action, version: 1 }));
+
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({
+          records: [record],
+          source: {
+            mode: 'api',
+            label: 'Canonical meeting-service',
+            detail: 'Canonical liste',
+            checkedAt: '2026-08-01T08:00:00Z',
+          },
+        })}
+        loadDetail={async (meeting) => ({
+          ...meeting,
+          detail: {
+            state: 'pending',
+            label: 'Canonical sonuç işleniyor',
+            detail: 'Toplantı planı bundan bağımsız kullanılabilir.',
+          },
+        })}
+        loadOperations={loadOperations}
+        createAgendaItem={createAgendaItem}
+        createAction={createAction}
+        updateAction={updateAction}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Operasyon toplantısı/i }));
+    expect(await screen.findByText('Canonical plan güncel.')).toBeInTheDocument();
+    expect(screen.getByText('Açılış')).toBeInTheDocument();
+    expect(screen.getByText('Önceki kararı doğrula')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Gündem başlığı'), {
+      target: { value: 'Riskler ve bağımlılıklar' },
+    });
+    fireEvent.change(screen.getByLabelText('Gündem sorumlusu'), {
+      target: { value: 'user-2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Gündeme ekle' }));
+
+    await waitFor(() => expect(createAgendaItem).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Riskler ve bağımlılıklar')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Görev açıklaması'), {
+      target: { value: 'Risk sahibini belirle' },
+    });
+    fireEvent.change(screen.getByLabelText('Görev sorumlusu'), {
+      target: { value: 'user-3' },
+    });
+    fireEvent.change(screen.getByLabelText('Görev termin tarihi'), {
+      target: { value: '2026-08-04' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Görev ata' }));
+
+    await waitFor(() => expect(createAction).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Risk sahibini belirle')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Risk sahibini belirle görev durumu'), {
+      target: { value: 'done' },
+    });
+    await waitFor(() =>
+      expect(updateAction).toHaveBeenCalledWith(
+        'meeting-operations',
+        expect.objectContaining({ id: 'action-created', state: 'done', version: 0 }),
+      ),
+    );
+    expect(loadOperations.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
   it('keeps primary regions and disabled actions accessible at a 375px viewport', async () => {
     const previousWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
