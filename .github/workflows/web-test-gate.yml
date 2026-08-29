@@ -75,7 +75,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -138,7 +138,7 @@ jobs:
           # objects, while Theme Doctor materializes the canonical base and
           # compares its debt ceiling to HEAD. Depth-1 cannot supply either proof.
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -206,7 +206,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -224,7 +224,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -254,7 +254,7 @@ jobs:
       cssom_full_outcome: ${{ steps.cssom_full_run.outcome }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -294,7 +294,7 @@ jobs:
         with:
           # Need full history for changed-file diff against base.
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -531,7 +531,7 @@ jobs:
           # checkout depth=1 makes the guard fall back to warn-only
           # silently, defeating the L4 enforcement.
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - name: Forward-looking visual boundary guard
@@ -580,7 +580,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'invariant-baseline'
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
@@ -637,7 +637,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
