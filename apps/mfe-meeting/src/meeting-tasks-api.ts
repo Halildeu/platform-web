@@ -41,13 +41,16 @@ export interface MeetingTask {
 export interface MeetingTaskUpdate {
   description: string;
   assigneeSubject: string | null;
+  /** gitops#3507: UI'lar sayısal dizin id'si yollar; backend KC subject'e çözer. */
+  assigneeUserId?: number | null;
   status: MeetingTaskStatus;
   dueAt: string | null;
   expectedVersion: number;
 }
 
 export interface UserOption {
-  subject: string;
+  /** Public dizinin sayısal id'si (kcSubject bilinçli olarak dizinde yok). */
+  userId: number;
   label: string;
 }
 
@@ -96,12 +99,19 @@ export async function listMeetingTasks(meetingId: string): Promise<MeetingTask[]
 
 export async function createMeetingTask(
   meetingId: string,
-  input: { description: string; assigneeSubject?: string | null; dueAt?: string | null },
+  input: {
+    description: string;
+    assigneeSubject?: string | null;
+    assigneeUserId?: number | null;
+    dueAt?: string | null;
+  },
 ): Promise<MeetingTask | null> {
   const { http } = getShellServices();
+  // Backend rejects both identity forms at once (400); send exactly one.
   const response = await http.post(ACTIONS_ENDPOINT(meetingId), {
     description: input.description,
-    assigneeSubject: input.assigneeSubject ?? null,
+    assigneeSubject: input.assigneeUserId != null ? null : (input.assigneeSubject ?? null),
+    assigneeUserId: input.assigneeUserId ?? null,
     dueAt: input.dueAt ?? null,
   });
   return toTask(response.data);
@@ -141,13 +151,14 @@ export async function searchAssignees(query: string): Promise<UserOption[]> {
   const options: UserOption[] = [];
   for (const raw of rows) {
     if (!isRecord(raw)) continue;
-    const subject =
-      str(raw, 'kcSubject') ?? str(raw, 'subject') ?? str(raw, 'keycloakId') ?? str(raw, 'id');
-    if (!subject) continue;
+    // gitops#3507: the directory exposes only the numeric id (kcSubject is
+    // server-to-server by design); the backend resolves id → subject.
+    const userId = typeof raw.id === 'number' ? raw.id : null;
+    if (userId === null) continue;
     const name = str(raw, 'displayName') ?? str(raw, 'fullName') ?? str(raw, 'name') ?? null;
     const email = str(raw, 'email');
-    const label = name && email ? `${name} (${email})` : (name ?? email ?? subject);
-    options.push({ subject, label });
+    const label = name && email ? `${name} (${email})` : (name ?? email ?? String(userId));
+    options.push({ userId, label });
   }
   return options;
 }

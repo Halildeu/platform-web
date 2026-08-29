@@ -55,12 +55,15 @@ describe('meeting-tasks-api', () => {
     expect(get).toHaveBeenCalledWith('/v1/admin/my/actions');
   });
 
-  it('searchAssignees reads items/content shapes and prefers subject-ish ids', async () => {
+  it('searchAssignees reads items/content shapes and keeps only numeric directory ids', async () => {
+    // gitops#3507: the public directory intentionally has no kcSubject; rows
+    // carry a numeric id (+ name/email) and the backend resolves id→subject.
     const get = vi.fn().mockResolvedValue({
       data: {
         items: [
-          { kcSubject: 'kc-1', displayName: 'Ali Veli', email: 'ali@acik.com' },
-          { id: 'fallback-id', email: 'zey@acik.com' },
+          { id: 30, name: 'Ali Veli', email: 'ali@acik.com' },
+          { id: 31, email: 'zey@acik.com' },
+          { kcSubject: 'kc-legacy-no-id', email: 'x@acik.com' },
           'noise',
         ],
       },
@@ -68,8 +71,8 @@ describe('meeting-tasks-api', () => {
     installHttp(get);
     const rows = await searchAssignees('ali');
     expect(rows).toEqual([
-      { subject: 'kc-1', label: 'Ali Veli (ali@acik.com)' },
-      { subject: 'fallback-id', label: 'zey@acik.com' },
+      { userId: 30, label: 'Ali Veli (ali@acik.com)' },
+      { userId: 31, label: 'zey@acik.com' },
     ]);
   });
 });
