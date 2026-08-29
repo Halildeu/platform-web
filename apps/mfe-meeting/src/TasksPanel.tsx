@@ -101,7 +101,7 @@ function AssigneeEditor(props: {
       ) : null}
       <ul role="listbox" aria-label="Kişi önerileri">
         {options.map((opt) => (
-          <li key={opt.subject}>
+          <li key={opt.userId}>
             <button type="button" onClick={() => props.onPick(opt)}>
               {opt.label}
             </button>
@@ -153,13 +153,23 @@ export function TasksPanel({ meetingId }: TasksPanelProps) {
   const applyUpdate = useCallback(
     (
       task: MeetingTask,
-      patch: Partial<Pick<MeetingTask, 'assigneeSubject' | 'status' | 'dueAt'>>,
+      patch: Partial<Pick<MeetingTask, 'assigneeSubject' | 'status' | 'dueAt'>> & {
+        assigneeUserId?: number | null;
+      },
     ) => {
       setNotice(null);
       updateMeetingTask(meetingId, task.id, {
         description: task.description,
+        // gitops#3507: a picked directory user travels as assigneeUserId and
+        // the subject is nulled (backend 400s when both forms are present);
+        // otherwise the stored subject is carried through unchanged.
         assigneeSubject:
-          patch.assigneeSubject !== undefined ? patch.assigneeSubject : task.assigneeSubject,
+          patch.assigneeUserId != null
+            ? null
+            : patch.assigneeSubject !== undefined
+              ? patch.assigneeSubject
+              : task.assigneeSubject,
+        assigneeUserId: patch.assigneeUserId ?? null,
         status: patch.status ?? task.status,
         dueAt: patch.dueAt !== undefined ? patch.dueAt : task.dueAt,
         expectedVersion: task.version,
@@ -269,7 +279,12 @@ export function TasksPanel({ meetingId }: TasksPanelProps) {
                   onClose={() => setEditingAssigneeOf(null)}
                   onPick={(opt) => {
                     setEditingAssigneeOf(null);
-                    applyUpdate(task, { assigneeSubject: opt ? opt.subject : null });
+                    applyUpdate(
+                      task,
+                      opt
+                        ? { assigneeUserId: opt.userId }
+                        : { assigneeSubject: null },
+                    );
                   }}
                 />
               ) : null}
