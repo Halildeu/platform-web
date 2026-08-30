@@ -12,6 +12,7 @@ import '@mfe/design-system/advanced/data-grid/setup';
 import { selectReportingCompany } from '../../components/CompanyPicker';
 import { EntityGridTemplate } from '../../grid';
 import { PlanImportSection } from './PlanImportSection';
+import { PypBreakdownSection } from './PypBreakdownSection';
 import {
   BudgetApiError,
   createProjectBinding,
@@ -1268,6 +1269,8 @@ export const BudgetWorkspace: React.FC = () => {
       ) : null}
 
       <PlanImportSection companyId={companyId} />
+
+      <PypBreakdownSection companyId={companyId} />
 
       <section className="rounded-xl border border-state-warning-text/30 bg-state-warning-bg p-4 text-sm text-text-primary">
         <strong>Kontrollü sınıflama.</strong> AI bu ekranda yalnız ileride maliyet kodu önerebilir;

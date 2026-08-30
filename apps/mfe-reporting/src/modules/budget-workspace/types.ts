@@ -191,6 +191,52 @@ export type BudgetPlanView = {
   lines: BudgetLineView[];
 };
 
+export type PypActualRow = {
+  sourceSystem: string;
+  sourceLedgerYear: number;
+  sourceCompanyId: number;
+  journalCardId: number;
+  journalRowId: number;
+  actionDate: string;
+  accountCode: string | null;
+  debitCredit: 'DEBIT' | 'CREDIT' | 'UNKNOWN';
+  signedAmount: number;
+  currency: string;
+  actionType: number | null;
+  actionId: number | null;
+  documentType: string;
+  documentNo: string | null;
+  cancelled: boolean;
+  dimensionSource:
+    | 'INVOICE_LINE'
+    | 'INVOICE_UNIFORM'
+    | 'INVOICE_MIXED'
+    | 'INVOICE_HEADER'
+    | 'EXPENSE_UNIFORM'
+    | 'EXPENSE_MIXED'
+    | 'NONE';
+  expenseCenterId: number | null;
+  expenseCenterCode: string | null;
+  expenseCenterName: string | null;
+  expenseCenterHierarchy: string | null;
+  expenseItemId: number | null;
+  expenseItemName: string | null;
+  expenseCategoryId: number | null;
+  projectId: number | null;
+  invoiceId: number | null;
+  invoiceRowId: number | null;
+  orderId: number | null;
+  progressId: number | null;
+  contractId: number | null;
+  rowHash: string;
+};
+
+export type PypActualPage = {
+  rows: PypActualRow[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 export type ProjectActualSourceDocumentDetail = {
   id: string;
   documentDate: string;
