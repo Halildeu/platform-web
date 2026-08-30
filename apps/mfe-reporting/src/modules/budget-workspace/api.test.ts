@@ -23,6 +23,7 @@ import {
   createProjectBinding,
   fetchCompanies,
   fetchPlanVersion,
+  fetchPypActuals,
   fetchProjectActualRows,
   fetchProjectActualSourceDocument,
   fetchProjectActualSourceLines,
@@ -194,6 +195,24 @@ describe('project actuals API contract', () => {
       null,
       { headers: { 'X-Company-Id': '1' } },
     );
+  });
+
+  it('pages the pyp-actuals provider with the fiscal-year cursor contract', async () => {
+    mocks.get
+      .mockResolvedValueOnce({ data: { rows: [], nextCursor: 'c1', hasMore: true } })
+      .mockResolvedValueOnce({ data: { rows: [], nextCursor: null, hasMore: false } });
+
+    await fetchPypActuals(1, 2026, null);
+    await fetchPypActuals(1, 2026, 'c1');
+
+    expect(mocks.get).toHaveBeenNthCalledWith(1, '/v1/reports/pyp-actuals/provider', {
+      headers: { 'X-Company-Id': '1' },
+      params: { fiscalYear: 2026, limit: 2000 },
+    });
+    expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/reports/pyp-actuals/provider', {
+      headers: { 'X-Company-Id': '1' },
+      params: { fiscalYear: 2026, limit: 2000, cursor: 'c1' },
+    });
   });
 
   it('refuses a plan import without a valid company scope', async () => {

@@ -4,6 +4,7 @@ import type {
   CompanyOption,
   PlanImportResult,
   ProjectActualRow,
+  PypActualPage,
   ProjectActualSourceDocumentDetail,
   ProjectActualSourceLineRow,
   ProjectActualSummary,
@@ -209,6 +210,22 @@ export const fetchProjectActualSourceDocument = (
         headers: companyHeaders(companyId),
       },
     ),
+  );
+
+export const fetchPypActuals = (
+  companyId: number,
+  fiscalYear: number,
+  cursor: string | null,
+): Promise<PypActualPage> =>
+  execute(() =>
+    resolveClient().get<PypActualPage>(`${REPORTS_BASE}/pyp-actuals/provider`, {
+      headers: companyHeaders(companyId),
+      params: {
+        fiscalYear,
+        limit: 2000,
+        ...(cursor ? { cursor } : {}),
+      },
+    }),
   );
 
 export const importWorkcubePlan = (
