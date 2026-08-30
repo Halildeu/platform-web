@@ -228,6 +228,17 @@ export const fetchPypActuals = (
     }),
   );
 
+export const fetchCurrentPlan = (
+  companyId: number,
+  fiscalYear: number,
+): Promise<BudgetPlanView> =>
+  execute(() =>
+    resolveClient().get<BudgetPlanView>(`${BUDGETS_BASE}/plans/current`, {
+      headers: companyHeaders(companyId),
+      params: { fiscalYear },
+    }),
+  );
+
 export const importWorkcubePlan = (
   companyId: number,
   fiscalYear: number,

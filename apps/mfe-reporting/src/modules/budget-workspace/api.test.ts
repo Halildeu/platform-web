@@ -22,6 +22,7 @@ import {
   BudgetApiError,
   createProjectBinding,
   fetchCompanies,
+  fetchCurrentPlan,
   fetchPlanVersion,
   fetchPypActuals,
   fetchProjectActualRows,
@@ -212,6 +213,17 @@ describe('project actuals API contract', () => {
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/reports/pyp-actuals/provider', {
       headers: { 'X-Company-Id': '1' },
       params: { fiscalYear: 2026, limit: 2000, cursor: 'c1' },
+    });
+  });
+
+  it('resolves the current plan by fiscal year', async () => {
+    mocks.get.mockResolvedValueOnce({ data: { planId: 'plan-1', versionId: 'version-1' } });
+
+    await fetchCurrentPlan(1, 2026);
+
+    expect(mocks.get).toHaveBeenCalledWith('/v1/budgets/plans/current', {
+      headers: { 'X-Company-Id': '1' },
+      params: { fiscalYear: 2026 },
     });
   });
 
