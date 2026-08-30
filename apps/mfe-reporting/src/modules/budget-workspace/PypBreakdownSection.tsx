@@ -1,6 +1,6 @@
 import React from 'react';
-import { BudgetApiError, fetchPypActuals } from './api';
-import type { PypActualRow } from './types';
+import { BudgetApiError, fetchCurrentPlan, fetchPypActuals } from './api';
+import type { BudgetPlanView, PypActualRow } from './types';
 
 const currentYear = new Date().getFullYear();
 const MAX_PAGES = 5;
@@ -127,6 +127,63 @@ export const buildBreakdown = (rows: PypActualRow[], truncated: boolean): Breakd
   };
 };
 
+export type ComparisonRow = {
+  accountCode: string;
+  planned: number;
+  actual: number;
+  variance: number;
+};
+
+export type Comparison = {
+  rows: ComparisonRow[];
+  plannedTotal: number;
+  actualOnPlanned: number;
+  planVersionNo: number;
+  planStatus: string;
+};
+
+/**
+ * Plan↔gerçekleşen birleşmesi ölçülmüş anahtar üzerinden yapılır: muhasebe
+ * hesap kodu (gitops#3496 Dilim C ölçümü — planın kalem-ID'si hiçbir kalem
+ * master'ına eşleşmiyor; kod her iki tarafta da dolu). Gerçekleşen tarafı
+ * kod bazında TÜM borç satırlarını sayar (etiketli olsun olmasın) — plan
+ * kod-anahtarlı olduğundan dürüst karşılık budur.
+ */
+export const buildComparison = (
+  plan: BudgetPlanView,
+  rows: PypActualRow[],
+): Comparison => {
+  const plannedByCode = new Map<string, number>();
+  for (const line of plan.lines) {
+    if (line.direction !== 'EXPENSE') continue;
+    plannedByCode.set(
+      line.accountCode,
+      (plannedByCode.get(line.accountCode) ?? 0) + line.plannedAmount,
+    );
+  }
+  const actualByCode = new Map<string, number>();
+  for (const row of rows) {
+    if (row.debitCredit !== 'DEBIT' || row.signedAmount <= 0 || !row.accountCode) continue;
+    actualByCode.set(
+      row.accountCode,
+      (actualByCode.get(row.accountCode) ?? 0) + row.signedAmount,
+    );
+  }
+  const comparisonRows: ComparisonRow[] = Array.from(plannedByCode.entries())
+    .map(([accountCode, planned]) => {
+      const actual = actualByCode.get(accountCode) ?? 0;
+      return { accountCode, planned, actual, variance: actual - planned };
+    })
+    .sort((a, b) => b.planned - a.planned);
+  return {
+    rows: comparisonRows,
+    plannedTotal: comparisonRows.reduce((sum, r) => sum + r.planned, 0),
+    actualOnPlanned: comparisonRows.reduce((sum, r) => sum + r.actual, 0),
+    planVersionNo: plan.versionNo,
+    planStatus: plan.status,
+  };
+};
+
 export type PypBreakdownSectionProps = {
   companyId: string;
 };
@@ -136,6 +193,8 @@ export const PypBreakdownSection: React.FC<PypBreakdownSectionProps> = ({ compan
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [breakdown, setBreakdown] = React.useState<Breakdown | null>(null);
+  const [comparison, setComparison] = React.useState<Comparison | null>(null);
+  const [planMissing, setPlanMissing] = React.useState(false);
 
   const numericYear = Number(fiscalYear);
   const validYear = Number.isInteger(numericYear) && numericYear >= 2000 && numericYear <= 2200;
@@ -143,6 +202,8 @@ export const PypBreakdownSection: React.FC<PypBreakdownSectionProps> = ({ compan
 
   React.useEffect(() => {
     setBreakdown(null);
+    setComparison(null);
+    setPlanMissing(false);
     setError(null);
   }, [companyId]);
 
@@ -151,6 +212,8 @@ export const PypBreakdownSection: React.FC<PypBreakdownSectionProps> = ({ compan
     setBusy(true);
     setError(null);
     setBreakdown(null);
+    setComparison(null);
+    setPlanMissing(false);
     try {
       const rows: PypActualRow[] = [];
       let cursor: string | null = null;
@@ -166,6 +229,18 @@ export const PypBreakdownSection: React.FC<PypBreakdownSectionProps> = ({ compan
         truncated = true;
       }
       setBreakdown(buildBreakdown(rows, truncated));
+      try {
+        const plan = await fetchCurrentPlan(Number(companyId), numericYear);
+        setComparison(buildComparison(plan, rows));
+        setPlanMissing(false);
+      } catch (planReason) {
+        if (planReason instanceof BudgetApiError && planReason.kind === 'NOT_FOUND') {
+          setComparison(null);
+          setPlanMissing(true);
+        } else {
+          throw planReason;
+        }
+      }
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -252,6 +327,70 @@ export const PypBreakdownSection: React.FC<PypBreakdownSectionProps> = ({ compan
               </strong>
             </div>
           </div>
+
+          {comparison ? (
+            <div
+              aria-label="Plan ve gerçekleşen karşılaştırması"
+              className="rounded-lg border border-border-subtle bg-surface-default p-4"
+            >
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Plan ↔ Gerçekleşen (hesap kodu anahtarıyla)
+                </h3>
+                <span className="text-xs text-text-secondary">
+                  Plan sürüm {comparison.planVersionNo} · plan{' '}
+                  {wholeLabel(comparison.plannedTotal)} · planlı kodlarda gerçekleşen{' '}
+                  {wholeLabel(comparison.actualOnPlanned)}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-xs">
+                  <thead className="text-text-secondary">
+                    <tr>
+                      <th className="px-2 py-1">Hesap kodu</th>
+                      <th className="px-2 py-1 text-right">Plan</th>
+                      <th className="px-2 py-1 text-right">Gerçekleşen</th>
+                      <th className="px-2 py-1 text-right">Fark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparison.rows.map((row) => (
+                      <tr key={row.accountCode} className="border-t border-border-subtle">
+                        <td className="px-2 py-1 font-mono">{row.accountCode}</td>
+                        <td className="px-2 py-1 text-right font-mono tabular-nums">
+                          {amountLabel(row.planned)}
+                        </td>
+                        <td className="px-2 py-1 text-right font-mono tabular-nums">
+                          {amountLabel(row.actual)}
+                        </td>
+                        <td
+                          className={`px-2 py-1 text-right font-mono tabular-nums ${
+                            row.variance > 0
+                              ? 'text-state-danger-text'
+                              : 'text-state-success-text'
+                          }`}
+                        >
+                          {amountLabel(row.variance)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-text-secondary">
+                Gerçekleşen sütunu ilgili hesap kodundaki TÜM borç kayıtlarını sayar; tarama
+                penceresi yukarıdaki dönemle sınırlıdır. Pozitif fark = plan aşımı.
+              </p>
+            </div>
+          ) : null}
+
+          {planMissing ? (
+            <div className="rounded-lg border border-state-warning-text/30 bg-state-warning-bg p-3 text-sm text-text-primary">
+              Bu mali yıl için içe aktarılmış bir bütçe planı yok — yukarıdaki
+              &quot;Workcube bütçe planını içe aktar&quot; adımıyla planı alın, karşılaştırma
+              burada belirsin.
+            </div>
+          ) : null}
 
           {breakdown.truncated ? (
             <div className="rounded-lg border border-state-warning-text/30 bg-state-warning-bg p-3 text-sm text-text-primary">

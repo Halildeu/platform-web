@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiMocks = vi.hoisted(() => ({
   fetchPypActuals: vi.fn(),
+  fetchCurrentPlan: vi.fn(),
 }));
 
 vi.mock('./api', () => {
@@ -19,12 +20,13 @@ vi.mock('./api', () => {
   return {
     BudgetApiError: MockBudgetApiError,
     fetchPypActuals: apiMocks.fetchPypActuals,
+    fetchCurrentPlan: apiMocks.fetchCurrentPlan,
   };
 });
 
-import PypBreakdownSection, { buildBreakdown } from './PypBreakdownSection';
+import PypBreakdownSection, { buildBreakdown, buildComparison } from './PypBreakdownSection';
 import { BudgetApiError } from './api';
-import type { PypActualRow } from './types';
+import type { BudgetPlanView, PypActualRow } from './types';
 
 const row = (overrides: Partial<PypActualRow>): PypActualRow => ({
   sourceSystem: 'WORKCUBE',
@@ -117,9 +119,67 @@ describe('buildBreakdown — muavin omurgası toplama kuralları', () => {
   });
 });
 
+const plan: BudgetPlanView = {
+  planId: 'plan-1',
+  versionId: 'version-1',
+  companyId: 1,
+  fiscalYear: 2026,
+  baseCurrency: 'TRY',
+  versionNo: 2,
+  status: 'SUBMITTED',
+  submittedBy: null,
+  approvedBy: null,
+  lines: [
+    {
+      id: 'l1', period: '2026-01', accountCode: '740.01.001', costCenterCode: null,
+      projectCode: null, departmentCode: null, branchCode: null,
+      direction: 'EXPENSE', plannedAmount: 2000, currency: 'TRY', description: null,
+    },
+    {
+      id: 'l2', period: '2026-01', accountCode: '600.01.001', costCenterCode: null,
+      projectCode: null, departmentCode: null, branchCode: null,
+      direction: 'INCOME', plannedAmount: 999, currency: 'TRY', description: null,
+    },
+  ],
+};
+
+describe('buildComparison — hesap kodu anahtarı', () => {
+  it('plan gider satırlarını kodla eşler, geliri dışarıda tutar, farkı işaretler', () => {
+    const comparison = buildComparison(plan, [
+      row({ signedAmount: 1500 }),
+      row({ journalRowId: 70002, signedAmount: 900, accountCode: '740.01.001' }),
+      row({ journalRowId: 70003, accountCode: '600.01.001', signedAmount: 5000 }),
+    ]);
+    expect(comparison.rows).toHaveLength(1);
+    expect(comparison.rows[0]).toEqual({
+      accountCode: '740.01.001',
+      planned: 2000,
+      actual: 2400,
+      variance: 400,
+    });
+    expect(comparison.plannedTotal).toBe(2000);
+    expect(comparison.actualOnPlanned).toBe(2400);
+  });
+
+  it('etiketsiz (dims null) borç kayıtları da kod anahtarıyla sayılır', () => {
+    const comparison = buildComparison(plan, [
+      row({
+        dimensionSource: 'NONE',
+        expenseItemId: null,
+        expenseItemName: null,
+        signedAmount: 700,
+      }),
+    ]);
+    expect(comparison.rows[0].actual).toBe(700);
+  });
+});
+
 describe('PypBreakdownSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.fetchCurrentPlan.mockRejectedValue(
+      new BudgetApiError('NOT_FOUND', 'Plan yok.'),
+    );
   });
 
   it('şirket seçilmeden kırılım getirilemez', () => {
@@ -165,6 +225,28 @@ describe('PypBreakdownSection', () => {
     fireEvent.click(screen.getByText('Kalıp İşçiliği'));
     expect(screen.getByText('FTR-17')).toBeInTheDocument();
     expect(screen.getByText('fiş 9001/70001 · sip 3501')).toBeInTheDocument();
+    expect(apiMocks.fetchCurrentPlan).toHaveBeenCalledWith(1, expect.any(Number));
+    expect(
+      screen.getByText(/içe aktarılmış bir bütçe planı yok/i),
+    ).toBeInTheDocument();
+  });
+
+  it('plan varsa hesap-kodu karşılaştırma tablosunu gösterir', async () => {
+    apiMocks.fetchPypActuals.mockResolvedValueOnce({
+      rows: [row({ signedAmount: 2400 })],
+      nextCursor: null,
+      hasMore: false,
+    });
+    apiMocks.fetchCurrentPlan.mockResolvedValue(plan);
+
+    render(<PypBreakdownSection companyId="1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Kırılımı getir' }));
+
+    expect(
+      await screen.findByText('Plan ↔ Gerçekleşen (hesap kodu anahtarıyla)'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('740.01.001').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Plan sürüm 2/)).toBeInTheDocument();
   });
 
   it('yetki hatasında fail-closed mesaj gösterir', async () => {
