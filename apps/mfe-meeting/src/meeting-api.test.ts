@@ -42,8 +42,15 @@ const sourceTexts = [
   'Müşteri takibini yarın yap.',
 ];
 
+// meeting-ai cites the canonical transcript (final segments joined with "\n") by
+// character offset; source_index is its own sentence number.
+function canonicalOffset(sourceIndex: number): number {
+  return sourceTexts.slice(0, sourceIndex).reduce((sum, text) => sum + text.length + 1, 0);
+}
+
 function citation(claim: string, sourceIndex: number) {
   const sourceText = sourceTexts[sourceIndex] as string;
+  const sourceCharStart = canonicalOffset(sourceIndex);
   return {
     claim,
     source_index: sourceIndex,
@@ -53,8 +60,8 @@ function citation(claim: string, sourceIndex: number) {
     status: 'PASSED',
     reason: '',
     start_sec: sourceIndex * 5,
-    source_char_start: 0,
-    source_char_end: sourceText.length,
+    source_char_start: sourceCharStart,
+    source_char_end: sourceCharStart + sourceText.length,
     source_hash: 'a'.repeat(64),
     quote_hash: 'b'.repeat(64),
   };
@@ -286,6 +293,75 @@ describe('meeting canonical API boundary', () => {
     expect(detail.summary.citations).toHaveLength(1);
   });
 
+  it('resolves a sentence meeting-ai glued out of several STT lines to the segment it starts in (platform-ai#334/#335)', async () => {
+    // Live 2026-09-03 (meeting b8ca6dbf): the canonical transcript holds one unpunctuated
+    // STT segment per line; meeting-ai cites the merged sentence by canonical offsets.
+    const lines = ['Bütçe konuşuldu.', 'En geç', 'Cuma gününe kadar', 'bitirilecek', '.'];
+    const decision = 'En geç Cuma gününe kadar bitirilecek.';
+    const start = lines[0]!.length + 1;
+    const end = lines.join('\n').length;
+    const mergedCitation = {
+      ...citation(decision, 1),
+      source_index: 1,
+      source_text: decision,
+      start_sec: 5,
+      source_char_start: start,
+      source_char_end: end,
+    };
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) {
+        return Promise.resolve({
+          data: canonicalResult({
+            decisions: [decision],
+            action_items: [],
+            citations: [mergedCitation],
+          }),
+        });
+      }
+      return Promise.resolve({
+        data: {
+          content: lines.map((text, index) => ({
+            id: `segment-${index + 1}`,
+            speakerId: 'speaker-1',
+            startTime: index * 5,
+            textFinal: text,
+            status: 'FINALIZED',
+          })),
+          totalElements: lines.length,
+          page: 0,
+          size: 200,
+        },
+      });
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.decisions[0]?.citations).toEqual([
+      { segmentId: 'segment-2', quote: decision, confidence: 'high' },
+    ]);
+  });
+
+  it('rejects a citation whose offsets do not reproduce the quoted sentence', async () => {
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) {
+        return Promise.resolve({
+          data: canonicalResult({
+            citations: [
+              { ...citation('Pilot kapsamı genel amaçlı kalacak.', 1), source_char_start: 0 },
+              citation('Müşteri takibini yarın yap.', 2),
+            ],
+          }),
+        });
+      }
+      return Promise.resolve({ data: transcriptPage() });
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.decisions[0]?.citations).toEqual([]);
+    expect(detail.actions[0]?.citations).toEqual([{ segmentId: 'segment-3', quote: 'Müşteri takibini yarın yap.', confidence: 'high' }]);
+  });
+
   it('never treats draft or mismatched transcript evidence as grounded', async () => {
     const get = vi.fn((url: string) => {
       if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
@@ -369,7 +445,8 @@ describe('meeting canonical API boundary', () => {
           source_index: 1,
           source_text: secondText,
           start_sec: 601.25,
-          source_char_end: secondText.length,
+          source_char_start: firstText.length + 1,
+          source_char_end: firstText.length + 1 + secondText.length,
         },
       ],
       decisions: [],
