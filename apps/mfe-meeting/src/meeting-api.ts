@@ -688,6 +688,28 @@ function citationsForClaim(
   });
 }
 
+/**
+ * The summary is extractive: meeting-ai selects transcript sentences and joins them,
+ * and `summary_citations` carries one claim per selected sentence — never a claim
+ * equal to the whole summary. Every summary citation whose claim is a sentence of
+ * the summary is therefore evidence for it (live b8ca6dbf: two sentences, two
+ * citations, zero whole-summary matches).
+ */
+function citationsForSummary(
+  summary: string,
+  citations: CanonicalMeetingIntelligenceCitation[],
+  transcript: MeetingRecord['transcript'],
+): EvidenceCitation[] {
+  const normalizedSummary = normalizedText(summary);
+  if (!normalizedSummary) return [];
+  return citations.flatMap((citation) => {
+    const claim = normalizedText(citation.claim);
+    if (!claim || !normalizedSummary.includes(claim)) return [];
+    const resolved = resolveCitation(citation, transcript);
+    return resolved ? [resolved] : [];
+  });
+}
+
 function confidenceOf(citations: CanonicalMeetingIntelligenceCitation[]): number {
   if (citations.length === 0) return 0;
   return citations.reduce((sum, citation) => sum + citation.similarity, 0) / citations.length;
@@ -777,7 +799,7 @@ function mapCanonicalResult(
   const renderedTranscript = displayTranscript ?? transcript;
   const summaryCanBeGrounded = result.summaryGroundingStatus?.toLowerCase() === 'verified';
   const summaryRawCitations = summaryCanBeGrounded ? result.summaryCitations : [];
-  const summaryCitations = citationsForClaim(result.summary, summaryRawCitations, transcript);
+  const summaryCitations = citationsForSummary(result.summary, summaryRawCitations, transcript);
   const summaryText = result.summary.trim();
   const decisions = result.decisions.map((decision, index) => {
     const rawCitations = result.citations.filter(
