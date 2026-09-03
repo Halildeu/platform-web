@@ -653,6 +653,86 @@ describe('MeetingApp', () => {
     );
   });
 
+  it('announces a canonical ready result and exposes citation links only to final segments — DRAFT segment anchors the link too (live b8ca6dbf)', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: 'ready-meeting',
+          title: 'Hazır canonical toplantı',
+          status: 'COMPLETED',
+          createdAt: '2026-07-11T08:00:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=ready-meeting');
+
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({
+          records: [record],
+          source: {
+            mode: 'api',
+            label: 'Canonical meeting-service',
+            detail: 'Canonical liste',
+            checkedAt: '2026-07-11T08:00:00Z',
+          },
+        })}
+        loadDetail={async (meeting) => ({
+          ...meeting,
+          status: 'ready',
+          detail: {
+            state: 'ready',
+            label: 'Canonical sonuç hazır',
+            detail: 'Final citation doğrulandı.',
+          },
+          intelligence: {
+            state: 'ready',
+            analysisRunId: 'run-1',
+            generatedAt: '2026-07-11T09:00:00Z',
+            persisted: true,
+            storageMode: 'canonical',
+            redacted: false,
+            redactionCount: 0,
+            rejectedClaimCount: 0,
+            ungroundedCount: 0,
+          },
+          transcript: [
+            {
+              id: 'segment-draft',
+              speaker: 'Konuşmacı',
+              startedAtMs: 0,
+              status: 'draft',
+              text: 'Doğrulanan final segment.',
+            },
+          ],
+          summary: {
+            text: 'Doğrulanmış özet.',
+            confidence: 0.95,
+            kind: 'ai-summary',
+            citations: [
+              {
+                segmentId: 'segment-draft',
+                quote: 'Doğrulanan final segment.',
+                confidence: 'high',
+              },
+            ],
+          },
+        })}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Canonical sonuç hazır');
+    expect(screen.getByLabelText('Canonical sonuç kaydı')).toHaveTextContent(
+      'Kalıcı canonical sonuç',
+    );
+    expect(screen.getByRole('link', { name: /00:00 · Konuşmacı/i })).toHaveAttribute(
+      'href',
+      '#segment-segment-draft',
+    );
+  });
+
   it('keeps primary regions and disabled actions accessible at a 375px viewport', async () => {
     const previousWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
