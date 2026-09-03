@@ -599,23 +599,70 @@ export function normalizeCanonicalIntelligenceResult(
 }
 
 function normalizedText(value: string): string {
-  return value.trim().replace(/\s+/g, ' ');
+  // Whitespace runs collapse and a stray space before punctuation is dropped, so a
+  // sentence meeting-ai glued out of several STT lines ("bitirilecek\n.") compares
+  // equal to the raw canonical slice it was cut from.
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.,!?;:…])/g, '$1');
 }
 
+interface CanonicalSegmentSpan {
+  segment: MeetingRecord['transcript'][number];
+  start: number;
+  end: number;
+}
+
+/**
+ * The canonical transcript meeting-ai analyses is the final segments joined with "\n"
+ * (transcript-service FinalizedTranscriptSnapshotCodec). Rebuilding that string here
+ * gives every segment its character span in the analysed text, which is the only
+ * coordinate system a citation's source_char_start/end are defined in.
+ */
+function canonicalSegmentSpans(transcript: MeetingRecord['transcript']): {
+  text: string;
+  spans: CanonicalSegmentSpan[];
+} {
+  const finalSegments = orderTranscriptSegments(transcript).filter(
+    (segment) => segment.status === 'final',
+  );
+  const spans: CanonicalSegmentSpan[] = [];
+  let cursor = 0;
+  for (const segment of finalSegments) {
+    const start = cursor;
+    const end = start + segment.text.length;
+    spans.push({ segment, start, end });
+    cursor = end + 1; // the "\n" joiner
+  }
+  return { text: finalSegments.map((segment) => segment.text).join('\n'), spans };
+}
+
+/**
+ * A meeting-ai citation addresses the analysed canonical transcript by character
+ * offset (`source_index` is meeting-ai's own sentence number, not a segment index):
+ * one sentence may span several STT segments. Evidence resolves to the segment the
+ * quoted sentence starts in, and only when the canonical slice at those offsets is
+ * the quoted text and the segment's start time agrees with the citation's.
+ */
 function resolveCitation(
   citation: CanonicalMeetingIntelligenceCitation,
   transcript: MeetingRecord['transcript'],
 ): EvidenceCitation | null {
   if (!citation.grounded || citation.status !== 'PASSED') return null;
-  const segment = orderTranscriptSegments(transcript)[citation.sourceIndex];
-  if (!segment || segment.status !== 'final') return null;
-  if (normalizedText(segment.text) !== normalizedText(citation.sourceText)) return null;
+  const { text, spans } = canonicalSegmentSpans(transcript);
+  if (citation.sourceCharEnd > text.length) return null;
+  const slice = text.slice(citation.sourceCharStart, citation.sourceCharEnd);
+  const quote = normalizedText(citation.sourceText);
+  if (!quote || normalizedText(slice) !== quote) return null;
+  const span = spans.find(
+    (candidate) => candidate.start <= citation.sourceCharStart && citation.sourceCharStart < candidate.end,
+  );
+  if (!span) return null;
+  const { segment } = span;
   if (citation.startSec !== null && Math.abs(segment.startedAtMs - citation.startSec * 1000) > 10) {
     return null;
   }
-  if (citation.sourceCharEnd > citation.sourceText.length) return null;
-  const quote = citation.sourceText.slice(citation.sourceCharStart, citation.sourceCharEnd).trim();
-  if (!quote) return null;
   return {
     segmentId: segment.id,
     quote,
