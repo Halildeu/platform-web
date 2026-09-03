@@ -183,9 +183,13 @@ function CitationTrail({
   citations: EvidenceCitation[];
   confidence: number;
 }) {
+  // A citation already proved its quote against the canonical snapshot (meeting-api
+  // resolves it by character offsets); the snapshot is built from DRAFT rows' ASR
+  // text as much as FINALIZED rows' corrected text, so a DRAFT segment is a valid
+  // anchor. Only REDACTED segments (`revised`) have nothing quotable to link to.
   const finalCitations = citations.filter((citation) =>
     meeting.transcript.some(
-      (segment) => segment.id === citation.segmentId && segment.status === 'final',
+      (segment) => segment.id === citation.segmentId && segment.status !== 'revised',
     ),
   );
   if (finalCitations.length === 0) {
