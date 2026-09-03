@@ -615,17 +615,21 @@ interface CanonicalSegmentSpan {
 }
 
 /**
- * The canonical transcript meeting-ai analyses is the final segments joined with "\n"
- * (transcript-service FinalizedTranscriptSnapshotCodec). Rebuilding that string here
+ * The canonical transcript meeting-ai analyses is the session's segments joined with
+ * "\n" (transcript-service FinalizedTranscriptSnapshotCodec): FINALIZED rows contribute
+ * their corrected text, DRAFT rows their ASR text — a segment's editorial status is not
+ * what makes it part of the snapshot, so DRAFT segments are citation sources too.
+ * Only REDACTED rows (shown as `revised`) carry no quotable text. Rebuilding that string
  * gives every segment its character span in the analysed text, which is the only
- * coordinate system a citation's source_char_start/end are defined in.
+ * coordinate system a citation's source_char_start/end are defined in; a segment that
+ * was edited after the snapshot simply stops reproducing the quoted slice.
  */
 function canonicalSegmentSpans(transcript: MeetingRecord['transcript']): {
   text: string;
   spans: CanonicalSegmentSpan[];
 } {
   const finalSegments = orderTranscriptSegments(transcript).filter(
-    (segment) => segment.status === 'final',
+    (segment) => segment.status !== 'revised',
   );
   const spans: CanonicalSegmentSpan[] = [];
   let cursor = 0;

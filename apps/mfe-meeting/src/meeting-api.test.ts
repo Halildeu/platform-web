@@ -102,7 +102,8 @@ function transcriptPage(status = 'FINALIZED') {
       id: `segment-${index + 1}`,
       speakerId: `speaker-${index + 1}`,
       startTime: index * 5,
-      textFinal: text,
+      // Live API shape: DRAFT rows carry textDraft only; FINALIZED rows textFinal.
+      ...(status === 'DRAFT' ? { textDraft: text, textFinal: '' } : { textFinal: text }),
       status,
     })),
     totalElements: sourceTexts.length,
@@ -362,10 +363,25 @@ describe('meeting canonical API boundary', () => {
     expect(detail.actions[0]?.citations).toEqual([{ segmentId: 'segment-3', quote: 'Müşteri takibini yarın yap.', confidence: 'high' }]);
   });
 
-  it('never treats draft or mismatched transcript evidence as grounded', async () => {
+  it('grounds citations on DRAFT segments — the snapshot is built from ASR text too (live b8ca6dbf)', async () => {
+    // transcript-service never flips segment status on finalization; the canonical
+    // snapshot takes textFinal for FINALIZED rows and textDraft for DRAFT rows.
     const get = vi.fn((url: string) => {
       if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
       return Promise.resolve({ data: transcriptPage('DRAFT') });
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.summary.citations[0]?.segmentId).toBe('segment-1');
+    expect(detail.decisions[0]?.citations).toEqual([{ segmentId: 'segment-2', quote: 'Pilot kapsamı genel amaçlı kalacak.', confidence: 'high' }]);
+    expect(detail.gates).toContainEqual({ id: 'grounded-summary', label: 'Kaynaklı çıktılar', state: 'pass' });
+  });
+
+  it('never treats redacted or mismatched transcript evidence as grounded', async () => {
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
+      return Promise.resolve({ data: transcriptPage('REDACTED') });
     });
 
     const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
