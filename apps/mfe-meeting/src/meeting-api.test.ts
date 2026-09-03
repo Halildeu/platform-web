@@ -378,6 +378,47 @@ describe('meeting canonical API boundary', () => {
     expect(detail.gates).toContainEqual({ id: 'grounded-summary', label: 'Kaynaklı çıktılar', state: 'pass' });
   });
 
+  it('grounds an extractive summary sentence by sentence (live b8ca6dbf: no whole-summary claim)', async () => {
+    const first = sourceTexts[0] as string;
+    const second = sourceTexts[1] as string;
+    const summary = `${first} ${second}`;
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) {
+        return Promise.resolve({
+          data: canonicalResult({
+            summary,
+            summary_citations: [citation(first, 0), citation(second, 1)],
+          }),
+        });
+      }
+      return Promise.resolve({ data: transcriptPage() });
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.summary.text).toBe(summary);
+    expect(detail.summary.citations.map((c) => c.segmentId)).toEqual(['segment-1', 'segment-2']);
+    expect(detail.gates).toContainEqual({ id: 'grounded-summary', label: 'Kaynaklı çıktılar', state: 'pass' });
+  });
+
+  it('ignores a summary citation whose claim is not a sentence of the summary', async () => {
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result')) {
+        return Promise.resolve({
+          data: canonicalResult({
+            summary: sourceTexts[0],
+            summary_citations: [citation(sourceTexts[2] as string, 2)],
+          }),
+        });
+      }
+      return Promise.resolve({ data: transcriptPage() });
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.summary.citations).toEqual([]);
+  });
+
   it('never treats redacted or mismatched transcript evidence as grounded', async () => {
     const get = vi.fn((url: string) => {
       if (url.endsWith('/intelligence/result')) return Promise.resolve({ data: canonicalResult() });
