@@ -21,6 +21,7 @@ const apiMocks = vi.hoisted(() => ({
   ],
   MAX_JOB_QUESTIONS: 10,
   MAX_JOB_QUESTION_OPTIONS: 8,
+  MIN_JOB_QUESTION_OPTIONS: 2,
   RECRUITER_JOB_QUESTION_KINDS: ['SHORT_TEXT', 'LONG_TEXT', 'YES_NO', 'SINGLE_CHOICE'],
   listRecruiterJobs: vi.fn(),
   createRecruiterJob: vi.fn(),
@@ -507,6 +508,78 @@ describe('RecruiterJobsPanel', () => {
       expect(await screen.findByTestId('job-question-warnings')).toBeVisible();
       expect(screen.getByText(/1\. soru/)).toBeVisible();
       expect(screen.getByText(/AGE/)).toBeVisible();
+    });
+
+    /**
+     * P1 (review): ekran "en az 2, en fazla 8 seçenek" vaat ederken önceki hâli boş
+     * etiketleri sessizce filtreliyordu — İK varsayılan iki alanı boş bırakıp
+     * gönderebiliyor, istek 0 seçenekle çıkıp backend 400'üne düşüyordu. Artık gönderim
+     * öncesi GÖRÜNÜR biçimde durdurulur ve istek hiç çıkmaz.
+     */
+    it('refuses to submit a single-choice question whose options are left empty', async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.change(screen.getByLabelText('Soru metni'), {
+        target: { value: 'Çalışma modu tercihiniz?' },
+      });
+      fireEvent.change(screen.getByLabelText('Cevap biçimi'), {
+        target: { value: 'SINGLE_CHOICE' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      expect(await screen.findByText(/boş seçenek var/i)).toBeVisible();
+      expect(apiMocks.createRecruiterJob).not.toHaveBeenCalled();
+    });
+
+    it('refuses to submit when only one of the two options is filled', async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.change(screen.getByLabelText('Soru metni'), {
+        target: { value: 'Çalışma modu tercihiniz?' },
+      });
+      fireEvent.change(screen.getByLabelText('Cevap biçimi'), {
+        target: { value: 'SINGLE_CHOICE' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 1. seçenek'), {
+        target: { value: 'Ofis' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      expect(await screen.findByText(/boş seçenek var/i)).toBeVisible();
+      expect(apiMocks.createRecruiterJob).not.toHaveBeenCalled();
+    });
+
+    it('refuses to submit two options that carry the same label', async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.change(screen.getByLabelText('Soru metni'), {
+        target: { value: 'Çalışma modu tercihiniz?' },
+      });
+      fireEvent.change(screen.getByLabelText('Cevap biçimi'), {
+        target: { value: 'SINGLE_CHOICE' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 1. seçenek'), {
+        target: { value: 'Ofis' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 2. seçenek'), {
+        target: { value: ' ofis ' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      expect(await screen.findByText(/aynı seçenek birden fazla/i)).toBeVisible();
+      expect(apiMocks.createRecruiterJob).not.toHaveBeenCalled();
     });
 
     /**

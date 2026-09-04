@@ -10,6 +10,7 @@ import {
   updateRecruiterJob,
   MAX_JOB_QUESTION_OPTIONS,
   MAX_JOB_QUESTIONS,
+  MIN_JOB_QUESTION_OPTIONS,
   RECRUITER_JOB_QUESTION_KINDS,
   type ApplicationFieldKey,
   type RecruiterJobDraftDto,
@@ -159,19 +160,56 @@ const payloadFromForm = (form: FormState): RecruiterJobDraftDto => ({
     text: question.text.trim(),
     kind: question.kind,
     required: question.required,
+    // Boş etiketler BURADA FİLTRELENMEZ. Sessizce düşürmek, ekranda "en az 2 seçenek"
+    // yazarken isteği 0/1 seçenekle göndermeye ve backend 400'üne yol açıyordu. Gönderim
+    // öncesi doğrulama (questionFormError) bu durumu görünür biçimde durdurur.
     ...(question.kind === 'SINGLE_CHOICE'
       ? {
-          options: question.options
-            .filter((option) => option.label.trim().length > 0)
-            .map((option) => ({
-              ...(option.optionId ? { optionId: option.optionId } : {}),
-              label: option.label.trim(),
-            })),
+          options: question.options.map((option) => ({
+            ...(option.optionId ? { optionId: option.optionId } : {}),
+            label: option.label.trim(),
+          })),
         }
       : {}),
   })),
   noticeVersion: 'kvkk-application-v1',
 });
+
+/**
+ * ats#240 A: gönderim ÖNCESİ soru doğrulaması.
+ *
+ * Ekran "en az 2, en fazla 8 seçenek" vaat ediyorsa istek de öyle gitmeli. Önceki hâli
+ * boş etiketleri sessizce filtreliyordu: İK iki varsayılan alanı boş bırakıp ya da yalnız
+ * birini doldurup gönderebiliyor, istek 0/1 seçenekle çıkıp backend 400'üne düşüyordu —
+ * kullanıcı ise ekranda kuralı okumuş oluyordu. Otorite yine backend; buradaki kontrol
+ * kuralı GÖRÜNÜR kılmak için, onun yerine geçmek için değil.
+ *
+ * @returns kullanıcıya gösterilecek hata; {@code null} = gönderilebilir
+ */
+const questionFormError = (questions: QuestionFormState[]): string | null => {
+  for (let index = 0; index < questions.length; index += 1) {
+    const question = questions[index];
+    const position = index + 1;
+    const text = question.text.trim();
+    if (text.length < 2 || text.length > 500) {
+      return `${position}. sorunun metni 2–500 karakter olmalı.`;
+    }
+    if (question.kind !== 'SINGLE_CHOICE') continue;
+
+    const labels = question.options.map((option) => option.label.trim());
+    if (labels.some((label) => label.length === 0)) {
+      return `${position}. soruda boş seçenek var; doldurun ya da silin.`;
+    }
+    if (labels.length < MIN_JOB_QUESTION_OPTIONS || labels.length > MAX_JOB_QUESTION_OPTIONS) {
+      return `${position}. soru ${MIN_JOB_QUESTION_OPTIONS}–${MAX_JOB_QUESTION_OPTIONS} seçenek ister.`;
+    }
+    const distinct = new Set(labels.map((label) => label.toLocaleLowerCase('tr')));
+    if (distinct.size !== labels.length) {
+      return `${position}. soruda aynı seçenek birden fazla kez var.`;
+    }
+  }
+  return null;
+};
 
 const OPTIONAL_FIELD_OPTIONS: Array<{ key: ApplicationFieldKey; label: string }> = [
   { key: 'linkedIn', label: 'LinkedIn adresi' },
@@ -418,6 +456,13 @@ const RecruiterJobsPanel = ({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    // ats#240 A: kural ekranda yazıyorsa istek de ona uymalı — sessiz filtreleme yok.
+    const questionError = questionFormError(form.questions);
+    if (questionError) {
+      setSuccess('');
+      setActionError(questionError);
+      return;
+    }
     setSaving(true);
     setActionError('');
     setSuccess('');
