@@ -19,6 +19,9 @@ const apiMocks = vi.hoisted(() => ({
     'skills',
     'note',
   ],
+  MAX_JOB_QUESTIONS: 10,
+  MAX_JOB_QUESTION_OPTIONS: 8,
+  RECRUITER_JOB_QUESTION_KINDS: ['SHORT_TEXT', 'LONG_TEXT', 'YES_NO', 'SINGLE_CHOICE'],
   listRecruiterJobs: vi.fn(),
   createRecruiterJob: vi.fn(),
   updateRecruiterJob: vi.fn(),
@@ -40,6 +43,8 @@ const JOB = {
   summary: 'Kullanıcı ihtiyaçlarını ölçülebilir ürün sonuçlarına dönüştürün.',
   highlights: ['Ürün keşfi', 'Yol haritası'],
   applicationFields: apiMocks.DEFAULT_APPLICATION_FIELDS,
+  questions: [] as Array<Record<string, unknown>>,
+  questionWarnings: [] as Array<Record<string, unknown>>,
   noticeVersion: 'kvkk-application-v1' as const,
   status: 'DRAFT' as const,
   applyEnabled: false,
@@ -363,4 +368,164 @@ describe('RecruiterJobsPanel', () => {
     expect(screen.queryByRole('button', { name: 'Yayınla' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Düzenle' })).not.toBeInTheDocument();
   });
+
+  /**
+   * ats#240 A: ilana özel başvuru soruları.
+   *
+   * Sözleşmenin taşıyıcı maddesi "order kimlik DEĞİL". UI'da bunu yapısal
+   * kıldık: form state'inde `order` alanı YOK, dizideki konum sıradır ve
+   * gönderirken türetilir; `questionId` ise taşınır. Aşağıdaki testler o
+   * ayrımın kaybolmadığını kilitler.
+   */
+  describe('başvuru soruları', () => {
+    const fillRequiredFields = () => {
+      fireEvent.change(screen.getByLabelText('İlan başlığı'), {
+        target: { value: 'Ürün Yöneticisi' },
+      });
+      fireEvent.change(screen.getByLabelText('Ekip'), { target: { value: 'Ürün ve Deneyim' } });
+      fireEvent.change(screen.getByLabelText('Konum'), { target: { value: 'İstanbul' } });
+      fireEvent.change(screen.getByLabelText('İlan özeti'), { target: { value: JOB.summary } });
+    };
+
+    it('sends the questions with the order derived from their position', async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+
+      expect(screen.getByTestId('job-questions-empty')).toBeVisible();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      const texts = screen.getAllByLabelText('Soru metni');
+      fireEvent.change(texts[0], { target: { value: 'Kaç yıllık deneyiminiz var?' } });
+      fireEvent.change(texts[1], { target: { value: 'Neden bu ilan?' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      await waitFor(() => expect(apiMocks.createRecruiterJob).toHaveBeenCalledTimes(1));
+      expect(apiMocks.createRecruiterJob.mock.calls[0][0].questions).toEqual([
+        { order: 1, text: 'Kaç yıllık deneyiminiz var?', kind: 'SHORT_TEXT', required: false },
+        { order: 2, text: 'Neden bu ilan?', kind: 'SHORT_TEXT', required: false },
+      ]);
+    });
+
+    it('keeps the question id when the recruiter reorders, and only swaps the order', async () => {
+      const saved = {
+        ...JOB,
+        questions: [
+          { questionId: `q_${'A'.repeat(16)}`, order: 1, text: 'Birinci', kind: 'SHORT_TEXT', required: false },
+          { questionId: `q_${'B'.repeat(16)}`, order: 2, text: 'İkinci', kind: 'SHORT_TEXT', required: false },
+        ],
+      };
+      apiMocks.listRecruiterJobs.mockResolvedValue([saved]);
+      render(<RecruiterJobsPanel canManage />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
+
+      fireEvent.click(screen.getByRole('button', { name: '2. soruyu yukarı taşı' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+
+      await waitFor(() => expect(apiMocks.updateRecruiterJob).toHaveBeenCalledTimes(1));
+      expect(apiMocks.updateRecruiterJob.mock.calls[0][1].questions).toEqual([
+        { questionId: `q_${'B'.repeat(16)}`, order: 1, text: 'İkinci', kind: 'SHORT_TEXT', required: false },
+        { questionId: `q_${'A'.repeat(16)}`, order: 2, text: 'Birinci', kind: 'SHORT_TEXT', required: false },
+      ]);
+    });
+
+    it('sends options only for a single-choice question', async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.change(screen.getByLabelText('Soru metni'), {
+        target: { value: 'Çalışma modu tercihiniz?' },
+      });
+
+      // Önce metin sorusu: seçenek alanı hiç görünmez, gövdeye de girmez.
+      expect(screen.queryByLabelText('1. soru, 1. seçenek')).toBeNull();
+
+      fireEvent.change(screen.getByLabelText('Cevap biçimi'), {
+        target: { value: 'SINGLE_CHOICE' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 1. seçenek'), {
+        target: { value: 'Ofis' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 2. seçenek'), {
+        target: { value: 'Uzaktan' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      await waitFor(() => expect(apiMocks.createRecruiterJob).toHaveBeenCalledTimes(1));
+      expect(apiMocks.createRecruiterJob.mock.calls[0][0].questions).toEqual([
+        {
+          order: 1,
+          text: 'Çalışma modu tercihiniz?',
+          kind: 'SINGLE_CHOICE',
+          required: false,
+          options: [{ label: 'Ofis' }, { label: 'Uzaktan' }],
+        },
+      ]);
+    });
+
+    it('stops at the agreed ceiling instead of letting the form grow without limit', async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+
+      const add = screen.getByTestId('job-question-add');
+      for (let index = 0; index < 10; index += 1) fireEvent.click(add);
+
+      expect(screen.getAllByTestId('job-question-row')).toHaveLength(10);
+      expect(add).toBeDisabled();
+      expect(screen.getByText('10 / 10 soru')).toBeVisible();
+    });
+
+    /**
+     * Uyarı ENGELLEMEZ: kayıt başarılıdır ve başarı mesajı görünür. Uyarının
+     * kaybolmaması ise sözleşmenin fail-closed tarafı — bu test onu kilitler.
+     */
+    it('shows the protected-attribute warning without failing the save', async () => {
+      apiMocks.createRecruiterJob.mockResolvedValue({
+        ...JOB,
+        questions: [
+          { questionId: `q_${'A'.repeat(16)}`, order: 1, text: 'Kaç yaşındasınız?', kind: 'SHORT_TEXT', required: false },
+        ],
+        questionWarnings: [
+          { questionId: `q_${'A'.repeat(16)}`, category: 'AGE', signal: 'QUESTION_LIKE_PROTECTED_MENTION' },
+        ],
+      });
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.change(screen.getByLabelText('Soru metni'), {
+        target: { value: 'Kaç yaşındasınız?' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      expect(await screen.findByText(/taslak ilanı kalıcı olarak oluşturuldu/i)).toBeVisible();
+      expect(await screen.findByTestId('job-question-warnings')).toBeVisible();
+      expect(screen.getByText(/1\. soru/)).toBeVisible();
+      expect(screen.getByText(/AGE/)).toBeVisible();
+    });
+
+    /**
+     * Deploy sırası garanti değil: sorulari destekleyen backend henüz canlıda
+     * olmayabilir ve yanıtta alan HİÇ bulunmaz. Düzenleme ekranı o durumda da
+     * açılmalı — `undefined.map` ilan düzenlemeyi tamamen kilitlerdi.
+     */
+    it('still opens the edit form when the server response carries no questions field', async () => {
+      const legacyJob = { ...JOB } as Record<string, unknown>;
+      delete legacyJob.questions;
+      delete legacyJob.questionWarnings;
+      apiMocks.listRecruiterJobs.mockResolvedValue([legacyJob]);
+
+      render(<RecruiterJobsPanel canManage />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Düzenle' }));
+
+      expect(screen.getByTestId('job-questions-editor')).toBeVisible();
+      expect(screen.getByTestId('job-questions-empty')).toBeVisible();
+    });
+  });
+
 });

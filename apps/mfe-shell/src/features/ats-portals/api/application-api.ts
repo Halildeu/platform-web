@@ -557,9 +557,69 @@ export type CandidateOfferDto = OfferTermsDto & {
 
 export type RecruiterJobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'ARCHIVED';
 
+/** ats#240 A: cevap biçimi. KAPALI küme — bilinmeyen tip serbest metne düşmez. */
+export type RecruiterJobQuestionKind = 'SHORT_TEXT' | 'LONG_TEXT' | 'YES_NO' | 'SINGLE_CHOICE';
+
+export const RECRUITER_JOB_QUESTION_KINDS: readonly RecruiterJobQuestionKind[] = [
+  'SHORT_TEXT',
+  'LONG_TEXT',
+  'YES_NO',
+  'SINGLE_CHOICE',
+];
+
+/** İlan başına üst sınır (ats#240 A onaylı sözleşme): 0..10 geçerli, 11 reddedilir. */
+export const MAX_JOB_QUESTIONS = 10;
+export const MAX_JOB_QUESTION_OPTIONS = 8;
+
+/**
+ * Seçenek: SABİT kimlik + görünen etiket. Cevaplar `optionId`'ye bağlanır — etiketi
+ * düzelten bir yazım hatası düzeltmesi geçmiş cevapları koparmamalı.
+ */
+export type RecruiterJobQuestionOptionDto = {
+  /** Sunucu üretimli; YENİ seçenekte gönderilmez. */
+  optionId?: string;
+  label: string;
+};
+
+/**
+ * ats#240 A: ilana özel başvuru sorusu.
+ *
+ * `questionId` KİMLİKTİR, `order` yalnız adayın gördüğü sıradır. Yeniden sıralama
+ * kimliği DEĞİŞTİRMEZ — düzenlerken mevcut `questionId` geri gönderilmelidir, aksi
+ * hâlde sunucu onu yeni soru sayar ve dilim B/C'de cevaplar sorusundan kopar.
+ */
+export type RecruiterJobQuestionDto = {
+  /** Sunucu üretimli; YENİ soruda gönderilmez, düzenlemede AYNEN geri gönderilir. */
+  questionId?: string;
+  order: number;
+  text: string;
+  kind: RecruiterJobQuestionKind;
+  required: boolean;
+  options?: RecruiterJobQuestionOptionDto[];
+};
+
+/**
+ * Korunan-özellik uyarısı. UYARIR, ENGELLEMEZ: ilan yine kaydedilir, uyarı İK'ya
+ * gösterilir. `COVERAGE_UNKNOWN`/`ADVISOR_UNAVAILABLE` kategorileri "taranamadı"
+ * demektir — uyarı yokluğunu "risk yok" diye okumamak için vardır.
+ */
+export type RecruiterJobQuestionWarningDto = {
+  questionId: string;
+  category: string;
+  signal: string;
+};
+
 export type RecruiterJobDto = PublicJobDto & {
   jobId: string;
   publicHandle: string | null;
+  /**
+   * ats#240 A. Soruları destekleyen sunucuda HER ZAMAN dizidir (soru yoksa boş).
+   * Opsiyonel işaretlenmesinin sebebi tip gevşekliği değil: frontend/backend
+   * deploy sırası garanti değildir ve alanı hiç tanımayan bir sunum canlıda
+   * olabilir. Boş diziye düşerek okumak bu yüzden zorunlu, süs değil.
+   */
+  questions?: Array<RecruiterJobQuestionDto & { questionId: string }>;
+  questionWarnings?: RecruiterJobQuestionWarningDto[];
   status: RecruiterJobStatus;
   applyEnabled: boolean;
   version: number;
@@ -577,6 +637,8 @@ export type RecruiterJobDraftDto = {
   summary: string;
   highlights: string[];
   applicationFields: ApplicationFieldKey[];
+  /** ats#240 A: gönderilmezse sunucu "soru yok" sayar (geriye uyumlu). */
+  questions?: RecruiterJobQuestionDto[];
   noticeVersion: typeof APPLICATION_NOTICE_VERSION;
 };
 
