@@ -203,7 +203,11 @@ const questionFormError = (questions: QuestionFormState[]): string | null => {
     if (labels.length < MIN_JOB_QUESTION_OPTIONS || labels.length > MAX_JOB_QUESTION_OPTIONS) {
       return `${position}. soru ${MIN_JOB_QUESTION_OPTIONS}–${MAX_JOB_QUESTION_OPTIONS} seçenek ister.`;
     }
-    const distinct = new Set(labels.map((label) => label.toLocaleLowerCase('tr')));
+    // Katlama LOCALE-BAĞIMSIZ olmalı: backend benzersizliği `Locale.ROOT` ile doğruluyor.
+    // Türkçe locale ile katlamak aynı sözleşmeyi üretmez — `I` burada `ı`ya, backend'de `i`ye
+    // düşer; "Istanbul"/"istanbul" çifti istemcide farklı sayılıp geçerken backend 400 verir.
+    // Yani giderilmiş sanılan frontend-400 yolu tam da Türkçe kenarında sürerdi.
+    const distinct = new Set(labels.map((label) => label.toLowerCase()));
     if (distinct.size !== labels.length) {
       return `${position}. soruda aynı seçenek birden fazla kez var.`;
     }

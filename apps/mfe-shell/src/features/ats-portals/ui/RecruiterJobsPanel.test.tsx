@@ -583,6 +583,37 @@ describe('RecruiterJobsPanel', () => {
     });
 
     /**
+     * P1 (review): katlama LOCALE-BAĞIMSIZ olmalı. Backend benzersizliği Locale.ROOT ile
+     * doğruluyor; istemcide Türkçe locale kullanmak aynı sözleşmeyi üretmez — 'I' burada
+     * 'ı'ya, backend'de 'i'ye düşer. "Istanbul"/"istanbul" çifti istemcide farklı
+     * sayılıp geçerken backend 400 verirdi.
+     */
+    it("treats I and i as the same label, exactly like the backend's root folding", async () => {
+      render(<RecruiterJobsPanel canManage />);
+      await screen.findByText('Henüz ilanınız yok.');
+      fireEvent.click(screen.getByRole('button', { name: 'Yeni ilan oluştur' }));
+      fillRequiredFields();
+      fireEvent.click(screen.getByTestId('job-question-add'));
+      fireEvent.change(screen.getByLabelText('Soru metni'), {
+        target: { value: 'Hangi şehirde çalışmak istersiniz?' },
+      });
+      fireEvent.change(screen.getByLabelText('Cevap biçimi'), {
+        target: { value: 'SINGLE_CHOICE' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 1. seçenek'), {
+        target: { value: 'Istanbul' },
+      });
+      fireEvent.change(screen.getByLabelText('1. soru, 2. seçenek'), {
+        target: { value: 'istanbul' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Taslak oluştur' }));
+
+      expect(await screen.findByText(/aynı seçenek birden fazla/i)).toBeVisible();
+      expect(apiMocks.createRecruiterJob).not.toHaveBeenCalled();
+    });
+
+    /**
      * Deploy sırası garanti değil: sorulari destekleyen backend henüz canlıda
      * olmayabilir ve yanıtta alan HİÇ bulunmaz. Düzenleme ekranı o durumda da
      * açılmalı — `undefined.map` ilan düzenlemeyi tamamen kilitlerdi.
