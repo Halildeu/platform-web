@@ -371,6 +371,18 @@ export type RecruiterApplicationDto = {
   certifications: string | null;
   skills: string[];
   note: string | null;
+  /**
+   * ats#240 C: adayın ilan sorularına cevapları ve cevap ANINDAKİ soru anlık görüntüsü.
+   * Soruları destekleyen sunucuda HER ZAMAN dizidir (sorusuz ilanda boş); opsiyonel
+   * işaretlenmesi tip gevşekliği değil #1019 deploy-sırası korumasıdır — alanı tanımayan
+   * bir sunucu canlıda olabilir, okurken `[]`'e düşülür. Sıra ve soru metni
+   * `questionsSnapshot`tan gelir (aday ne gördüyse o; İK sonradan düzenlese de), cevap
+   * `questionId`/`optionId` ile bağlanır. `jobVersion` başvuru anındaki ilan sürümü,
+   * eski satırlarda null.
+   */
+  answers?: ApplicationAnswerDto[];
+  questionsSnapshot?: PublicJobQuestionDto[];
+  jobVersion?: number | null;
   status: ApplicationStatus;
   version: number;
   createdAt: string;

@@ -11,6 +11,11 @@ import {
   type RecruiterApplicationEvaluationRequest,
   type RecruiterEvaluationRecommendation,
 } from '../api/application-api';
+import {
+  QUESTION_KIND_LABELS,
+  screeningAnswerRows,
+  UNANSWERED_ANSWER_LABEL,
+} from '../model/screening-answers';
 import RecruiterInterviewPanel from './RecruiterInterviewPanel';
 import RecruiterOfferPanel from './RecruiterOfferPanel';
 
@@ -291,6 +296,11 @@ const RecruiterApplicationReviewPanel = ({
     // `ats#229` ekledi ve ondan önceki backend hiç göndermiyor.
     const otherApplications = detail.otherApplications ?? [];
     const sameJobAgain = otherApplications.filter((o) => o.sameJob);
+    // ats#240 C: aynı yokluk toleransı — alanı tanımayan (C öncesi) backend hiç göndermez.
+    const screeningRows = screeningAnswerRows(
+      application.questionsSnapshot ?? [],
+      application.answers ?? [],
+    );
     return (
       <div className="mt-5 space-y-5">
         <section className="rounded-2xl border border-border-subtle bg-surface-muted p-4">
@@ -319,9 +329,7 @@ const RecruiterApplicationReviewPanel = ({
               className="text-sm font-bold text-text-primary"
             >
               Bu adayın {otherApplications.length} başvurusu daha var
-              {sameJobAgain.length > 0
-                ? ` — ${sameJobAgain.length} tanesi bu ilana`
-                : ''}
+              {sameJobAgain.length > 0 ? ` — ${sameJobAgain.length} tanesi bu ilana` : ''}
             </h4>
             <ol className="mt-3 space-y-2">
               {otherApplications.map((other) => (
@@ -448,6 +456,53 @@ const RecruiterApplicationReviewPanel = ({
             </div>
           ) : null}
         </dl>
+
+        {/* ats#240 C: adayın ilan sorularına cevapları — soru METNİYLE birlikte ve karar
+            eylemlerinin hemen üstünde: İK cevabı okumadan "Kısa listeye al" demesin.
+            Sıra ve metin cevap anındaki anlık görüntüden gelir (İK soruyu sonradan
+            düzenlese de aday ne gördüyse o); cevaplanmamış isteğe bağlı soru da listelenir.
+            Her yetki/aşama kapısından BAĞIMSIZ salt-okunur: görüntüleme yetkisi olan
+            herkes okur, terminal durumda da görünür. Anlık görüntü boşsa AÇIK boş durum
+            basılır — "soru yoktu" ile "sunucu alanı tanımıyor" aynı görünmesin (#1019). */}
+        <section
+          className="rounded-2xl border border-border-subtle bg-surface-muted p-4"
+          data-testid="recruiter-application-answers"
+          aria-labelledby="recruiter-application-answers-heading"
+        >
+          <h4
+            id="recruiter-application-answers-heading"
+            className="text-sm font-bold text-text-primary"
+          >
+            Aday cevapları
+          </h4>
+          {screeningRows.length === 0 ? (
+            <p
+              className="mt-2 text-sm text-text-secondary"
+              data-testid="recruiter-application-answers-empty"
+            >
+              Bu ilanda başvuru sorusu yoktu.
+            </p>
+          ) : (
+            <ol className="mt-3 space-y-2">
+              {screeningRows.map((row) => (
+                <li
+                  key={row.questionId}
+                  data-testid={`recruiter-application-answer-${row.questionId}`}
+                  className="rounded-lg border border-border-subtle bg-surface-default p-3 text-sm"
+                >
+                  <p className="font-semibold text-text-primary">{row.text}</p>
+                  <p className="text-xs text-text-secondary">
+                    {QUESTION_KIND_LABELS[row.kind]}
+                    {row.required ? ' · zorunlu' : ''}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap leading-6">
+                    {row.answer ?? UNANSWERED_ANSWER_LABEL}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
 
         <section aria-labelledby="application-actions-heading">
           <h3 id="application-actions-heading" className="text-sm font-bold text-text-primary">

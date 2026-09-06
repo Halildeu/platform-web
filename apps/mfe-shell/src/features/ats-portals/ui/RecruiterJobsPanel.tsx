@@ -34,12 +34,9 @@ type QuestionFormState = {
   options: Array<{ optionId?: string; label: string }>;
 };
 
-const QUESTION_KIND_LABELS: Record<RecruiterJobQuestionKind, string> = {
-  SHORT_TEXT: 'Kısa metin',
-  LONG_TEXT: 'Uzun metin',
-  YES_NO: 'Evet / Hayır',
-  SINGLE_CHOICE: 'Tek seçim',
-};
+// ats#240 C: tür etiketlerinin tek kaynağı model modülü — İK inceleme paneli de aynı
+// etiketleri basar; iki yerde iki liste olsaydı ilk yeni tür geldiğinde ayrışırdı.
+import { QUESTION_KIND_LABELS } from '../model/screening-answers';
 
 const EMPTY_QUESTION: QuestionFormState = {
   text: '',
@@ -337,8 +334,9 @@ const RecruiterJobsPanel = ({
       setJobs(loaded);
       // İlk yüklemede karar: yayında ilan varsa oraya odaklan, yoksa Tümü.
       // Kullanıcı bir filtre seçtiyse ona DOKUNMA (yenileme seçimi ezmez).
-      setJobFilter((current) =>
-        current ?? (loaded.some((job) => job.status === 'PUBLISHED') ? 'PUBLISHED' : 'ALL'),
+      setJobFilter(
+        (current) =>
+          current ?? (loaded.some((job) => job.status === 'PUBLISHED') ? 'PUBLISHED' : 'ALL'),
       );
       return loaded;
     } catch (loadError) {
@@ -638,7 +636,9 @@ const RecruiterJobsPanel = ({
       <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="İlan durumu filtresi">
         {JOB_FILTERS.map((filter) => {
           const count =
-            filter.id === 'ALL' ? jobs.length : jobs.filter((job) => job.status === filter.id).length;
+            filter.id === 'ALL'
+              ? jobs.length
+              : jobs.filter((job) => job.status === filter.id).length;
           const active = activeFilter === filter.id;
           return (
             <button
@@ -704,12 +704,10 @@ const RecruiterJobsPanel = ({
           role="status"
           data-testid="job-question-warnings"
         >
-          <p className="text-sm font-bold text-text-primary">
-            Sorularınız gözden geçirilmeli
-          </p>
+          <p className="text-sm font-bold text-text-primary">Sorularınız gözden geçirilmeli</p>
           <p className="mt-1 text-xs leading-5 text-text-secondary">
-            Aşağıdaki sorular korunan bir kişisel özelliğe değiyor olabilir. İlan kaydedildi;
-            eleme yapılmadı. Soruların işle ilgili olduğundan emin olun.
+            Aşağıdaki sorular korunan bir kişisel özelliğe değiyor olabilir. İlan kaydedildi; eleme
+            yapılmadı. Soruların işle ilgili olduğundan emin olun.
           </p>
           <ul className="mt-2 grid gap-1">
             {questionWarnings.map((warning, index) => (
@@ -1225,9 +1223,8 @@ const RecruiterJobsPanel = ({
                     >
                       {stage.label} ·{' '}
                       {
-                        applications.filter(
-                          (a) => a.jobSlug === job.slug && a.status === stage.id,
-                        ).length
+                        applications.filter((a) => a.jobSlug === job.slug && a.status === stage.id)
+                          .length
                       }
                     </button>
                   ))}

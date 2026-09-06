@@ -485,6 +485,117 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText('ISO 45001')).toBeVisible();
   });
 
+  // ── ats#240 C: İK aday cevaplarını soru metniyle, kararın yanında görür ───────
+  //
+  // B'den beri aday ilan sorularına cevap veriyor ve cevaplar DB'de duruyordu; İK
+  // panelinde hiç görünmüyordu. Sıra ve metin cevap anındaki anlık görüntüden gelir,
+  // cevap kimliğe bağlıdır; bölüm her yetki kapısından bağımsız salt-okunurdur.
+
+  const SNAPSHOT = [
+    {
+      questionId: 'q_NOTE000000000000',
+      order: 2,
+      text: 'Eklemek istediğiniz bir şey var mı?',
+      kind: 'LONG_TEXT',
+      required: false,
+    },
+    {
+      questionId: 'q_MODE000000000000',
+      order: 1,
+      text: 'Hangi çalışma biçimini tercih edersiniz?',
+      kind: 'SINGLE_CHOICE',
+      required: true,
+      options: [
+        { optionId: 'qo_OFFICE000000', label: 'Ofis' },
+        { optionId: 'qo_REMOTE000000', label: 'Uzaktan' },
+      ],
+    },
+  ];
+
+  it('shows candidate answers with the question text, in snapshot order, next to the decision', async () => {
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: {
+        ...APPLICATION,
+        answers: [{ questionId: 'q_MODE000000000000', optionId: 'qo_REMOTE000000' }],
+        questionsSnapshot: SNAPSHOT,
+        jobVersion: 3,
+      },
+      history: [],
+      evaluations: [],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByRole('dialog', { name: 'Deniz Sentetik' });
+
+    const answers = screen.getByTestId('recruiter-application-answers');
+    expect(within(answers).getByRole('heading', { name: 'Aday cevapları' })).toBeVisible();
+    const rows = within(answers).getAllByRole('listitem');
+    // Anlık görüntü sırası (order 1, 2) — cevap listesi sırası değil.
+    expect(rows[0]).toHaveAttribute(
+      'data-testid',
+      'recruiter-application-answer-q_MODE000000000000',
+    );
+    expect(rows[0]).toHaveTextContent('Hangi çalışma biçimini tercih edersiniz?');
+    // Seçenek ETİKETİ anlık görüntüden çözülür; kimlik basılmaz.
+    expect(rows[0]).toHaveTextContent('Uzaktan');
+    expect(rows[0]).not.toHaveTextContent('qo_REMOTE000000');
+    expect(rows[0]).toHaveTextContent('Tek seçim · zorunlu');
+    // Cevaplanmamış isteğe bağlı soru da görünür.
+    expect(rows[1]).toHaveTextContent('Eklemek istediğiniz bir şey var mı?');
+    expect(rows[1]).toHaveTextContent('Yanıtlanmadı');
+    expect(screen.queryByTestId('recruiter-application-answers-empty')).not.toBeInTheDocument();
+    // Karar eylemleri bölümü cevapların ALTINDA — önce oku, sonra karar ver.
+    expect(
+      answers.compareDocumentPosition(
+        screen.getByRole('heading', { name: 'Açık insan eylemleri' }),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('renders the answers read-only even without manage permission', async () => {
+    permissionMocks.getModuleLevel.mockReturnValueOnce('VIEW');
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: {
+        ...APPLICATION,
+        answers: [{ questionId: 'q_MODE000000000000', optionId: 'qo_OFFICE000000' }],
+        questionsSnapshot: SNAPSHOT,
+        jobVersion: 1,
+      },
+      history: [],
+      evaluations: [],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByRole('dialog', { name: 'Deniz Sentetik' });
+    expect(screen.getByTestId('recruiter-application-answer-q_MODE000000000000')).toHaveTextContent(
+      'Ofis',
+    );
+  });
+
+  it('says explicitly when the posting had no questions', async () => {
+    apiMocks.getRecruiterApplication.mockResolvedValue({
+      application: { ...APPLICATION, answers: [], questionsSnapshot: [], jobVersion: 0 },
+      history: [],
+      evaluations: [],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByRole('dialog', { name: 'Deniz Sentetik' });
+    expect(screen.getByTestId('recruiter-application-answers-empty')).toHaveTextContent(
+      'Bu ilanda başvuru sorusu yoktu.',
+    );
+  });
+
+  it('still renders when the backend predates the answer fields entirely', async () => {
+    // Varsayılan APPLICATION fixture'ında answers/questionsSnapshot/jobVersion YOK —
+    // #1019 dersi: frontend backend'den önce inerse panel çökmemeli.
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await screen.findByRole('dialog', { name: 'Deniz Sentetik' });
+    expect(screen.getByTestId('recruiter-application-answers-empty')).toBeVisible();
+    expect(screen.getByText('Sentetik profesyonel özet')).toBeVisible();
+  });
+
   it('calls the interview-track stage "Kısa liste" for the recruiter', async () => {
     // #227 B: sahip sordu "kaci kisa listeye alinmis" — cevabi olan asama ZATEN
     // vardi (`INTERVIEW_PENDING` = inceleme gecildi, mulakat hattinda), ama adi
