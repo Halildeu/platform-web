@@ -895,6 +895,9 @@ describe('CandidateApplicationPage', () => {
     await reachPreview();
 
     const disclosure = screen.getByTestId('kvkk-notice-disclosure-kvkk-application-v1');
+    // The action color is only 4.37:1 on the disclosure's subtle surface.
+    expect(disclosure.querySelector('summary')).toHaveClass('text-text-primary', 'underline');
+    expect(disclosure.querySelector('summary')).not.toHaveClass('text-action-primary');
     // Veri sorumlusu kimliği metinde YAZILI olmalı — VERBİS sicilinden.
     expect(disclosure).toHaveTextContent('AÇIK HOLDİNG ANONİM ŞİRKETİ');
     expect(disclosure).toHaveTextContent('acikholding@hs03.kep.tr');
