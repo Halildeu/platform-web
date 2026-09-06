@@ -1019,7 +1019,7 @@ const CandidatePortalPage = () => {
                                 href={interview.location}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="break-all font-semibold text-action-primary underline"
+                                className="break-all font-semibold text-text-primary underline"
                               >
                                 Güvenli görüşme bağlantısını aç
                               </a>

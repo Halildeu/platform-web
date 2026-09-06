@@ -129,7 +129,7 @@ export const KvkkNoticeDisclosure = ({
     data-testid={`kvkk-notice-disclosure-${notice.version}`}
     className="mt-2 rounded-xl border border-border-subtle bg-surface-subtle px-3 py-2"
   >
-    <summary className="cursor-pointer text-sm font-bold text-action-primary">
+    <summary className="cursor-pointer text-sm font-bold text-text-primary underline">
       {notice.title}’ni oku
     </summary>
     <div className="mt-2 border-t border-border-subtle pt-2">

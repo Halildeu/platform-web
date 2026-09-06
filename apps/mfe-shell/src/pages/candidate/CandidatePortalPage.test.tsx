@@ -583,6 +583,12 @@ describe('CandidatePortalPage', () => {
       'https://meet.example.test/sentetik',
     );
     expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Güvenli görüşme bağlantısını aç' })).toHaveClass(
+      'text-text-primary', 'underline',
+    );
+    expect(screen.getByRole('link', { name: 'Güvenli görüşme bağlantısını aç' })).not.toHaveClass(
+      'text-action-primary',
+    );
     expect(apiMocks.getCandidateInterviews).toHaveBeenCalledWith(SESSION);
   });
 
