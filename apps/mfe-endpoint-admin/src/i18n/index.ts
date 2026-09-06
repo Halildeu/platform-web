@@ -1693,6 +1693,10 @@ const DICT_TR = {
     'Bilinmeyen doğrulama kodu (ham değer gösteriliyor)',
   // Approval page (device-scoped, approve-only).
   'endpointAdmin.uninstallApproval.heading': 'Kaldırma onayı',
+  'endpointAdmin.uninstallApproval.ownerExceptionSubtitle':
+    'Bu talep, owner tarafından izin verilen süreli TEST istisnası kapsamındadır. Bağımsız ikinci yönetici onayı değildir.',
+  'endpointAdmin.uninstallApproval.ownerException':
+    'Yalnız bu talep için TEST owner istisnası. Son geçerlilik:',
   'endpointAdmin.uninstallApproval.subtitle':
     'Bu kaldırma talebini ikinci yönetici olarak onaylayın. Talebi oluşturan onaylayamaz (maker-checker).',
   'endpointAdmin.uninstallApproval.loading': 'Talep yükleniyor…',
@@ -3469,6 +3473,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.uninstall.verification.unknown.aria':
     'Unknown verification code (raw value shown)',
   'endpointAdmin.uninstallApproval.heading': 'Uninstall approval',
+  'endpointAdmin.uninstallApproval.ownerExceptionSubtitle':
+    'This request has a time-limited TEST owner exception. This is not independent second-administrator approval.',
+  'endpointAdmin.uninstallApproval.ownerException':
+    'TEST owner exception for this request only. Valid until:',
   'endpointAdmin.uninstallApproval.subtitle':
     'Approve this uninstall request as a second admin. The proposer cannot approve (maker-checker).',
   'endpointAdmin.uninstallApproval.loading': 'Loading request…',

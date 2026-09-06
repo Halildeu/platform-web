@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { UninstallApprovalPage } from '../UninstallApprovalPage';
 import type { AdminUninstallRequestResponse } from '../../../entities/endpoint-uninstall/types';
@@ -73,7 +73,45 @@ function mockEnv(opts: {
 beforeEach(() => {
   vi.clearAllMocks();
 });
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+describe('request-bound TEST owner exception', () => {
+  const decisionRef = 'https://github.com/Halildeu/platform-k8s-gitops/issues/2828#issuecomment-1';
+  it('enables the recorded owner only, labels the exception and expires without reload', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-06T15:00:00Z'));
+    mockEnv({ subject: 'admin-a', request: buildRequest({ ownerException: {
+      decisionRef, expiresAt: '2026-09-06T15:00:02Z',
+    } }) });
+    render(<UninstallApprovalPage />);
+    expect((screen.getByTestId('uninstall-approval-approve') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('uninstall-approval-owner-exception').textContent).toMatch(/TEST owner/);
+    expect(screen.queryByTestId('uninstall-approval-self')).toBeNull();
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect((screen.getByTestId('uninstall-approval-approve') as HTMLButtonElement).disabled).toBe(true);
+  });
+  it.each([
+    { decisionRef, expiresAt: '2000-01-01T00:00:00Z' },
+    { decisionRef, expiresAt: 'invalid' },
+    { decisionRef: 'https://example.com', expiresAt: '2099-01-01T00:00:00Z' },
+  ])('rejects stale or malformed exception metadata', (ownerException) => {
+    mockEnv({ subject: 'admin-a', request: buildRequest({ ownerException }) });
+    render(<UninstallApprovalPage />);
+    expect((screen.getByTestId('uninstall-approval-approve') as HTMLButtonElement).disabled).toBe(true);
+  });
+  it('does not grant authority to an unresolved actor', () => {
+    mockEnv({ subject: null, request: buildRequest({ ownerException: { decisionRef, expiresAt: '2099-01-01T00:00:00Z' } }) });
+    render(<UninstallApprovalPage />);
+    expect((screen.getByTestId('uninstall-approval-approve') as HTMLButtonElement).disabled).toBe(true);
+  });
+  it('keeps the backend refusal authoritative even with exception metadata', async () => {
+    mockEnv({ subject: 'admin-a', request: buildRequest({ ownerException: { decisionRef, expiresAt: '2099-01-01T00:00:00Z' } }), approveReject: { status: 403, data: {} } });
+    render(<UninstallApprovalPage />);
+    fireEvent.click(screen.getByTestId('uninstall-approval-approve'));
+    expect(await screen.findByTestId('uninstall-approval-error')).toBeTruthy();
+    expect(approveTriggerMock).toHaveBeenCalledWith({ deviceId: 'dev-1', requestId: 'req-1', body: {} });
+  });
+});
 
 describe('UninstallApprovalPage — maker-checker guard (Codex 019e93d2 must-fix #2)', () => {
   it('disables approve + warns when the active admin identity is UNRESOLVED (fail-safe)', () => {
