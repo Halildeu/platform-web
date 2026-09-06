@@ -178,7 +178,7 @@ const payloadFromForm = (form: FormState): RecruiterJobDraftDto => ({
 /**
  * ats#240 A: gönderim ÖNCESİ soru doğrulaması.
  *
- * Ekran "en az 2, en fazla 8 seçenek" vaat ediyorsa istek de öyle gitmeli. Önceki hâli
+ * Ekran "en az 2, en fazla 10 seçenek" vaat ediyorsa istek de öyle gitmeli. Önceki hâli
  * boş etiketleri sessizce filtreliyordu: İK iki varsayılan alanı boş bırakıp ya da yalnız
  * birini doldurup gönderebiliyor, istek 0/1 seçenekle çıkıp backend 400'üne düşüyordu —
  * kullanıcı ise ekranda kuralı okumuş oluyordu. Otorite yine backend; buradaki kontrol

@@ -20,7 +20,7 @@ const apiMocks = vi.hoisted(() => ({
     'note',
   ],
   MAX_JOB_QUESTIONS: 10,
-  MAX_JOB_QUESTION_OPTIONS: 8,
+  MAX_JOB_QUESTION_OPTIONS: 10,
   MIN_JOB_QUESTION_OPTIONS: 2,
   RECRUITER_JOB_QUESTION_KINDS: ['SHORT_TEXT', 'LONG_TEXT', 'YES_NO', 'SINGLE_CHOICE'],
   listRecruiterJobs: vi.fn(),
@@ -511,7 +511,7 @@ describe('RecruiterJobsPanel', () => {
     });
 
     /**
-     * P1 (review): ekran "en az 2, en fazla 8 seçenek" vaat ederken önceki hâli boş
+     * P1 (review): ekran "en az 2, en fazla 10 seçenek" vaat ederken önceki hâli boş
      * etiketleri sessizce filtreliyordu — İK varsayılan iki alanı boş bırakıp
      * gönderebiliyor, istek 0 seçenekle çıkıp backend 400'üne düşüyordu. Artık gönderim
      * öncesi GÖRÜNÜR biçimde durdurulur ve istek hiç çıkmaz.
