@@ -114,6 +114,32 @@ describe('request-bound TEST owner exception', () => {
 });
 
 describe('UninstallApprovalPage — maker-checker guard (Codex 019e93d2 must-fix #2)', () => {
+  it.each(['APPROVED', 'QUEUED', 'CLAIMED', 'RUNNING', 'TERMINAL'] as const)(
+    'does not ask for another approval in %s state', (state) => {
+      mockEnv({ subject: 'admin-a', request: buildRequest({ state }) });
+      render(<UninstallApprovalPage />);
+      expect(screen.queryByTestId('uninstall-approval-self')).toBeNull();
+      expect(screen.queryByTestId('uninstall-approval-pending-subtitle')).toBeNull();
+      expect(screen.queryByTestId('uninstall-approval-reason')).toBeNull();
+      expect(screen.getByTestId('uninstall-approval-not-pending')).toBeTruthy();
+      const approve = screen.getByTestId('uninstall-approval-approve') as HTMLButtonElement;
+      expect(approve.disabled).toBe(true);
+      fireEvent.click(approve);
+      expect(approveTriggerMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('removes the pending subtitle immediately after approval before the query refreshes', async () => {
+    mockEnv({ subject: 'admin-b', request: buildRequest() });
+    render(<UninstallApprovalPage />);
+    expect(screen.getByTestId('uninstall-approval-pending-subtitle')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('uninstall-approval-approve'));
+    await screen.findByTestId('uninstall-approval-success');
+    expect(screen.queryByTestId('uninstall-approval-pending-subtitle')).toBeNull();
+    expect(screen.queryByTestId('uninstall-approval-reason')).toBeNull();
+    expect((screen.getByTestId('uninstall-approval-approve') as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('disables approve + warns when the active admin identity is UNRESOLVED (fail-safe)', () => {
     mockEnv({ subject: null, request: buildRequest({ createdBy: 'admin-a' }) });
     render(<UninstallApprovalPage />);

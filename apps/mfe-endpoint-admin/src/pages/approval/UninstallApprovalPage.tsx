@@ -205,7 +205,7 @@ export const UninstallApprovalPage: React.FC = () => {
           </div>
         )}
 
-        {isSelfApproval && !hasOwnerException && (
+        {isPending && !approved && isSelfApproval && !hasOwnerException && (
           <p
             className="rounded-md border border-state-warning-border bg-state-warning-bg px-3 py-2 text-sm text-state-warning-text"
             data-testid="uninstall-approval-self"
@@ -285,9 +285,11 @@ export const UninstallApprovalPage: React.FC = () => {
       <h1 className="text-2xl font-semibold mb-1">
         {t('endpointAdmin.uninstallApproval.heading')}
       </h1>
-      <p className="text-sm text-text-secondary mb-4">
-        {t(hasOwnerException ? 'endpointAdmin.uninstallApproval.ownerExceptionSubtitle' : 'endpointAdmin.uninstallApproval.subtitle')}
-      </p>
+      {isPending && !approved && (
+        <p className="text-sm text-text-secondary mb-4" data-testid="uninstall-approval-pending-subtitle">
+          {t(hasOwnerException ? 'endpointAdmin.uninstallApproval.ownerExceptionSubtitle' : 'endpointAdmin.uninstallApproval.subtitle')}
+        </p>
+      )}
       {renderBody()}
     </div>
   );
