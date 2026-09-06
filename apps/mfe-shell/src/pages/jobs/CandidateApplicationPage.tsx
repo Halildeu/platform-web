@@ -22,10 +22,12 @@ import {
   type ResumeFieldKey,
   RESUME_ONLY_FIELDS,
   APPLICATION_ENTRY_LIMITS,
+  type ApplicationAnswerDto,
   type ApplicationEducationEntry,
   type ApplicationExperienceEntry,
   type ApplicationReceiptDto,
   type PublicJobDto,
+  type PublicJobQuestionDto,
   type ResumeDraftDto,
   type ResumeImportDto,
   type ResumeProposalDto,
@@ -445,6 +447,47 @@ const labelClassName = 'text-sm font-semibold text-text-primary';
 const sectionClassName =
   'rounded-2xl border border-border-subtle bg-surface-default p-5 shadow-xs sm:p-6';
 
+/**
+ * ats#240 B: adayın cevap taslağı (form state). Anahtar `questionId`; değer tipe
+ * göre metin, evet/hayır ya da seçenek kimliği. Boş/whitespace metin "cevaplanmadı"
+ * demektir — zorunlu soruda önizleme kapısı bunu yakalar.
+ */
+type AnswerDraft = { text?: string; yes?: boolean; optionId?: string };
+
+/** Metin cevabı üst sınırları (backend ile aynı kapalı sözleşme). */
+const ANSWER_TEXT_LIMITS: Record<'SHORT_TEXT' | 'LONG_TEXT', number> = {
+  SHORT_TEXT: 200,
+  LONG_TEXT: 2000,
+};
+
+/** İlan soruları gösterim sırasına göre; alanı tanımayan sunucuda `[]` (bkz. PublicJobDto). */
+const questionsOf = (job: PublicJobDto | null): PublicJobQuestionDto[] =>
+  [...(job?.questions ?? [])].sort((a, b) => a.order - b.order);
+
+const isAnswered = (question: PublicJobQuestionDto, draft: AnswerDraft | undefined): boolean => {
+  if (!draft) return false;
+  switch (question.kind) {
+    case 'YES_NO':
+      return typeof draft.yes === 'boolean';
+    case 'SINGLE_CHOICE':
+      return typeof draft.optionId === 'string' && draft.optionId.length > 0;
+    default:
+      return typeof draft.text === 'string' && draft.text.trim().length > 0;
+  }
+};
+
+/** Tipe göre TAM BİR değer alanı; İK metnine değil kimliğe bağlanır (bkz. ApplicationAnswerDto). */
+const toAnswerDto = (question: PublicJobQuestionDto, draft: AnswerDraft): ApplicationAnswerDto => {
+  switch (question.kind) {
+    case 'YES_NO':
+      return { questionId: question.questionId, yes: draft.yes === true };
+    case 'SINGLE_CHOICE':
+      return { questionId: question.questionId, optionId: draft.optionId ?? '' };
+    default:
+      return { questionId: question.questionId, text: (draft.text ?? '').trim() };
+  }
+};
+
 const FIELD_LABELS: Record<ApplicationFieldKey, string> = {
   fullName: 'Ad soyad',
   email: 'E-posta',
@@ -564,6 +607,8 @@ const CandidateApplicationPage = () => {
   const [job, setJob] = useState<PublicJobDto | null>(null);
   const [jobError, setJobError] = useState('');
   const [values, setValues] = useState<ApplicationValues>(EMPTY_VALUES);
+  // ats#240 B: ilan sorularına cevap taslakları (questionId → değer).
+  const [answers, setAnswers] = useState<Record<string, AnswerDraft>>({});
   const rowIdRef = useRef(0);
   const nextRowId = () => {
     rowIdRef.current += 1;
@@ -641,7 +686,10 @@ const CandidateApplicationPage = () => {
    * sistem yalnız sürüm kimliği taşıyor, "okudum" beyanı alıyor ve o beyanı kalıcı
    * kaydediyordu. Metni olmayan bir sürüm için onay toplanamaz.
    */
-  const applicationNotice = noticeFor(job?.noticeVersion ?? APPLICATION_NOTICE_VERSION, publicHandle);
+  const applicationNotice = noticeFor(
+    job?.noticeVersion ?? APPLICATION_NOTICE_VERSION,
+    publicHandle,
+  );
   const resumeNotice = noticeFor(RESUME_IMPORT_NOTICE_VERSION, publicHandle);
   const noticeHref = publicHandle
     ? `/careers/${encodeURIComponent(publicHandle)}/jobs/aydinlatma`
@@ -1185,6 +1233,101 @@ const CandidateApplicationPage = () => {
     setFormStep('profile');
   };
 
+  // ── ats#240 B: ilana özel sorular ───────────────────────────────────────────
+  const questions = questionsOf(job);
+  const setAnswer = (questionId: string, patch: AnswerDraft) => {
+    setAnswers((current) => ({ ...current, [questionId]: { ...current[questionId], ...patch } }));
+    setFormError('');
+    setSubmitError('');
+  };
+  const renderQuestion = (question: PublicJobQuestionDto) => {
+    const id = `candidate-question-${question.questionId}`;
+    const draft = answers[question.questionId];
+    const requiredMark = question.required ? <span className="text-danger">*</span> : null;
+    // Kart `bg-surface-subtle` üstünde: metin renkleri text-* — `text-action-primary`
+    // bu yüzeyde 4.37:1 kalır (platform-web#1140/#1141 ile ölçüldü).
+    const card = 'flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface-subtle p-4';
+    if (question.kind === 'YES_NO' || question.kind === 'SINGLE_CHOICE') {
+      const choices =
+        question.kind === 'YES_NO'
+          ? [
+              {
+                key: 'yes',
+                label: 'Evet',
+                checked: draft?.yes === true,
+                pick: () => setAnswer(question.questionId, { yes: true }),
+              },
+              {
+                key: 'no',
+                label: 'Hayır',
+                checked: draft?.yes === false,
+                pick: () => setAnswer(question.questionId, { yes: false }),
+              },
+            ]
+          : (question.options ?? []).map((option) => ({
+              key: option.optionId,
+              label: option.label,
+              checked: draft?.optionId === option.optionId,
+              pick: () => setAnswer(question.questionId, { optionId: option.optionId }),
+            }));
+      return (
+        <fieldset key={question.questionId} className={card} data-testid={id}>
+          <legend className={labelClassName}>
+            {question.text} {requiredMark}
+          </legend>
+          {choices.map((choice) => (
+            <label
+              key={choice.key}
+              className="mt-1 flex items-start gap-2 text-sm text-text-primary"
+            >
+              <input
+                type="radio"
+                name={`question-${question.questionId}`}
+                data-testid={`${id}-${choice.key}`}
+                checked={choice.checked}
+                onChange={choice.pick}
+                className="mt-1 h-4 w-4"
+              />
+              <span>{choice.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      );
+    }
+    const limit = ANSWER_TEXT_LIMITS[question.kind];
+    const onText = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setAnswer(question.questionId, { text: event.target.value });
+    return (
+      <div key={question.questionId} className={card}>
+        <label htmlFor={id} className={labelClassName}>
+          {question.text} {requiredMark}
+        </label>
+        {question.kind === 'LONG_TEXT' ? (
+          <textarea
+            id={id}
+            data-testid={id}
+            rows={4}
+            maxLength={limit}
+            value={draft?.text ?? ''}
+            onChange={onText}
+            className={inputClassName}
+          />
+        ) : (
+          <input
+            id={id}
+            data-testid={id}
+            type="text"
+            maxLength={limit}
+            value={draft?.text ?? ''}
+            onChange={onText}
+            className={inputClassName}
+          />
+        )}
+        <p className="text-xs text-text-secondary">En fazla {limit} karakter.</p>
+      </div>
+    );
+  };
+
   const openPreview: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     if (resumeStatus === 'uploading') {
@@ -1202,6 +1345,12 @@ const CandidateApplicationPage = () => {
       setFormError('Önizlemeye geçmek için yıldızlı alanları doldurun.');
       return;
     }
+    // ats#240 B: zorunlu ilan soruları da bu tek gerçek kapıda denetlenir (aynı ilke:
+    // iki yerde tutmak drift üretirdi). Backend kendi ilan sözleşmesinden yeniden doğrular.
+    if (questions.some((q) => q.required && !isAnswered(q, answers[q.questionId]))) {
+      setFormError('Önizlemeye geçmek için zorunlu ilan sorularını yanıtlayın.');
+      return;
+    }
     // #239: bitiş < başlangıç sessizce gönderilmemeli — İK bunu veri hatası
     // olarak değil adayın beyanı olarak okur.
     const backwardExperience = experienceRows.some((row) =>
@@ -1214,9 +1363,7 @@ const CandidateApplicationPage = () => {
       setFormError('Bitiş tarihi başlangıçtan önce olamaz; ilgili kaydı düzeltin.');
       return;
     }
-    if (
-      educationRows.some((row) => hasImplausibleYear(row.value.startYear, row.value.endYear))
-    ) {
+    if (educationRows.some((row) => hasImplausibleYear(row.value.startYear, row.value.endYear))) {
       setFormError(`Eğitim yılı ${MIN_ENTRY_YEAR} ile ${CURRENT_YEAR} arasında olmalı.`);
       return;
     }
@@ -1292,6 +1439,15 @@ const CandidateApplicationPage = () => {
           languages: values.languages.trim() || undefined,
           certifications: values.certifications.trim() || undefined,
           note: isFieldEnabled('note') ? values.note || undefined : undefined,
+          // ats#240 B: cevaplar YALNIZ ilan soru taşıyorsa gönderilir (bkz. DTO notu);
+          // cevaplanmayan isteğe bağlı sorular listeye girmez.
+          ...(questions.length > 0
+            ? {
+                answers: questions
+                  .filter((q) => isAnswered(q, answers[q.questionId]))
+                  .map((q) => toAnswerDto(q, answers[q.questionId] as AnswerDraft)),
+              }
+            : {}),
           noticeVersion: job.noticeVersion,
           noticeAcceptedAt,
           accuracyConfirmedAt,
@@ -1662,22 +1818,23 @@ const CandidateApplicationPage = () => {
     </fieldset>
   );
 
-  const allPreviewRows: Array<[keyof ApplicationValues | 'experience' | 'education', string, string]> =
-    [
-      ['fullName', 'Ad soyad', values.fullName],
-      ['email', 'E-posta', values.email],
-      ['phone', 'Telefon', values.phone],
-      ['city', 'Şehir', values.city],
-      ['linkedIn', 'LinkedIn', values.linkedIn || 'Eklenmedi'],
-      ['portfolio', 'Portföy', values.portfolio || 'Eklenmedi'],
-      ['summary', 'Profesyonel özet', values.summary],
-      ['experience', 'Deneyim', derivedExperience],
-      ['education', 'Eğitim', derivedEducation],
-      ['skills', 'Beceriler', values.skills],
-      ['languages', 'Diller', values.languages || 'Eklenmedi'],
-      ['certifications', 'Sertifikalar ve eğitimler', values.certifications || 'Eklenmedi'],
-      ['note', 'Ek not', values.note || 'Eklenmedi'],
-    ];
+  const allPreviewRows: Array<
+    [keyof ApplicationValues | 'experience' | 'education', string, string]
+  > = [
+    ['fullName', 'Ad soyad', values.fullName],
+    ['email', 'E-posta', values.email],
+    ['phone', 'Telefon', values.phone],
+    ['city', 'Şehir', values.city],
+    ['linkedIn', 'LinkedIn', values.linkedIn || 'Eklenmedi'],
+    ['portfolio', 'Portföy', values.portfolio || 'Eklenmedi'],
+    ['summary', 'Profesyonel özet', values.summary],
+    ['experience', 'Deneyim', derivedExperience],
+    ['education', 'Eğitim', derivedEducation],
+    ['skills', 'Beceriler', values.skills],
+    ['languages', 'Diller', values.languages || 'Eklenmedi'],
+    ['certifications', 'Sertifikalar ve eğitimler', values.certifications || 'Eklenmedi'],
+    ['note', 'Ek not', values.note || 'Eklenmedi'],
+  ];
   const previewRows = allPreviewRows.filter(([field]) =>
     // Deneyim/eğitim ilan alan listesinde her zaman var ve artık forma girdi olarak
     // giriyor; ikisi de `ApplicationValues` anahtarı olmadığı için ayrıca geçirilir.
@@ -1857,7 +2014,7 @@ const CandidateApplicationPage = () => {
 
           {view === 'form' ? (
             <form className="flex flex-col gap-5" onSubmit={openPreview} noValidate>
-              {(
+              {
                 <div ref={resumeSectionRef}>
                   <section className={sectionClassName} aria-labelledby="resume-heading">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -2275,8 +2432,8 @@ const CandidateApplicationPage = () => {
                             </p>
                           ) : (
                             <p className="mt-2 text-xs text-text-secondary">
-                              {selectedResumeFields} alan forma aktarılacak,{' '}
-                              {resumeTally.REJECTED} alan aktarılmayacak.
+                              {selectedResumeFields} alan forma aktarılacak, {resumeTally.REJECTED}{' '}
+                              alan aktarılmayacak.
                             </p>
                           )}
                         </div>
@@ -2459,9 +2616,9 @@ const CandidateApplicationPage = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              }
 
-              {(
+              {
                 <div ref={contactSectionRef}>
                   <section className={sectionClassName} aria-labelledby="contact-heading">
                     <div className="mb-5">
@@ -2538,9 +2695,9 @@ const CandidateApplicationPage = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              }
 
-              {(
+              {
                 <div ref={profileSectionRef}>
                   <section className={sectionClassName} aria-labelledby="profile-heading">
                     <div className="mb-5">
@@ -2609,6 +2766,28 @@ const CandidateApplicationPage = () => {
                         : null}
                     </div>
                   </section>
+                  {questions.length > 0 ? (
+                    <section
+                      className={sectionClassName}
+                      aria-labelledby="questions-heading"
+                      data-testid="candidate-questions"
+                    >
+                      <div className="mb-5">
+                        <p className="text-xs font-bold uppercase tracking-wider text-action-primary">
+                          İlana özel sorular
+                        </p>
+                        <h2 id="questions-heading" className="mt-1 text-xl font-bold">
+                          Sorular
+                        </h2>
+                        <p className="mt-2 text-sm leading-6 text-text-secondary">
+                          Bu ilan için işverenin sorduğu sorular. Yıldızlı olanlar zorunludur;
+                          cevaplarınız başvurunuzla birlikte kaydedilir ve yalnız insan
+                          değerlendirici tarafından okunur.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-4">{questions.map(renderQuestion)}</div>
+                    </section>
+                  ) : null}
                   {formError ? (
                     <p
                       role="alert"
@@ -2638,7 +2817,7 @@ const CandidateApplicationPage = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              }
             </form>
           ) : null}
 
@@ -2690,6 +2869,33 @@ const CandidateApplicationPage = () => {
                     </dd>
                   </div>
                 ))}
+                {questions.map((question) => {
+                  const draft = answers[question.questionId];
+                  const shown = !isAnswered(question, draft)
+                    ? 'Yanıtlanmadı'
+                    : question.kind === 'YES_NO'
+                      ? draft?.yes
+                        ? 'Evet'
+                        : 'Hayır'
+                      : question.kind === 'SINGLE_CHOICE'
+                        ? (question.options?.find((option) => option.optionId === draft?.optionId)
+                            ?.label ?? '—')
+                        : (draft?.text ?? '').trim();
+                  return (
+                    <div
+                      key={question.questionId}
+                      data-testid={`candidate-preview-question-${question.questionId}`}
+                      className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
+                    >
+                      <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
+                        {question.text}
+                      </dt>
+                      <dd className="whitespace-pre-wrap break-words text-sm text-text-primary">
+                        {shown}
+                      </dd>
+                    </div>
+                  );
+                })}
                 <div className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4">
                   <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
                     PDF
@@ -2716,36 +2922,37 @@ const CandidateApplicationPage = () => {
                     yayımlanmadan başvuru onayı toplanamaz ve başvuru gönderilemez.
                   </p>
                 ) : (
-                <label
-                  className="flex items-start gap-3 text-sm leading-6"
-                  htmlFor="candidate-notice-accepted"
-                >
-                  <input
-                    id="candidate-notice-accepted"
-                    type="checkbox"
-                    checked={noticeAccepted}
-                    onChange={(event) => {
-                      setNoticeAccepted(event.target.checked);
-                      setNoticeAcceptedAt(event.target.checked ? new Date().toISOString() : '');
-                      if (!event.target.checked) {
-                        setAccuracyConfirmed(false);
-                        setAccuracyConfirmedAt('');
-                      }
-                      setSubmitError('');
-                    }}
-                    className="mt-1 h-4 w-4"
-                  />
-                  <span>
-                    {/* BEYAN METNİ AYNEN KORUNUR. Bu cümle `kvkk-application-v1`
+                  <label
+                    className="flex items-start gap-3 text-sm leading-6"
+                    htmlFor="candidate-notice-accepted"
+                  >
+                    <input
+                      id="candidate-notice-accepted"
+                      type="checkbox"
+                      checked={noticeAccepted}
+                      onChange={(event) => {
+                        setNoticeAccepted(event.target.checked);
+                        setNoticeAcceptedAt(event.target.checked ? new Date().toISOString() : '');
+                        if (!event.target.checked) {
+                          setAccuracyConfirmed(false);
+                          setAccuracyConfirmedAt('');
+                        }
+                        setSubmitError('');
+                      }}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span>
+                      {/* BEYAN METNİ AYNEN KORUNUR. Bu cümle `kvkk-application-v1`
                         sürümü altında kaydedilen beyandır; sözcüklerini değiştirip
                         sürümü aynı bırakmak, tek sürüm altında iki farklı beyan
                         kaydetmek olurdu (parserVersion ile aynı provenance kuralı).
                         Metnin okunabilir hâli aşağıya EKLENİR, beyan değişmez. */}
-                    KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
-                    kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla kaydedileceğini
-                    anladım. <span className="sr-only">Sürüm: {job?.noticeVersion}</span>
-                  </span>
-                </label>
+                      KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
+                      kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla
+                      kaydedileceğini anladım.{' '}
+                      <span className="sr-only">Sürüm: {job?.noticeVersion}</span>
+                    </span>
+                  </label>
                 )}
                 {/* Metin onayın YANINDA durur: "okudum" beyanı ancak okunabilir bir
                     metnin yanında anlam taşır. Daha önce yalnız sürüm kimliği vardı. */}
