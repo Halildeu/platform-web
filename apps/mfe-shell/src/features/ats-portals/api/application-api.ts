@@ -570,7 +570,7 @@ export const RECRUITER_JOB_QUESTION_KINDS: readonly RecruiterJobQuestionKind[] =
 /** İlan başına üst sınır (ats#240 A onaylı sözleşme): 0..10 geçerli, 11 reddedilir. */
 export const MAX_JOB_QUESTIONS = 10;
 export const MIN_JOB_QUESTION_OPTIONS = 2;
-export const MAX_JOB_QUESTION_OPTIONS = 8;
+export const MAX_JOB_QUESTION_OPTIONS = 10;
 
 /**
  * Seçenek: SABİT kimlik + görünen etiket. Cevaplar `optionId`'ye bağlanır — etiketi
