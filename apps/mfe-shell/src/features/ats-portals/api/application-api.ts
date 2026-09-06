@@ -115,6 +115,25 @@ export const DEFAULT_APPLICATION_FIELDS: ApplicationFieldKey[] = [
   'note',
 ];
 
+/** ats#240 B: adayın gördüğü seçenek — sunucu kimliği HER ZAMAN dolu (cevap buna bağlanır). */
+export type PublicJobQuestionOptionDto = {
+  optionId: string;
+  label: string;
+};
+
+/**
+ * ats#240 B: adayın gördüğü ilana özel soru. İK sözleşmesinin (`RecruiterJobQuestionDto`)
+ * aday yüzü: kimlikler sunucudan gelir ve doludur; `order` yalnız gösterim sırasıdır.
+ */
+export type PublicJobQuestionDto = {
+  questionId: string;
+  order: number;
+  text: string;
+  kind: RecruiterJobQuestionKind;
+  required: boolean;
+  options?: PublicJobQuestionOptionDto[];
+};
+
 export type PublicJobDto = {
   slug: string;
   title: string;
@@ -125,7 +144,27 @@ export type PublicJobDto = {
   summary: string;
   highlights: string[];
   applicationFields: ApplicationFieldKey[];
+  /**
+   * ats#240 B. Soruları destekleyen sunucuda HER ZAMAN dizidir (soru yoksa boş).
+   * Opsiyonel işaretlenmesi tip gevşekliği değil deploy-sırası korumasıdır:
+   * alanı hiç tanımayan bir sunum canlıda olabilir; okurken `[]`'e düşülür.
+   */
+  questions?: PublicJobQuestionDto[];
   noticeVersion: typeof APPLICATION_NOTICE_VERSION;
+};
+
+/**
+ * ats#240 B: adayın bir soruya cevabı. Cevap `questionId`/`optionId`'ye bağlanır,
+ * görünen METNE DEĞİL — İK bir yazım hatasını düzeltse de geçmiş cevap kopmaz.
+ * Tipe göre TAM BİR değer alanı gider: SHORT_TEXT/LONG_TEXT → `text`,
+ * YES_NO → `yes`, SINGLE_CHOICE → `optionId`. Backend şeması
+ * `additionalProperties: false` — başka anahtar gönderilmez.
+ */
+export type ApplicationAnswerDto = {
+  questionId: string;
+  text?: string;
+  yes?: boolean;
+  optionId?: string;
 };
 
 export type ApplicationSubmissionDto = {
@@ -155,6 +194,14 @@ export type ApplicationSubmissionDto = {
   accuracyConfirmedAt: string;
   resumeImportId?: string;
   resumeDraftVersion?: number;
+  /**
+   * ats#240 B: ilan sorularına cevaplar. YALNIZ ilan `questions` taşıyorsa
+   * gönderilir — soruları tanımayan (eski) bir sunucu `additionalProperties:
+   * false` ile bilinmeyen anahtarı reddeder ve TÜM başvurular düşerdi. Soru
+   * döndüren sunucu, cevabı kabul eden sunucudur (aynı dilim). Cevaplanmayan
+   * isteğe bağlı sorular listeye girmez; zorunlular önizleme kapısında dolar.
+   */
+  answers?: ApplicationAnswerDto[];
 };
 
 export type ResumeProposalState =
@@ -1055,7 +1102,8 @@ export const readCandidateEmailSession = (): CandidateEmailSession | null => {
     const parsed = JSON.parse(
       window.sessionStorage.getItem(EMAIL_LOGIN_SESSION_KEY) ?? 'null',
     ) as Partial<CandidateEmailSession> | null;
-    return parsed?.email && parsed.sessionToken &&
+    return parsed?.email &&
+      parsed.sessionToken &&
       CANDIDATE_ACCESS_PATTERN.test(parsed.sessionToken)
       ? { email: parsed.email, sessionToken: parsed.sessionToken }
       : null;

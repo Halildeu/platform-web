@@ -86,6 +86,51 @@ const JOB = {
   noticeVersion: 'kvkk-application-v1' as const,
 };
 
+// ats#240 B: ilana özel sorular. Sıra BİLEREK karışık (2, 1, 3): ekran `order`a göre dizmeli.
+const Q_MODE = 'q_' + 'M'.repeat(16);
+const Q_START = 'q_' + 'S'.repeat(16);
+const Q_YESNO = 'q_' + 'Y'.repeat(16);
+const Q_NOTE = 'q_' + 'N'.repeat(16);
+const OPT_OFFICE = 'qo_' + 'O'.repeat(12);
+const OPT_REMOTE = 'qo_' + 'R'.repeat(12);
+const JOB_WITH_QUESTIONS = {
+  ...JOB,
+  questions: [
+    {
+      questionId: Q_MODE,
+      order: 2,
+      text: 'Çalışma tercihiniz nedir?',
+      kind: 'SINGLE_CHOICE' as const,
+      required: true,
+      options: [
+        { optionId: OPT_OFFICE, label: 'Ofis' },
+        { optionId: OPT_REMOTE, label: 'Uzaktan' },
+      ],
+    },
+    {
+      questionId: Q_START,
+      order: 1,
+      text: 'Ne zaman başlayabilirsiniz?',
+      kind: 'SHORT_TEXT' as const,
+      required: true,
+    },
+    {
+      questionId: Q_YESNO,
+      order: 3,
+      text: 'Vardiyalı çalışabilir misiniz?',
+      kind: 'YES_NO' as const,
+      required: false,
+    },
+    {
+      questionId: Q_NOTE,
+      order: 4,
+      text: 'Eklemek istediğiniz bir şey var mı?',
+      kind: 'LONG_TEXT' as const,
+      required: false,
+    },
+  ],
+};
+
 const RECEIPT = {
   publicRef: 'app_abcdefghijklmnopqrstuvwx',
   candidateAccessToken: 'A'.repeat(43),
@@ -311,12 +356,15 @@ describe('CandidateApplicationPage', () => {
       void blob;
       return u;
     }) as unknown as typeof URL.createObjectURL;
-    URL.revokeObjectURL = vi.fn((u: string) => revoked.push(u)) as unknown as typeof URL.revokeObjectURL;
+    URL.revokeObjectURL = vi.fn((u: string) =>
+      revoked.push(u),
+    ) as unknown as typeof URL.revokeObjectURL;
     const origClick = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function patched(this: HTMLAnchorElement) {
       clicked.push({ download: this.download, href: this.href });
     };
-    const fetchCallsBefore = (globalThis.fetch as ReturnType<typeof vi.fn>)?.mock?.calls?.length ?? 0;
+    const fetchCallsBefore =
+      (globalThis.fetch as ReturnType<typeof vi.fn>)?.mock?.calls?.length ?? 0;
 
     try {
       renderPage();
@@ -485,8 +533,7 @@ describe('CandidateApplicationPage', () => {
 
     const card = () => screen.getByTestId('resume-proposal-fullName');
     const badge = () => screen.getByTestId('resume-proposal-state-fullName');
-    const acceptButton = () =>
-      within(card()).getByRole('button', { name: 'Öneriyi kabul et' });
+    const acceptButton = () => within(card()).getByRole('button', { name: 'Öneriyi kabul et' });
     const rejectButton = () => within(card()).getByRole('button', { name: 'Reddet' });
 
     expect(card()).toHaveAttribute('data-decision', 'UNREVIEWED');
@@ -561,13 +608,10 @@ describe('CandidateApplicationPage', () => {
     const progress = screen.getByTestId('resume-review-progress');
     expect(progress).toHaveTextContent('8 alandan 0 tanesi karara bağlandı');
     expect(progress).toHaveTextContent('8 alan bekliyor');
-    expect(screen.getByRole('progressbar', { name: 'Karara bağlanan CV alanı sayısı' })).toHaveAttribute(
-      'aria-valuenow',
-      '0',
-    );
     expect(
-      screen.getByText(/8 alan için henüz karar vermediniz/),
-    ).toBeVisible();
+      screen.getByRole('progressbar', { name: 'Karara bağlanan CV alanı sayısı' }),
+    ).toHaveAttribute('aria-valuenow', '0');
+    expect(screen.getByText(/8 alan için henüz karar vermediniz/)).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
 
@@ -576,10 +620,9 @@ describe('CandidateApplicationPage', () => {
         '8 alandan 8 tanesi karara bağlandı',
       ),
     );
-    expect(screen.getByRole('progressbar', { name: 'Karara bağlanan CV alanı sayısı' })).toHaveAttribute(
-      'aria-valuenow',
-      '8',
-    );
+    expect(
+      screen.getByRole('progressbar', { name: 'Karara bağlanan CV alanı sayısı' }),
+    ).toHaveAttribute('aria-valuenow', '8');
     expect(screen.queryByText(/henüz karar vermediniz/)).not.toBeInTheDocument();
     expect(screen.getByText(/8 alan forma aktarılacak/)).toBeVisible();
   });
@@ -809,9 +852,7 @@ describe('CandidateApplicationPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
 
-    expect(
-      screen.getByText(/Önizlemeye geçmek için yıldızlı alanları doldurun/i),
-    ).toBeVisible();
+    expect(screen.getByText(/Önizlemeye geçmek için yıldızlı alanları doldurun/i)).toBeVisible();
     expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
   });
 
@@ -919,9 +960,10 @@ describe('CandidateApplicationPage', () => {
     // KVKK m.11 hakları ve başvuru kanalı.
     expect(disclosure).toHaveTextContent('silinmesini veya yok edilmesini isteme');
     // Kalıcı sayfaya bağlantı da bulunmalı.
-    expect(
-      within(disclosure).getByRole('link', { name: /kalıcı sayfada aç/i }),
-    ).toHaveAttribute('href', '/jobs/aydinlatma');
+    expect(within(disclosure).getByRole('link', { name: /kalıcı sayfada aç/i })).toHaveAttribute(
+      'href',
+      '/jobs/aydinlatma',
+    );
   });
 
   it('does not collect consent when the notice text is missing', async () => {
@@ -1207,6 +1249,85 @@ describe('CandidateApplicationPage', () => {
     const body = apiMocks.submitApplication.mock.calls[0][3];
     expect(body.languages).toBe('Türkçe — ana dil, İngilizce — ileri seviye');
     expect(body.certifications).toBe('ISO 45001 Lead Auditor · 2025');
+  });
+
+  // ── ats#240 B: ilana özel sorular (aday tarafı) ────────────────────────────
+
+  it('renders the posting questions in order and blocks preview until required ones are answered', async () => {
+    apiMocks.getPublicJob.mockResolvedValue(JOB_WITH_QUESTIONS);
+    renderPage();
+    await reachProfileStep();
+
+    const section = screen.getByTestId('candidate-questions');
+    const text = section.textContent ?? '';
+    // order 1 < 2 < 3 < 4, dizi sırası değil `order`.
+    expect(text.indexOf('Ne zaman başlayabilirsiniz?')).toBeLessThan(
+      text.indexOf('Çalışma tercihiniz nedir?'),
+    );
+    expect(text.indexOf('Çalışma tercihiniz nedir?')).toBeLessThan(
+      text.indexOf('Vardiyalı çalışabilir misiniz?'),
+    );
+
+    // Diğer her şey dolu, yalnız zorunlu sorular boş: tek gerçek kapı burada durur.
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('zorunlu ilan sorularını yanıtlayın');
+    expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId(`candidate-question-${Q_START}`), {
+      target: { value: '  İki hafta içinde ' },
+    });
+    fireEvent.click(screen.getByTestId(`candidate-question-${Q_MODE}-${OPT_REMOTE}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+
+    expect(screen.getByTestId('candidate-application-preview')).toBeVisible();
+    expect(screen.getByTestId(`candidate-preview-question-${Q_START}`)).toHaveTextContent(
+      'İki hafta içinde',
+    );
+    expect(screen.getByTestId(`candidate-preview-question-${Q_MODE}`)).toHaveTextContent('Uzaktan');
+    expect(screen.getByTestId(`candidate-preview-question-${Q_YESNO}`)).toHaveTextContent(
+      'Yanıtlanmadı',
+    );
+  });
+
+  it('sends only the answered questions, bound to ids not labels', async () => {
+    apiMocks.getPublicJob.mockResolvedValue(JOB_WITH_QUESTIONS);
+    renderPage();
+    await reachProfileStep();
+    fireEvent.change(screen.getByTestId(`candidate-question-${Q_START}`), {
+      target: { value: 'Hemen' },
+    });
+    fireEvent.click(screen.getByTestId(`candidate-question-${Q_MODE}-${OPT_OFFICE}`));
+    fireEvent.click(screen.getByTestId(`candidate-question-${Q_YESNO}-no`));
+    // Q_NOTE (isteğe bağlı uzun metin) BİLEREK boş bırakılır.
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+
+    await waitFor(() => expect(apiMocks.submitApplication).toHaveBeenCalled());
+    const body = apiMocks.submitApplication.mock.calls[0][3];
+    expect(body.answers).toEqual([
+      { questionId: Q_START, text: 'Hemen' },
+      { questionId: Q_MODE, optionId: OPT_OFFICE },
+      { questionId: Q_YESNO, yes: false },
+    ]);
+    // Etiket/metin ASLA gitmez; boş isteğe bağlı soru listeye girmez.
+    expect(JSON.stringify(body.answers)).not.toContain('Ofis');
+    expect(body.answers.some((a: { questionId: string }) => a.questionId === Q_NOTE)).toBe(false);
+  });
+
+  it('shows no question section and sends no answers key for a posting without questions', async () => {
+    // Soruları tanımayan (eski) sunucu `additionalProperties: false` ile bilinmeyen
+    // anahtarı reddeder; bu yüzden `answers` YALNIZ ilan soru taşıyorsa gönderilir.
+    renderPage();
+    await reachProfileStep();
+    expect(screen.queryByTestId('candidate-questions')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+    screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+    fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+
+    await waitFor(() => expect(apiMocks.submitApplication).toHaveBeenCalled());
+    const body = apiMocks.submitApplication.mock.calls[0][3];
+    expect('answers' in body).toBe(false);
   });
 
   it('refuses the preview until at least one entry actually has content', async () => {
