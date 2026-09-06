@@ -8,11 +8,45 @@ import {
   listRecruiterJobs,
   transitionRecruiterJob,
   updateRecruiterJob,
+  MAX_JOB_QUESTION_OPTIONS,
+  MAX_JOB_QUESTIONS,
+  MIN_JOB_QUESTION_OPTIONS,
+  RECRUITER_JOB_QUESTION_KINDS,
   type ApplicationFieldKey,
   type RecruiterJobDraftDto,
   type RecruiterJobDto,
+  type RecruiterJobQuestionKind,
+  type RecruiterJobQuestionWarningDto,
   type RecruiterJobStatus,
 } from '../api/application-api';
+
+/**
+ * ats#240 A: form içindeki soru. `order` BURADA YOK — dizideki konum sıradır ve
+ * gönderirken `order`'a çevrilir. Kimlik `questionId`'dir; mevcut sorularda
+ * AYNEN taşınır, yeni soruda yoktur ve sunucu atar. Sıra değişimi kimliği
+ * değiştirmez; bu, dilim B/C'de cevapların sorusuna bağlı kalmasının önkoşulu.
+ */
+type QuestionFormState = {
+  questionId?: string;
+  text: string;
+  kind: RecruiterJobQuestionKind;
+  required: boolean;
+  options: Array<{ optionId?: string; label: string }>;
+};
+
+const QUESTION_KIND_LABELS: Record<RecruiterJobQuestionKind, string> = {
+  SHORT_TEXT: 'Kısa metin',
+  LONG_TEXT: 'Uzun metin',
+  YES_NO: 'Evet / Hayır',
+  SINGLE_CHOICE: 'Tek seçim',
+};
+
+const EMPTY_QUESTION: QuestionFormState = {
+  text: '',
+  kind: 'SHORT_TEXT',
+  required: false,
+  options: [{ label: '' }, { label: '' }],
+};
 
 type FormState = {
   slug: string;
@@ -24,6 +58,7 @@ type FormState = {
   summary: string;
   highlights: string;
   applicationFields: ApplicationFieldKey[];
+  questions: QuestionFormState[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -36,6 +71,7 @@ const EMPTY_FORM: FormState = {
   summary: '',
   highlights: '',
   applicationFields: DEFAULT_APPLICATION_FIELDS,
+  questions: [],
 };
 
 const STATUS_LABELS: Record<RecruiterJobStatus, string> = {
@@ -82,6 +118,25 @@ const formFromJob = (job: RecruiterJobDto): FormState => ({
   summary: job.summary,
   highlights: job.highlights.join('\n'),
   applicationFields: job.applicationFields,
+  // Sunucu `order` artan sırada döndürür; dizideki konum o sırayı temsil eder.
+  //
+  // `?? []` bilinçli: bu ekran, soruları destekleyen backend HENÜZ deploy
+  // edilmemişken de açılabilir (frontend/backend deploy sırası garanti değil).
+  // O durumda alan yanıtta hiç bulunmaz; `undefined.map` ilan düzenlemeyi
+  // tamamen kilitlerdi. Sorusuz ilan zaten geçerli bir durum.
+  questions: (job.questions ?? []).map((question) => ({
+    questionId: question.questionId,
+    text: question.text,
+    kind: question.kind,
+    required: question.required,
+    options:
+      question.kind === 'SINGLE_CHOICE' && question.options?.length
+        ? question.options.map((option) => ({
+            optionId: option.optionId,
+            label: option.label,
+          }))
+        : [{ label: '' }, { label: '' }],
+  })),
 });
 
 const payloadFromForm = (form: FormState): RecruiterJobDraftDto => ({
@@ -97,8 +152,68 @@ const payloadFromForm = (form: FormState): RecruiterJobDraftDto => ({
     .map((item) => item.trim())
     .filter((item, index, values) => item.length > 0 && values.indexOf(item) === index),
   applicationFields: form.applicationFields,
+  // `order` dizideki konumdan TÜRETİLİR (1'den başlar). Sıra bir sunum kararıdır;
+  // kimlik `questionId`'dir ve olduğu gibi geri gönderilir.
+  questions: form.questions.map((question, index) => ({
+    ...(question.questionId ? { questionId: question.questionId } : {}),
+    order: index + 1,
+    text: question.text.trim(),
+    kind: question.kind,
+    required: question.required,
+    // Boş etiketler BURADA FİLTRELENMEZ. Sessizce düşürmek, ekranda "en az 2 seçenek"
+    // yazarken isteği 0/1 seçenekle göndermeye ve backend 400'üne yol açıyordu. Gönderim
+    // öncesi doğrulama (questionFormError) bu durumu görünür biçimde durdurur.
+    ...(question.kind === 'SINGLE_CHOICE'
+      ? {
+          options: question.options.map((option) => ({
+            ...(option.optionId ? { optionId: option.optionId } : {}),
+            label: option.label.trim(),
+          })),
+        }
+      : {}),
+  })),
   noticeVersion: 'kvkk-application-v1',
 });
+
+/**
+ * ats#240 A: gönderim ÖNCESİ soru doğrulaması.
+ *
+ * Ekran "en az 2, en fazla 8 seçenek" vaat ediyorsa istek de öyle gitmeli. Önceki hâli
+ * boş etiketleri sessizce filtreliyordu: İK iki varsayılan alanı boş bırakıp ya da yalnız
+ * birini doldurup gönderebiliyor, istek 0/1 seçenekle çıkıp backend 400'üne düşüyordu —
+ * kullanıcı ise ekranda kuralı okumuş oluyordu. Otorite yine backend; buradaki kontrol
+ * kuralı GÖRÜNÜR kılmak için, onun yerine geçmek için değil.
+ *
+ * @returns kullanıcıya gösterilecek hata; {@code null} = gönderilebilir
+ */
+const questionFormError = (questions: QuestionFormState[]): string | null => {
+  for (let index = 0; index < questions.length; index += 1) {
+    const question = questions[index];
+    const position = index + 1;
+    const text = question.text.trim();
+    if (text.length < 2 || text.length > 500) {
+      return `${position}. sorunun metni 2–500 karakter olmalı.`;
+    }
+    if (question.kind !== 'SINGLE_CHOICE') continue;
+
+    const labels = question.options.map((option) => option.label.trim());
+    if (labels.some((label) => label.length === 0)) {
+      return `${position}. soruda boş seçenek var; doldurun ya da silin.`;
+    }
+    if (labels.length < MIN_JOB_QUESTION_OPTIONS || labels.length > MAX_JOB_QUESTION_OPTIONS) {
+      return `${position}. soru ${MIN_JOB_QUESTION_OPTIONS}–${MAX_JOB_QUESTION_OPTIONS} seçenek ister.`;
+    }
+    // Katlama LOCALE-BAĞIMSIZ olmalı: backend benzersizliği `Locale.ROOT` ile doğruluyor.
+    // Türkçe locale ile katlamak aynı sözleşmeyi üretmez — `I` burada `ı`ya, backend'de `i`ye
+    // düşer; "Istanbul"/"istanbul" çifti istemcide farklı sayılıp geçerken backend 400 verir.
+    // Yani giderilmiş sanılan frontend-400 yolu tam da Türkçe kenarında sürerdi.
+    const distinct = new Set(labels.map((label) => label.toLowerCase()));
+    if (distinct.size !== labels.length) {
+      return `${position}. soruda aynı seçenek birden fazla kez var.`;
+    }
+  }
+  return null;
+};
 
 const OPTIONAL_FIELD_OPTIONS: Array<{ key: ApplicationFieldKey; label: string }> = [
   { key: 'linkedIn', label: 'LinkedIn adresi' },
@@ -150,6 +265,15 @@ const RecruiterJobsPanel = ({
   const [editing, setEditing] = useState<RecruiterJobDto | null>(null);
   const [previewing, setPreviewing] = useState<RecruiterJobDto | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  /**
+   * ats#240 A: kaydedilen ilanın korunan-özellik uyarıları. Kayıt BAŞARILIDIR —
+   * uyarı engellemez, görünür kılar. Boş dizi "uyarı yok" demektir; taranamama
+   * hâli sunucudan ayrı bir kategori (`COVERAGE_UNKNOWN`) olarak gelir, sessizce
+   * temiz görünmez.
+   */
+  const [questionWarnings, setQuestionWarnings] = useState<
+    Array<{ order: number; category: string; signal: string }>
+  >([]);
   const [saving, setSaving] = useState(false);
   const [transitioningJobId, setTransitioningJobId] = useState<string | null>(null);
   /**
@@ -246,6 +370,7 @@ const RecruiterJobsPanel = ({
     setFormOpen(true);
     setActionError('');
     setSuccess('');
+    setQuestionWarnings([]);
   };
 
   const openEdit = (job: RecruiterJobDto) => {
@@ -254,11 +379,94 @@ const RecruiterJobsPanel = ({
     setFormOpen(true);
     setActionError('');
     setSuccess('');
+    setQuestionWarnings([]);
   };
+
+  // --- ats#240 A: soru düzenleme -------------------------------------------------
+  // Hepsi form state'i üzerinde çalışır; kaydedilene kadar sunucuya gitmez.
+
+  const patchQuestion = (index: number, patch: Partial<QuestionFormState>) =>
+    setForm((current) => ({
+      ...current,
+      questions: current.questions.map((question, position) =>
+        position === index ? { ...question, ...patch } : question,
+      ),
+    }));
+
+  const addQuestion = () =>
+    setForm((current) =>
+      current.questions.length >= MAX_JOB_QUESTIONS
+        ? current
+        : { ...current, questions: [...current.questions, { ...EMPTY_QUESTION }] },
+    );
+
+  const removeQuestion = (index: number) =>
+    setForm((current) => ({
+      ...current,
+      questions: current.questions.filter((_, position) => position !== index),
+    }));
+
+  /**
+   * Yeniden sıralama yalnız dizideki konumu değiştirir. `questionId` taşınır —
+   * "3. soruyu yukarı al" işlemi soruyu değil, sırasını değiştirir.
+   */
+  const moveQuestion = (index: number, delta: -1 | 1) =>
+    setForm((current) => {
+      const target = index + delta;
+      if (target < 0 || target >= current.questions.length) return current;
+      const questions = [...current.questions];
+      [questions[index], questions[target]] = [questions[target], questions[index]];
+      return { ...current, questions };
+    });
+
+  const patchOption = (questionIndex: number, optionIndex: number, label: string) =>
+    setForm((current) => ({
+      ...current,
+      questions: current.questions.map((question, position) =>
+        position !== questionIndex
+          ? question
+          : {
+              ...question,
+              options: question.options.map((option, slot) =>
+                slot === optionIndex ? { ...option, label } : option,
+              ),
+            },
+      ),
+    }));
+
+  const addOption = (questionIndex: number) =>
+    setForm((current) => ({
+      ...current,
+      questions: current.questions.map((question, position) =>
+        position !== questionIndex || question.options.length >= MAX_JOB_QUESTION_OPTIONS
+          ? question
+          : { ...question, options: [...question.options, { label: '' }] },
+      ),
+    }));
+
+  const removeOption = (questionIndex: number, optionIndex: number) =>
+    setForm((current) => ({
+      ...current,
+      questions: current.questions.map((question, position) =>
+        position !== questionIndex
+          ? question
+          : {
+              ...question,
+              options: question.options.filter((_, slot) => slot !== optionIndex),
+            },
+      ),
+    }));
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    // ats#240 A: kural ekranda yazıyorsa istek de ona uymalı — sessiz filtreleme yok.
+    const questionError = questionFormError(form.questions);
+    if (questionError) {
+      setSuccess('');
+      setActionError(questionError);
+      return;
+    }
     setSaving(true);
     setActionError('');
     setSuccess('');
@@ -279,6 +487,21 @@ const RecruiterJobsPanel = ({
       );
       setFormOpen(false);
       setEditing(null);
+      // Kayıt başarılı; uyarılar İK'ya AYRICA gösterilir, kaydı geri almaz.
+      //
+      // Uyarı `questionId` taşır (kimlik), ekranda ise "kaçıncı soru" anlamlıdır.
+      // Eşleme SUNUCUNUN döndürdüğü kayıt üzerinden yapılır: yeni sorularda form
+      // state'inde henüz kimlik yoktur, kimliği sunucu bu yanıtta atar.
+      const savedQuestions = saved.questions ?? [];
+      setQuestionWarnings(
+        (saved.questionWarnings ?? []).map((warning) => ({
+          order:
+            savedQuestions.find((question) => question.questionId === warning.questionId)?.order ??
+            0,
+          category: warning.category,
+          signal: warning.signal,
+        })),
+      );
       setSuccess(
         editing
           ? `“${saved.title}” ilanı güncellendi.`
@@ -469,6 +692,43 @@ const RecruiterJobsPanel = ({
         </p>
       ) : null}
 
+      {/*
+        ats#240 A: korunan-özellik uyarıları. Kayıt BAŞARILIDIR — bu kutu onun
+        yanında durur, yerine değil. Uyarı engellemez, görünür kılar; kararı İK
+        verir. `COVERAGE_UNKNOWN`/`ADVISOR_UNAVAILABLE` "taranamadı" demektir ve
+        sessizce "temiz" görünmemesi için sunucudan ayrı kategori olarak gelir.
+      */}
+      {questionWarnings.length > 0 ? (
+        <div
+          className="mt-4 rounded-xl border border-state-warning-border bg-state-warning-bg p-3"
+          role="status"
+          data-testid="job-question-warnings"
+        >
+          <p className="text-sm font-bold text-text-primary">
+            Sorularınız gözden geçirilmeli
+          </p>
+          <p className="mt-1 text-xs leading-5 text-text-secondary">
+            Aşağıdaki sorular korunan bir kişisel özelliğe değiyor olabilir. İlan kaydedildi;
+            eleme yapılmadı. Soruların işle ilgili olduğundan emin olun.
+          </p>
+          <ul className="mt-2 grid gap-1">
+            {questionWarnings.map((warning, index) => (
+              <li
+                key={`${warning.order}-${warning.category}-${index}`}
+                className="text-xs text-text-primary"
+              >
+                <strong>{warning.order || '?'}. soru</strong>
+                {' — '}
+                {warning.category === 'COVERAGE_UNKNOWN' ||
+                warning.category === 'ADVISOR_UNAVAILABLE'
+                  ? 'tarama yapılamadı; uyarı yokluğu "risk yok" anlamına gelmez'
+                  : `${warning.category} (${warning.signal})`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {formOpen ? (
         <form
           onSubmit={(event) => void submit(event)}
@@ -602,6 +862,180 @@ const RecruiterJobsPanel = ({
             <p className="mt-3 text-xs text-text-secondary">
               Aydınlatma metni sürümü: <strong>kvkk-application-v1</strong>
             </p>
+          </fieldset>
+
+          {/*
+            ats#240 A: ilana özel başvuru soruları. Sahip talebi — "adaya sorular
+            da yöneltebilmeliyiz". Öncesinde tek çıkış yolu adayın serbest not
+            alanına yazmasıydı: ne sorulduğu belli değil, cevap yapısal değil.
+
+            Sıra dizideki konumdur; kimlik değildir. Yukarı/aşağı taşımak soruyu
+            değil sırasını değiştirir, `questionId` sabit kalır.
+          */}
+          <fieldset
+            className="mt-4 rounded-2xl border border-border-subtle bg-surface-default p-4"
+            data-testid="job-questions-editor"
+          >
+            <legend className="px-1 text-sm font-bold text-text-primary">
+              Adaya sorulacak sorular
+            </legend>
+            <p className="mt-1 text-xs leading-5 text-text-secondary">
+              Bu ilana özel, başvuru sırasında yanıtlanacak sorular. Cevaplar size gösterilir;
+              <strong> otomatik eleme veya puanlama yapılmaz</strong> — kararı siz verirsiniz.
+            </p>
+            <p className="mt-1 text-xs font-semibold text-text-secondary">
+              {form.questions.length} / {MAX_JOB_QUESTIONS} soru
+            </p>
+
+            {form.questions.length === 0 && (
+              <p className="mt-3 text-xs text-text-secondary" data-testid="job-questions-empty">
+                Henüz soru eklenmedi. Sorusuz ilan geçerlidir.
+              </p>
+            )}
+
+            <ol className="mt-3 grid gap-3">
+              {form.questions.map((question, index) => (
+                <li
+                  key={question.questionId ?? `new-${index}`}
+                  className="rounded-xl border border-border-subtle p-3"
+                  data-testid="job-question-row"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-text-secondary">{index + 1}. soru</span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveQuestion(index, -1)}
+                        disabled={index === 0}
+                        aria-label={`${index + 1}. soruyu yukarı taşı`}
+                        className="min-h-11 min-w-11 rounded-lg border border-border-subtle px-2 text-sm font-bold disabled:opacity-40"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveQuestion(index, 1)}
+                        disabled={index === form.questions.length - 1}
+                        aria-label={`${index + 1}. soruyu aşağı taşı`}
+                        className="min-h-11 min-w-11 rounded-lg border border-border-subtle px-2 text-sm font-bold disabled:opacity-40"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeQuestion(index)}
+                        aria-label={`${index + 1}. soruyu sil`}
+                        className="min-h-11 rounded-lg border border-border-subtle px-3 text-sm font-bold"
+                      >
+                        Sil
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="mt-2 block text-sm font-semibold text-text-primary">
+                    Soru metni
+                    <input
+                      value={question.text}
+                      onChange={(event) => patchQuestion(index, { text: event.target.value })}
+                      required
+                      minLength={2}
+                      maxLength={500}
+                      className="mt-2 min-h-11 w-full rounded-xl border border-border-subtle bg-surface-default px-3.5 text-sm"
+                    />
+                  </label>
+
+                  <div className="mt-2 flex flex-wrap items-end gap-4">
+                    <label className="block text-sm font-semibold text-text-primary">
+                      Cevap biçimi
+                      <select
+                        value={question.kind}
+                        onChange={(event) =>
+                          patchQuestion(index, {
+                            kind: event.target.value as RecruiterJobQuestionKind,
+                          })
+                        }
+                        className="mt-2 min-h-11 rounded-xl border border-border-subtle bg-surface-default px-3 text-sm"
+                      >
+                        {RECRUITER_JOB_QUESTION_KINDS.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {QUESTION_KIND_LABELS[kind]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={question.required}
+                        onChange={(event) =>
+                          patchQuestion(index, { required: event.target.checked })
+                        }
+                        className="h-4 w-4"
+                      />
+                      Yanıtlanması zorunlu
+                    </label>
+                  </div>
+
+                  {question.kind === 'SINGLE_CHOICE' && (
+                    <div className="mt-3 rounded-lg border border-border-subtle p-3">
+                      <p className="text-xs font-bold text-text-secondary">
+                        Seçenekler (en az 2, en fazla {MAX_JOB_QUESTION_OPTIONS})
+                      </p>
+                      <div className="mt-2 grid gap-2">
+                        {question.options.map((option, optionIndex) => (
+                          <div
+                            key={option.optionId ?? `new-option-${optionIndex}`}
+                            className="flex items-center gap-2"
+                          >
+                            <input
+                              value={option.label}
+                              onChange={(event) =>
+                                patchOption(index, optionIndex, event.target.value)
+                              }
+                              maxLength={120}
+                              aria-label={`${index + 1}. soru, ${optionIndex + 1}. seçenek`}
+                              className="min-h-11 flex-1 rounded-xl border border-border-subtle bg-surface-default px-3.5 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeOption(index, optionIndex)}
+                              disabled={question.options.length <= 2}
+                              aria-label={`${optionIndex + 1}. seçeneği sil`}
+                              className="min-h-11 rounded-lg border border-border-subtle px-3 text-sm font-bold disabled:opacity-40"
+                            >
+                              Sil
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addOption(index)}
+                        disabled={question.options.length >= MAX_JOB_QUESTION_OPTIONS}
+                        className="mt-2 min-h-11 rounded-lg border border-border-subtle px-3 text-sm font-bold disabled:opacity-40"
+                      >
+                        Seçenek ekle
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+
+            <button
+              type="button"
+              onClick={addQuestion}
+              disabled={form.questions.length >= MAX_JOB_QUESTIONS}
+              data-testid="job-question-add"
+              className="mt-3 min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 text-sm font-bold disabled:opacity-40"
+            >
+              Soru ekle
+            </button>
+            {form.questions.length >= MAX_JOB_QUESTIONS && (
+              <p className="mt-2 text-xs text-text-secondary">
+                Üst sınıra ulaşıldı. Başvuru formunun uzunluğu adayın işini bozmamalı.
+              </p>
+            )}
           </fieldset>
           <div className="mt-5 flex flex-wrap gap-3">
             <button
