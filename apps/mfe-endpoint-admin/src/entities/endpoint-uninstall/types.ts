@@ -107,6 +107,8 @@ export interface AdminUninstallRequestResponse {
   approvedBy: string | null;
   createdAt: string;
   stateUpdatedAt: string;
+  /** Server-authorized, request-bound TEST exception; never supplied by the caller. */
+  ownerException?: { decisionRef: string; expiresAt: string } | null;
 }
 
 /**

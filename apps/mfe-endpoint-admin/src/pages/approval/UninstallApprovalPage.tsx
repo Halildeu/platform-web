@@ -60,6 +60,12 @@ export const UninstallApprovalPage: React.FC = () => {
     if (!listQuery.data || !requestId) return undefined;
     return listQuery.data.find((r) => r.requestId === requestId);
   }, [listQuery.data, requestId]);
+  const [now, setNow] = React.useState(Date.now);
+  React.useEffect(() => {
+    if (!request?.ownerException) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [request?.ownerException]);
 
   const mapError = (err: unknown): { headline: string; detail: string } => {
     const status = readErrorStatus(err);
@@ -112,11 +118,17 @@ export const UninstallApprovalPage: React.FC = () => {
     request && currentSubject && request.createdBy && request.createdBy === currentSubject,
   );
   const isPending = request?.state === 'PENDING_APPROVAL';
+  const ownerException = request?.ownerException;
+  const hasOwnerException = Boolean(
+    isPending && isSelfApproval && ownerException &&
+    /^https:\/\/github\.com\/Halildeu\/platform-k8s-gitops\/issues\/[0-9]+#issuecomment-[0-9]+$/.test(ownerException.decisionRef) &&
+    Date.parse(ownerException.expiresAt) > now,
+  );
   // Approve is permitted only when the request is still PENDING_APPROVAL,
   // the active admin identity is resolved, it is not a (client-detected)
   // self-approval, and no submit is in flight (double-submit guard).
   const approveDisabled =
-    !isPending || !actorResolved || isSelfApproval || approveState.isLoading || approved;
+    !isPending || !actorResolved || (isSelfApproval && !hasOwnerException) || approveState.isLoading || approved;
 
   const renderBody = () => {
     if (isLoading) {
@@ -186,7 +198,14 @@ export const UninstallApprovalPage: React.FC = () => {
           </p>
         )}
 
-        {isSelfApproval && (
+        {hasOwnerException && ownerException && (
+          <div role="status" className="border-l-4 border-state-warning-border px-3 py-2 text-sm" data-testid="uninstall-approval-owner-exception">
+            <p>{t('endpointAdmin.uninstallApproval.ownerException')}</p>
+            <time dateTime={ownerException.expiresAt}>{new Date(ownerException.expiresAt).toLocaleString()}</time>
+          </div>
+        )}
+
+        {isSelfApproval && !hasOwnerException && (
           <p
             className="rounded-md border border-state-warning-border bg-state-warning-bg px-3 py-2 text-sm text-state-warning-text"
             data-testid="uninstall-approval-self"
@@ -267,7 +286,7 @@ export const UninstallApprovalPage: React.FC = () => {
         {t('endpointAdmin.uninstallApproval.heading')}
       </h1>
       <p className="text-sm text-text-secondary mb-4">
-        {t('endpointAdmin.uninstallApproval.subtitle')}
+        {t(hasOwnerException ? 'endpointAdmin.uninstallApproval.ownerExceptionSubtitle' : 'endpointAdmin.uninstallApproval.subtitle')}
       </p>
       {renderBody()}
     </div>
