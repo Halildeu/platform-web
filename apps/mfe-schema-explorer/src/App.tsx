@@ -42,10 +42,16 @@ const App = () => {
 
   // The schema list belongs to the selected source: IFS lists Oracle owners,
   // Workcube lists MSSQL schemas.
+  // The header is usable before any snapshot arrives, so a slow reply for the
+  // previous source must not land after the user has already switched: the
+  // list is cleared on change and a stale reply is dropped (Codex 01a0884d).
   useEffect(() => {
+    let current = true;
+    setSchemas([]);
     schemaApi.getSchemas(activeSource)
-      .then(list => setSchemas(Array.isArray(list) ? list : []))
-      .catch(() => setSchemas([]));
+      .then(list => { if (current) setSchemas(Array.isArray(list) ? list : []); })
+      .catch(() => { if (current) setSchemas([]); });
+    return () => { current = false; };
   }, [activeSource]);
 
   const handleTableSelect = useCallback((tableName: string) => {
