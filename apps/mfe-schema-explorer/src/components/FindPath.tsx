@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { schemaApi, type SchemaSnapshot } from '../api/schemaApi';
+import { schemaApi, scopedUrl, type SchemaScope, type SchemaSnapshot } from '../api/schemaApi';
 
 interface FindPathProps {
+  scope?: SchemaScope;
   snapshot: SchemaSnapshot;
   selectedTable: string | null;
   onTableSelect: (table: string) => void;
@@ -23,7 +24,7 @@ interface PathResult {
   joinSql: string;
 }
 
-export const FindPath = ({ snapshot, selectedTable, onTableSelect }: FindPathProps) => {
+export const FindPath = ({ snapshot, selectedTable, onTableSelect, scope }: FindPathProps) => {
   const [fromTable, setFromTable] = useState(selectedTable || '');
   const [toTable, setToTable] = useState('');
   const [results, setResults] = useState<PathResult[] | null>(null);
@@ -38,7 +39,7 @@ export const FindPath = ({ snapshot, selectedTable, onTableSelect }: FindPathPro
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/schema/path?from=${fromTable}&to=${toTable}&limit=3`);
+      const res = await fetch(scopedUrl(`/path?from=${fromTable}&to=${toTable}&limit=3`, scope));
       const data = await res.json();
       if (data.error) {
         setError(data.error);

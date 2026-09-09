@@ -126,7 +126,7 @@
     "build:ubuntu:single-domain": "node ./scripts/deploy/build-single-domain.mjs",
     "build:raw": "npm run clean && npm-run-all --parallel build:shell build:suggestions build:ethic build:etik-speak-public build:etik-speak-manager build:access build:audit build:meeting build:design-system build:users build:reporting build:interview-evidence",
     "build": "bash ./scripts/health/run-web-build-guard.sh --script build:raw",
-    "test": "npm-run-all test:shell test:ethic test:etik-speak-public test:etik-speak-manager test:access:unit test:audit test:meeting test:design-system test:shared-types",
+    "test": "npm-run-all test:shell test:ethic test:etik-speak-public test:etik-speak-manager test:access:unit test:audit test:meeting test:design-system test:shared-types test:schema-explorer",
     "test:shell": "npm run test --prefix apps/mfe-shell",
     "test:ethic": "npm run test --prefix apps/mfe-ethic",
     "test:etik-speak-public": "npm run test --prefix apps/etik-speak-public",
@@ -259,7 +259,8 @@
     "format:check": "prettier --check .",
     "dev:frontend": "node -e \"console.error('[deprecated] use pnpm start');\" && pnpm start",
     "stop:frontend": "bash ./scripts/stop-frontend.sh",
-    "dev:full": "node -e \"console.error('[deprecated] use canonical backend compose + pnpm start');\" && cd ../backend && ./scripts/run-compose-stack.sh && cd ../web && pnpm start"
+    "dev:full": "node -e \"console.error('[deprecated] use canonical backend compose + pnpm start');\" && cd ../backend && ./scripts/run-compose-stack.sh && cd ../web && pnpm start",
+    "test:schema-explorer": "npm run test --prefix apps/mfe-schema-explorer"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [

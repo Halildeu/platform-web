@@ -1,14 +1,16 @@
 import { useState } from 'react';
+import { type SchemaScope } from '../api/schemaApi';
 import { useImpactAnalysis } from '../hooks/useSchemaData';
 
 interface ImpactAnalysisProps {
+  scope?: SchemaScope;
   tableName: string;
   onTableSelect: (table: string) => void;
 }
 
-export const ImpactAnalysis = ({ tableName, onTableSelect }: ImpactAnalysisProps) => {
+export const ImpactAnalysis = ({ tableName, onTableSelect, scope }: ImpactAnalysisProps) => {
   const [hops, setHops] = useState(2);
-  const { data, isLoading } = useImpactAnalysis(tableName, hops);
+  const { data, isLoading } = useImpactAnalysis(tableName, hops, scope);
 
   return (
     <div className="se-impact">
