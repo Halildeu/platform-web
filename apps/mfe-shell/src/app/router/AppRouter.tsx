@@ -376,10 +376,16 @@ export const AppRouter: React.FC = () => {
             </AuthTraceRoute>
           }
         />
+        {/* gitops#3605: the Explorer browses catalog METADATA (table/view and
+            column names, discovered relationships) of the reporting sources —
+            no row data. It sat behind THEME since the 2026-04-08 bulk module
+            migration (#213), which in practice made it ADMIN-only: ADMIN is
+            the only role carrying THEME. REPORT is the module whose users
+            already see the data these catalogs describe. */}
         <Route
           path="/admin/schema-explorer/*"
           element={
-            <ProtectedRoute requiredModule="THEME">
+            <ProtectedRoute requiredModule="REPORT">
               <SchemaExplorerModule />
             </ProtectedRoute>
           }
