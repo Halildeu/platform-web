@@ -229,3 +229,7 @@
 
 /* Main */
 .se-main { overflow: hidden; }
+
+/* gitops#3605: header stays interactive while the snapshot loads */
+.se-header__stats-pending { color: var(--se-muted, #8b98a8); font-style: italic; }
+.se-sidebar--pending { opacity: 0.4; }

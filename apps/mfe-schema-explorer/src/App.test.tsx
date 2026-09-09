@@ -67,6 +67,29 @@ describe('schema explorer source picker', () => {
     expect(api.getSchemas).toHaveBeenLastCalledWith('ifs');
   });
 
+  it('shows the source picker while the snapshot is still loading', async () => {
+    // A cold Workcube snapshot takes ~100 s on a fresh pod; an IFS user must be
+    // able to switch source before it arrives (browser lane timed out at 60 s).
+    api.getSnapshot.mockImplementation(() => new Promise(() => {}));
+    render(<App />);
+
+    const picker = await screen.findByTestId('se-source-select');
+    expect(screen.getByTestId('se-loading')).toBeInTheDocument();
+    expect(await screen.findByText('workcube_mikrolink (1565)')).toBeInTheDocument();
+
+    fireEvent.change(picker, { target: { value: 'ifs' } });
+    await waitFor(() => expect(api.getSnapshot).toHaveBeenCalledWith({ source: 'ifs', schema: undefined }));
+  });
+
+  it('shows the error inside the layout, header still usable', async () => {
+    api.getSnapshot.mockRejectedValue(new Error('snapshot exploded'));
+    render(<App />);
+
+    // the local QueryClient retries once (~1 s) before surfacing the error
+    expect(await screen.findByText('Failed to load schema data', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByTestId('se-source-select')).toBeInTheDocument();
+  });
+
   it('hides the picker when the service exposes no sources', async () => {
     api.getSources.mockResolvedValue([]);
     render(<App />);
