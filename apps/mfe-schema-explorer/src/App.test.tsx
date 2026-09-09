@@ -67,6 +67,89 @@ describe('schema explorer source picker', () => {
     expect(api.getSchemas).toHaveBeenLastCalledWith('ifs');
   });
 
+  it('shows the source picker while the snapshot is still loading', async () => {
+    // A cold Workcube snapshot takes ~100 s on a fresh pod; an IFS user must be
+    // able to switch source before it arrives (browser lane timed out at 60 s).
+    api.getSnapshot.mockImplementation(() => new Promise(() => {}));
+    render(<App />);
+
+    const picker = await screen.findByTestId('se-source-select');
+    expect(screen.getByTestId('se-loading')).toBeInTheDocument();
+    expect(await screen.findByText('workcube_mikrolink (1565)')).toBeInTheDocument();
+
+    fireEvent.change(picker, { target: { value: 'ifs' } });
+    await waitFor(() => expect(api.getSnapshot).toHaveBeenCalledWith({ source: 'ifs', schema: undefined }));
+  });
+
+  it('shows the error inside the layout, header still usable', async () => {
+    api.getSnapshot.mockRejectedValue(new Error('snapshot exploded'));
+    render(<App />);
+
+    // the local QueryClient retries once (~1 s) before surfacing the error
+    expect(await screen.findByText('Failed to load schema data', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByTestId('se-source-select')).toBeInTheDocument();
+  });
+
+  it('a late schema reply for the previous source is dropped after switching to ifs', async () => {
+    // Workcube's schema list arrives *after* the user has switched to IFS; it
+    // must not replace the IFS list, or a Workcube schema could be requested
+    // under source=ifs (Codex 01a0884d P2).
+    let releaseWorkcube: (v: { name: string; tableCount: number }[]) => void = () => {};
+    api.getSchemas.mockImplementation((source?: string) =>
+      source === 'ifs'
+        ? Promise.resolve([{ name: 'IFSAPP', tableCount: 10886 }])
+        : new Promise(resolve => { releaseWorkcube = resolve; }));
+    api.getSnapshot.mockImplementation(() => new Promise(() => {}));
+    render(<App />);
+
+    const picker = await screen.findByTestId('se-source-select');
+    fireEvent.change(picker, { target: { value: 'ifs' } });
+    expect(await screen.findByText('IFSAPP (10886)')).toBeInTheDocument();
+
+    releaseWorkcube([{ name: 'workcube_mikrolink', tableCount: 1565 }]);
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(screen.queryByText('workcube_mikrolink (1565)')).toBeNull();
+    expect(screen.getByText('IFSAPP (10886)')).toBeInTheDocument();
+  });
+
+  it('switching source while the primary snapshot is still loading shows the ifs result', async () => {
+    api.getSnapshot.mockImplementation((scope?: { source?: string; schema?: string }) =>
+      scope?.source === 'ifs' ? Promise.resolve(snapshotFor('ifs')) : new Promise(() => {}));
+    render(<App />);
+
+    const picker = await screen.findByTestId('se-source-select');
+    expect(screen.getByTestId('se-loading')).toBeInTheDocument();
+    fireEvent.change(picker, { target: { value: 'ifs' } });
+
+    await waitFor(() => expect(screen.queryByTestId('se-loading')).toBeNull());
+    expect(screen.getByText('1')).toBeInTheDocument(); // tables stat from the IFS snapshot
+  });
+
+  it('panels can be switched while loading without a snapshot', async () => {
+    api.getSnapshot.mockImplementation(() => new Promise(() => {}));
+    render(<App />);
+    await screen.findByTestId('se-source-select');
+
+    for (const label of ['Columns', 'Find Path', 'Hubs', 'Dead Tables', 'Health', 'Impact', 'Drift', 'AI Chat', 'Export', 'ER Graph']) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      expect(screen.getByTestId('se-loading')).toBeInTheDocument();
+    }
+  });
+
+  it('error renders inside the main panel and the user can recover by switching source', async () => {
+    api.getSnapshot.mockImplementation((scope?: { source?: string; schema?: string }) =>
+      scope?.source === 'ifs' ? Promise.resolve(snapshotFor('ifs')) : Promise.reject(new Error('snapshot exploded')));
+    render(<App />);
+
+    const error = await screen.findByText('Failed to load schema data', {}, { timeout: 5000 });
+    expect(error.closest('main.se-main')).not.toBeNull();
+
+    fireEvent.change(screen.getByTestId('se-source-select'), { target: { value: 'ifs' } });
+    await waitFor(() => expect(screen.queryByText('Failed to load schema data')).toBeNull());
+    expect(screen.getByText('2')).toBeInTheDocument(); // columns stat from the IFS snapshot
+  });
+
   it('hides the picker when the service exposes no sources', async () => {
     api.getSources.mockResolvedValue([]);
     render(<App />);

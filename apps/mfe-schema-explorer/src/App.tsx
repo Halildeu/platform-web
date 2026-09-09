@@ -42,10 +42,16 @@ const App = () => {
 
   // The schema list belongs to the selected source: IFS lists Oracle owners,
   // Workcube lists MSSQL schemas.
+  // The header is usable before any snapshot arrives, so a slow reply for the
+  // previous source must not land after the user has already switched: the
+  // list is cleared on change and a stale reply is dropped (Codex 01a0884d).
   useEffect(() => {
+    let current = true;
+    setSchemas([]);
     schemaApi.getSchemas(activeSource)
-      .then(list => setSchemas(Array.isArray(list) ? list : []))
-      .catch(() => setSchemas([]));
+      .then(list => { if (current) setSchemas(Array.isArray(list) ? list : []); })
+      .catch(() => { if (current) setSchemas([]); });
+    return () => { current = false; };
   }, [activeSource]);
 
   const handleTableSelect = useCallback((tableName: string) => {
@@ -72,25 +78,27 @@ const App = () => {
     setViewMode('domain');
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="se-loading">
-        <div className="se-loading__spinner" />
-        <p>Loading schema data...</p>
-      </div>
-    );
-  }
-
-  if (error || !snapshot) {
-    return (
-      <div className="se-error">
-        <p>Failed to load schema data</p>
-        <p className="se-error__detail">{(error as Error)?.message}</p>
-      </div>
-    );
-  }
-
+  // gitops#3605: the header (source + schema pickers) must not wait for the
+  // snapshot. A cold Workcube snapshot takes ~100 s on a fresh pod; an IFS user
+  // could not even reach the source picker meanwhile. Only the snapshot-backed
+  // parts (stats, sidebar, panels, detail) render the loading / error state.
   const renderMainPanel = () => {
+    if (isLoading) {
+      return (
+        <div className="se-loading" data-testid="se-loading">
+          <div className="se-loading__spinner" />
+          <p>Loading schema data...</p>
+        </div>
+      );
+    }
+    if (error || !snapshot) {
+      return (
+        <div className="se-error">
+          <p>Failed to load schema data</p>
+          <p className="se-error__detail">{(error as Error)?.message}</p>
+        </div>
+      );
+    }
     switch (panelMode) {
       case 'search':
         return <ColumnSearch onTableSelect={handleTableSelect} scope={scope} />;
@@ -164,10 +172,16 @@ const App = () => {
         </select>
 
         <div className="se-header__stats">
-          <span><strong>{snapshot.metadata.tableCount.toLocaleString()}</strong> tables</span>
-          <span><strong>{snapshot.metadata.columnCount.toLocaleString()}</strong> columns</span>
-          <span><strong>{snapshot.metadata.relationshipCount.toLocaleString()}</strong> rels</span>
-          <span><strong>{snapshot.metadata.domainCount}</strong> domains</span>
+          {snapshot ? (
+            <>
+              <span><strong>{snapshot.metadata.tableCount.toLocaleString()}</strong> tables</span>
+              <span><strong>{snapshot.metadata.columnCount.toLocaleString()}</strong> columns</span>
+              <span><strong>{snapshot.metadata.relationshipCount.toLocaleString()}</strong> rels</span>
+              <span><strong>{snapshot.metadata.domainCount}</strong> domains</span>
+            </>
+          ) : (
+            <span className="se-header__stats-pending">{isLoading ? 'loading catalog…' : '—'}</span>
+          )}
         </div>
         <nav className="se-header__nav">
           {([
@@ -193,17 +207,21 @@ const App = () => {
         </nav>
       </header>
 
-      <Sidebar
-        snapshot={snapshot}
-        selectedTable={selectedTable}
-        onSelect={handleTableSelect}
-      />
+      {snapshot ? (
+        <Sidebar
+          snapshot={snapshot}
+          selectedTable={selectedTable}
+          onSelect={handleTableSelect}
+        />
+      ) : (
+        <aside className="se-sidebar se-sidebar--pending" aria-busy={isLoading} />
+      )}
 
       <main className="se-main">
         {renderMainPanel()}
       </main>
 
-      {selectedTable && (
+      {snapshot && selectedTable && (
         <TableDetail
           snapshot={snapshot}
           tableName={selectedTable}
