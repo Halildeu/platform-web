@@ -21,19 +21,20 @@ const ctx = (over: Partial<SearchableItemVisibilityCtx> = {}): SearchableItemVis
 });
 
 describe('isSearchableItemVisible — global search permission gate', () => {
-  it('hides the schema-explorer tool from users without the THEME module', () => {
+  it('hides the schema-explorer tool from users without the REPORT module', () => {
     // Regression: tool-schema had no `permission`, so it leaked into the
     // Cmd/Ctrl+K command palette for everyone — clicking it landed on
-    // /unauthorized (the /admin/schema-explorer route guard needs THEME).
+    // /unauthorized. The route guard needs REPORT (gitops#3605: the Explorer
+    // shows reporting-source catalog metadata; THEME had made it ADMIN-only).
     const toolSchema = pick('tool-schema');
-    expect(toolSchema.permission).toBe('THEME');
+    expect(toolSchema.permission).toBe('REPORT');
 
     expect(isSearchableItemVisible(toolSchema, ctx())).toBe(false);
   });
 
-  it('shows the schema-explorer tool when the THEME module is granted', () => {
+  it('shows the schema-explorer tool when the REPORT module is granted', () => {
     const toolSchema = pick('tool-schema');
-    expect(isSearchableItemVisible(toolSchema, ctx({ hasModule: (m) => m === 'THEME' }))).toBe(
+    expect(isSearchableItemVisible(toolSchema, ctx({ hasModule: (m) => m === 'REPORT' }))).toBe(
       true,
     );
   });

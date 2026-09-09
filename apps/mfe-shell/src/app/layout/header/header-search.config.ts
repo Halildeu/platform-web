@@ -164,7 +164,7 @@ export const SEARCHABLE_ITEMS: SearchableItem[] = [
     group: 'tools',
     path: '/admin/schema-explorer',
     keywords: ['schema', 'explorer', 'database', 'veritabani', 'tablo'],
-    permission: MODULE_KEYS.THEME,
+    permission: MODULE_KEYS.REPORT,
   },
   {
     id: 'tool-designlab',

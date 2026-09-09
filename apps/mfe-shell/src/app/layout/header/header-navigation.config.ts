@@ -257,7 +257,7 @@ export const NAV_GROUPS: NavGroup[] = [
         descriptionKey: 'shell.mega.tools.schema.desc',
         path: '/admin/schema-explorer',
         icon: Database,
-        module: MODULE_KEYS.THEME,
+        module: MODULE_KEYS.REPORT,
       },
       {
         key: 'designlab',
