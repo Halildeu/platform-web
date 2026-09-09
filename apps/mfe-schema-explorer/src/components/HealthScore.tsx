@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { scopedUrl, type SchemaScope } from '../api/schemaApi';
 
 interface HealthIssue {
   rule: string;
@@ -19,7 +20,7 @@ interface HealthReport {
 
 export interface HealthScoreProps {
   onTableSelect: (table: string) => void;
-  schema?: string;
+  scope?: SchemaScope;
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -36,18 +37,18 @@ const SEVERITY_COLORS: Record<string, string> = {
   low: 'var(--se-yellow)',
 };
 
-export const HealthScore = ({ onTableSelect }: HealthScoreProps) => {
+export const HealthScore = ({ onTableSelect, scope }: HealthScoreProps) => {
   const [report, setReport] = useState<HealthReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/v1/schema/health-score')
+    fetch(scopedUrl('/health-score', scope))
       .then(r => r.json())
       .then(setReport)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [scope?.source, scope?.schema]);
 
   if (loading) return <div className="se-search__loading">Analyzing schema health...</div>;
   if (!report) return <div className="se-search__empty">Failed to load health score</div>;

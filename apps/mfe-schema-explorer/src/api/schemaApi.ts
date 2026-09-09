@@ -76,23 +76,66 @@ export type { SchemaSnapshot };
 export type ColumnSearchResult = SchemaColumnSearchResult;
 export type ImpactResult = SchemaImpactResult;
 
-export const schemaApi = {
-  getSnapshot: (schema?: string) =>
-    api.get<SchemaSnapshot>('/snapshot', { params: { schema } }).then(r => r.data),
+/* gitops#3605 — the service reads more than one catalog now (Workcube MSSQL
+ * and IFS ERP Oracle). Every call carries the pair the user picked: which
+ * source, and which schema/owner inside it. An absent source is the primary
+ * (Workcube) lane, so existing deployments behave exactly as before. */
+export interface SchemaScope {
+  source?: string;
+  schema?: string;
+}
 
-  getTable: (tableName: string, schema?: string) =>
+export interface SchemaSourceInfo {
+  source: string;
+  engine: string;
+}
+
+export interface SchemaListEntry {
+  name: string;
+  tableCount: number;
+}
+
+function scopeParams(scope?: SchemaScope) {
+  return {
+    schema: scope?.schema || undefined,
+    source: scope?.source || undefined,
+  };
+}
+
+/** Builds a scoped URL for the panels that still use raw fetch(). Existing
+ * query parameters on `path` are preserved. */
+export function scopedUrl(path: string, scope?: SchemaScope): string {
+  const absoluteBase = /^https?:\/\//.test(BASE_URL);
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+  const url = new URL(`${BASE_URL}${path}`, origin);
+  if (scope?.source) url.searchParams.set('source', scope.source);
+  if (scope?.schema) url.searchParams.set('schema', scope.schema);
+  return absoluteBase ? url.toString() : `${url.pathname}${url.search}`;
+}
+
+export const schemaApi = {
+  getSources: () =>
+    api.get<SchemaSourceInfo[]>('/sources').then(r => r.data),
+
+  getSchemas: (source?: string) =>
+    api.get<SchemaListEntry[]>('/schemas', { params: { source: source || undefined } }).then(r => r.data),
+
+  getSnapshot: (scope?: SchemaScope) =>
+    api.get<SchemaSnapshot>('/snapshot', { params: scopeParams(scope) }).then(r => r.data),
+
+  getTable: (tableName: string, scope?: SchemaScope) =>
     api.get<{ table: TableInfo; outgoingFks: Relationship[]; incomingRefs: Relationship[]; domain: string }>(
-      `/tables/${tableName}`, { params: { schema } }
+      `/tables/${tableName}`, { params: scopeParams(scope) }
     ).then(r => r.data),
 
-  searchColumns: (q: string, schema?: string) =>
-    api.get<ColumnSearchResult>('/search/columns', { params: { q, schema } }).then(r => r.data),
+  searchColumns: (q: string, scope?: SchemaScope) =>
+    api.get<ColumnSearchResult>('/search/columns', { params: { q, ...scopeParams(scope) } }).then(r => r.data),
 
-  getImpact: (tableName: string, hops = 2, schema?: string) =>
-    api.get<ImpactResult>(`/impact/${tableName}`, { params: { hops, schema } }).then(r => r.data),
+  getImpact: (tableName: string, hops = 2, scope?: SchemaScope) =>
+    api.get<ImpactResult>(`/impact/${tableName}`, { params: { hops, ...scopeParams(scope) } }).then(r => r.data),
 
-  getDomains: (schema?: string) =>
+  getDomains: (scope?: SchemaScope) =>
     api.get<{ domainCount: number; domains: { name: string; tableCount: number; tables: string[] }[] }>(
-      '/domains', { params: { schema } }
+      '/domains', { params: scopeParams(scope) }
     ).then(r => r.data),
 };

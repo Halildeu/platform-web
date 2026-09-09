@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { scopedUrl, type SchemaScope } from '../api/schemaApi';
 
 interface DriftReport {
   comparedAt: string;
@@ -11,20 +12,21 @@ interface DriftReport {
 }
 
 interface DriftDashboardProps {
+  scope?: SchemaScope;
   onTableSelect: (table: string) => void;
 }
 
-export const DriftDashboard = ({ onTableSelect }: DriftDashboardProps) => {
+export const DriftDashboard = ({ onTableSelect, scope }: DriftDashboardProps) => {
   const [report, setReport] = useState<DriftReport | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/schema/drift')
+    fetch(scopedUrl('/drift', scope))
       .then(r => r.json())
       .then(setReport)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [scope?.source, scope?.schema]);
 
   if (loading) return <div className="se-search__loading">Checking for schema changes...</div>;
   if (!report) return <div className="se-search__empty">Failed to load drift report</div>;

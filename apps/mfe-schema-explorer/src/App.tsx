@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useSchemaSnapshot } from './hooks/useSchemaData';
+import { schemaApi, type SchemaScope, type SchemaSourceInfo, type SchemaListEntry } from './api/schemaApi';
 import { Sidebar } from './components/Sidebar';
 import { SchemaGraph } from './components/SchemaGraph';
 import { TableDetail } from './components/TableDetail';
@@ -18,23 +19,34 @@ import './styles/schema-explorer.css';
 type ViewMode = 'domain' | 'neighborhood';
 type PanelMode = 'graph' | 'search' | 'path' | 'hubs' | 'dead' | 'health' | 'impact' | 'drift' | 'chat' | 'export';
 
-interface SchemaInfo { name: string; tableCount: number }
-
 const App = () => {
+  // gitops#3605: the service exposes several catalogs (Workcube MSSQL, IFS
+  // ERP Oracle). `activeSource` undefined = the primary lane, so a deployment
+  // with a single source looks exactly as it did before.
+  const [activeSource, setActiveSource] = useState<string | undefined>(undefined);
+  const [sources, setSources] = useState<SchemaSourceInfo[]>([]);
   const [activeSchema, setActiveSchema] = useState<string | undefined>(undefined);
-  const [schemas, setSchemas] = useState<SchemaInfo[]>([]);
-  const { data: snapshot, isLoading, error } = useSchemaSnapshot(activeSchema);
+  const [schemas, setSchemas] = useState<SchemaListEntry[]>([]);
+  const scope = useMemo<SchemaScope>(() => ({ source: activeSource, schema: activeSchema }), [activeSource, activeSchema]);
+  const { data: snapshot, isLoading, error } = useSchemaSnapshot(scope);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('domain');
   const [panelMode, setPanelMode] = useState<PanelMode>('graph');
 
-  // Load available schemas
+  // Load the configured catalog sources once.
   useEffect(() => {
-    fetch('/api/v1/schema/schemas')
-      .then(r => r.json())
-      .then((list: SchemaInfo[]) => setSchemas(list))
-      .catch(() => {});
+    schemaApi.getSources()
+      .then(list => setSources(Array.isArray(list) ? list : []))
+      .catch(() => setSources([]));
   }, []);
+
+  // The schema list belongs to the selected source: IFS lists Oracle owners,
+  // Workcube lists MSSQL schemas.
+  useEffect(() => {
+    schemaApi.getSchemas(activeSource)
+      .then(list => setSchemas(Array.isArray(list) ? list : []))
+      .catch(() => setSchemas([]));
+  }, [activeSource]);
 
   const handleTableSelect = useCallback((tableName: string) => {
     setSelectedTable(tableName);
@@ -44,6 +56,17 @@ const App = () => {
 
   const handleSchemaChange = useCallback((schema: string) => {
     setActiveSchema(schema || undefined);
+    setSelectedTable(null);
+    setPanelMode('graph');
+    setViewMode('domain');
+  }, []);
+
+  // Changing the source invalidates the schema: a Workcube schema name means
+  // nothing to Oracle. Falling back to undefined lets the service pick that
+  // source's own default (IFSAPP for IFS).
+  const handleSourceChange = useCallback((source: string) => {
+    setActiveSource(source || undefined);
+    setActiveSchema(undefined);
     setSelectedTable(null);
     setPanelMode('graph');
     setViewMode('domain');
@@ -70,21 +93,21 @@ const App = () => {
   const renderMainPanel = () => {
     switch (panelMode) {
       case 'search':
-        return <ColumnSearch onTableSelect={handleTableSelect} schema={activeSchema} />;
+        return <ColumnSearch onTableSelect={handleTableSelect} scope={scope} />;
       case 'path':
-        return <FindPath snapshot={snapshot} selectedTable={selectedTable} onTableSelect={handleTableSelect} />;
+        return <FindPath snapshot={snapshot} selectedTable={selectedTable} onTableSelect={handleTableSelect} scope={scope} />;
       case 'hubs':
         return <HubTables snapshot={snapshot} onTableSelect={handleTableSelect} />;
       case 'dead':
         return <DeadTables snapshot={snapshot} onTableSelect={handleTableSelect} />;
       case 'health':
-        return <HealthScore onTableSelect={handleTableSelect} schema={activeSchema} />;
+        return <HealthScore onTableSelect={handleTableSelect} scope={scope} />;
       case 'impact':
         return selectedTable
-          ? <ImpactAnalysis tableName={selectedTable} onTableSelect={handleTableSelect} />
+          ? <ImpactAnalysis tableName={selectedTable} onTableSelect={handleTableSelect} scope={scope} />
           : <div className="se-search__empty">Select a table first to run impact analysis</div>;
       case 'drift':
-        return <DriftDashboard onTableSelect={handleTableSelect} />;
+        return <DriftDashboard onTableSelect={handleTableSelect} scope={scope} />;
       case 'chat':
         return <AiChat onTableSelect={handleTableSelect} />;
       case 'export':
@@ -107,9 +130,28 @@ const App = () => {
       <header className="se-header">
         <h1 className="se-header__title">SchemaLens</h1>
 
+        {/* Source selector — which catalog (Workcube MSSQL, IFS Oracle) */}
+        {sources.length > 0 && (
+          <select
+            className="se-header__schema-select"
+            aria-label="Data source"
+            data-testid="se-source-select"
+            value={activeSource || ''}
+            onChange={e => handleSourceChange(e.target.value)}
+          >
+            {sources.map((s, i) => (
+              <option key={s.source} value={i === 0 ? '' : s.source}>
+                {s.source} · {s.engine}
+              </option>
+            ))}
+          </select>
+        )}
+
         {/* Schema selector */}
         <select
           className="se-header__schema-select"
+          aria-label="Schema"
+          data-testid="se-schema-select"
           value={activeSchema || ''}
           onChange={e => handleSchemaChange(e.target.value)}
         >

@@ -1,25 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
-import { schemaApi, type SchemaSnapshot } from '../api/schemaApi';
+import { schemaApi, type SchemaScope, type SchemaSnapshot } from '../api/schemaApi';
 
-export function useSchemaSnapshot(schema?: string) {
+const scopeKey = (scope?: SchemaScope) => [scope?.source ?? '', scope?.schema ?? ''];
+
+export function useSchemaSnapshot(scope?: SchemaScope) {
   return useQuery<SchemaSnapshot>({
-    queryKey: ['schema-snapshot', schema],
-    queryFn: () => schemaApi.getSnapshot(schema),
+    queryKey: ['schema-snapshot', ...scopeKey(scope)],
+    queryFn: () => schemaApi.getSnapshot(scope),
   });
 }
 
-export function useColumnSearch(query: string, schema?: string) {
+export function useColumnSearch(query: string, scope?: SchemaScope) {
   return useQuery({
-    queryKey: ['column-search', query, schema],
-    queryFn: () => schemaApi.searchColumns(query, schema),
+    queryKey: ['column-search', query, ...scopeKey(scope)],
+    queryFn: () => schemaApi.searchColumns(query, scope),
     enabled: query.length >= 2,
   });
 }
 
-export function useImpactAnalysis(tableName: string | null, hops = 2, schema?: string) {
+export function useImpactAnalysis(tableName: string | null, hops = 2, scope?: SchemaScope) {
   return useQuery({
-    queryKey: ['impact', tableName, hops, schema],
-    queryFn: () => schemaApi.getImpact(tableName!, hops, schema),
+    queryKey: ['impact', tableName, hops, ...scopeKey(scope)],
+    queryFn: () => schemaApi.getImpact(tableName!, hops, scope),
     enabled: !!tableName,
   });
 }

@@ -56,3 +56,9 @@ jobs:
         # drift fails CI instead of code review / runtime. NO `|| echo`
         # swallow, NO `--if-present` — exit code propagates.
         run: pnpm --filter mfe-reporting run test:grid-contract
+
+      # gitops#3605: the Schema Explorer's source scope (Workcube MSSQL / IFS
+      # Oracle). First tests this app has ever had; kept as a hard step so a
+      # dropped `source` parameter cannot land silently.
+      - name: Schema Explorer source scope (vitest)
+        run: pnpm --filter mfe-schema-explorer run test

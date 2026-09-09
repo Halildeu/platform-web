@@ -1,14 +1,15 @@
 import { useState } from 'react';
+import { type SchemaScope } from '../api/schemaApi';
 import { useColumnSearch } from '../hooks/useSchemaData';
 
 export interface ColumnSearchProps {
   onTableSelect: (table: string) => void;
-  schema?: string;
+  scope?: SchemaScope;
 }
 
-export const ColumnSearch = ({ onTableSelect, schema: _schema }: ColumnSearchProps) => {
+export const ColumnSearch = ({ onTableSelect, scope }: ColumnSearchProps) => {
   const [query, setQuery] = useState('');
-  const { data, isLoading } = useColumnSearch(query);
+  const { data, isLoading } = useColumnSearch(query, scope);
 
   return (
     <div className="se-search">
