@@ -86,6 +86,25 @@ type MergeConflict = {
 type EntryRow<T> = { rowId: string; value: T };
 
 /**
+ * #1153 (P2, tur 2): aktarilan satirlarin kaynak kaydini uretir — rowId -> aktarilan
+ * degerler. Bos alanlar kaydedilmez: aktarim onlara zaten dokunmadi, kaydedilirse
+ * adayin sonradan doldurmasi "duzeltme" gibi gorunurdu.
+ */
+const recordImportedRows = <T extends Record<string, string | undefined>>(
+  rows: Array<EntryRow<T>>,
+): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    rows.map((row) => [
+      row.rowId,
+      Object.fromEntries(
+        Object.entries(row.value).filter(
+          (pair): pair is [string, string] => typeof pair[1] === 'string' && pair[1].trim() !== '',
+        ),
+      ),
+    ]),
+  );
+
+/**
  * #239: alan tipine uygun girdi. `kind` yoksa düz metin (mevcut davranış).
  *
  * `month`/`year` seçimi VERİYİ DÜŞÜRMEDEN uygulanır: CV ayrıştırıcısı serbest
@@ -601,6 +620,69 @@ const isValidOptionalHttpUrl = (value: string) => {
   }
 };
 
+/**
+ * #1153 (P2-2): dosyanin ICERIK kimligi.
+ *
+ * <p>Onceki hali parmak izini ad|boyut|lastModified'dan kuruyordu. Inceleme bunun
+ * yetmedigini olctu: ayni ad/boyut/lastModified tasiyan FARKLI iceriklı iki dosya ayni
+ * anahtari aliyor, "ayni key + ayni payload" sozlesmesi kiriliyordu. Metadata dosya
+ * icerigi kimligi DEGILDIR.
+ *
+ * <p>Dosya adi parmak izine BILEREK girmiyor: kimligi belirleyen icerik, ve ad zaten
+ * disari sizmamasi gereken bir deger.
+ */
+const FNV32_OFFSET = 0x811c9dc5;
+const FNV32_PRIME = 0x01000193;
+
+/**
+ * Baytlar uzerinde FNV-1a, iki BAGIMSIZ serit halinde: biri ileri, digeri geri yonde
+ * ve farkli baslangic degeriyle. Tek 32-bit serit bu is icin dar; iki serit birlikte
+ * 64 bitlik bir ayirt edicilik verir.
+ *
+ * <p>Kriptografik DEGILDIR ve oyle sunulmuyor. Burada sorulan soru "bu dosya
+ * saldirgan tarafindan uretilmis bir carpisma mi" degil, "aday az once denedigi
+ * dosyanin AYNISINI mi yeniden secti" — tek oturumda birkac dosyalik, dusmanca
+ * olmayan bir ayrim. Bu olcek icin carpisma olasiligi ihmal edilebilir.
+ */
+const contentLanes = (bytes: Uint8Array): string => {
+  let forward = FNV32_OFFSET;
+  let backward = FNV32_PRIME;
+  for (let i = 0; i < bytes.length; i += 1) {
+    forward = Math.imul(forward ^ bytes[i], FNV32_PRIME);
+    backward = Math.imul(backward ^ bytes[bytes.length - 1 - i], FNV32_PRIME);
+  }
+  const hex = (value: number) => (value >>> 0).toString(16).padStart(8, '0');
+  return `${hex(forward)}${hex(backward)}`;
+};
+
+/**
+ * #1153 (P2-2): dosyanin ICERIK kimligi.
+ *
+ * <p>Onceki hali parmak izini ad|boyut|lastModified'dan kuruyordu. Inceleme bunun
+ * yetmedigini olctu: ayni ad/boyut/lastModified tasiyan FARKLI iceriklı iki dosya ayni
+ * anahtari aliyor, "ayni key + ayni payload" sozlesmesi kiriliyordu. Metadata dosya
+ * icerigi kimligi DEGILDIR.
+ *
+ * <p>Dosya adi parmak izine BILEREK girmiyor: kimligi belirleyen icerik, ve ad zaten
+ * disari sizmamasi gereken bir deger.
+ *
+ * <p>NEDEN {@code crypto.subtle} DEGIL (#1153 CI kirmizisinin kok nedeni):
+ * ilk hali {@code crypto.subtle.digest('SHA-256', ...)} kullaniyordu. {@code subtle}
+ * tasarimi geregi YALNIZ secure context'te tanimlidir; bu bir yamalanabilir hata degil,
+ * API'nin dogasidir. Sonucu olculdu: CI'nin jsdom ortaminda {@code subtle} yok, digest
+ * firlatiyor ve yukleme daha {@code uploadResumePdf} cagrilmadan iptal oluyordu —
+ * PDF yukleyen 30 test birden kirmizi. Ayni sinir URUNDE de gecerlidir: aday sayfaya
+ * duz {@code http://} uzerinden gelirse {@code subtle} yine tanimsizdir ve CV yukleme
+ * tamamen bozulurdu. Bu yuzden dogru hamle {@code subtle}'i polyfill etmek degil, bu is
+ * icin ona olan bagimliligi kaldirmakti: parmak izi artik gercek baytlardan, her yerde
+ * calisan aritmetikle uretiliyor. Icerik kimligi sozlesmesi (metadata degil, BAYT)
+ * aynen korunuyor.
+ */
+const fileContentFingerprint = async (file: File): Promise<string> => {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return `${file.size}|${contentLanes(bytes)}`;
+};
+
 const CandidateApplicationPage = () => {
   const { publicHandle, jobSlug = 'urun-yoneticisi' } = useParams();
   const jobsBase = publicHandle ? `/careers/${encodeURIComponent(publicHandle)}/jobs` : '/jobs';
@@ -626,6 +708,14 @@ const CandidateApplicationPage = () => {
   );
   const experienceEntries = experienceRows.map((row) => row.value);
   const educationEntries = educationRows.map((row) => row.value);
+
+  // #966: ref'ler her render sonrası güncellenir; uçuştaki bir yanıt döndüğünde
+  // okuduğu değer adayın EN SON yazdığıdır.
+  useEffect(() => {
+    valuesRef.current = values;
+    experienceRowsRef.current = experienceRows;
+    educationRowsRef.current = educationRows;
+  });
   const derivedExperience = deriveExperienceText(experienceEntries);
   const derivedEducation = deriveEducationText(educationEntries);
   const [view, setView] = useState<View>('form');
@@ -654,6 +744,44 @@ const CandidateApplicationPage = () => {
   const [resumeNoticeAcceptedAt, setResumeNoticeAcceptedAt] = useState('');
   const [resumeImport, setResumeImport] = useState<ResumeImportDto | null>(null);
   const [resumeBinding, setResumeBinding] = useState<ResumeBinding | null>(null);
+  /**
+   * #966: CV'den AKTARILDIĞI ANDA alanın taşıdığı değer.
+   *
+   * <p>Alan-bazlı provenance'ın dayanağı budur ve GERÇEK veridir — varsayım değil.
+   * Bir alan bu haritada yoksa CV'den gelmemiştir (rozet basılmaz). Varsa ve güncel
+   * değer aktarılan değerle aynıysa "CV'den aktarıldı"; farklıysa aday sonradan
+   * düzeltmiştir, "Siz düzenlediniz".
+   *
+   * <p>Önceki ekran yalnız TOPLU bir sayı gösteriyordu ("N alan aktarıldı") ve aday
+   * düzeltme yapınca bu sayı değişmediği için ekran artık doğru olmayan bir şey
+   * söylüyordu.
+   *
+   * <p>Kaynak bağı ({@code resumeBinding}) bundan BAĞIMSIZ ve korunur: adayın düzeltmesi
+   * import/draft/version bağını silmez — yalnız "gönderilen değer taslakla aynı"
+   * anlamını kaldırır.
+   */
+  const [importedValues, setImportedValues] = useState<
+    Partial<Record<keyof ApplicationValues, string>>
+  >({});
+  /**
+   * #1153 (P2, tur 2): GRUPLU deneyim/egitim satirlarinin kaynak bilgisi.
+   *
+   * <p>Onceki halim provenance'i yalniz skalar alanlara kurdu; iki liste acikca
+   * atlanmisti. Olculen sonuc: confirm'den gercek gruplu entry'ler donunce PDF unvani
+   * forma geliyordu ama ilgili fieldset'te kaynak etiketi YOKTU, aday o satirlari elle
+   * duzeltince de CV/manuel ayrimi gorunmuyordu. Ayni alan-bazli sozlesmenin eksik
+   * parcasiydi; yeni bir davranis degil.
+   *
+   * <p>Anahtar SATIR KIMLIGI ({@code rowId}), indeks DEGIL. Indeks kirilgan: aday
+   * ustteki satiri silince alttaki onun indeksine kayar ve etiket YANLIS satira
+   * tasinirdi. {@code rowIdRef} monoton artiyor ve bir rowId asla yeniden
+   * kullanilmiyor; bu yuzden silinen satirin kaydi hayatta kalsa bile baska bir
+   * satira baglanamaz.
+   *
+   * <p>Deger de saklaniyor (yalniz "CV'den geldi" bayragi degil), cunku "aday bunu
+   * sonradan duzeltti mi" sorusu ancak aktarilan degerle karsilastirarak yanitlanir.
+   */
+  const [importedRows, setImportedRows] = useState<Record<string, Record<string, string>>>({});
   const [resumeEdits, setResumeEdits] = useState<Partial<Record<ResumeFieldKey, string>>>({});
   const [resumeBusyField, setResumeBusyField] = useState<ResumeFieldKey | 'all' | null>(null);
   const [replaceRequested, setReplaceRequested] = useState(false);
@@ -672,8 +800,57 @@ const CandidateApplicationPage = () => {
   const [credentialDownloaded, setCredentialDownloaded] = useState(false);
   const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
   const resumeCreateKeyRef = useRef(createApplicationIdempotencyKey());
+  /**
+   * #966: YÜKLEME adımının idempotency anahtarı — mantıksal istek başına SABİT.
+   *
+   * <p>Önceki hâli her denemede yeni anahtar üretiyordu. Belirsiz bir timeout'ta istek
+   * sunucuya ULAŞMIŞ olabilir; aday aynı dosyayı yeniden yüklediğinde yeni anahtar gitmesi
+   * sunucunun idempotency korumasını etkisiz kılıyor ve ikinci bir belge yaratabiliyordu.
+   *
+   * <p>Kural: aynı mantıksal istek (aynı dosya) → AYNI anahtar; yeni kullanıcı niyeti →
+   * yeni anahtar. Parmak izi dosya kimliğidir. Aynı desen bu kod tabanında zaten var
+   * ({@code RecruiterJobsPanel} içindeki payload-fingerprint'li retry anahtarı); yenisini
+   * icat etmek yerine o uygulanıyor.
+   *
+   * <p>İPTAL/SIFIRLAMA sonrası temizlenir: aynı dosyanın parmak izi aynı kalır ama niyet
+   * artık aynı değildir — aday vazgeçip yeniden başlamıştır.
+   *
+   * <p>Anahtar UI'ye veya log'a yazılmaz; yalnız bellekte tutulur.
+   */
+  const uploadKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  /**
+   * #1153 (P2-1): confirm uctayken adayin DOKUNDUGU yuzeyler.
+   *
+   * <p>Adim 1'de okumayi guncelledim ama kuralin kendisi hala "bos ⇒ dokunulmamis"
+   * sayiyordu. Olculen kusur: aday uctayken deneyim satirini yazip SILINCE `current`
+   * bos kaliyor, otomatik aktarim devreye giriyor ve PDF satiri geri geliyordu — silme
+   * sessizce iptal oluyordu.
+   *
+   * <p>Baslangic/bitis karsilastirmasi bu vakayi YAKALAMAZ: aday confirm basladiktan
+   * sonra yazip sildiginde iki uçta da bos gorunur. Gereken sey DOKUNULDU bilgisidir.
+   * Alan bazinda tutuluyor — tek bir alana dokunmak digerlerinin aktarimini bloke
+   * etmemeli.
+   */
+  const touchedDuringConfirmRef = useRef<Set<string>>(new Set());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
   const resumeRequestIdRef = useRef(0);
+  /**
+   * #966: GÜNCEL form durumu. Ağ turu (`await`) sürerken aday yazmaya devam edebilir;
+   * dönüşte çalışan kod render kapanışındaki FOTOĞRAFI görürse adayın o sırada yazdığı
+   * görünmez olur. Ölçülen kayıp buydu: `applyDraftToForm` `{ ...values }` ile bayat
+   * fotoğrafı alıp geri yazıyordu.
+   *
+   * <p>Çakışma mantığı zaten doğru — alan doluysa EZMEZ, çakışma üretip adaya sorar.
+   * Kusur yalnız OKUMADAYDI: bayat fotoğrafta alan boş göründüğü için "boş, aktarabilirim"
+   * yolu seçiliyordu. Ref'ler güncel durumu verince mevcut çakışma makinesi kendiliğinden
+   * doğru davranıyor; ayrı bir birleştirme kuralı yazmaya gerek kalmıyor.
+   *
+   * <p>Üç ayrı state var (`values`, `experienceRows`, `educationRows`); tek bir functional
+   * update üçünü birden korumaz, bu yüzden tutarlı anlık görüntü ref'lerle taşınıyor.
+   */
+  const valuesRef = useRef(EMPTY_VALUES);
+  const experienceRowsRef = useRef<Array<EntryRow<ApplicationExperienceEntry>>>([]);
+  const educationRowsRef = useRef<Array<EntryRow<ApplicationEducationEntry>>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileErrorRef = useRef<HTMLParagraphElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -738,6 +915,7 @@ const CandidateApplicationPage = () => {
       field: keyof ApplicationValues,
     ): React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement> =>
     (event) => {
+      touchedDuringConfirmRef.current.add(field);
       setValues((current) => ({ ...current, [field]: event.target.value }));
       setFormError('');
       setSubmitError('');
@@ -755,6 +933,9 @@ const CandidateApplicationPage = () => {
     ): React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement> =>
     (event) => {
       const nextValue = event.target.value;
+      touchedDuringConfirmRef.current.add(
+        setRows === (setExperienceRows as unknown) ? 'experience' : 'education',
+      );
       setRows((current) =>
         current.map((row, rowIndex) =>
           rowIndex === index ? { ...row, value: { ...row.value, [key]: nextValue } } : row,
@@ -767,6 +948,9 @@ const CandidateApplicationPage = () => {
   const addEntryRow = <T,>(
     setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
   ): void => {
+    touchedDuringConfirmRef.current.add(
+      setRows === (setExperienceRows as unknown) ? 'experience' : 'education',
+    );
     setRows((current) =>
       // Üst sınır backend ile aynı: aşan satır sunucuda 400 döndürürdü, o yüzden
       // düğme burada sessizce çalışmak yerine hiç eklemez (düğme de gizlenir).
@@ -781,6 +965,9 @@ const CandidateApplicationPage = () => {
     setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
     index: number,
   ): void => {
+    touchedDuringConfirmRef.current.add(
+      setRows === (setExperienceRows as unknown) ? 'experience' : 'education',
+    );
     setRows((current) =>
       // Son satır silinmez, boşaltılır: liste tamamen boşalırsa aday yazacak yer
       // bulamaz ve "satır ekle"yi bulmak zorunda kalır.
@@ -819,6 +1006,8 @@ const CandidateApplicationPage = () => {
 
   const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
     const requestId = ++resumeRequestIdRef.current;
+    // #1153 (P2-1): bu andan sonra adayin dokundugu her sey ONUN TERCIHIDIR.
+    touchedDuringConfirmRef.current = new Set();
     const file = event.target.files?.[0];
     setFileError('');
     setFileMeta(null);
@@ -858,7 +1047,15 @@ const CandidateApplicationPage = () => {
       } else if (replaceRequested && active.documentVersion > 0) {
         active = await replaceResumePdf(active, candidateAccessTokenRef.current);
       }
-      const uploadKey = createApplicationIdempotencyKey();
+      // #966 + #1153 (P2-2): aynı İÇERİK => aynı anahtar. Metadata yeterli değil.
+      const uploadFingerprint = await fileContentFingerprint(file);
+      if (uploadKeyRef.current?.fingerprint !== uploadFingerprint) {
+        uploadKeyRef.current = {
+          fingerprint: uploadFingerprint,
+          key: createApplicationIdempotencyKey(),
+        };
+      }
+      const uploadKey = uploadKeyRef.current.key;
       const uploaded = await uploadResumePdf(
         active,
         file,
@@ -921,6 +1118,10 @@ const CandidateApplicationPage = () => {
       setResumeStatus('idle');
       setShowRejectAllConfirm(false);
       resumeCreateKeyRef.current = createApplicationIdempotencyKey();
+      // #966: yeni niyet — aynı dosya yeniden seçilse bile yeni anahtar alsın.
+      uploadKeyRef.current = null;
+      setImportedValues({});
+      setImportedRows({});
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (terminateError) {
       setFileError(
@@ -1040,7 +1241,15 @@ const CandidateApplicationPage = () => {
   const applyDraftToForm = (draft: ResumeDraftDto) => {
     let imported = 0;
     const conflicts: MergeConflict[] = [];
-    const next = { ...values };
+    // #966: closure fotoğrafı DEĞİL, güncel durum. Gerekçe valuesRef javadoc'unda.
+    const liveValues = valuesRef.current;
+    // #966: hangi alanın HANGİ değerle aktarıldığı — alan-bazlı provenance'ın dayanağı.
+    const importedByField: Partial<Record<keyof ApplicationValues, string>> = {};
+    const liveExperience = deriveExperienceText(
+      experienceRowsRef.current.map((row) => row.value),
+    );
+    const liveEducation = deriveEducationText(educationRowsRef.current.map((row) => row.value));
+    const next = { ...liveValues };
     let nextExperience: Array<EntryRow<ApplicationExperienceEntry>> | null = null;
     let nextEducation: Array<EntryRow<ApplicationEducationEntry>> | null = null;
 
@@ -1054,7 +1263,10 @@ const CandidateApplicationPage = () => {
       // ya da gruplama güvenilir değil) gelen metin ilk kaydın açıklaması olur —
       // bugünkü davranış fallback kalır, bilgi kaybolmaz.
       if (field === 'experience' || field === 'education') {
-        const current = field === 'experience' ? derivedExperience : derivedEducation;
+        const current = field === 'experience' ? liveExperience : liveEducation;
+        // #1153 (P2-1): aday uctayken bu listeye dokunup BOSALTTIYSA bu bir tercihtir,
+        // "dokunulmamis" degil — otomatik aktarim silmeyi geri getirmemeli.
+        if (touchedDuringConfirmRef.current.has(field) && !current.trim()) return;
         if (!current.trim() || current === resumeValue) {
           const grouped = draft.entries?.[field] ?? [];
           if (grouped.length > 0) {
@@ -1116,23 +1328,39 @@ const CandidateApplicationPage = () => {
 
       if (!(field in next)) return;
       const formField = field as keyof ApplicationValues;
-      if (!values[formField].trim() || values[formField] === resumeValue) {
+      // #1153 (P2-1): aday uctayken bu alani bosalttiysa aktarma (bkz. yukarisi).
+      if (touchedDuringConfirmRef.current.has(formField) && !liveValues[formField].trim()) {
+        return;
+      }
+      if (!liveValues[formField].trim() || liveValues[formField] === resumeValue) {
         next[formField] = resumeValue;
+        importedByField[formField] = resumeValue;
         imported += 1;
       } else {
         conflicts.push({
           field: formField,
-          manualValue: values[formField],
+          manualValue: liveValues[formField],
           resumeValue,
-          mergedValue: `${values[formField]}\n${resumeValue}`,
+          mergedValue: `${liveValues[formField]}\n${resumeValue}`,
           choice: null,
         });
       }
     });
 
     setValues(next);
+    setImportedValues(importedByField);
     if (nextExperience) setExperienceRows(nextExperience);
     if (nextEducation) setEducationRows(nextEducation);
+    // #1153 (P2, tur 2): aktarilan satirlarin kaynak kaydi. Yalniz BU aktarimda
+    // uretilen rowId'ler yazilir; adayin kendi ekledigi satirlar kayitsiz kalir ve
+    // dogru sekilde etiketsiz gorunur.
+    if (nextExperience || nextEducation) {
+      setImportedRows((current) => ({
+        ...current,
+        ...recordImportedRows(nextExperience ?? []),
+        ...recordImportedRows(nextEducation ?? []),
+      }));
+    }
     setMergeConflicts(conflicts);
     setFileMeta((current) => (current ? { ...current, importedFieldCount: imported } : current));
     return conflicts.length;
@@ -1142,8 +1370,15 @@ const CandidateApplicationPage = () => {
     if (!resumeImport || resumeBusyField) return;
     setFileError('');
     setResumeBusyField('all');
+    // #966: bu isteğin kuşağı. İptal (`resetResumeImport`/terminate) ve yeni içe aktarma
+    // bu sayacı artırıyor; dönüşte kuşak değişmişse yanıt ARTIK GEÇERLİ DEĞİLDİR ve forma
+    // hiç uygulanmaz. Aynı korumayı yükleme yolu zaten kullanıyordu, confirm yolu yoksundu:
+    // ölçümde aday içe aktarmayı iptal edip kendi adını yazdıktan sonra geç gelen cevap
+    // "PDF Demo Adayı" ile üzerine yazıyordu.
+    const requestId = ++resumeRequestIdRef.current;
     try {
       const confirmed = await confirmResumeImport(resumeImport, candidateAccessTokenRef.current);
+      if (requestId !== resumeRequestIdRef.current) return;
       setResumeImport(confirmed.resumeImport);
       setResumeBinding({
         importId: confirmed.draft.importId,
@@ -1190,27 +1425,49 @@ const CandidateApplicationPage = () => {
     // adayın yazdığı satırları KORUR ve CV metnini yeni bir satır olarak ekler —
     // birleştirilmiş metni tek satıra ezmek adayın yapılandırdığı bilgiyi düzleştirirdi.
     mergeConflicts.forEach((conflict) => {
-      if (conflict.field === 'experience') {
-        if (conflict.choice === 'resume') {
-          setExperienceRows([{ rowId: nextRowId(), value: { description: conflict.resumeValue } }]);
-        } else if (conflict.choice === 'edit') {
-          setExperienceRows((current) => [
-            ...current,
-            { rowId: nextRowId(), value: { description: conflict.resumeValue } },
-          ]);
-        }
+      if (conflict.field !== 'experience' && conflict.field !== 'education') return;
+      if (conflict.choice !== 'resume' && conflict.choice !== 'edit') return;
+
+      // #1153 (P2, tur 2): rowId ONCE uretilir, cunku ayni kimlik hem satira hem de
+      // kaynak kaydina yazilmali. setState geri cagrisi icinde uretilseydi kimlige
+      // burada erisemez ve satir yine etiketsiz kalirdi.
+      const rowId = nextRowId();
+      const row = { rowId, value: { description: conflict.resumeValue } };
+      const setRows =
+        conflict.field === 'experience'
+          ? (setExperienceRows as React.Dispatch<React.SetStateAction<Array<EntryRow<never>>>>)
+          : (setEducationRows as React.Dispatch<React.SetStateAction<Array<EntryRow<never>>>>);
+
+      if (conflict.choice === 'resume') {
+        setRows([row as EntryRow<never>]);
+      } else {
+        setRows((current) => [...current, row as EntryRow<never>]);
       }
-      if (conflict.field === 'education') {
-        if (conflict.choice === 'resume') {
-          setEducationRows([{ rowId: nextRowId(), value: { description: conflict.resumeValue } }]);
-        } else if (conflict.choice === 'edit') {
-          setEducationRows((current) => [
-            ...current,
-            { rowId: nextRowId(), value: { description: conflict.resumeValue } },
-          ]);
-        }
-      }
+      // Satirin icerigi tumuyle CV'den geliyor: 'edit' secilse bile bu YENI satir
+      // birlestirilmis metin degil, CV metnidir; adayin kendi satirlari korunur ve
+      // kayitsiz oldugu icin etiketsiz kalir.
+      setImportedRows((current) => ({
+        ...current,
+        [rowId]: { description: conflict.resumeValue },
+      }));
     });
+    // #1153 (P2-3): adayin ACIKCA CV kaynagini sectigi alan da provenance tasimali.
+    // Onceki hali yalniz ilk otomatik aktarimi kaydediyordu; cakisma secimi haritayi
+    // guncellemedigi icin alan etiketsiz kaliyor ve sonraki elle duzeltmesi de
+    // izlenmiyordu. 'edit' (birlestir) secildiginde kaydedilen deger CV degeridir;
+    // guncel deger birlestirilmis oldugu icin rozet dogru sekilde "Siz duzenlediniz" der.
+    setImportedValues((current) => {
+      const next = { ...current };
+      mergeConflicts.forEach((conflict) => {
+        if (conflict.field === 'experience' || conflict.field === 'education') return;
+        const field = conflict.field as keyof ApplicationValues;
+        if (conflict.choice === 'resume' || conflict.choice === 'edit') {
+          next[field] = conflict.resumeValue;
+        }
+      });
+      return next;
+    });
+
     const imported = mergeConflicts.filter((conflict) =>
       ['resume', 'edit'].includes(conflict.choice ?? ''),
     ).length;
@@ -1545,6 +1802,10 @@ const CandidateApplicationPage = () => {
     setCredentialDownloaded(false);
     idempotencyKeyRef.current = createApplicationIdempotencyKey();
     resumeCreateKeyRef.current = createApplicationIdempotencyKey();
+    // #966: yeni niyet — yükleme anahtarı da sıfırlanır.
+    uploadKeyRef.current = null;
+    setImportedValues({});
+    setImportedRows({});
     candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
     setFormStep('resume');
@@ -1613,6 +1874,24 @@ const CandidateApplicationPage = () => {
     setCredentialDownloaded(true);
   };
 
+  /**
+   * #966: alan-bazlı provenance rozeti. CV'den gelmeyen alan rozet TAŞIMAZ — her alana
+   * bir etiket basmak bilgiyi değil gürültüyü artırırdı.
+   */
+  const renderProvenance = (field: keyof ApplicationValues) => {
+    const importedValue = importedValues[field];
+    if (importedValue === undefined) return null;
+    const edited = values[field] !== importedValue;
+    return (
+      <p
+        data-testid={`candidate-${field}-provenance`}
+        className="text-xs text-text-secondary"
+      >
+        {edited ? 'Siz düzenlediniz' : "CV'den aktarıldı"}
+      </p>
+    );
+  };
+
   const renderField = (
     field: keyof ApplicationValues,
     label: string,
@@ -1638,6 +1917,7 @@ const CandidateApplicationPage = () => {
         required={options?.required}
         autoComplete={options?.autoComplete}
       />
+      {renderProvenance(field)}
     </div>
   );
 
@@ -1662,6 +1942,7 @@ const CandidateApplicationPage = () => {
         required={required}
         rows={rows}
       />
+      {renderProvenance(field)}
     </div>
   );
 
@@ -1705,6 +1986,24 @@ const CandidateApplicationPage = () => {
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">
                 {index + 1}. {itemNoun}
+                {(() => {
+                  // #1153 (P2, tur 2): satirin kaynak rozeti. Kayit rowId ile
+                  // bagli oldugu icin satir silinip indeksler kaysa bile etiket
+                  // baska satira gecmez.
+                  const importedRow = importedRows[row.rowId];
+                  if (!importedRow) return null;
+                  const edited = specs.some(
+                    (spec) => (row.value[spec.key] ?? '') !== (importedRow[spec.key] ?? ''),
+                  );
+                  return (
+                    <span
+                      data-testid={`candidate-${name}-${index}-provenance`}
+                      className="ml-2 font-semibold normal-case tracking-normal"
+                    >
+                      {edited ? 'Siz düzenlediniz' : "CV'den aktarıldı"}
+                    </span>
+                  );
+                })()}
               </p>
               <button
                 type="button"
@@ -2403,7 +2702,15 @@ const CandidateApplicationPage = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setReplaceRequested(true)}
+                              onClick={() => {
+                                // #966 (karşı-örnek yoklaması): DEĞİŞTİRME yeni bir
+                                // niyettir — aday aynı dosyayı yeniden seçse bile.
+                                // Parmak izi aynı kaldığı için anahtar burada
+                                // temizlenmezse sunucu bunu ilk yüklemenin tekrarı
+                                // sayardı. Ölçüldü: aynı anahtar gidiyordu.
+                                uploadKeyRef.current = null;
+                                setReplaceRequested(true);
+                              }}
                               disabled={Boolean(resumeBusyField)}
                               className="rounded-xl border border-border-strong px-4 py-2 text-sm font-bold disabled:opacity-50"
                             >

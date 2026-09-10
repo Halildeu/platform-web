@@ -1,0 +1,85 @@
+name: ats#966 Resume Import Browser Regressions
+
+# Halildeu/ats#966 — adim 5.
+#
+# KATMAN ADI (bilerek acik yazildi): bu is, YEREL dev sunucusu + SENTETIK API route
+# mock'lari uzerinde gercek Chromium ile kosar. Docker/VPN/Vault gerektirmez.
+# CANLI TEST KABULU DEGILDIR; normal aday -> duzeltme -> gonderim -> IK kalici okuma
+# kabulu ayri bir hattir ve bu is ile karsilanmaz.
+#
+# KAPSAM: yalnizca "ats#966" ile isaretli blok kosar (-g filtresi). Ayni spec
+# dosyasindaki daha eski iki test main uzerinde ZATEN kirik (artik var olmayan
+# `candidate-experience` testid'i ve "Basvuruyu onizle" dugmesi araniyor); bu spec
+# hicbir workflow tarafindan kosulmadigi icin fark edilmemis. Onlarin onarimi bu
+# PR'in kapsami degildir, ayrica raporlandi.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/mfe-shell/src/pages/jobs/CandidateApplicationPage.tsx'
+      - 'tests/playwright/faz25-candidate-application.spec.ts'
+      - '.github/workflows/ats966-resume-import-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ats966-resume-import-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resume-import-browser:
+    name: Chromium — gecikmeli confirm + retry anahtari
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start mfe-shell dev harness
+        run: |
+          pnpm --filter mfe-shell exec vite --host 127.0.0.1 --port 3000 --strictPort \
+            > /tmp/ats966-shell.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 /tmp/ats966-shell.log || true
+          exit 1
+
+      - name: Chromium regressions (ats#966 only)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+        run: >-
+          pnpm exec playwright test
+          tests/playwright/faz25-candidate-application.spec.ts
+          --config tests/playwright/playwright.config.ts
+          --project=chromium
+          --workers=1
+          -g "ats#966"
+
+      - name: Upload browser diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ats966-browser-diagnostics
+          if-no-files-found: ignore
+          path: |
+            /tmp/ats966-shell.log
+            test-results/
+            playwright-report/
