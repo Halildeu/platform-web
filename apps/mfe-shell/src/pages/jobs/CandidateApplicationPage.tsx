@@ -680,6 +680,24 @@ const CandidateApplicationPage = () => {
   const [credentialDownloaded, setCredentialDownloaded] = useState(false);
   const idempotencyKeyRef = useRef(createApplicationIdempotencyKey());
   const resumeCreateKeyRef = useRef(createApplicationIdempotencyKey());
+  /**
+   * #966: YÜKLEME adımının idempotency anahtarı — mantıksal istek başına SABİT.
+   *
+   * <p>Önceki hâli her denemede yeni anahtar üretiyordu. Belirsiz bir timeout'ta istek
+   * sunucuya ULAŞMIŞ olabilir; aday aynı dosyayı yeniden yüklediğinde yeni anahtar gitmesi
+   * sunucunun idempotency korumasını etkisiz kılıyor ve ikinci bir belge yaratabiliyordu.
+   *
+   * <p>Kural: aynı mantıksal istek (aynı dosya) → AYNI anahtar; yeni kullanıcı niyeti →
+   * yeni anahtar. Parmak izi dosya kimliğidir. Aynı desen bu kod tabanında zaten var
+   * ({@code RecruiterJobsPanel} içindeki payload-fingerprint'li retry anahtarı); yenisini
+   * icat etmek yerine o uygulanıyor.
+   *
+   * <p>İPTAL/SIFIRLAMA sonrası temizlenir: aynı dosyanın parmak izi aynı kalır ama niyet
+   * artık aynı değildir — aday vazgeçip yeniden başlamıştır.
+   *
+   * <p>Anahtar UI'ye veya log'a yazılmaz; yalnız bellekte tutulur.
+   */
+  const uploadKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
   const resumeRequestIdRef = useRef(0);
   /**
@@ -883,7 +901,15 @@ const CandidateApplicationPage = () => {
       } else if (replaceRequested && active.documentVersion > 0) {
         active = await replaceResumePdf(active, candidateAccessTokenRef.current);
       }
-      const uploadKey = createApplicationIdempotencyKey();
+      // #966: aynı dosya => aynı anahtar (gerekçe uploadKeyRef javadoc'unda).
+      const uploadFingerprint = `${file.name}|${file.size}|${file.lastModified}`;
+      if (uploadKeyRef.current?.fingerprint !== uploadFingerprint) {
+        uploadKeyRef.current = {
+          fingerprint: uploadFingerprint,
+          key: createApplicationIdempotencyKey(),
+        };
+      }
+      const uploadKey = uploadKeyRef.current.key;
       const uploaded = await uploadResumePdf(
         active,
         file,
@@ -946,6 +972,8 @@ const CandidateApplicationPage = () => {
       setResumeStatus('idle');
       setShowRejectAllConfirm(false);
       resumeCreateKeyRef.current = createApplicationIdempotencyKey();
+      // #966: yeni niyet — aynı dosya yeniden seçilse bile yeni anahtar alsın.
+      uploadKeyRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (terminateError) {
       setFileError(
@@ -1583,6 +1611,8 @@ const CandidateApplicationPage = () => {
     setCredentialDownloaded(false);
     idempotencyKeyRef.current = createApplicationIdempotencyKey();
     resumeCreateKeyRef.current = createApplicationIdempotencyKey();
+    // #966: yeni niyet — yükleme anahtarı da sıfırlanır.
+    uploadKeyRef.current = null;
     candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
     setFormStep('resume');

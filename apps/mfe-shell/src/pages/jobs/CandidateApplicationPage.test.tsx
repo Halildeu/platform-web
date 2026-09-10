@@ -602,6 +602,73 @@ describe('CandidateApplicationPage', () => {
     });
   });
 
+
+  // =========================================================================================
+  // #966 adım 2 — RETRY KEY LIFECYCLE.
+  //
+  // Kural: aynı MANTIKSAL isteğin belirsiz timeout/retry'ında AYNI key ve aynı payload;
+  // yeni kullanıcı niyetinde YENİ key. Her hata sonrası körlemesine key yenilemek, sunucunun
+  // idempotency korumasını etkisiz kılar — belirsiz timeout'ta istek sunucuya ULAŞMIŞ
+  // olabilir ve yeni key ikinci bir belge yaratır.
+  //
+  // NOT: bu blok `createApplicationIdempotencyKey` mock'unu AYIRT EDİCİ hale getirir.
+  // Ortak fixture sabit bir anahtar döndürüyor; onunla yazılsaydı test "anahtarlar aynı"
+  // iddiasını doğrulamadan, mock sabit olduğu için geçerdi.
+  // =========================================================================================
+  describe('#966 retry key lifecycle', () => {
+    let issued: string[] = [];
+
+    beforeEach(() => {
+      issued = [];
+      apiMocks.createApplicationIdempotencyKey.mockImplementation(() => {
+        const key = `web-key-${issued.length + 1}`;
+        issued.push(key);
+        return key;
+      });
+    });
+
+    it('REPRO: ayni dosyanin yeniden yuklenmesi AYNI upload key ile gitmeli', async () => {
+      // İlk deneme belirsiz bir hatayla düşüyor (sunucu almış olabilir).
+      apiMocks.uploadResumePdf.mockRejectedValueOnce(new Error('network timeout'));
+
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+      const pdf = new File(['%PDF synthetic'], 'ornek-cv.pdf', { type: 'application/pdf' });
+
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+
+      // Aday AYNI dosyayı yeniden seçiyor: yeni niyet değil, aynı isteğin tekrarı.
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
+
+      const firstKey = apiMocks.uploadResumePdf.mock.calls[0][2];
+      const secondKey = apiMocks.uploadResumePdf.mock.calls[1][2];
+      expect(secondKey).toBe(firstKey);
+    });
+
+    it('REPRO: FARKLI dosya yeni niyettir, yeni upload key almali', async () => {
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+
+      const first = new File(['%PDF one'], 'ilk-cv.pdf', { type: 'application/pdf' });
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [first] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+
+      const second = new File(['%PDF two different'], 'ikinci-cv.pdf', {
+        type: 'application/pdf',
+      });
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [second] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
+
+      expect(apiMocks.uploadResumePdf.mock.calls[1][2]).not.toBe(
+        apiMocks.uploadResumePdf.mock.calls[0][2],
+      );
+    });
+  });
+
   it('gives every decision state its own frame, not just its own badge', () => {
     // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
     // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve
