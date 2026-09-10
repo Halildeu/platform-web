@@ -669,6 +669,78 @@ describe('CandidateApplicationPage', () => {
     });
   });
 
+
+  // =========================================================================================
+  // #966 adım 3 — GÖRÜNÜR, ALAN-BAZLI PROVENANCE.
+  //
+  // Bugünkü ekran yalnız TOPLU bir cümle kuruyor: "N aday kontrollü alan aktarıldı".
+  // Aday sonradan o alanlardan birini düzeltse bile bu cümle değişmiyor — yani ekran
+  // artık doğru olmayan bir şey söylüyor. Sahip tercihi: değişmemiş aktarım "CV'den
+  // aktarıldı", sonradan elle düzeltilen "Siz düzenlediniz" desin.
+  //
+  // Kaynak bağı (import/draft/version) KORUNUR: adayın düzeltmesi bağı silmez, yalnız
+  // "gönderilen değer taslakla aynı" anlamını kaldırır.
+  // =========================================================================================
+  describe('#966 alan bazlı provenance', () => {
+    const importEightFields = async () => {
+      renderPage();
+      await selectPdf();
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+        ).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+      await screen.findByTestId('candidate-resume-meta');
+    };
+
+    it('REPRO: aktarılan alan CV kaynaklı olduğunu söylemeli', async () => {
+      await importEightFields();
+      expect(screen.getByTestId('candidate-fullName-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+    });
+
+    it('REPRO: aday aktarılan alanı düzeltince ekran BUNU söylemeli', async () => {
+      await importEightFields();
+
+      fireEvent.change(screen.getByTestId('candidate-fullName'), {
+        target: { value: 'Adayin duzelttigi ad' },
+      });
+
+      expect(screen.getByTestId('candidate-fullName-provenance')).toHaveTextContent(
+        /Siz düzenlediniz/,
+      );
+      // Düzeltme yalnız O alanı etkiler; dokunulmayan alan CV kaynaklı kalır.
+      expect(screen.getByTestId('candidate-email-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+    });
+
+    it('REPRO: düzeltme kaynak bağını SESSİZCE SİLMEMELİ', async () => {
+      await importEightFields();
+      fireEvent.change(screen.getByTestId('candidate-fullName'), {
+        target: { value: 'Adayin duzelttigi ad' },
+      });
+
+      // resumeBinding duruyorsa bu düğme "İletişim bilgilerime geç" der (bkz. bileşen).
+      expect(
+        screen.getByRole('button', { name: 'İletişim bilgilerime geç' }),
+      ).toBeInTheDocument();
+    });
+
+    it('REPRO: elle doldurulan, CV\'den gelmeyen alan provenance rozeti TAŞIMAMALI', async () => {
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.change(screen.getByTestId('candidate-fullName'), {
+        target: { value: 'Elle yazilan ad' },
+      });
+
+      expect(screen.queryByTestId('candidate-fullName-provenance')).toBeNull();
+    });
+  });
+
   it('gives every decision state its own frame, not just its own badge', () => {
     // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
     // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve

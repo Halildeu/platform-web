@@ -662,6 +662,25 @@ const CandidateApplicationPage = () => {
   const [resumeNoticeAcceptedAt, setResumeNoticeAcceptedAt] = useState('');
   const [resumeImport, setResumeImport] = useState<ResumeImportDto | null>(null);
   const [resumeBinding, setResumeBinding] = useState<ResumeBinding | null>(null);
+  /**
+   * #966: CV'den AKTARILDIĞI ANDA alanın taşıdığı değer.
+   *
+   * <p>Alan-bazlı provenance'ın dayanağı budur ve GERÇEK veridir — varsayım değil.
+   * Bir alan bu haritada yoksa CV'den gelmemiştir (rozet basılmaz). Varsa ve güncel
+   * değer aktarılan değerle aynıysa "CV'den aktarıldı"; farklıysa aday sonradan
+   * düzeltmiştir, "Siz düzenlediniz".
+   *
+   * <p>Önceki ekran yalnız TOPLU bir sayı gösteriyordu ("N alan aktarıldı") ve aday
+   * düzeltme yapınca bu sayı değişmediği için ekran artık doğru olmayan bir şey
+   * söylüyordu.
+   *
+   * <p>Kaynak bağı ({@code resumeBinding}) bundan BAĞIMSIZ ve korunur: adayın düzeltmesi
+   * import/draft/version bağını silmez — yalnız "gönderilen değer taslakla aynı"
+   * anlamını kaldırır.
+   */
+  const [importedValues, setImportedValues] = useState<
+    Partial<Record<keyof ApplicationValues, string>>
+  >({});
   const [resumeEdits, setResumeEdits] = useState<Partial<Record<ResumeFieldKey, string>>>({});
   const [resumeBusyField, setResumeBusyField] = useState<ResumeFieldKey | 'all' | null>(null);
   const [replaceRequested, setReplaceRequested] = useState(false);
@@ -974,6 +993,7 @@ const CandidateApplicationPage = () => {
       resumeCreateKeyRef.current = createApplicationIdempotencyKey();
       // #966: yeni niyet — aynı dosya yeniden seçilse bile yeni anahtar alsın.
       uploadKeyRef.current = null;
+      setImportedValues({});
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (terminateError) {
       setFileError(
@@ -1095,6 +1115,8 @@ const CandidateApplicationPage = () => {
     const conflicts: MergeConflict[] = [];
     // #966: closure fotoğrafı DEĞİL, güncel durum. Gerekçe valuesRef javadoc'unda.
     const liveValues = valuesRef.current;
+    // #966: hangi alanın HANGİ değerle aktarıldığı — alan-bazlı provenance'ın dayanağı.
+    const importedByField: Partial<Record<keyof ApplicationValues, string>> = {};
     const liveExperience = deriveExperienceText(
       experienceRowsRef.current.map((row) => row.value),
     );
@@ -1177,6 +1199,7 @@ const CandidateApplicationPage = () => {
       const formField = field as keyof ApplicationValues;
       if (!liveValues[formField].trim() || liveValues[formField] === resumeValue) {
         next[formField] = resumeValue;
+        importedByField[formField] = resumeValue;
         imported += 1;
       } else {
         conflicts.push({
@@ -1190,6 +1213,7 @@ const CandidateApplicationPage = () => {
     });
 
     setValues(next);
+    setImportedValues(importedByField);
     if (nextExperience) setExperienceRows(nextExperience);
     if (nextEducation) setEducationRows(nextEducation);
     setMergeConflicts(conflicts);
@@ -1613,6 +1637,7 @@ const CandidateApplicationPage = () => {
     resumeCreateKeyRef.current = createApplicationIdempotencyKey();
     // #966: yeni niyet — yükleme anahtarı da sıfırlanır.
     uploadKeyRef.current = null;
+    setImportedValues({});
     candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
     setFormStep('resume');
@@ -1681,6 +1706,24 @@ const CandidateApplicationPage = () => {
     setCredentialDownloaded(true);
   };
 
+  /**
+   * #966: alan-bazlı provenance rozeti. CV'den gelmeyen alan rozet TAŞIMAZ — her alana
+   * bir etiket basmak bilgiyi değil gürültüyü artırırdı.
+   */
+  const renderProvenance = (field: keyof ApplicationValues) => {
+    const importedValue = importedValues[field];
+    if (importedValue === undefined) return null;
+    const edited = values[field] !== importedValue;
+    return (
+      <p
+        data-testid={`candidate-${field}-provenance`}
+        className="text-xs text-text-secondary"
+      >
+        {edited ? 'Siz düzenlediniz' : "CV'den aktarıldı"}
+      </p>
+    );
+  };
+
   const renderField = (
     field: keyof ApplicationValues,
     label: string,
@@ -1706,6 +1749,7 @@ const CandidateApplicationPage = () => {
         required={options?.required}
         autoComplete={options?.autoComplete}
       />
+      {renderProvenance(field)}
     </div>
   );
 
@@ -1730,6 +1774,7 @@ const CandidateApplicationPage = () => {
         required={required}
         rows={rows}
       />
+      {renderProvenance(field)}
     </div>
   );
 
