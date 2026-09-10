@@ -468,3 +468,109 @@ test.describe('Faz 25 public candidate journey', () => {
     }
   });
 });
+
+/**
+ * ats#966 — GERÇEK TARAYICI regresyonları (sentetik).
+ *
+ * <p>jsdom bazı şeyleri kanıtlayamaz: gerçek olay döngüsü, gerçek input odağı ve
+ * gerçekten GECİKEN bir ağ yanıtı. Bu blok tam olarak o boşluğu kapatır — özellikle
+ * "ref'ler efekt akmadan bayat kalır mı" sorusunu, yapay bir jsdom kurgusuyla değil
+ * gerçek Chromium'da ölçer.
+ *
+ * <p>ADLANDIRMA SINIRI: bu katman sentetik API mock'larıyla, yerel dev sunucusunda
+ * koşar. Canlı TEST kabulü DEĞİLDİR — normal aday → düzeltme → gönderim → İK kalıcı
+ * okuma kabulü ayrı bir hattır ve bu testlerle karşılanmaz.
+ */
+test.describe('ats#966 resume import sertleştirme (sentetik, gerçek tarayıcı)', () => {
+  const gotoApply = async (page: Page, baseURL: string | undefined) => {
+    await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/careers/acik/jobs/${JOB.slug}/apply`, {
+      waitUntil: 'domcontentloaded',
+    });
+  };
+
+  const importEightFields = async (page: Page) => {
+    await page.getByLabel(/CV içe aktarma aydınlatmasını okudum/i).check();
+    await page.getByTestId('candidate-resume').setInputFiles({
+      name: 'ornek-cv.pdf',
+      mimeType: 'application/pdf',
+      buffer: buildSyntheticResumePdf(),
+    });
+    await expect(page.getByTestId('candidate-resume-review')).toBeVisible();
+    await page.getByRole('button', { name: 'Güvenli önerileri kabul et' }).click();
+    await expect(
+      page.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+    ).toBeEnabled();
+  };
+
+  test('gecikmeli confirm sırasında adayın yazdığı gerçek tarayıcıda korunur', async ({
+    page,
+    baseURL,
+  }) => {
+    await installAtsApi(page);
+    // Confirm yanıtını BİLEREK geciktir: aday bu sürede yazmaya devam edecek.
+    await page.route('**/candidate/resume-imports/*/confirm', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fallback();
+    });
+
+    await gotoApply(page, baseURL);
+    await importEightFields(page);
+
+    await page.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }).click();
+    // İstek uçuşta; aday telefonunu yazıyor.
+    await page.getByTestId('candidate-phone').fill('0555 111 22 33');
+
+    // Aktarımın tamamlandığını bekle. NOT: bu sayı ayırt edici DEĞİLDİR — ölçtüm,
+    // kusurlu sürümde de 7 yazıyor. Yalnızca akışın bittiğini işaretler.
+    await expect(page.getByTestId('candidate-resume-meta')).toContainText('7 alan forma aktarıldı');
+
+    /*
+     * ASIL REGRESYON SİNYALİ BURASI (negatif doğrulama ile ölçüldü).
+     *
+     * Kaynakta `valuesRef.current` yerine bayat `values` kapanışı kullanılacak şekilde
+     * geçici geri alma yaptım ve bu testi koşturdum: telefon alanı `""` olarak geldi,
+     * yani adayın uçuşta yazdığı numara siliniyor. Ref'i geri koyunca yeşil.
+     *
+     * Dolayısıyla bu satır sinyali gerçekten taşıyor; sayı satırı taşımıyor.
+     */
+    await expect(page.getByTestId('candidate-phone')).toHaveValue('0555 111 22 33');
+  });
+
+  test('aynı dosyanın retry yüklemesi aynı idempotency anahtarını kullanır', async ({
+    page,
+    baseURL,
+  }) => {
+    await installAtsApi(page);
+
+    const uploadKeys: string[] = [];
+    let firstAttempt = true;
+    await page.route('**/candidate/resume-imports/*/document', async (route) => {
+      uploadKeys.push(route.request().headers()['x-ats-idempotency-key'] ?? '');
+      if (firstAttempt) {
+        firstAttempt = false;
+        // Belirsiz hata: istek sunucuya ULAŞMIŞ olabilir.
+        await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await gotoApply(page, baseURL);
+    await page.getByLabel(/CV içe aktarma aydınlatmasını okudum/i).check();
+
+    const pdf = {
+      name: 'ornek-cv.pdf',
+      mimeType: 'application/pdf',
+      buffer: buildSyntheticResumePdf(),
+    };
+    await page.getByTestId('candidate-resume').setInputFiles(pdf);
+    await expect.poll(() => uploadKeys.length).toBe(1);
+
+    // Aday AYNI dosyayı yeniden seçiyor: yeni niyet değil, aynı isteğin tekrarı.
+    await page.getByTestId('candidate-resume').setInputFiles(pdf);
+    await expect.poll(() => uploadKeys.length).toBe(2);
+
+    expect(uploadKeys[0]).not.toBe('');
+    expect(uploadKeys[1]).toBe(uploadKeys[0]);
+  });
+});
