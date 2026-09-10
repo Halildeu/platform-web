@@ -40,6 +40,16 @@ export interface EthicsCaseSummary {
   mode: string | null;
   /** Zero means nobody is on the case — the state that most needs to be visible. */
   participantCount: number;
+  /**
+   * ES-301 (platform-backend#882/#1152) — the highest SLA escalation level the server
+   * has RECORDED for this case (0 = none), and when the latest level was recorded.
+   * History, not activity: it does not drop when the obligation is met afterwards,
+   * because "this case reached level 2 before it was acknowledged" is the fact the
+   * record exists to keep. Optional so a bundle talking to an older service reads it
+   * as "no escalation recorded", never as a crash.
+   */
+  escalationLevel?: number | null;
+  escalatedAt?: string | null;
 }
 
 // The status vocabulary, transition table and labels live in `case-lifecycle.ts`.

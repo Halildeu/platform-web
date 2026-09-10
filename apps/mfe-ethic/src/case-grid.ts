@@ -21,7 +21,9 @@ import {
 
 /** Persisted-state identity for the EntityGridTemplate variant system. */
 export const CASE_GRID_ID = 'ethics-cases';
-export const CASE_GRID_SCHEMA_VERSION = 1;
+// 2: ES-301 (#882) added the `escalationText` column; a saved column layout from
+// version 1 does not know it and would keep it hidden.
+export const CASE_GRID_SCHEMA_VERSION = 2;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,6 +62,9 @@ export interface CaseGridSource {
   category: string | null;
   mode: string | null;
   participantCount: number;
+  /** ES-301: server-recorded escalation; absent on an older service = none recorded. */
+  escalationLevel?: number | null;
+  escalatedAt?: string | null;
 }
 
 export interface CaseGridRow extends Record<string, unknown> {
@@ -79,6 +84,10 @@ export interface CaseGridRow extends Record<string, unknown> {
   feedbackSlaText: string;
   feedbackSlaTone: SlaTone;
   feedbackSlaOrder: number;
+  escalationText: string;
+  escalationTone: SlaTone;
+  escalationLevel: number;
+  escalationOrder: number;
   createdAt: string;
   createdAtOrder: number;
 }
@@ -161,6 +170,25 @@ export function ownerFor(item: {
   return { owner: legacy ? legacy : 'Sahipsiz', unattended };
 }
 
+/**
+ * ES-301 — the escalation level the SERVER recorded, as one grid cell. Not derived
+ * from the clock: the two SLA cells above say where the case stands now; this one says
+ * what was written down (and audited) when a deadline was missed, and it stays after
+ * the obligation is met. "Seviye 2" on an acknowledged case is therefore correct, not
+ * stale — the level was reached, and the record of it is the point.
+ *
+ * The wording avoids "yükseltme", which this workspace already uses for the sanction
+ * scale's severity escalation — a different thing on the same screen.
+ */
+export function escalationFor(item: {
+  escalationLevel?: number | null;
+}): SlaCell & { level: number } {
+  const level = Math.max(0, Math.trunc(item.escalationLevel ?? 0));
+  if (level === 0) return { text: '—', tone: 'none', order: 0, level };
+  // Higher levels sort first, like the breached clocks (most negative first).
+  return { text: `Seviye ${level}`, tone: 'danger', order: -level, level };
+}
+
 /** One list item → one grid row. Derivation only; no fetching, no formatting surprises. */
 export function buildCaseRows(
   items: readonly CaseGridSource[],
@@ -169,6 +197,7 @@ export function buildCaseRows(
   return items.map((item) => {
     const ack = ackSlaFor(item, now);
     const feedback = feedbackSlaFor(item, now);
+    const escalation = escalationFor(item);
     const { owner, unattended } = ownerFor(item);
     const created = Date.parse(item.createdAt);
     return {
@@ -188,6 +217,10 @@ export function buildCaseRows(
       feedbackSlaText: feedback.text,
       feedbackSlaTone: feedback.tone,
       feedbackSlaOrder: feedback.order,
+      escalationText: escalation.text,
+      escalationTone: escalation.tone,
+      escalationLevel: escalation.level,
+      escalationOrder: escalation.order,
       createdAt: item.createdAt,
       createdAtOrder: Number.isNaN(created) ? 0 : created,
     };
@@ -260,7 +293,7 @@ type CaseColumnDefs = EntityGridTemplateProps<CaseGridRow>['columnDefs'];
 export type CaseGridColumnDef = CaseColumnDefs[number];
 
 const bySlaOrder =
-  (key: 'ackSlaOrder' | 'feedbackSlaOrder' | 'createdAtOrder') =>
+  (key: 'ackSlaOrder' | 'feedbackSlaOrder' | 'escalationOrder' | 'createdAtOrder') =>
   (
     _valueA: unknown,
     _valueB: unknown,
@@ -272,7 +305,7 @@ const bySlaOrder =
 const slaCellClass = (tone: SlaTone) => `ethics-grid-sla is-${tone}`;
 
 /**
- * The eight columns of the case grid, in reading order. Text/tone pairs come
+ * The nine columns of the case grid, in reading order. Text/tone pairs come
  * off the row (derived in {@link buildCaseRows}); classes only decorate what
  * the words already say.
  */
@@ -314,6 +347,13 @@ export function buildCaseColumnDefs(): CaseGridColumnDef[] {
       minWidth: 160,
       comparator: bySlaOrder('feedbackSlaOrder'),
       cellClass: (params) => slaCellClass(params.data?.feedbackSlaTone ?? 'none'),
+    },
+    {
+      field: 'escalationText',
+      headerName: 'SLA eskalasyonu',
+      minWidth: 140,
+      comparator: bySlaOrder('escalationOrder'),
+      cellClass: (params) => slaCellClass(params.data?.escalationTone ?? 'none'),
     },
     {
       field: 'createdAt',
