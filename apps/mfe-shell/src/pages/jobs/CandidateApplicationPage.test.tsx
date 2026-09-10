@@ -741,6 +741,94 @@ describe('CandidateApplicationPage', () => {
     });
   });
 
+
+  // =========================================================================================
+  // #966 adım 4 — SIZINTI KONTROLLERİ (çalışma zamanı).
+  //
+  // Talimat: "salt string taraması runtime kanıtı değildir." Bu yüzden kaynakta arama
+  // yapılmıyor; akış GERÇEKTEN koşturuluyor ve koşarken üretilen yüzeyler toplanıyor:
+  // console/error kanalları, adres çubuğu (URL/query/hash), localStorage ve kullanıcıya
+  // gösterilen hata metni.
+  //
+  // Aranan değerler sentetik: aday erişim token'ı ve dosya adı.
+  // =========================================================================================
+  describe('#966 sızıntı yüzeyleri', () => {
+    const TOKEN = 'A'.repeat(43);
+    const FILENAME = 'ornek-cv.pdf';
+
+    /** Koşarken yazılan her console satırı burada toplanır. */
+    let consoleLines: string[] = [];
+    let spies: Array<{ restore: () => void }> = [];
+
+    beforeEach(() => {
+      consoleLines = [];
+      spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((level) => {
+        const spy = vi
+          .spyOn(console, level)
+          .mockImplementation((...args: unknown[]) => {
+            consoleLines.push(args.map((a) => String(a)).join(' '));
+          });
+        return { restore: () => spy.mockRestore() };
+      });
+      window.localStorage.clear();
+    });
+
+    afterEach(() => {
+      spies.forEach((s) => s.restore());
+    });
+
+    const leakSurfaces = () => {
+      const storage: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const key = window.localStorage.key(i);
+        if (key) storage.push(`${key}=${window.localStorage.getItem(key) ?? ''}`);
+      }
+      return [
+        ...consoleLines,
+        window.location.href,
+        window.location.search,
+        window.location.hash,
+        ...storage,
+      ].join('\n');
+    };
+
+    it('başarılı akışta token ve dosya adı hiçbir yüzeye sızmamalı', async () => {
+      renderPage();
+      await selectPdf();
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+        ).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+      await screen.findByTestId('candidate-resume-meta');
+
+      const surfaces = leakSurfaces();
+      expect(surfaces).not.toContain(TOKEN);
+      expect(surfaces).not.toContain(FILENAME);
+    });
+
+    it('HATA yolunda da sızmamalı — hata yüzeyi en olası kaçak noktasıdır', async () => {
+      // Hata mesajının içine token/dosya adı konması klasik kaçak; runtime'da yokluyoruz.
+      apiMocks.uploadResumePdf.mockRejectedValueOnce(
+        new Error('yukleme basarisiz (sentetik hata)'),
+      );
+
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+      const pdf = new File(['%PDF synthetic'], FILENAME, { type: 'application/pdf' });
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+
+      const surfaces = `${leakSurfaces()}\n${document.body.textContent ?? ''}`;
+      expect(surfaces).not.toContain(TOKEN);
+      expect(surfaces).not.toContain(FILENAME);
+    });
+  });
+
   it('gives every decision state its own frame, not just its own badge', () => {
     // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
     // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve
