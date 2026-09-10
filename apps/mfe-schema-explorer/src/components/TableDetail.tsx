@@ -39,6 +39,7 @@ export const TableDetail = ({ snapshot, tableName, onClose, onFkClick }: TableDe
       <div className="se-detail__header">
         <div>
           <h2>{tableName}</h2>
+          {table.comment && <p className="se-detail__comment" data-testid="se-table-comment">{table.comment}</p>}
           <div className="se-detail__badges">
             <span className="se-badge se-badge--col">{table.columns.length} cols</span>
             <span className="se-badge se-badge--fk">{Object.keys(fkMap).length} FK</span>
@@ -63,7 +64,10 @@ export const TableDetail = ({ snapshot, tableName, onClose, onFkClick }: TableDe
               {table.columns.map((col, i) => (
                 <tr key={col.name}>
                   <td className="se-col-table__num">{i + 1}</td>
-                  <td className={col.pk ? 'se-col--pk' : ''}>{col.pk && '\uD83D\uDD11 '}{col.name}</td>
+                  <td className={col.pk ? 'se-col--pk' : ''} title={col.comment ?? undefined}>
+                    {col.pk && '\uD83D\uDD11 '}{col.name}
+                    {col.label && <div className="se-col__label" data-testid="se-col-label">{col.label}</div>}
+                  </td>
                   <td className="se-col--type">{col.dataType}</td>
                   <td className="se-col--nullable">{col.nullable ? 'NULL' : 'NOT NULL'}</td>
                   <td>

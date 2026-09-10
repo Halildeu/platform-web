@@ -49,6 +49,7 @@ export const ColumnSearch = ({ onTableSelect, scope }: ColumnSearchProps) => {
                     <code>{entry.column}</code>
                     <span className="se-col--type" style={{ marginLeft: 8 }}>{entry.type}</span>
                     {entry.pk && <span className="se-col--pk" style={{ marginLeft: 4 }}>PK</span>}
+                    {entry.label && <span className="se-col__label se-col__label--inline" data-testid="se-search-label">{entry.label}</span>}
                   </div>
                 ))}
                 {group.tables.length > 30 && (
