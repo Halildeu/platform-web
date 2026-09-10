@@ -169,6 +169,10 @@
 .se-col--fk:hover { text-decoration: underline; }
 .se-col--nullable { color: var(--se-text-dim); }
 .se-col--type { color: var(--se-green); }
+/* gitops#3631 — source-provided labels (IFS PROMPT=) sit under the column name; muted, never louder than the name. */
+.se-col__label { font-size: 11px; color: var(--se-muted, #8b98a8); font-weight: 400; margin-top: 2px; }
+.se-col__label--inline { display: inline; margin-left: 8px; }
+.se-detail__comment { margin: 4px 0 8px; font-size: 12px; color: var(--se-muted, #8b98a8); }
 
 /* Relationship cards */
 .se-rel-card {

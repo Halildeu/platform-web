@@ -26,6 +26,14 @@ export interface SchemaColumnInfo {
   pk: boolean;
   /** Ordinal position in the table (1-based) */
   ordinal: number;
+  /**
+   * Raw dictionary comment from the source (Oracle ALL_COL_COMMENTS; IFS keeps its
+   * FLAGS/DATATYPE/PROMPT metadata here). Absent/null on sources that carry none.
+   * @since gitops#3631
+   */
+  comment?: string | null;
+  /** Human label the source provides (IFS PROMPT=); null when the column name is all there is. */
+  label?: string | null;
   /** Referenced table name if this is a foreign key (discovered by relationship engine) */
   referencedTable?: string;
   /** Referenced column name */
@@ -49,6 +57,8 @@ export interface SchemaTableInfo {
   columnCount: number;
   /** Business domain tag (e.g., "Finance", "HR") — assigned by domain clustering */
   domainTag?: string;
+  /** Source's own description of the object (Oracle ALL_TAB_COMMENTS). @since gitops#3631 */
+  comment?: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -139,6 +149,8 @@ export interface SchemaColumnSearchMatch {
   column: string;
   type: string;
   pk: boolean;
+  /** Source-provided label (IFS PROMPT=), present only when the source has one. @since gitops#3631 */
+  label?: string;
 }
 
 export interface SchemaColumnSearchGroup {
