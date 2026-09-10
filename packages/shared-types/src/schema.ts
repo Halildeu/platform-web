@@ -80,6 +80,14 @@ export interface SchemaRelationship {
   source: string;
   /** Whether discovered by multiple techniques (higher reliability) */
   multiSource: boolean;
+  /**
+   * Every source column of the key in key order (platform-backend#1156). Present on
+   * composite edges (`fk_constraint_composite`); `fromColumn` is its last entry. A JOIN
+   * must use all pairs — the representative pair alone matches rows of other parents.
+   */
+  fromColumns?: string[];
+  /** Every target column of the key, paired with `fromColumns` by index. */
+  toColumns?: string[];
 }
 
 /* ------------------------------------------------------------------ */
