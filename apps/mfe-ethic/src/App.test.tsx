@@ -557,6 +557,45 @@ describe('Etik Speak manager MFE', () => {
     expect(state).toHaveAttribute('data-overdue', 'false');
   });
 
+  /**
+   * ES-301 (#882): the escalation level is what the SERVER recorded when a deadline was
+   * missed. It is shown from the field, never computed here, and it stays after the
+   * acknowledgement — an acknowledged case at level 2 is the record, not a stale badge.
+   */
+  test('sunucunun kaydettiği SLA eskalasyon seviyesi detayda görünür, teyit verilmiş olsa da', async () => {
+    const escalated = {
+      ...detail,
+      createdAt: '2026-07-01T12:00:00Z',
+      acknowledgedAt: '2026-07-20T12:00:00Z',
+      escalationLevel: 2,
+      escalatedAt: '2026-07-11T12:00:00Z',
+    };
+    vi.mocked(api.listCases).mockResolvedValue([escalated]);
+    vi.mocked(api.getCase).mockResolvedValue(escalated);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    const level = await screen.findByTestId('escalation-level');
+    expect(level).toHaveAttribute('data-level', '2');
+    expect(level).toHaveTextContent('SLA eskalasyonu: Seviye 2');
+    expect(level).toHaveAttribute('role', 'alert');
+    // Still acknowledged; the two facts live side by side.
+    expect(await screen.findByTestId('acknowledgement-state')).toHaveAttribute('data-overdue', 'false');
+  });
+
+  /** An older service (no field) or level 0 renders no escalation line at all — nothing is invented. */
+  test('eskalasyon alanı yoksa veya sıfırsa satır hiç çizilmez', async () => {
+    const legacy = { ...detail };
+    delete (legacy as { escalationLevel?: number | null }).escalationLevel;
+    vi.mocked(api.listCases).mockResolvedValue([legacy as api.EthicsCaseSummary]);
+    vi.mocked(api.getCase).mockResolvedValue(legacy as api.EthicsCaseDetail);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /#11111111/ }));
+
+    await screen.findByTestId('acknowledgement-state');
+    expect(screen.queryByTestId('escalation-level')).toBeNull();
+  });
+
   test('teyit verilmişse geçen süre gösterilir, uyarı verilmez', async () => {
     const acknowledged = {
       ...detail,

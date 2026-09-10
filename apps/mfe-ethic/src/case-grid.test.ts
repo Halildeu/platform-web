@@ -6,6 +6,7 @@ import {
   CASE_GRID_ID,
   CASE_GRID_SCHEMA_VERSION,
   computeKpis,
+  escalationFor,
   feedbackSlaFor,
   modeLabel,
   nextWorkReason,
@@ -140,6 +141,37 @@ describe('SLA hücreleri', () => {
   });
 });
 
+describe('SLA eskalasyonu hücresi (sunucunun kaydettiği seviye)', () => {
+  test('kayıt yoksa — ve alan hiç gelmiyorsa — tire, ton yok, sıralama nötr', () => {
+    expect(escalationFor({})).toEqual({ text: '—', tone: 'none', order: 0, level: 0 });
+    expect(escalationFor({ escalationLevel: 0 })).toEqual({ text: '—', tone: 'none', order: 0, level: 0 });
+    expect(escalationFor({ escalationLevel: null })).toEqual({ text: '—', tone: 'none', order: 0, level: 0 });
+  });
+
+  test('seviye varsa sözcükle söyler, danger tonu taşır ve yüksek seviye önce sıralanır', () => {
+    expect(escalationFor({ escalationLevel: 1 })).toEqual({ text: 'Seviye 1', tone: 'danger', order: -1, level: 1 });
+    expect(escalationFor({ escalationLevel: 2 })).toEqual({ text: 'Seviye 2', tone: 'danger', order: -2, level: 2 });
+    expect(escalationFor({ escalationLevel: 2 }).order).toBeLessThan(escalationFor({ escalationLevel: 1 }).order);
+  });
+
+  test('teyit sonradan verilse de kayıtlı seviye satırdan düşmez — tarih değil, kayıt', () => {
+    const [row] = buildCaseRows(
+      [{ ...base, createdAt: daysBefore(20), acknowledgedAt: daysBefore(1), escalationLevel: 2 }],
+      NOW,
+    );
+    expect(row.ackSlaText).toBe('Verildi');
+    expect(row.escalationText).toBe('Seviye 2');
+    expect(row.escalationTone).toBe('danger');
+    expect(row.escalationLevel).toBe(2);
+  });
+
+  test('eskalasyon hücresi saatten türetilmez: gecikmiş ama kaydı olmayan vaka tire gösterir', () => {
+    const [row] = buildCaseRows([{ ...base, createdAt: daysBefore(30) }], NOW);
+    expect(row.ackSlaText).toMatch(/gecikti$/);
+    expect(row.escalationText).toBe('—');
+  });
+});
+
 describe('buildCaseRows', () => {
   test('sahip türetimi: katılımcı sayısı > 0 sayar, eski etiket varsa okunur, hiçbiri yoksa Sahipsiz', () => {
     expect(ownerFor({ legacyAssignmentLabel: null, participantCount: 0 })).toEqual({
@@ -197,6 +229,7 @@ describe('sütunlar', () => {
       'owner',
       'ackSlaText',
       'feedbackSlaText',
+      'escalationText',
       'createdAt',
     ]);
     const [row] = buildCaseRows([base], NOW);
@@ -214,7 +247,7 @@ describe('sütunlar', () => {
 
   test('grid kimliği ve şema sürümü sabittir', () => {
     expect(CASE_GRID_ID).toBe('ethics-cases');
-    expect(CASE_GRID_SCHEMA_VERSION).toBe(1);
+    expect(CASE_GRID_SCHEMA_VERSION).toBe(2);
   });
 });
 

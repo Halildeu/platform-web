@@ -787,6 +787,7 @@ export default function App() {
                 {(() => {
                   const ack = acknowledgementState(selected);
                   return (
+                    <>
                     <p
                       className="ethics-muted"
                       data-testid="acknowledgement-state"
@@ -798,6 +799,22 @@ export default function App() {
                         ? ` · Sonuç: ${outcomeLabel(selected.outcome)}`
                         : ''}
                     </p>
+                    {(selected.escalationLevel ?? 0) > 0 ? (
+                      // ES-301: what the server RECORDED when a deadline was missed. It
+                      // stays after the obligation is met — the record is the point.
+                      <p
+                        className="ethics-muted ethics-escalation-level"
+                        data-testid="escalation-level"
+                        data-level={selected.escalationLevel}
+                        role="alert"
+                      >
+                        SLA eskalasyonu: Seviye {selected.escalationLevel}
+                        {selected.escalatedAt
+                          ? ` · ${new Date(selected.escalatedAt).toLocaleString('tr-TR')}`
+                          : ''}
+                      </p>
+                    ) : null}
+                    </>
                   );
                 })()}
                 <section aria-labelledby="narrative-heading">
