@@ -626,6 +626,14 @@ const CandidateApplicationPage = () => {
   );
   const experienceEntries = experienceRows.map((row) => row.value);
   const educationEntries = educationRows.map((row) => row.value);
+
+  // #966: ref'ler her render sonrası güncellenir; uçuştaki bir yanıt döndüğünde
+  // okuduğu değer adayın EN SON yazdığıdır.
+  useEffect(() => {
+    valuesRef.current = values;
+    experienceRowsRef.current = experienceRows;
+    educationRowsRef.current = educationRows;
+  });
   const derivedExperience = deriveExperienceText(experienceEntries);
   const derivedEducation = deriveEducationText(educationEntries);
   const [view, setView] = useState<View>('form');
@@ -674,6 +682,23 @@ const CandidateApplicationPage = () => {
   const resumeCreateKeyRef = useRef(createApplicationIdempotencyKey());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
   const resumeRequestIdRef = useRef(0);
+  /**
+   * #966: GÜNCEL form durumu. Ağ turu (`await`) sürerken aday yazmaya devam edebilir;
+   * dönüşte çalışan kod render kapanışındaki FOTOĞRAFI görürse adayın o sırada yazdığı
+   * görünmez olur. Ölçülen kayıp buydu: `applyDraftToForm` `{ ...values }` ile bayat
+   * fotoğrafı alıp geri yazıyordu.
+   *
+   * <p>Çakışma mantığı zaten doğru — alan doluysa EZMEZ, çakışma üretip adaya sorar.
+   * Kusur yalnız OKUMADAYDI: bayat fotoğrafta alan boş göründüğü için "boş, aktarabilirim"
+   * yolu seçiliyordu. Ref'ler güncel durumu verince mevcut çakışma makinesi kendiliğinden
+   * doğru davranıyor; ayrı bir birleştirme kuralı yazmaya gerek kalmıyor.
+   *
+   * <p>Üç ayrı state var (`values`, `experienceRows`, `educationRows`); tek bir functional
+   * update üçünü birden korumaz, bu yüzden tutarlı anlık görüntü ref'lerle taşınıyor.
+   */
+  const valuesRef = useRef(EMPTY_VALUES);
+  const experienceRowsRef = useRef<Array<EntryRow<ApplicationExperienceEntry>>>([]);
+  const educationRowsRef = useRef<Array<EntryRow<ApplicationEducationEntry>>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileErrorRef = useRef<HTMLParagraphElement>(null);
   const previewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -1040,7 +1065,13 @@ const CandidateApplicationPage = () => {
   const applyDraftToForm = (draft: ResumeDraftDto) => {
     let imported = 0;
     const conflicts: MergeConflict[] = [];
-    const next = { ...values };
+    // #966: closure fotoğrafı DEĞİL, güncel durum. Gerekçe valuesRef javadoc'unda.
+    const liveValues = valuesRef.current;
+    const liveExperience = deriveExperienceText(
+      experienceRowsRef.current.map((row) => row.value),
+    );
+    const liveEducation = deriveEducationText(educationRowsRef.current.map((row) => row.value));
+    const next = { ...liveValues };
     let nextExperience: Array<EntryRow<ApplicationExperienceEntry>> | null = null;
     let nextEducation: Array<EntryRow<ApplicationEducationEntry>> | null = null;
 
@@ -1054,7 +1085,7 @@ const CandidateApplicationPage = () => {
       // ya da gruplama güvenilir değil) gelen metin ilk kaydın açıklaması olur —
       // bugünkü davranış fallback kalır, bilgi kaybolmaz.
       if (field === 'experience' || field === 'education') {
-        const current = field === 'experience' ? derivedExperience : derivedEducation;
+        const current = field === 'experience' ? liveExperience : liveEducation;
         if (!current.trim() || current === resumeValue) {
           const grouped = draft.entries?.[field] ?? [];
           if (grouped.length > 0) {
@@ -1116,15 +1147,15 @@ const CandidateApplicationPage = () => {
 
       if (!(field in next)) return;
       const formField = field as keyof ApplicationValues;
-      if (!values[formField].trim() || values[formField] === resumeValue) {
+      if (!liveValues[formField].trim() || liveValues[formField] === resumeValue) {
         next[formField] = resumeValue;
         imported += 1;
       } else {
         conflicts.push({
           field: formField,
-          manualValue: values[formField],
+          manualValue: liveValues[formField],
           resumeValue,
-          mergedValue: `${values[formField]}\n${resumeValue}`,
+          mergedValue: `${liveValues[formField]}\n${resumeValue}`,
           choice: null,
         });
       }
@@ -1142,8 +1173,15 @@ const CandidateApplicationPage = () => {
     if (!resumeImport || resumeBusyField) return;
     setFileError('');
     setResumeBusyField('all');
+    // #966: bu isteğin kuşağı. İptal (`resetResumeImport`/terminate) ve yeni içe aktarma
+    // bu sayacı artırıyor; dönüşte kuşak değişmişse yanıt ARTIK GEÇERLİ DEĞİLDİR ve forma
+    // hiç uygulanmaz. Aynı korumayı yükleme yolu zaten kullanıyordu, confirm yolu yoksundu:
+    // ölçümde aday içe aktarmayı iptal edip kendi adını yazdıktan sonra geç gelen cevap
+    // "PDF Demo Adayı" ile üzerine yazıyordu.
+    const requestId = ++resumeRequestIdRef.current;
     try {
       const confirmed = await confirmResumeImport(resumeImport, candidateAccessTokenRef.current);
+      if (requestId !== resumeRequestIdRef.current) return;
       setResumeImport(confirmed.resumeImport);
       setResumeBinding({
         importId: confirmed.draft.importId,

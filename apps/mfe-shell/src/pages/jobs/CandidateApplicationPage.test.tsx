@@ -480,6 +480,128 @@ describe('CandidateApplicationPage', () => {
     expect(screen.getByTestId('candidate-email')).toHaveValue('pdf.aday@example.test');
   });
 
+
+  // =========================================================================================
+  // #966 adım 1 — GECİKMELİ CONFIRM SIRASINDA VERİ KAYBI (yeniden üretme).
+  //
+  // `confirmReviewedResume` ağ turunu `await` ediyor; dönüşte `applyDraftToForm`
+  // render kapanışından gelen `values` fotoğrafını `setValues(next)` ile geri yazıyor
+  // ve satır listelerini TOPTAN değiştiriyor. Aday `await` sürerken yazmaya devam
+  // edebildiği için arada yazdığı kaybolabilir.
+  //
+  // Bu blok kaybı ÖLÇER; çözüm ölçümden sonra seçilecek (issue talimatı: önce yeniden
+  // üret). Üç yüzey ayrı ayrı sınanıyor çünkü state'ler ayrı: `values`,
+  // `experienceRows`, `educationRows`.
+  // =========================================================================================
+  describe('#966 gecikmeli confirm', () => {
+    /** Cevabı elde tutulan confirm: uçuşta yazabilmek için. */
+    const deferredConfirm = () => {
+      let release: (value: unknown) => void = () => {};
+      const pending = new Promise((resolve) => {
+        release = resolve;
+      });
+      apiMocks.confirmResumeImport.mockReturnValue(pending);
+      return { release };
+    };
+
+    /** PDF yükle → önerileri kabul et → aktar düğmesine bas (cevap beklemede kalır). */
+    const startConfirm = async () => {
+      renderPage();
+      await selectPdf();
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+        ).toBeEnabled(),
+      );
+      const gate = deferredConfirm();
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+      return gate;
+    };
+
+    const CONFIRMED = {
+      resumeImport: { ...UPLOADED_IMPORT, state: 'CONFIRMED', version: 10, proposals: [] },
+      draft: {
+        draftId: '11111111-1111-1111-1111-111111111111',
+        importId: CREATED_IMPORT.importId,
+        version: 0,
+        // Deneyim ALANI ve GRUPLANMIS girdi birlikte: satir degistirme yolunu
+        // (setExperienceRows(nextExperience)) gercekten tetiklemek icin sart.
+        // Ilk fixture'imda bunlar yoktu ve satir testi YANLIS SEBEPTEN geciyordu.
+        fields: {
+          fullName: 'PDF Demo Adayı',
+          email: 'pdf.aday@example.test',
+          experience: 'PDF icinden gelen deneyim metni',
+        },
+        entries: {
+          experience: [
+            {
+              title: 'PDF icinden gelen unvan',
+              subtitle: '',
+              dateText: '2019 - 2021',
+              description: 'PDF icinden gelen aciklama',
+            },
+          ],
+        },
+        createdAt: '2026-07-18T08:02:00Z',
+      },
+    };
+
+    it('REPRO: aday alanı confirm uçuştayken yazarsa yazdığı korunmalı', async () => {
+      const gate = await startConfirm();
+
+      // İstek uçuşta: aday telefonunu yazıyor.
+      fireEvent.change(screen.getByTestId('candidate-phone'), {
+        target: { value: '0555 111 22 33' },
+      });
+      expect(screen.getByTestId('candidate-phone')).toHaveValue('0555 111 22 33');
+
+      await act(async () => {
+        gate.release(CONFIRMED);
+      });
+
+      expect(screen.getByTestId('candidate-phone')).toHaveValue('0555 111 22 33');
+    });
+
+    it('REPRO: aday deneyim satırını confirm uçuştayken düzenlerse düzenlemesi korunmalı', async () => {
+      const gate = await startConfirm();
+
+      fireEvent.change(screen.getByTestId('candidate-experience-0-title'), {
+        target: { value: 'Adayin elle yazdigi unvan' },
+      });
+      expect(screen.getByTestId('candidate-experience-0-title')).toHaveValue(
+        'Adayin elle yazdigi unvan',
+      );
+
+      await act(async () => {
+        gate.release(CONFIRMED);
+      });
+
+      expect(screen.getByTestId('candidate-experience-0-title')).toHaveValue(
+        'Adayin elle yazdigi unvan',
+      );
+    });
+
+    it('REPRO: iptal edilmiş içe aktarmanın geç cevabı forma UYGULANMAMALI', async () => {
+      const gate = await startConfirm();
+
+      // Aday vazgeçiyor: içe aktarmayı sonlandırıyor.
+      const cancel = screen.queryByRole('button', { name: /Tümünü reddet/ })
+        ?? screen.queryByRole('button', { name: /Vazgeç/ });
+      if (cancel) fireEvent.click(cancel);
+
+      fireEvent.change(screen.getByTestId('candidate-fullName'), {
+        target: { value: 'Adayin kendi yazdigi ad' },
+      });
+
+      await act(async () => {
+        gate.release(CONFIRMED);
+      });
+
+      expect(screen.getByTestId('candidate-fullName')).toHaveValue('Adayin kendi yazdigi ad');
+    });
+  });
+
   it('gives every decision state its own frame, not just its own badge', () => {
     // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
     // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve
