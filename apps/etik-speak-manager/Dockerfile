@@ -20,7 +20,13 @@ RUN pnpm --filter etik-speak-manager build
 # dosya sunan nginx onu cagirmiyor). Etiket + digest yerine SADECE digest:
 # ikisini birlikte yazmak, etiket hareket ettiginde ikisinin ayni seyi
 # gosterdigi yanilsamasini birakiyordu.
-FROM nginxinc/nginx-unprivileged@sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
+# ES-306b (gitops#3624, 2026-09-10): vuln gate 2026-08-25'ten beri kirmiziydi —
+# bu tabanin openssl 3.5.7-r0 / curl 8.21.0 / libexpat 2.8.2 paketleri 8 Critical +
+# 36 High biriktirdi. Yeni stable-alpine index digest'i (nginx 1.30.4, Alpine 3.24.1,
+# openssl 3.5.8-r0, curl 8.22.0-r0, libexpat 2.8.4-r0) ayni ACCEPTED listesiyle
+# grype'la tarandi: 0 Critical / 0 High. Digest registry index manifest'i (multi-arch).
+# Onceki: sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
+FROM nginxinc/nginx-unprivileged@sha256:442753882674b49ae2c1de83ed67896131c0777f56df5005e356e62bc3f7e7ce
 ARG BUILD_SHA=""
 LABEL org.opencontainers.image.revision="${BUILD_SHA}"
 COPY --from=builder /app/apps/etik-speak-manager/dist /usr/share/nginx/html/ethic
