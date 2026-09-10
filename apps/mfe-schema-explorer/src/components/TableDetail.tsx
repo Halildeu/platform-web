@@ -8,17 +8,27 @@ interface TableDetailProps {
   onFkClick: (table: string) => void;
 }
 
+/** Every source column of a relationship: the composite list when the snapshot carries one, else the representative column. */
+const sourceColumns = (rel: Relationship): string[] =>
+  rel.fromColumns && rel.fromColumns.length > 0 ? rel.fromColumns : [rel.fromColumn];
+
 export const TableDetail = ({ snapshot, tableName, onClose, onFkClick }: TableDetailProps) => {
   const table = snapshot.tables[tableName];
   if (!table) return null;
 
+  // A composite key (fromColumns of length > 1, platform-backend#1156) marks every one of its
+  // columns, not only the representative one; the relationship itself is listed once.
+  const outgoing = useMemo(
+    () => snapshot.relationships.filter(r => r.fromTable === tableName),
+    [snapshot.relationships, tableName],
+  );
   const fkMap = useMemo(() => {
     const map: Record<string, Relationship> = {};
-    for (const rel of snapshot.relationships) {
-      if (rel.fromTable === tableName) map[rel.fromColumn] = rel;
+    for (const rel of outgoing) {
+      for (const col of sourceColumns(rel)) map[col] = rel;
     }
     return map;
-  }, [snapshot.relationships, tableName]);
+  }, [outgoing]);
 
   const incomingRefs = useMemo(
     () => snapshot.relationships.filter(r => r.toTable === tableName),
@@ -42,7 +52,7 @@ export const TableDetail = ({ snapshot, tableName, onClose, onFkClick }: TableDe
           {table.comment && <p className="se-detail__comment" data-testid="se-table-comment">{table.comment}</p>}
           <div className="se-detail__badges">
             <span className="se-badge se-badge--col">{table.columns.length} cols</span>
-            <span className="se-badge se-badge--fk">{Object.keys(fkMap).length} FK</span>
+            <span className="se-badge se-badge--fk">{outgoing.length} FK</span>
             <span className="se-badge se-badge--ref">{incomingRefs.length} refs</span>
             {domain && <span className="se-badge se-badge--domain">{domain}</span>}
             {table.rowCount != null && (
@@ -83,12 +93,12 @@ export const TableDetail = ({ snapshot, tableName, onClose, onFkClick }: TableDe
           </table>
         </section>
 
-        {Object.keys(fkMap).length > 0 && (
+        {outgoing.length > 0 && (
           <section className="se-detail__section">
-            <h3>FK Relationships ({Object.keys(fkMap).length})</h3>
-            {Object.values(fkMap).map(rel => (
-              <div key={`${rel.fromColumn}-${rel.toTable}`} className="se-rel-card" onClick={() => onFkClick(rel.toTable)}>
-                <code>{rel.fromColumn}</code>
+            <h3>FK Relationships ({outgoing.length})</h3>
+            {outgoing.map(rel => (
+              <div key={`${sourceColumns(rel).join('+')}-${rel.toTable}`} className="se-rel-card" data-testid="se-fk-card" onClick={() => onFkClick(rel.toTable)}>
+                <code>{sourceColumns(rel).join(', ')}</code>
                 {' '}<span className="se-rel-card__arrow">→</span>{' '}
                 <strong>{rel.toTable}</strong>
                 <span className={`se-conf ${confClass(rel.confidence)}`}>
@@ -103,9 +113,9 @@ export const TableDetail = ({ snapshot, tableName, onClose, onFkClick }: TableDe
           <section className="se-detail__section">
             <h3>Referenced By ({incomingRefs.length})</h3>
             {incomingRefs.map(rel => (
-              <div key={`${rel.fromTable}-${rel.fromColumn}`} className="se-rel-card" onClick={() => onFkClick(rel.fromTable)}>
+              <div key={`${rel.fromTable}-${sourceColumns(rel).join('+')}`} className="se-rel-card" data-testid="se-ref-card" onClick={() => onFkClick(rel.fromTable)}>
                 <strong>{rel.fromTable}</strong>
-                <code>.{rel.fromColumn}</code>
+                <code>.{sourceColumns(rel).join(', ')}</code>
                 {' '}<span className="se-rel-card__arrow">→</span>{' '}
                 {tableName}
                 <span className={`se-conf ${confClass(rel.confidence)}`}>
