@@ -601,6 +601,26 @@ const isValidOptionalHttpUrl = (value: string) => {
   }
 };
 
+/**
+ * #1153 (P2-2): dosyanin ICERIK kimligi.
+ *
+ * <p>Onceki hali parmak izini ad|boyut|lastModified'dan kuruyordu. Inceleme bunun
+ * yetmedigini olctu: ayni ad/boyut/lastModified tasiyan FARKLI iceriklı iki dosya ayni
+ * anahtari aliyor, "ayni key + ayni payload" sozlesmesi kiriliyordu. Metadata dosya
+ * icerigi kimligi DEGILDIR.
+ *
+ * <p>Dosya adi parmak izine BILEREK girmiyor: kimligi belirleyen icerik, ve ad zaten
+ * disari sizmamasi gereken bir deger.
+ */
+const fileContentFingerprint = async (file: File): Promise<string> => {
+  const bytes = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const hex = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  return `${file.size}|${hex}`;
+};
+
 const CandidateApplicationPage = () => {
   const { publicHandle, jobSlug = 'urun-yoneticisi' } = useParams();
   const jobsBase = publicHandle ? `/careers/${encodeURIComponent(publicHandle)}/jobs` : '/jobs';
@@ -717,6 +737,20 @@ const CandidateApplicationPage = () => {
    * <p>Anahtar UI'ye veya log'a yazılmaz; yalnız bellekte tutulur.
    */
   const uploadKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  /**
+   * #1153 (P2-1): confirm uctayken adayin DOKUNDUGU yuzeyler.
+   *
+   * <p>Adim 1'de okumayi guncelledim ama kuralin kendisi hala "bos ⇒ dokunulmamis"
+   * sayiyordu. Olculen kusur: aday uctayken deneyim satirini yazip SILINCE `current`
+   * bos kaliyor, otomatik aktarim devreye giriyor ve PDF satiri geri geliyordu — silme
+   * sessizce iptal oluyordu.
+   *
+   * <p>Baslangic/bitis karsilastirmasi bu vakayi YAKALAMAZ: aday confirm basladiktan
+   * sonra yazip sildiginde iki uçta da bos gorunur. Gereken sey DOKUNULDU bilgisidir.
+   * Alan bazinda tutuluyor — tek bir alana dokunmak digerlerinin aktarimini bloke
+   * etmemeli.
+   */
+  const touchedDuringConfirmRef = useRef<Set<string>>(new Set());
   const candidateAccessTokenRef = useRef(createCandidateAccessToken());
   const resumeRequestIdRef = useRef(0);
   /**
@@ -800,6 +834,7 @@ const CandidateApplicationPage = () => {
       field: keyof ApplicationValues,
     ): React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement> =>
     (event) => {
+      touchedDuringConfirmRef.current.add(field);
       setValues((current) => ({ ...current, [field]: event.target.value }));
       setFormError('');
       setSubmitError('');
@@ -817,6 +852,9 @@ const CandidateApplicationPage = () => {
     ): React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement> =>
     (event) => {
       const nextValue = event.target.value;
+      touchedDuringConfirmRef.current.add(
+        setRows === (setExperienceRows as unknown) ? 'experience' : 'education',
+      );
       setRows((current) =>
         current.map((row, rowIndex) =>
           rowIndex === index ? { ...row, value: { ...row.value, [key]: nextValue } } : row,
@@ -829,6 +867,9 @@ const CandidateApplicationPage = () => {
   const addEntryRow = <T,>(
     setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
   ): void => {
+    touchedDuringConfirmRef.current.add(
+      setRows === (setExperienceRows as unknown) ? 'experience' : 'education',
+    );
     setRows((current) =>
       // Üst sınır backend ile aynı: aşan satır sunucuda 400 döndürürdü, o yüzden
       // düğme burada sessizce çalışmak yerine hiç eklemez (düğme de gizlenir).
@@ -843,6 +884,9 @@ const CandidateApplicationPage = () => {
     setRows: React.Dispatch<React.SetStateAction<Array<EntryRow<T>>>>,
     index: number,
   ): void => {
+    touchedDuringConfirmRef.current.add(
+      setRows === (setExperienceRows as unknown) ? 'experience' : 'education',
+    );
     setRows((current) =>
       // Son satır silinmez, boşaltılır: liste tamamen boşalırsa aday yazacak yer
       // bulamaz ve "satır ekle"yi bulmak zorunda kalır.
@@ -881,6 +925,8 @@ const CandidateApplicationPage = () => {
 
   const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
     const requestId = ++resumeRequestIdRef.current;
+    // #1153 (P2-1): bu andan sonra adayin dokundugu her sey ONUN TERCIHIDIR.
+    touchedDuringConfirmRef.current = new Set();
     const file = event.target.files?.[0];
     setFileError('');
     setFileMeta(null);
@@ -920,8 +966,8 @@ const CandidateApplicationPage = () => {
       } else if (replaceRequested && active.documentVersion > 0) {
         active = await replaceResumePdf(active, candidateAccessTokenRef.current);
       }
-      // #966: aynı dosya => aynı anahtar (gerekçe uploadKeyRef javadoc'unda).
-      const uploadFingerprint = `${file.name}|${file.size}|${file.lastModified}`;
+      // #966 + #1153 (P2-2): aynı İÇERİK => aynı anahtar. Metadata yeterli değil.
+      const uploadFingerprint = await fileContentFingerprint(file);
       if (uploadKeyRef.current?.fingerprint !== uploadFingerprint) {
         uploadKeyRef.current = {
           fingerprint: uploadFingerprint,
@@ -1136,6 +1182,9 @@ const CandidateApplicationPage = () => {
       // bugünkü davranış fallback kalır, bilgi kaybolmaz.
       if (field === 'experience' || field === 'education') {
         const current = field === 'experience' ? liveExperience : liveEducation;
+        // #1153 (P2-1): aday uctayken bu listeye dokunup BOSALTTIYSA bu bir tercihtir,
+        // "dokunulmamis" degil — otomatik aktarim silmeyi geri getirmemeli.
+        if (touchedDuringConfirmRef.current.has(field) && !current.trim()) return;
         if (!current.trim() || current === resumeValue) {
           const grouped = draft.entries?.[field] ?? [];
           if (grouped.length > 0) {
@@ -1197,6 +1246,10 @@ const CandidateApplicationPage = () => {
 
       if (!(field in next)) return;
       const formField = field as keyof ApplicationValues;
+      // #1153 (P2-1): aday uctayken bu alani bosalttiysa aktarma (bkz. yukarisi).
+      if (touchedDuringConfirmRef.current.has(formField) && !liveValues[formField].trim()) {
+        return;
+      }
       if (!liveValues[formField].trim() || liveValues[formField] === resumeValue) {
         next[formField] = resumeValue;
         importedByField[formField] = resumeValue;
@@ -1301,6 +1354,23 @@ const CandidateApplicationPage = () => {
         }
       }
     });
+    // #1153 (P2-3): adayin ACIKCA CV kaynagini sectigi alan da provenance tasimali.
+    // Onceki hali yalniz ilk otomatik aktarimi kaydediyordu; cakisma secimi haritayi
+    // guncellemedigi icin alan etiketsiz kaliyor ve sonraki elle duzeltmesi de
+    // izlenmiyordu. 'edit' (birlestir) secildiginde kaydedilen deger CV degeridir;
+    // guncel deger birlestirilmis oldugu icin rozet dogru sekilde "Siz duzenlediniz" der.
+    setImportedValues((current) => {
+      const next = { ...current };
+      mergeConflicts.forEach((conflict) => {
+        if (conflict.field === 'experience' || conflict.field === 'education') return;
+        const field = conflict.field as keyof ApplicationValues;
+        if (conflict.choice === 'resume' || conflict.choice === 'edit') {
+          next[field] = conflict.resumeValue;
+        }
+      });
+      return next;
+    });
+
     const imported = mergeConflicts.filter((conflict) =>
       ['resume', 'edit'].includes(conflict.choice ?? ''),
     ).length;

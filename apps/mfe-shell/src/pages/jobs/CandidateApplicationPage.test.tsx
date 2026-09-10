@@ -582,23 +582,67 @@ describe('CandidateApplicationPage', () => {
       );
     });
 
-    it('REPRO: iptal edilmiş içe aktarmanın geç cevabı forma UYGULANMAMALI', async () => {
+    /**
+     * ÖLÇÜLEN GERÇEK: confirm uçuştayken iptal kontrolü UI'da ZATEN DEVRE DIŞI.
+     *
+     * <p>Önceki testim iptali {@code if (cancel)} dalıyla "deneyip" geçiyordu ve düğme
+     * bulunamadığında sessizce atlıyordu; inceleme haklı olarak bunun iptal kanıtı
+     * olmadığını söyledi. Gerçek tetiklemeyle yazınca düğmenin DISABLED olduğu ortaya
+     * çıktı — yani "iptal sonrası geç cevap" senaryosuna bu yoldan ULAŞILAMIYOR.
+     *
+     * <p>Bu, kusurun yokluğu değil, korumanın BAŞKA KATMANDA olması: UI aday iptal
+     * edemeden önce isteği bitiriyor. Kilitlenen davranış budur. Koddaki kuşak koruması
+     * ({@code resumeRequestIdRef}) savunma katmanı olarak duruyor; bu testle
+     * KANITLANMIYOR ve PR'da öyle sunulmuyor.
+     */
+    it('confirm uçuştayken iptal kontrolü devre dışıdır, sonra yeniden açılır', async () => {
       const gate = await startConfirm();
 
-      // Aday vazgeçiyor: içe aktarmayı sonlandırıyor.
-      const cancel = screen.queryByRole('button', { name: /Tümünü reddet/ })
-        ?? screen.queryByRole('button', { name: /Vazgeç/ });
-      if (cancel) fireEvent.click(cancel);
+      const cancel = screen.getByRole('button', { name: 'Tümünü reddet' });
+      expect(cancel).toBeDisabled();
+      expect(apiMocks.terminateResumeImport).not.toHaveBeenCalled();
+
+      await act(async () => {
+        gate.release(CONFIRMED);
+      });
+
+      // İstek bittikten sonra kontrol yeniden kullanılabilir (finally çalıştı).
+      await waitFor(() =>
+        expect(screen.getByTestId('candidate-fullName')).toBeEnabled(),
+      );
+    });
+
+    /**
+     * Geç gelen HATA adayın yazdığını silmemeli ve {@code finally} UI'ı kilitli
+     * bırakmamalı. İptal adımı YOK — yukarıda ölçüldüğü gibi o yol UI'da kapalı.
+     */
+    it('geç gelen HATA cevabı adayın yazdığını silmemeli, UI kilitli kalmamalı', async () => {
+      let reject: (reason: unknown) => void = () => {};
+      const pending = new Promise((_resolve, rejectFn) => {
+        reject = rejectFn;
+      });
+      renderPage();
+      await selectPdf();
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+        ).toBeEnabled(),
+      );
+      apiMocks.confirmResumeImport.mockReturnValue(pending);
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
 
       fireEvent.change(screen.getByTestId('candidate-fullName'), {
         target: { value: 'Adayin kendi yazdigi ad' },
       });
 
       await act(async () => {
-        gate.release(CONFIRMED);
+        reject(new Error('gec gelen sentetik hata'));
+        await Promise.resolve();
       });
 
       expect(screen.getByTestId('candidate-fullName')).toHaveValue('Adayin kendi yazdigi ad');
+      expect(screen.getByTestId('candidate-fullName')).toBeEnabled();
     });
   });
 
@@ -792,7 +836,11 @@ describe('CandidateApplicationPage', () => {
       ].join('\n');
     };
 
-    it('başarılı akışta token ve dosya adı hiçbir yüzeye sızmamalı', async () => {
+    // NOT (inceleme): bu testler "sızıntı yok" gibi GENEL bir iddia kurmaz. Kanıt yalnız
+    // AŞAĞIDA YOKLANAN yüzeyler içindir: console kanalları, adres çubuğu, localStorage ve
+    // kullanıcıya gösterilen metin. Ağ gövdeleri, telemetri sağlayıcıları ve tarayıcı
+    // eklenti yüzeyleri bu kapsamda DEĞİLDİR.
+    it('yoklanan yüzeylerde token ve dosya adı görünmemeli (başarılı akış)', async () => {
       renderPage();
       await selectPdf();
       fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
@@ -809,7 +857,7 @@ describe('CandidateApplicationPage', () => {
       expect(surfaces).not.toContain(FILENAME);
     });
 
-    it('HATA yolunda da sızmamalı — hata yüzeyi en olası kaçak noktasıdır', async () => {
+    it('yoklanan yüzeylerde token ve dosya adı görünmemeli (HATA yolu)', async () => {
       // Hata mesajının içine token/dosya adı konması klasik kaçak; runtime'da yokluyoruz.
       apiMocks.uploadResumePdf.mockRejectedValueOnce(
         new Error('yukleme basarisiz (sentetik hata)'),
@@ -875,6 +923,161 @@ describe('CandidateApplicationPage', () => {
       await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
 
       expect(apiMocks.uploadResumePdf.mock.calls[1][2]).not.toBe(firstKey);
+    });
+  });
+
+
+  // =========================================================================================
+  // #1153 review turu 1 (Halildeu) — uc P2 bulgusu. Fixture'lar incelemede tarif edildigi
+  // haliyle. Ortak ders: adim 1'de OKUMAYI guncelledim ama KURALIN kendisi hala
+  // "bos = dokunulmamis" sayiyordu; adim 2'de kimligi dosya METADATASINDAN kurdum,
+  // metadata icerik kimligi degil; adim 3'te provenance'i yalniz ilk otomatik aktarima
+  // bagladim, cakisma secimini kapsamadi.
+  // =========================================================================================
+  describe('#1153 review bulgulari', () => {
+    const CONFIRMED_WITH_EXPERIENCE = {
+      resumeImport: { ...UPLOADED_IMPORT, state: 'CONFIRMED', version: 10, proposals: [] },
+      draft: {
+        draftId: '11111111-1111-1111-1111-111111111111',
+        importId: CREATED_IMPORT.importId,
+        version: 0,
+        fields: {
+          fullName: 'PDF Demo Adayı',
+          email: 'pdf.aday@example.test',
+          experience: 'PDF icinden gelen deneyim metni',
+        },
+        entries: {
+          experience: [
+            {
+              title: 'PDF icinden gelen unvan',
+              subtitle: '',
+              dateText: '2019 - 2021',
+              description: 'PDF icinden gelen aciklama',
+            },
+          ],
+        },
+        createdAt: '2026-07-18T08:02:00Z',
+      },
+    };
+
+    const startConfirmDeferred = async () => {
+      let release: (value: unknown) => void = () => {};
+      const pending = new Promise((resolve) => {
+        release = resolve;
+      });
+      renderPage();
+      await selectPdf();
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+        ).toBeEnabled(),
+      );
+      apiMocks.confirmResumeImport.mockReturnValue(pending);
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+      return { release };
+    };
+
+    /**
+     * P2-1 — BOŞALTMA/SİLME niyeti korunmalı.
+     *
+     * <p>Adım 1'de okumayı güncelledim ama kural hâlâ "boş ⇒ dokunulmamış" sayıyor:
+     * {@code if (!current.trim() || ...)}. Aday uçuşta satırı silerse `current` boş kalır
+     * ve PDF değeri otomatik geri gelir — silme sessizce iptal olur.
+     */
+    it('P2-1: ucusta silinen deneyim satiri geri GELMEMELI', async () => {
+      const gate = await startConfirmDeferred();
+
+      fireEvent.change(screen.getByTestId('candidate-experience-0-title'), {
+        target: { value: 'Adayin yazdigi unvan' },
+      });
+      // Aday vazgeçip satırı siliyor.
+      fireEvent.click(screen.getByTestId('candidate-experience-remove-0'));
+
+      await act(async () => {
+        gate.release(CONFIRMED_WITH_EXPERIENCE);
+      });
+
+      expect(screen.queryByTestId('candidate-experience-0-title')).not.toHaveValue(
+        'PDF icinden gelen unvan',
+      );
+    });
+
+    /**
+     * P2-2 — retry kimliği dosya METADATASINDAN kurulamaz.
+     *
+     * <p>Aynı ad/boyut/lastModified ama FARKLI byte içeriği: metadata parmak izi
+     * çakışıyor ve iki farklı dosya aynı anahtarı alıyor. "Aynı key + aynı payload"
+     * sözleşmesi bozuluyor.
+     */
+    it('P2-2: ayni metadata FARKLI icerik ayni anahtari ALMAMALI', async () => {
+      const issued: string[] = [];
+      apiMocks.createApplicationIdempotencyKey.mockImplementation(() => {
+        const key = `bytes-key-${issued.length + 1}`;
+        issued.push(key);
+        return key;
+      });
+
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+
+      const one = new File(['%PDF one'], 'synthetic.pdf', {
+        type: 'application/pdf',
+        lastModified: 123456,
+      });
+      const two = new File(['%PDF two'], 'synthetic.pdf', {
+        type: 'application/pdf',
+        lastModified: 123456,
+      });
+      // Ayni ad/boyut/lastModified, farkli icerik.
+      expect(one.size).toBe(two.size);
+
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [one] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [two] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
+
+      expect(apiMocks.uploadResumePdf.mock.calls[1][2]).not.toBe(
+        apiMocks.uploadResumePdf.mock.calls[0][2],
+      );
+    });
+
+    /**
+     * P2-3 — çakışmada "CV değerini kullan" seçimi de provenance üretmeli.
+     *
+     * <p>{@code importedByField} yalnız ilk otomatik aktarımı kapsıyordu;
+     * {@code applyMergeChoices} haritayı güncellemiyordu. Adayın AÇIKÇA CV kaynağını
+     * seçtiği alan etiketsiz kalıyor ve sonraki elle düzeltmesi de izlenmiyor.
+     */
+    it('P2-3: cakismada CV secilen alan provenance rozeti TASIMALI', async () => {
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      // Aday once elle dolduruyor: aktarim cakisma uretecek.
+      fireEvent.change(screen.getByTestId('candidate-fullName'), {
+        target: { value: 'Adayin elle yazdigi ad' },
+      });
+
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+      const pdf = new File(['%PDF synthetic'], 'ornek-cv.pdf', { type: 'application/pdf' });
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+      await screen.findByTestId('candidate-resume-review');
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }),
+        ).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+
+      // Cakisma ekrani: CV degerini sec ve uygula.
+      const useResume = await screen.findByRole('radio', { name: /CV değerini kullan/ });
+      fireEvent.click(useResume);
+      fireEvent.click(screen.getByRole('button', { name: 'Seçimleri forma uygula' }));
+
+      expect(screen.getByTestId('candidate-fullName-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
     });
   });
 
