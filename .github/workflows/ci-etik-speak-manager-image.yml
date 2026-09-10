@@ -66,7 +66,10 @@ jobs:
           cmp /tmp/manager.html /tmp/deep.html
           grep -Eiq '^HTTP/[^ ]+ 308' /tmp/redirect.headers
           grep -Eiq '^Location: /ethic/' /tmp/redirect.headers
-          grep -Fq "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'" /tmp/root.headers
+          # platform-web#1155: style-src carries 'unsafe-inline' for AG Grid's injected styles;
+          # script-src must stay 'self' with script-src-attr 'none' — the tripwire is on scripts.
+          grep -Fq "Content-Security-Policy: default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'" /tmp/root.headers
+          ! grep -Ei "^Content-Security-Policy:.*script-src[^;]*'unsafe-(inline|eval)'" /tmp/root.headers
           grep -Eiq '^Cache-Control: no-store' /tmp/root.headers
           asset="$(grep -oE '/ethic/assets/[^" ]+\.js' /tmp/manager.html | head -1)"
           test -n "$asset"
