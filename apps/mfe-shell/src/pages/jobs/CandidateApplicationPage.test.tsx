@@ -829,6 +829,55 @@ describe('CandidateApplicationPage', () => {
     });
   });
 
+
+  // =========================================================================================
+  // #966 KARŞI-ÖRNEK YOKLAMASI — kendi eklediğim kuralları sorguluyorum.
+  //
+  // Bugün ats#264 bu yöntemle doğdu: merge olmuş kodda, hiç kimse istemeden, üçüncü bir
+  // kusur çıktı. Aynı soruyu kendi yeni kurallarıma soruyorum:
+  //   "Kural X diyorsa, X olup da X'in sonucunu HAK ETMEYEN ne var?"
+  // =========================================================================================
+  describe('#966 karşı-örnek yoklaması', () => {
+    let issued: string[] = [];
+
+    beforeEach(() => {
+      issued = [];
+      apiMocks.createApplicationIdempotencyKey.mockImplementation(() => {
+        const key = `probe-key-${issued.length + 1}`;
+        issued.push(key);
+        return key;
+      });
+    });
+
+    /**
+     * PROBE B — "aynı parmak izi ⇒ aynı anahtar" kuralı.
+     *
+     * <p>Soru: parmak izi aynı olup NİYETİN aynı olmadığı başka bir durum var mı?
+     * İptal/sıfırlamayı zaten kapsamıştım. Ama DEĞİŞTİRME (replace) akışı da aynı
+     * dosyayı kullanabilir: aday CV'sini yükler, sonra "başka PDF yükle" deyip AYNI
+     * dosyayı seçerse bu YENİ bir yükleme niyetidir — eski anahtarın tekrarı değil.
+     * Aynı anahtar giderse sunucu bunu ilk yüklemenin tekrarı sayabilir.
+     */
+    it('PROBE B: degistirme (replace) akisinda ayni dosya YENI anahtar almali', async () => {
+      renderPage();
+      const pdf = await selectPdf();
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+      const firstKey = apiMocks.uploadResumePdf.mock.calls[0][2];
+
+      // Aday "başka PDF yükle" diyor ve AYNI dosyayı seçiyor: yeni niyet.
+      const replace = screen.queryByRole('button', { name: /Başka PDF/i })
+        ?? screen.queryByRole('button', { name: /PDF değiştir/i })
+        ?? screen.queryByRole('button', { name: /değiştir/i });
+      expect(replace, 'degistirme dugmesi bulunamadi — fixture guncellenmeli').not.toBeNull();
+      fireEvent.click(replace as HTMLElement);
+
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
+
+      expect(apiMocks.uploadResumePdf.mock.calls[1][2]).not.toBe(firstKey);
+    });
+  });
+
   it('gives every decision state its own frame, not just its own badge', () => {
     // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
     // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve

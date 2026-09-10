@@ -2516,7 +2516,15 @@ const CandidateApplicationPage = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setReplaceRequested(true)}
+                              onClick={() => {
+                                // #966 (karşı-örnek yoklaması): DEĞİŞTİRME yeni bir
+                                // niyettir — aday aynı dosyayı yeniden seçse bile.
+                                // Parmak izi aynı kaldığı için anahtar burada
+                                // temizlenmezse sunucu bunu ilk yüklemenin tekrarı
+                                // sayardı. Ölçüldü: aynı anahtar gidiyordu.
+                                uploadKeyRef.current = null;
+                                setReplaceRequested(true);
+                              }}
                               disabled={Boolean(resumeBusyField)}
                               className="rounded-xl border border-border-strong px-4 py-2 text-sm font-bold disabled:opacity-50"
                             >
