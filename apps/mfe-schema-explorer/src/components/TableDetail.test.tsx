@@ -43,6 +43,42 @@ describe('TableDetail — IFS labels and comments', () => {
     expect(screen.getByTestId('se-table-comment')).toHaveTextContent('Voucher rows across all voucher types');
   });
 
+  it('a composite key marks every one of its columns and is listed once with all of them (gitops#3643)', () => {
+    const snap = snapshot([
+      column({ name: 'COMPANY', pk: true, ordinal: 1 }),
+      column({ name: 'VOUCHER_NO', pk: true, ordinal: 2 }),
+      column({ name: 'AMOUNT', ordinal: 3 }),
+    ]);
+    snap.relationships = [
+      { fromTable: 'TRYPE_ALL_VOUCHER_QRY', fromColumn: 'VOUCHER_NO', toTable: 'VOUCHER', toColumn: 'VOUCHER_NO',
+        confidence: 1, source: 'fk_constraint_composite', multiSource: false,
+        fromColumns: ['COMPANY', 'VOUCHER_NO'], toColumns: ['COMPANY', 'VOUCHER_NO'] },
+      { fromTable: 'CHILD', fromColumn: 'VOUCHER_NO', toTable: 'TRYPE_ALL_VOUCHER_QRY', toColumn: 'VOUCHER_NO',
+        confidence: 1, source: 'fk_constraint_composite', multiSource: false,
+        fromColumns: ['COMPANY', 'VOUCHER_NO'], toColumns: ['COMPANY', 'VOUCHER_NO'] },
+    ];
+    render(<TableDetail snapshot={snap} tableName="TRYPE_ALL_VOUCHER_QRY" onClose={vi.fn()} onFkClick={vi.fn()} />);
+
+    expect(screen.getAllByText('→ VOUCHER', { selector: 'span' })).toHaveLength(2);   // COMPANY and VOUCHER_NO rows
+    expect(screen.getByText('1 FK')).toBeInTheDocument();
+    const cards = screen.getAllByTestId('se-fk-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toHaveTextContent('COMPANY, VOUCHER_NO');
+    expect(screen.getByTestId('se-ref-card')).toHaveTextContent('CHILD.COMPANY, VOUCHER_NO');
+  });
+
+  it('a single-column relationship renders as before', () => {
+    const snap = snapshot([column({ name: 'INVOICE_ID' })]);
+    snap.relationships = [
+      { fromTable: 'TRYPE_ALL_VOUCHER_QRY', fromColumn: 'INVOICE_ID', toTable: 'INVOICE', toColumn: 'INVOICE_ID',
+        confidence: 0.9, source: 'name_match_exact', multiSource: false },
+    ];
+    render(<TableDetail snapshot={snap} tableName="TRYPE_ALL_VOUCHER_QRY" onClose={vi.fn()} onFkClick={vi.fn()} />);
+
+    expect(screen.getAllByText('→ INVOICE', { selector: 'span' })).toHaveLength(1);
+    expect(screen.getByTestId('se-fk-card')).toHaveTextContent('INVOICE_ID');
+  });
+
   it('a source without labels or comments renders exactly as before — nothing invented', () => {
     render(
       <TableDetail
