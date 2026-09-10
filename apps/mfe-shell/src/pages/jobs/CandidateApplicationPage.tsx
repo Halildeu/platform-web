@@ -612,13 +612,56 @@ const isValidOptionalHttpUrl = (value: string) => {
  * <p>Dosya adi parmak izine BILEREK girmiyor: kimligi belirleyen icerik, ve ad zaten
  * disari sizmamasi gereken bir deger.
  */
+const FNV32_OFFSET = 0x811c9dc5;
+const FNV32_PRIME = 0x01000193;
+
+/**
+ * Baytlar uzerinde FNV-1a, iki BAGIMSIZ serit halinde: biri ileri, digeri geri yonde
+ * ve farkli baslangic degeriyle. Tek 32-bit serit bu is icin dar; iki serit birlikte
+ * 64 bitlik bir ayirt edicilik verir.
+ *
+ * <p>Kriptografik DEGILDIR ve oyle sunulmuyor. Burada sorulan soru "bu dosya
+ * saldirgan tarafindan uretilmis bir carpisma mi" degil, "aday az once denedigi
+ * dosyanin AYNISINI mi yeniden secti" — tek oturumda birkac dosyalik, dusmanca
+ * olmayan bir ayrim. Bu olcek icin carpisma olasiligi ihmal edilebilir.
+ */
+const contentLanes = (bytes: Uint8Array): string => {
+  let forward = FNV32_OFFSET;
+  let backward = FNV32_PRIME;
+  for (let i = 0; i < bytes.length; i += 1) {
+    forward = Math.imul(forward ^ bytes[i], FNV32_PRIME);
+    backward = Math.imul(backward ^ bytes[bytes.length - 1 - i], FNV32_PRIME);
+  }
+  const hex = (value: number) => (value >>> 0).toString(16).padStart(8, '0');
+  return `${hex(forward)}${hex(backward)}`;
+};
+
+/**
+ * #1153 (P2-2): dosyanin ICERIK kimligi.
+ *
+ * <p>Onceki hali parmak izini ad|boyut|lastModified'dan kuruyordu. Inceleme bunun
+ * yetmedigini olctu: ayni ad/boyut/lastModified tasiyan FARKLI iceriklı iki dosya ayni
+ * anahtari aliyor, "ayni key + ayni payload" sozlesmesi kiriliyordu. Metadata dosya
+ * icerigi kimligi DEGILDIR.
+ *
+ * <p>Dosya adi parmak izine BILEREK girmiyor: kimligi belirleyen icerik, ve ad zaten
+ * disari sizmamasi gereken bir deger.
+ *
+ * <p>NEDEN {@code crypto.subtle} DEGIL (#1153 CI kirmizisinin kok nedeni):
+ * ilk hali {@code crypto.subtle.digest('SHA-256', ...)} kullaniyordu. {@code subtle}
+ * tasarimi geregi YALNIZ secure context'te tanimlidir; bu bir yamalanabilir hata degil,
+ * API'nin dogasidir. Sonucu olculdu: CI'nin jsdom ortaminda {@code subtle} yok, digest
+ * firlatiyor ve yukleme daha {@code uploadResumePdf} cagrilmadan iptal oluyordu —
+ * PDF yukleyen 30 test birden kirmizi. Ayni sinir URUNDE de gecerlidir: aday sayfaya
+ * duz {@code http://} uzerinden gelirse {@code subtle} yine tanimsizdir ve CV yukleme
+ * tamamen bozulurdu. Bu yuzden dogru hamle {@code subtle}'i polyfill etmek degil, bu is
+ * icin ona olan bagimliligi kaldirmakti: parmak izi artik gercek baytlardan, her yerde
+ * calisan aritmetikle uretiliyor. Icerik kimligi sozlesmesi (metadata degil, BAYT)
+ * aynen korunuyor.
+ */
 const fileContentFingerprint = async (file: File): Promise<string> => {
-  const bytes = await file.arrayBuffer();
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  const hex = Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-  return `${file.size}|${hex}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return `${file.size}|${contentLanes(bytes)}`;
 };
 
 const CandidateApplicationPage = () => {

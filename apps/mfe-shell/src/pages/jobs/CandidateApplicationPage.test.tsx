@@ -1081,6 +1081,108 @@ describe('CandidateApplicationPage', () => {
     });
   });
 
+  /**
+   * #1153 CI kirmizisi — {@code crypto.subtle} her ortamda YOKTUR.
+   *
+   * <p>Olculen olay: P2-2 duzeltmemde parmak izini {@code crypto.subtle.digest} ile
+   * kurdum. Yerelde (Node 24) yesildi; canonical CI'da (jsdom, Node 22.12) PDF yukleyen
+   * 30 test birden kirmizi oldu, cunku {@code subtle} orada tanimsiz ve digest daha
+   * {@code uploadResumePdf} cagrilmadan firlatiyordu.
+   *
+   * <p>Bu bir test ortami tuhafligi DEGIL: {@code crypto.subtle} tasarimi geregi
+   * secure-context'e baglidir, dolayisiyla adayin sayfaya duz {@code http://} uzerinden
+   * geldigi bir kurulumda CV yukleme de ayni sekilde bozulurdu.
+   *
+   * <p>Bu blok tam olarak o ortami kurar: {@code subtle} kaldirilir. Onceki halde bu
+   * testler kirmizi olurdu; bagimlilik kaldirildigi icin artik yesil.
+   */
+  describe('#1153 subtle olmayan ortam', () => {
+    let restoreSubtle: (() => void) | null = null;
+
+    beforeEach(() => {
+      const original = Object.getOwnPropertyDescriptor(globalThis.crypto, 'subtle');
+      Object.defineProperty(globalThis.crypto, 'subtle', {
+        value: undefined,
+        configurable: true,
+      });
+      restoreSubtle = () => {
+        if (original) Object.defineProperty(globalThis.crypto, 'subtle', original);
+      };
+    });
+
+    afterEach(() => {
+      restoreSubtle?.();
+      restoreSubtle = null;
+    });
+
+    it('subtle yokken de CV yukleme calisir ve inceleme paneli acilir', async () => {
+      expect(globalThis.crypto.subtle).toBeUndefined();
+      renderPage();
+      await selectPdf();
+      expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('candidate-resume-review')).toBeVisible();
+    });
+
+    it('subtle yokken de icerik kimligi korunur: ayni metadata FARKLI icerik', async () => {
+      // ZORUNLU: paylasilan fixture bu fabrikayi SABIT bir degere mock'luyor. Override
+      // edilmezse YENI uretilen anahtar da ayni gorunur ve "farkli anahtar" iddiasi
+      // olculemez. (Bu tuzaga ilk yazimda dustum; assertion yanlis sebeple kirmizi geldi.)
+      let issued = 0;
+      apiMocks.createApplicationIdempotencyKey.mockImplementation(() => {
+        issued += 1;
+        return `bytes-key-${issued}`;
+      });
+
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+
+      const one = new File(['%PDF one'], 'synthetic.pdf', {
+        type: 'application/pdf',
+        lastModified: 123456,
+      });
+      const two = new File(['%PDF two'], 'synthetic.pdf', {
+        type: 'application/pdf',
+        lastModified: 123456,
+      });
+      expect(one.size).toBe(two.size);
+
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [one] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [two] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
+
+      expect(apiMocks.uploadResumePdf.mock.calls[1][2]).not.toBe(
+        apiMocks.uploadResumePdf.mock.calls[0][2],
+      );
+    });
+
+    it('subtle yokken de AYNI dosya AYNI anahtari alir', async () => {
+      // Ayni zorunluluk TERS yonde: sabit mock ile "ayni anahtar" iddiasi yeni anahtar
+      // uretilse bile gecerdi, yani test hicbir sey olcmezdi. Artan mock ile "ayni"
+      // ancak fabrika IKINCI kez cagrilmadiysa dogru olur.
+      let issued = 0;
+      apiMocks.createApplicationIdempotencyKey.mockImplementation(() => {
+        issued += 1;
+        return `bytes-key-${issued}`;
+      });
+
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/i));
+
+      const pdf = new File(['%PDF same bytes'], 'synthetic.pdf', { type: 'application/pdf' });
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(1));
+      fireEvent.change(screen.getByTestId('candidate-resume'), { target: { files: [pdf] } });
+      await waitFor(() => expect(apiMocks.uploadResumePdf).toHaveBeenCalledTimes(2));
+
+      expect(apiMocks.uploadResumePdf.mock.calls[1][2]).toBe(
+        apiMocks.uploadResumePdf.mock.calls[0][2],
+      );
+    });
+  });
+
   it('gives every decision state its own frame, not just its own badge', () => {
     // Canlı geri bildirim: "reddet UI/UX çalışmıyor gibi, çerçeve rengi
     // değişmiyor". Sebep: REJECTED ile UNREVIEWED birebir ayni kenarlik ve
