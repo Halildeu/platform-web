@@ -86,6 +86,25 @@ type MergeConflict = {
 type EntryRow<T> = { rowId: string; value: T };
 
 /**
+ * #1153 (P2, tur 2): aktarilan satirlarin kaynak kaydini uretir — rowId -> aktarilan
+ * degerler. Bos alanlar kaydedilmez: aktarim onlara zaten dokunmadi, kaydedilirse
+ * adayin sonradan doldurmasi "duzeltme" gibi gorunurdu.
+ */
+const recordImportedRows = <T extends Record<string, string | undefined>>(
+  rows: Array<EntryRow<T>>,
+): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    rows.map((row) => [
+      row.rowId,
+      Object.fromEntries(
+        Object.entries(row.value).filter(
+          (pair): pair is [string, string] => typeof pair[1] === 'string' && pair[1].trim() !== '',
+        ),
+      ),
+    ]),
+  );
+
+/**
  * #239: alan tipine uygun girdi. `kind` yoksa düz metin (mevcut davranış).
  *
  * `month`/`year` seçimi VERİYİ DÜŞÜRMEDEN uygulanır: CV ayrıştırıcısı serbest
@@ -744,6 +763,25 @@ const CandidateApplicationPage = () => {
   const [importedValues, setImportedValues] = useState<
     Partial<Record<keyof ApplicationValues, string>>
   >({});
+  /**
+   * #1153 (P2, tur 2): GRUPLU deneyim/egitim satirlarinin kaynak bilgisi.
+   *
+   * <p>Onceki halim provenance'i yalniz skalar alanlara kurdu; iki liste acikca
+   * atlanmisti. Olculen sonuc: confirm'den gercek gruplu entry'ler donunce PDF unvani
+   * forma geliyordu ama ilgili fieldset'te kaynak etiketi YOKTU, aday o satirlari elle
+   * duzeltince de CV/manuel ayrimi gorunmuyordu. Ayni alan-bazli sozlesmenin eksik
+   * parcasiydi; yeni bir davranis degil.
+   *
+   * <p>Anahtar SATIR KIMLIGI ({@code rowId}), indeks DEGIL. Indeks kirilgan: aday
+   * ustteki satiri silince alttaki onun indeksine kayar ve etiket YANLIS satira
+   * tasinirdi. {@code rowIdRef} monoton artiyor ve bir rowId asla yeniden
+   * kullanilmiyor; bu yuzden silinen satirin kaydi hayatta kalsa bile baska bir
+   * satira baglanamaz.
+   *
+   * <p>Deger de saklaniyor (yalniz "CV'den geldi" bayragi degil), cunku "aday bunu
+   * sonradan duzeltti mi" sorusu ancak aktarilan degerle karsilastirarak yanitlanir.
+   */
+  const [importedRows, setImportedRows] = useState<Record<string, Record<string, string>>>({});
   const [resumeEdits, setResumeEdits] = useState<Partial<Record<ResumeFieldKey, string>>>({});
   const [resumeBusyField, setResumeBusyField] = useState<ResumeFieldKey | 'all' | null>(null);
   const [replaceRequested, setReplaceRequested] = useState(false);
@@ -1083,6 +1121,7 @@ const CandidateApplicationPage = () => {
       // #966: yeni niyet — aynı dosya yeniden seçilse bile yeni anahtar alsın.
       uploadKeyRef.current = null;
       setImportedValues({});
+      setImportedRows({});
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (terminateError) {
       setFileError(
@@ -1312,6 +1351,16 @@ const CandidateApplicationPage = () => {
     setImportedValues(importedByField);
     if (nextExperience) setExperienceRows(nextExperience);
     if (nextEducation) setEducationRows(nextEducation);
+    // #1153 (P2, tur 2): aktarilan satirlarin kaynak kaydi. Yalniz BU aktarimda
+    // uretilen rowId'ler yazilir; adayin kendi ekledigi satirlar kayitsiz kalir ve
+    // dogru sekilde etiketsiz gorunur.
+    if (nextExperience || nextEducation) {
+      setImportedRows((current) => ({
+        ...current,
+        ...recordImportedRows(nextExperience ?? []),
+        ...recordImportedRows(nextEducation ?? []),
+      }));
+    }
     setMergeConflicts(conflicts);
     setFileMeta((current) => (current ? { ...current, importedFieldCount: imported } : current));
     return conflicts.length;
@@ -1376,26 +1425,31 @@ const CandidateApplicationPage = () => {
     // adayın yazdığı satırları KORUR ve CV metnini yeni bir satır olarak ekler —
     // birleştirilmiş metni tek satıra ezmek adayın yapılandırdığı bilgiyi düzleştirirdi.
     mergeConflicts.forEach((conflict) => {
-      if (conflict.field === 'experience') {
-        if (conflict.choice === 'resume') {
-          setExperienceRows([{ rowId: nextRowId(), value: { description: conflict.resumeValue } }]);
-        } else if (conflict.choice === 'edit') {
-          setExperienceRows((current) => [
-            ...current,
-            { rowId: nextRowId(), value: { description: conflict.resumeValue } },
-          ]);
-        }
+      if (conflict.field !== 'experience' && conflict.field !== 'education') return;
+      if (conflict.choice !== 'resume' && conflict.choice !== 'edit') return;
+
+      // #1153 (P2, tur 2): rowId ONCE uretilir, cunku ayni kimlik hem satira hem de
+      // kaynak kaydina yazilmali. setState geri cagrisi icinde uretilseydi kimlige
+      // burada erisemez ve satir yine etiketsiz kalirdi.
+      const rowId = nextRowId();
+      const row = { rowId, value: { description: conflict.resumeValue } };
+      const setRows =
+        conflict.field === 'experience'
+          ? (setExperienceRows as React.Dispatch<React.SetStateAction<Array<EntryRow<never>>>>)
+          : (setEducationRows as React.Dispatch<React.SetStateAction<Array<EntryRow<never>>>>);
+
+      if (conflict.choice === 'resume') {
+        setRows([row as EntryRow<never>]);
+      } else {
+        setRows((current) => [...current, row as EntryRow<never>]);
       }
-      if (conflict.field === 'education') {
-        if (conflict.choice === 'resume') {
-          setEducationRows([{ rowId: nextRowId(), value: { description: conflict.resumeValue } }]);
-        } else if (conflict.choice === 'edit') {
-          setEducationRows((current) => [
-            ...current,
-            { rowId: nextRowId(), value: { description: conflict.resumeValue } },
-          ]);
-        }
-      }
+      // Satirin icerigi tumuyle CV'den geliyor: 'edit' secilse bile bu YENI satir
+      // birlestirilmis metin degil, CV metnidir; adayin kendi satirlari korunur ve
+      // kayitsiz oldugu icin etiketsiz kalir.
+      setImportedRows((current) => ({
+        ...current,
+        [rowId]: { description: conflict.resumeValue },
+      }));
     });
     // #1153 (P2-3): adayin ACIKCA CV kaynagini sectigi alan da provenance tasimali.
     // Onceki hali yalniz ilk otomatik aktarimi kaydediyordu; cakisma secimi haritayi
@@ -1751,6 +1805,7 @@ const CandidateApplicationPage = () => {
     // #966: yeni niyet — yükleme anahtarı da sıfırlanır.
     uploadKeyRef.current = null;
     setImportedValues({});
+    setImportedRows({});
     candidateAccessTokenRef.current = createCandidateAccessToken();
     setView('form');
     setFormStep('resume');
@@ -1931,6 +1986,24 @@ const CandidateApplicationPage = () => {
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xs font-bold uppercase tracking-wider text-text-secondary">
                 {index + 1}. {itemNoun}
+                {(() => {
+                  // #1153 (P2, tur 2): satirin kaynak rozeti. Kayit rowId ile
+                  // bagli oldugu icin satir silinip indeksler kaysa bile etiket
+                  // baska satira gecmez.
+                  const importedRow = importedRows[row.rowId];
+                  if (!importedRow) return null;
+                  const edited = specs.some(
+                    (spec) => (row.value[spec.key] ?? '') !== (importedRow[spec.key] ?? ''),
+                  );
+                  return (
+                    <span
+                      data-testid={`candidate-${name}-${index}-provenance`}
+                      className="ml-2 font-semibold normal-case tracking-normal"
+                    >
+                      {edited ? 'Siz düzenlediniz' : "CV'den aktarıldı"}
+                    </span>
+                  );
+                })()}
               </p>
               <button
                 type="button"

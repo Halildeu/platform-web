@@ -1096,6 +1096,160 @@ describe('CandidateApplicationPage', () => {
    * <p>Bu blok tam olarak o ortami kurar: {@code subtle} kaldirilir. Onceki halde bu
    * testler kirmizi olurdu; bagimlilik kaldirildigi icin artik yesil.
    */
+  /**
+   * #1153 P2 (tur 2) — GRUPLU deneyim/egitim satirlarinin kaynak bilgisi.
+   *
+   * <p>Inceleme notu: {@code importedValues} yalniz skalar alanlari tutuyordu, iki liste
+   * acikca atlanmisti ve {@code renderEntryList} kaynak etiketi render etmiyordu.
+   * Confirm'den gercek gruplu entry'ler donunce PDF unvani forma geliyor (aktarim
+   * calisiyor) ama fieldset'te "CV'den aktarildi" YOK; aday satiri elle duzeltince de
+   * kaynak ayrimi gorunmuyor.
+   *
+   * <p>Bu blok ucunu de olcer: aktarilan satir etiketlenir, duzeltilince etiket durum
+   * degistirir, ve ekle/sil sirasinda etiket BASKA SATIRA TASINMAZ.
+   */
+  describe('#1153 gruplu satir provenance', () => {
+    const GROUPED = {
+      resumeImport: { ...UPLOADED_IMPORT, state: 'CONFIRMED', version: 10, proposals: [] },
+      draft: {
+        draftId: '11111111-1111-1111-1111-111111111111',
+        importId: CREATED_IMPORT.importId,
+        version: 0,
+        fields: {
+          fullName: 'PDF Demo Adayı',
+          email: 'pdf.aday@example.test',
+          experience: 'PDF icinden gelen deneyim metni',
+        },
+        entries: {
+          experience: [
+            {
+              title: 'BIRINCI PDF unvani',
+              subtitle: 'Birinci sirket',
+              dateText: '2019 - 2021',
+              description: 'Birinci aciklama',
+            },
+            {
+              title: 'IKINCI PDF unvani',
+              subtitle: 'Ikinci sirket',
+              dateText: '2021 - 2023',
+              description: 'Ikinci aciklama',
+            },
+          ],
+        },
+        createdAt: '2026-07-18T08:02:00Z',
+      },
+    };
+
+    const importGrouped = async () => {
+      apiMocks.confirmResumeImport.mockResolvedValue(GROUPED);
+      renderPage();
+      await selectPdf();
+      fireEvent.click(screen.getByRole('button', { name: 'Güvenli önerileri kabul et' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }),
+        ).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
+      await waitFor(() =>
+        expect(screen.getByTestId('candidate-experience-0-title')).toHaveValue(
+          'BIRINCI PDF unvani',
+        ),
+      );
+    };
+
+    it('aktarilan gruplu satirlar CV kaynakli oldugunu SOYLER', async () => {
+      await importGrouped();
+
+      // Aktarim zaten calisiyordu; eksik olan etiketti.
+      expect(screen.getByTestId('candidate-experience-1-title')).toHaveValue('IKINCI PDF unvani');
+      expect(screen.getByTestId('candidate-experience-0-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+      expect(screen.getByTestId('candidate-experience-1-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+    });
+
+    it('aday gruplu satiri duzeltince kaynak ayrimi GORUNUR', async () => {
+      await importGrouped();
+
+      fireEvent.change(screen.getByTestId('candidate-experience-0-title'), {
+        target: { value: 'Adayin kendi duzelttigi unvan' },
+      });
+
+      expect(screen.getByTestId('candidate-experience-0-provenance')).toHaveTextContent(
+        /Siz düzenlediniz/,
+      );
+      // Komsu satir etkilenmez: duzeltme satir bazindadir.
+      expect(screen.getByTestId('candidate-experience-1-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+    });
+
+    it('adayin KENDI ekledigi satir CV etiketi TASIMAZ', async () => {
+      await importGrouped();
+
+      fireEvent.click(screen.getByRole('button', { name: /Deneyim ekle/i }));
+
+      await waitFor(() => expect(screen.getByTestId('candidate-experience-2-title')).toBeVisible());
+      expect(screen.queryByTestId('candidate-experience-2-provenance')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Halil'in acikca istedigi kontrol: silme sonrasi etiket BASKA satira gecmemeli.
+     *
+     * <p>Kirilgan tasarim indeks anahtarli olan olurdu: 0. satir silinince 1. satir
+     * 0 indeksine kayar ve 0'in kaydini devralirdi. Kayit rowId ile bagli oldugu ve
+     * rowId asla yeniden kullanilmadigi icin bu olamaz.
+     */
+    it('ustteki satir silinince etiket ALTTAKI satira tasinmaz', async () => {
+      await importGrouped();
+
+      /*
+       * AYIRT EDICI KURGU (ilk yazimda kaciriyordum).
+       *
+       * Ilk halim once 1. satiri duzeltip sonra 0. satiri siliyordu. Olctum: o kurgu
+       * INDEKS anahtarli (kusurlu) uygulamada da GECIYOR, cunku iki yontem de ayni
+       * cevaba variyordu — yani test iddiayi hic olcmuyordu.
+       *
+       * Ayrim ancak HIC DUZELTMEDEN silince ortaya cikiyor: silinenin ardindan 0
+       * indeksine gelen satir DEGISTIRILMEMISTIR, dolayisiyla "CV'den aktarildi"
+       * demelidir. Indeks anahtarli uygulama ona SILINEN satirin kaydini bakar,
+       * degerler tutmaz ve yanlislikla "Siz duzenlediniz" der.
+       */
+      expect(screen.getByTestId('candidate-experience-0-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+
+      fireEvent.click(screen.getByTestId('candidate-experience-remove-0'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('candidate-experience-0-title')).toHaveValue(
+          'IKINCI PDF unvani',
+        ),
+      );
+      expect(screen.getByTestId('candidate-experience-0-provenance')).toHaveTextContent(
+        /CV'den aktarıldı/,
+      );
+      expect(screen.queryByTestId('candidate-experience-1-provenance')).not.toBeInTheDocument();
+    });
+
+    /*
+     * "Tümünü reddet sonrası etiket kalmaz" testi BILEREK YOK.
+     *
+     * Yazdim ve kirmizi verdi; sebebi kod hatasi degil, senaryonun ULASILAMAZ olmasiydi:
+     * "Tümünü reddet" dugmesi inceleme panelinin icinde yasiyor ve aktarim tamamlandiktan
+     * sonra panel kapaniyor, yani gruplu satirlar olustuktan sonra o yola bu ekrandan
+     * girilemiyor. Ulasilmayan bir yolu "deneyip" sessizce gecen bir test yazmak, olcum
+     * gibi gorunen bir bosluk olurdu.
+     *
+     * Sifirlama kodu yine de duruyor: terminate ve tam sifirlama noktalarinda
+     * setImportedRows({}) cagriliyor, importedValues ile ayni satirda ve ayni yasam
+     * dongusunde.
+     */
+  });
+
   describe('#1153 subtle olmayan ortam', () => {
     let restoreSubtle: (() => void) | null = null;
 
