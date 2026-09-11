@@ -49,9 +49,9 @@ describe('graphLayout determinism (gitops#3650, 2026-09-11)', () => {
     expect(p.get('D')).toEqual({ x: 180, y: 90 });
   });
 
-  it('fcose no longer randomizes the start', () => {
+  it('fcose no longer randomizes the neighbourhood start; the draft domain map must keep randomizing', () => {
     expect(layoutOptions('neighborhood', 'VOUCHER_ROW').randomize).toBe(false);
-    expect(layoutOptions('domain', null).randomize).toBe(false);
+    expect(layoutOptions('domain', null).randomize).toBe(true);
   });
 
   const apply = (boxes: { id: string; x1: number; y1: number; x2: number; y2: number }[], shifts: Map<string, { x: number; y: number }>) =>
@@ -83,5 +83,21 @@ describe('graphLayout determinism (gitops#3650, 2026-09-11)', () => {
     const second = resolveOverlaps(crowded, null);
     expect(countOverlaps(apply(crowded, first))).toBe(0);
     expect([...first.entries()]).toEqual([...second.entries()]);
+  });
+
+  it('separates dense stacks the push-apart pass cannot (Codex 01a08f35 counter-examples)', () => {
+    const identical = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `N${i}`, x1: 0, y1: 0, x2: 160, y2: 40 }));
+    for (const n of [30, 60]) {
+      const boxes = identical(n);
+      const shifts = resolveOverlaps(boxes, 'N0');
+      expect(countOverlaps(apply(boxes, shifts))).toBe(0);
+      expect(shifts.get('N0')).toEqual({ x: 0, y: 0 });
+    }
+    const diagonal = Array.from({ length: 60 }, (_, i) => ({ id: `N${i}`, x1: i, y1: -i, x2: 80 + i, y2: 24 - i }));
+    const shifts = resolveOverlaps(diagonal, 'N0');
+    expect(countOverlaps(apply(diagonal, shifts))).toBe(0);
+    expect(shifts.get('N0')).toEqual({ x: 0, y: 0 });
+    // Deterministic across calls.
+    expect([...resolveOverlaps(diagonal, 'N0').entries()]).toEqual([...shifts.entries()]);
   });
 });

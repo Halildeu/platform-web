@@ -10,10 +10,14 @@
  * acceptance (`data-overlaps`), so a regression is a number, not an impression.
  *
  * 2026-09-11: the acceptance run on the merged build still hit 1 overlap out of 2 runs —
- * fcose starts from random positions and does not guarantee separation. The layout now
- * starts from deterministic positions (`initialPositions`) and, once fcose stops, any
- * boxes that still intersect are pushed apart by `resolveOverlaps` before the fit, so
- * the reported number is 0 by construction rather than by luck.
+ * fcose starts from random positions and does not guarantee separation. The neighbourhood
+ * now starts from deterministic positions (`initialPositions`) with fcose told not to
+ * randomize, and once fcose stops, any boxes that still intersect are separated by
+ * `resolveOverlaps` before the fit: an iterative push-apart that keeps fcose's shape,
+ * followed — only if anything still intersects — by a finite greedy placement that
+ * walks each remaining box outward from the pinned centre until it is clear. The
+ * reported number is therefore 0 by construction rather than by luck (Codex 01a08f35:
+ * the push-apart alone left 9 pairs on 30 identical boxes within its budget).
  */
 
 export type ViewMode = 'domain' | 'neighborhood';
@@ -71,10 +75,17 @@ export function initialPositions(ids: string[], center: string | null): Map<stri
 }
 
 /**
- * Push intersecting boxes apart along the axis of least penetration until none
- * intersect (or the iteration budget runs out). Returns the shift per node id. The
- * pinned node never moves; its partner takes the whole displacement. Deterministic:
- * pairs are visited in input order and nothing is random.
+ * Separate intersecting boxes. Returns the shift per node id; the pinned node never
+ * moves. Deterministic: pairs are visited in input order and nothing is random.
+ *
+ * Pass 1 pushes each intersecting pair apart along the axis of least penetration (the
+ * partner of the pinned node takes the whole displacement, otherwise 50/50) for up to
+ * `maxIterations` sweeps — this keeps fcose's shape for the ordinary residual overlap.
+ * Pass 2 runs only if pass 1 left intersections (dense stacks): boxes are placed one by
+ * one, ordered by distance from the pinned centre then id, each walked outward along
+ * its own direction until it clears everything placed before it. Every step moves a
+ * box strictly further out and the placed set is finite, so pass 2 terminates with no
+ * intersections left.
  */
 export function resolveOverlaps(boxes: NodeBox[], pinned: string | null, gap = 8, maxIterations = 200): Map<string, Point> {
   const current = boxes.map(b => ({ ...b }));
@@ -109,6 +120,40 @@ export function resolveOverlaps(boxes: NodeBox[], pinned: string | null, gap = 8
     }
     if (!moved) break;
   }
+  if (countOverlaps(current) === 0) return shift;
+
+  // Pass 2: finite greedy placement outward from the pinned centre.
+  const centerBox = pinned ? current.find(b => b.id === pinned) : undefined;
+  const origin: Point = centerBox
+    ? { x: (centerBox.x1 + centerBox.x2) / 2, y: (centerBox.y1 + centerBox.y2) / 2 }
+    : { x: 0, y: 0 };
+  const centre = (b: Box): Point => ({ x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2 });
+  const order = [...current].sort((a, b) => {
+    if (a.id === pinned) return -1;
+    if (b.id === pinned) return 1;
+    const da = Math.hypot(centre(a).x - origin.x, centre(a).y - origin.y);
+    const db = Math.hypot(centre(b).x - origin.x, centre(b).y - origin.y);
+    return da - db || a.id.localeCompare(b.id);
+  });
+  const placed: NodeBox[] = [];
+  order.forEach((b, index) => {
+    if (b.id !== pinned) {
+      const c = centre(b);
+      let dx = c.x - origin.x;
+      let dy = c.y - origin.y;
+      let length = Math.hypot(dx, dy);
+      if (length < 1) {
+        // Sitting on the centre: fan out by index so stacked boxes take distinct rays.
+        const angle = index * 2.399963; // golden angle, never repeats a direction exactly
+        dx = Math.cos(angle); dy = Math.sin(angle); length = 1;
+      }
+      const step = Math.max(gap, Math.min(b.x2 - b.x1, b.y2 - b.y1) / 2);
+      const ux = (dx / length) * step;
+      const uy = (dy / length) * step;
+      while (placed.some(p => intersects(p, b))) move(b, ux, uy);
+    }
+    placed.push(b);
+  });
   return shift;
 }
 
@@ -120,9 +165,12 @@ export function layoutOptions(viewMode: ViewMode, center: string | null): Record
     quality: neighborhood ? 'default' : 'draft',
     animate: true,
     animationDuration: 500,
-    // Start from `initialPositions`, not from random ones: the same data lays out the
-    // same way every time, so acceptance screenshots are comparable run to run.
-    randomize: false,
+    // The neighbourhood starts from `initialPositions`, not from random ones, so the
+    // same data lays out the same way every time. The domain map keeps randomizing:
+    // fcose 2.2 with quality 'draft' skips its CoSE phase and, without the spectral
+    // start that randomize:true triggers, throws (Codex 01a08f35) — the draft map
+    // would silently fall back to the grid.
+    randomize: !neighborhood,
     fit: true,
     padding: 40,
     nodeDimensionsIncludeLabels: true,
