@@ -272,6 +272,48 @@ const buildSyntheticResumePdf = () => {
 };
 
 test.describe('Faz 25 public candidate journey', () => {
+  for (const width of [390, 1280]) {
+    test(`summary validation preserves edits and blocks invalid preview at ${width}px`, async ({
+      page,
+      baseURL,
+    }, testInfo) => {
+      const submissions: Array<Record<string, unknown>> = [];
+      await installAtsApi(page, submissions);
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`${baseURL}/careers/acik/jobs/${JOB.slug}/apply`);
+      await page.getByTestId('fill-synthetic-resume').click();
+      const summary = page.getByTestId('candidate-summary');
+      for (const value of ['abc', 'x'.repeat(4001)]) {
+        await summary.fill(value);
+        await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
+        await expect(page.getByTestId('candidate-application-preview')).toHaveCount(0);
+        await expect(summary).toHaveValue(value);
+        await expect(summary).toBeFocused();
+        await expect(summary).toHaveAttribute('aria-invalid', 'true');
+        await expect(summary).toHaveAccessibleDescription(
+          'Profesyonel özet 10 ile 4000 karakter arasında olmalıdır.',
+        );
+      }
+      expect(submissions).toHaveLength(0);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+      ).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: testInfo.outputPath(`summary-error-${width}.png`) });
+      await summary.fill('Urun gelistirme deneyimine sahip sentetik aday.');
+      await expect(summary).not.toHaveAttribute('aria-invalid', 'true');
+      await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
+      await expect(page.getByTestId('candidate-application-preview')).toBeVisible();
+      for (const confirmation of await page.getByRole('checkbox').all()) {
+        await confirmation.check();
+      }
+      await page.getByTestId('create-application-receipt').click();
+      await expect(page.getByTestId('candidate-application-receipt')).toBeVisible();
+      expect(submissions).toHaveLength(1);
+      expect(submissions[0].summary).toBe('Urun gelistirme deneyimine sahip sentetik aday.');
+    });
+  }
+
   test('boots a canonical career-handle application directly without the authenticated shell and imports PDF fields', async ({
     page,
     baseURL,

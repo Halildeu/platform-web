@@ -5,6 +5,8 @@ const httpMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() 
 vi.mock('@mfe/shared-http', () => ({ api: httpMocks }));
 
 import {
+  APPLICATION_SUMMARY_ERROR,
+  getApplicationSummaryError,
   clearCandidateSession,
   parseTrackingCredentialFile,
   confirmResumeImport,
@@ -182,6 +184,71 @@ describe('application-api', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toEqual(
       expect.objectContaining({ tenantId: expect.anything(), status: expect.anything() }),
     );
+  });
+
+  describe('professional summary validation', () => {
+    const submission = {
+      fullName: 'Deniz Sentetik',
+      email: 'deniz@example.test',
+      phone: '+905550000000',
+      city: 'Ankara',
+      summary: 'Sentetik profesyonel özet',
+      experience: 'Sentetik deneyim',
+      education: 'Sentetik eğitim',
+      skills: ['Ürün keşfi'],
+      noticeVersion: 'kvkk-application-v1' as const,
+      noticeAcceptedAt: '2026-07-16T10:00:00Z',
+      accuracyConfirmedAt: '2026-07-16T10:00:00Z',
+    };
+
+    it.each(['', '   ', 'abc', 'x'.repeat(9), '  abc  ', 'x'.repeat(4001)])(
+      'rejects invalid lengths before any network write (case %#)',
+      async (summary) => {
+        expect(getApplicationSummaryError(summary)).toBe(APPLICATION_SUMMARY_ERROR);
+        await expect(
+          submitApplication('urun-yoneticisi', 'web-idempotency-123456', 'A'.repeat(43), {
+            ...submission,
+            summary,
+          }),
+        ).rejects.toThrow(APPLICATION_SUMMARY_ERROR);
+        expect(fetchMock).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['x'.repeat(10), 'x'.repeat(4000), `  ${'x'.repeat(10)}  `])(
+      'accepts boundary lengths without rewriting candidate content (case %#)',
+      async (summary) => {
+        fetchMock.mockResolvedValueOnce(
+          jsonResponse({ publicRef: 'app_abcdefghijklmnopqrstuvwx' }),
+        );
+        expect(getApplicationSummaryError(summary)).toBeNull();
+        await submitApplication('urun-yoneticisi', 'web-idempotency-123456', 'A'.repeat(43), {
+          ...submission,
+          summary,
+        });
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body).summary).toBe(summary);
+      },
+    );
+
+    it('localizes the known server summary rejection without exposing its field identifier', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ error: 'INVALID', reason: 'summary 10..4000 karakter olmalı' }, 400),
+      );
+      await expect(
+        submitApplication('urun-yoneticisi', 'web-idempotency-123456', 'A'.repeat(43), submission),
+      ).rejects.toThrow(APPLICATION_SUMMARY_ERROR);
+    });
+
+    it('preserves unrelated server validation and transient failure handling', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ reason: 'İlan başvuruya kapalı.' }, 409));
+      await expect(
+        submitApplication('urun-yoneticisi', 'web-idempotency-123456', 'A'.repeat(43), submission),
+      ).rejects.toThrow('İlan başvuruya kapalı.');
+      fetchMock.mockResolvedValueOnce(jsonResponse({ reason: 'internal detail' }, 503));
+      await expect(
+        submitApplication('urun-yoneticisi', 'web-idempotency-123456', 'A'.repeat(43), submission),
+      ).rejects.toThrow('Servis geçici olarak kullanılamıyor.');
+    });
   });
 
   it('keeps the candidate tracking credential in session storage only', () => {

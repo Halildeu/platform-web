@@ -278,6 +278,33 @@ describe('CandidateApplicationPage', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([
+    ['three-character', 'abc'],
+    ['oversized', 'x'.repeat(4001)],
+  ])(
+    'blocks a %s professional summary before preview without losing input',
+    async (_label, value) => {
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      fireEvent.click(screen.getByTestId('fill-synthetic-resume'));
+      const summary = screen.getByTestId('candidate-summary');
+      fireEvent.change(summary, { target: { value } });
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+      expect(screen.queryByTestId('candidate-application-preview')).not.toBeInTheDocument();
+      expect(summary).toHaveValue(value);
+      expect(summary).toHaveAttribute('aria-invalid', 'true');
+      expect(summary).toHaveAccessibleDescription(
+        'Profesyonel özet 10 ile 4000 karakter arasında olmalıdır.',
+      );
+      expect(summary).toHaveFocus();
+      expect(apiMocks.submitApplication).not.toHaveBeenCalled();
+      fireEvent.change(summary, { target: { value: 'Geçerli bir profesyonel özet.' } });
+      expect(summary).not.toHaveAttribute('aria-invalid', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu kontrol et' }));
+      expect(screen.getByTestId('candidate-application-preview')).toBeVisible();
+    },
+  );
+
   it('shows every form section on one page instead of one step at a time', async () => {
     // #1048 SAHIP ILKESI: aralarinda islevsel kapi olmayan alan gruplarini
     // adim adim gostermek adaya sebepsiz sira dayatiyordu. Uc bolum artik

@@ -7,7 +7,7 @@ name: ats#966 Resume Import Browser Regressions
 # CANLI TEST KABULU DEGILDIR; normal aday -> duzeltme -> gonderim -> IK kalici okuma
 # kabulu ayri bir hattir ve bu is ile karsilanmaz.
 #
-# KAPSAM: yalnizca "ats#966" ile isaretli blok kosar (-g filtresi). Ayni spec
+# KAPSAM: "ats#966" ve #1164 summary validation bloklari kosar (-g filtresi). Ayni spec
 # dosyasindaki daha eski iki test main uzerinde ZATEN kirik (artik var olmayan
 # `candidate-experience` testid'i ve "Basvuruyu onizle" dugmesi araniyor); bu spec
 # hicbir workflow tarafindan kosulmadigi icin fark edilmemis. Onlarin onarimi bu
@@ -19,6 +19,7 @@ on:
   pull_request:
     paths:
       - 'apps/mfe-shell/src/pages/jobs/CandidateApplicationPage.tsx'
+      - 'apps/mfe-shell/src/features/ats-portals/api/application-api.ts'
       - 'tests/playwright/faz25-candidate-application.spec.ts'
       - '.github/workflows/ats966-resume-import-browser.yml'
 
@@ -62,7 +63,7 @@ jobs:
           tail -n 200 /tmp/ats966-shell.log || true
           exit 1
 
-      - name: Chromium regressions (ats#966 only)
+      - name: Chromium regressions (ats#966 and summary validation)
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
         run: >-
@@ -71,7 +72,7 @@ jobs:
           --config tests/playwright/playwright.config.ts
           --project=chromium
           --workers=1
-          -g "ats#966"
+          -g "ats#966|summary validation"
 
       - name: Upload browser diagnostics on failure
         if: failure()
