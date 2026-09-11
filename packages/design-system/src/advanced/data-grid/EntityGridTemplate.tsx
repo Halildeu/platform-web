@@ -326,6 +326,13 @@ export interface EntityGridTemplateProps<
    * add/remove discards stale drafts, a pure reorder keeps them.
    */
   layoutDraftIdentity?: string;
+  /**
+   * platform-web#1155 — whether the embedded {@link VariantIntegration} is mounted.
+   * {@code 'off'} renders no variant slot and never calls the grid-variants service:
+   * for cells whose role has no {@code VARIANTS_READ} by contract (Etik Speak manager,
+   * Faz 35 least privilege) the call could only answer 403. Default {@code 'on'}.
+   */
+  variants?: 'on' | 'off';
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,6 +401,7 @@ export function EntityGridTemplate<
     sanitizeVariantColumnState,
     sanitizeVariantPivotMode,
     layoutDraftIdentity,
+    variants = 'on',
   } = props;
 
   const accessState = resolveAccessState(access);
@@ -707,7 +715,7 @@ export function EntityGridTemplate<
           </>
         }
         exportLeadingExtras={exportLeadingExtras}
-        variantSlot={
+        variantSlot={variants === 'off' ? undefined : (
           <VariantIntegration<RowData>
             gridId={gridId}
             gridSchemaVersion={gridSchemaVersion}
@@ -723,7 +731,7 @@ export function EntityGridTemplate<
             draftIdentity={layoutDraftIdentity}
             columnDefIds={columnDefIds}
           />
-        }
+        )}
       />
 
       {/* Grid */}

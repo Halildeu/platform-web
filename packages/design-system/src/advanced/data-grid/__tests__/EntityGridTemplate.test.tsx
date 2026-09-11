@@ -46,6 +46,22 @@ afterEach(() => {
 /*  Temel render                                                       */
 /* ------------------------------------------------------------------ */
 
+describe('EntityGridTemplate — variants prop (platform-web#1155)', () => {
+  it('mounts the variant integration by default', () => {
+    render(
+      <EntityGridTemplate gridId="variants-default" gridSchemaVersion={1} columnDefs={[{ field: 'name' }]} />,
+    );
+    expect(screen.getByTestId('variant-integration-mock')).toBeInTheDocument();
+  });
+
+  it('variants="off" mounts no variant integration at all (no grid-variants request can be made)', () => {
+    render(
+      <EntityGridTemplate gridId="variants-off" gridSchemaVersion={1} columnDefs={[{ field: 'name' }]} variants="off" />,
+    );
+    expect(screen.queryByTestId('variant-integration-mock')).not.toBeInTheDocument();
+  });
+});
+
 describe('EntityGridTemplate — temel render', () => {
   it('data-component="entity-grid-template" attribute atar', () => {
     const { container } = render(

@@ -366,6 +366,11 @@ export default function CaseListWorkspace({
         <EntityGridTemplate<CaseGridRow>
           gridId={CASE_GRID_ID}
           gridSchemaVersion={CASE_GRID_SCHEMA_VERSION}
+          // platform-web#1155: the Faz 35 least-privilege contract gives ETIK_SPEAK_MANAGER
+          // exactly MODULE:ETHIC:MANAGE — no VARIANTS_READ — so the grid-variants call can
+          // only answer 403. The manager journey never used presets; do not ask for them.
+          // Granting the permission is a separate product decision (gitops#3665).
+          variants="off"
           columnDefs={columnDefs}
           defaultColDef={DEFAULT_COL_DEF}
           rowData={rows}
