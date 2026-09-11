@@ -44,10 +44,21 @@ jobs:
           pnpm exec tsc -p apps/etik-speak-manager/tsconfig.json
       - name: Install isolated Chromium for digest-pinned smoke
         run: pnpm exec playwright install --with-deps chromium
+      - name: Require the AG Grid licence key for the published image
+        # platform-web#1155: the published manager image must carry the licence key
+        # (public by design, ships in the client bundle). The value is never printed.
+        env:
+          AG_GRID_LICENSE_KEY: ${{ secrets.AG_GRID_LICENSE_KEY }}
+        run: |
+          if [ -z "${AG_GRID_LICENSE_KEY}" ]; then
+            echo "::error::AG_GRID_LICENSE_KEY secret is empty; refusing to publish an unlicensed manager image"
+            exit 1
+          fi
       - name: Build exact trusted-main candidate
         run: |
           docker build \
             --build-arg BUILD_SHA="${GITHUB_SHA}" \
+            --build-arg VITE_AG_GRID_LICENSE_KEY="${{ secrets.AG_GRID_LICENSE_KEY }}" \
             --provenance=false \
             --tag etik-speak-manager:candidate \
             --file apps/etik-speak-manager/Dockerfile .

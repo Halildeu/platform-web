@@ -12,10 +12,12 @@ COPY packages/shared-types ./packages/shared-types
 COPY packages/x-charts ./packages/x-charts
 COPY apps/mfe-shell/src/styles ./apps/mfe-shell/src/styles
 RUN pnpm install --frozen-lockfile --prod=false
-# AG Grid Enterprise licence: GitHub secret AG_GRID_LICENSE_KEY -> build-arg -> Vite
-# define -> bundle (same single-source lane as the platform frontend, platform-web#1155).
-# The key is public by design (it ships in the client bundle); an empty value builds
-# a bundle that shows the licence banner, exactly as before.
+# AG Grid Enterprise licence: GitHub secret AG_GRID_LICENSE_KEY -> build-arg -> index.html
+# window.__env__ (inject-runtime-env plugin, allowlisted key only) -> design-system reader
+# (same single-source lane as the platform frontend, platform-web#1155). The key is public
+# by design (it ships in the client bundle). The empty default is for local and PR builds
+# without the secret and yields the licence banner; the release workflow refuses to build
+# with it empty.
 ARG VITE_AG_GRID_LICENSE_KEY=""
 ENV VITE_AG_GRID_LICENSE_KEY=$VITE_AG_GRID_LICENSE_KEY
 RUN pnpm --filter etik-speak-manager build

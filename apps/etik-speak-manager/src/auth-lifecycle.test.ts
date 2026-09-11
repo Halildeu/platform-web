@@ -121,15 +121,39 @@ describe('Etik Speak Keycloak lifecycle', () => {
     keycloakMock.init.mockResolvedValue(true);
     keycloakMock.updateToken.mockResolvedValue(true);
     const auth = await import('./auth');
-    const { api } = await import('./standalone-http');
+    const { api, resolveAuthToken } = await import('./standalone-http');
     const invalidate = vi.fn();
     auth.subscribeManagerSessionInvalidation(invalidate);
     await auth.initializeManagerSession();
+    expect(resolveAuthToken()).toBe('initial-token');
 
     keycloakMock.tokenParsed = { ...validClaims(), aud: ['account'] };
     keycloakMock.onTokenExpired?.();
     await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce());
 
     await expect(api.get('/v1/ethics/cases')).rejects.toThrow('oturumu henüz hazır değil');
+    // The synchronous snapshot (platform-web#1155) is gone with the provider, even
+    // though the Keycloak object still holds a token string.
+    expect(keycloakMock.token).toBe('initial-token');
+    expect(resolveAuthToken()).toBeNull();
+  });
+
+  it('exposes the live session token synchronously for the grid-variants client (platform-web#1155)', async () => {
+    keycloakMock.init.mockResolvedValue(true);
+    const auth = await import('./auth');
+    const { resolveAuthToken } = await import('./standalone-http');
+    expect(resolveAuthToken()).toBeNull();
+
+    await expect(auth.initializeManagerSession()).resolves.toBe('ready');
+    expect(resolveAuthToken()).toBe('initial-token');
+
+    // Re-reads the Keycloak object on every call: a refreshed token is visible at once.
+    keycloakMock.token = 'refreshed-token';
+    expect(resolveAuthToken()).toBe('refreshed-token');
+
+    // And the contract is re-checked on every call: a token without the manager
+    // audience/scope/role is never handed out, even while the object still holds it.
+    keycloakMock.tokenParsed = { ...validClaims(), realm_access: { roles: [] } };
+    expect(resolveAuthToken()).toBeNull();
   });
 });
