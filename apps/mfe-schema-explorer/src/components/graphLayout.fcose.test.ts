@@ -27,7 +27,6 @@ describe('graphLayout on the installed fcose', () => {
 
   it('runs the domain-map options on a compound graph without throwing', () => {
     const cy = build(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(() => cy.layout({ ...layoutOptions('domain', null), animate: false } as any).run()).not.toThrow();
     for (const n of cy.nodes('[type="table"]')) {
       expect(Number.isFinite(n.position('x')) && Number.isFinite(n.position('y'))).toBe(true);
@@ -39,7 +38,6 @@ describe('graphLayout on the installed fcose', () => {
     const tables = cy.nodes('[type="table"]');
     const starts = initialPositions(tables.map(n => n.id()), 'VOUCHER_ROW');
     tables.forEach(n => { n.position(starts.get(n.id())!); });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(() => cy.layout({ ...layoutOptions('neighborhood', 'VOUCHER_ROW'), animate: false } as any).run()).not.toThrow();
     expect(cy.getElementById('VOUCHER_ROW').position()).toEqual({ x: 0, y: 0 });
     const boxes = tables.map(n => ({ id: n.id(), ...n.boundingBox({ includeLabels: false }) }));
