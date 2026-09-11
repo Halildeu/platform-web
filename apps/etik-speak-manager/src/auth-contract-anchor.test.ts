@@ -39,8 +39,12 @@ const AUTH_SURFACE = ['AuthGate.tsx', 'auth.ts'] as const;
  * the tripwire that asks you to look.
  */
 const REVIEWED = {
-  sha256: '1a3de9db7d91ec402f5b1ca1dde66069130c7eb4e0e5ad076f3f4af2d54141de',
-  at: '2026-07-28',
+  // 2026-09-11 (platform-web#1155): auth.ts registers a synchronous token snapshot for the
+  // grid-variants client next to the async provider; scope, audience, PKCE, check-sso and
+  // the upgrade path are untouched (auth-lifecycle.test.ts / AuthGate.test.tsx unchanged).
+  // Review recorded in ADR-0046 (platform-k8s-gitops).
+  sha256: '2af261db885569c758d7f89ae9e35548d33c181e1f09e8473d023b7280199de6',
+  at: '2026-09-11',
 };
 
 function authSurfaceDigest(): string {

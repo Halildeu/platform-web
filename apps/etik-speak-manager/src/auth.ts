@@ -2,6 +2,7 @@ import Keycloak, { type KeycloakTokenParsed } from 'keycloak-js';
 import {
   clearAccessTokenProvider,
   registerAccessTokenProvider,
+  registerAccessTokenSnapshot,
   registerAuthorizationFailureHandler,
 } from './standalone-http';
 
@@ -158,6 +159,11 @@ const startManagerSession = async (): Promise<'ready' | 'redirecting' | 'denied'
   clearUpgradeAttempt();
 
   registerAuthorizationFailureHandler(invalidateManagerSession);
+  // Synchronous view for the grid-variants client (platform-web#1155); the async provider
+  // below stays the path that refreshes the token before ethics-service calls.
+  registerAccessTokenSnapshot(() =>
+    keycloak?.token && hasEthicsManagerContract(keycloak.tokenParsed) ? keycloak.token : null,
+  );
   registerAccessTokenProvider(async () => {
     try {
       await keycloak?.updateToken(30);

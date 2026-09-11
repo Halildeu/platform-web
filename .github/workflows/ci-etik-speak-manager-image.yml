@@ -40,6 +40,7 @@ jobs:
         run: |
           docker build \
             --build-arg BUILD_SHA="${GITHUB_SHA}" \
+            --build-arg VITE_AG_GRID_LICENSE_KEY="${{ secrets.AG_GRID_LICENSE_KEY }}" \
             --provenance=false \
             --tag etik-speak-manager:candidate \
             --file apps/etik-speak-manager/Dockerfile .
