@@ -30,20 +30,24 @@ describe('VariantIntegration — late variants fetch after unmount', () => {
     const rejections: unknown[] = [];
     const onRejection = (reason: unknown) => rejections.push(reason);
     process.on('unhandledRejection', onRejection);
-
-    const { unmount } = render(<VariantIntegration gridId="unmount-probe" />);
-    expect(fetchGridVariants).toHaveBeenCalledWith('unmount-probe');
-    unmount();
-
-    // What the CI run hit: the environment is gone by the time the fetch settles.
-    const realWindow = globalThis.window;
-    vi.stubGlobal('window', undefined);
     try {
-      resolve([]);
-      await new Promise((r) => setTimeout(r, 0));
-      await new Promise((r) => setTimeout(r, 0));
+      const { unmount } = render(<VariantIntegration gridId="unmount-probe" />);
+      expect(fetchGridVariants).toHaveBeenCalledWith('unmount-probe');
+      unmount();
+
+      // What the CI run hit: the environment is gone by the time the fetch settles.
+      const realWindow = globalThis.window;
+      vi.stubGlobal('window', undefined);
+      try {
+        resolve([]);
+        await new Promise((r) => setTimeout(r, 0));
+        await new Promise((r) => setTimeout(r, 0));
+      } finally {
+        vi.stubGlobal('window', realWindow);
+      }
     } finally {
-      vi.stubGlobal('window', realWindow);
+      // Always detach: a listener left behind would mute Vitest's own unhandled-error
+      // reporting for the rest of this worker.
       process.off('unhandledRejection', onRejection);
     }
     expect(rejections).toEqual([]);

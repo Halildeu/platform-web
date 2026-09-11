@@ -797,8 +797,10 @@ export const VariantIntegration = <RowData = unknown,>({
    * Web Test Gate 2026-09-11 (run 34571036236): the fetch settled after the test
    * file's jsdom was gone and `finally { setLoading(false) }` ran on an unmounted
    * tree — "ReferenceError: window is not defined" as an unhandled rejection. State
-   * is only touched while the component is mounted and the answer still belongs to
-   * the current gridId; a superseded gridId's answer is dropped, not shown.
+   * is only touched while the component is mounted; for the effect-triggered fetch
+   * the answer must also still belong to the current gridId (a superseded gridId's
+   * answer is dropped, not shown). Handler-triggered reloads (save/clone/rename/…)
+   * get the mounted guard only; their own `finally` writes are unchanged.
    */
   const mountedRef = useRef(true);
   useEffect(() => {
