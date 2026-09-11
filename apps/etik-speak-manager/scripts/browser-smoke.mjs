@@ -10,13 +10,22 @@ try {
     const runtimeErrors = [];
     const authRequests = [];
     let renderedHeading = false;
-    await page.exposeFunction('recordEtikSpeakHeading', () => {
+    // platform-web#1155: evidence is recorded from the manager document itself, while it
+    // is still open — check-sso then navigates the top-level window to Keycloak, and a
+    // later page.evaluate would read the redirect target's window, not the manager's.
+    let runtimeEnv = null;
+    await page.exposeFunction('recordEtikSpeakHeading', (evidence) => {
       renderedHeading = true;
+      runtimeEnv = evidence;
     });
     await page.addInitScript(() => {
       const observer = new MutationObserver(() => {
         if (document.querySelector('h1')?.textContent?.trim() === 'Etik Speak') {
-          window.recordEtikSpeakHeading();
+          const env = window.__env__;
+          window.recordEtikSpeakHeading({
+            hasRuntimeEnv: typeof env === 'object' && env !== null,
+            hasLicense: typeof env?.VITE_AG_GRID_LICENSE_KEY === 'string' && env.VITE_AG_GRID_LICENSE_KEY.length > 0,
+          });
           observer.disconnect();
         }
       });
@@ -51,11 +60,10 @@ try {
     if (runtimeErrors.length) throw new Error(`${path}: ${runtimeErrors.join('; ')}`);
     // platform-web#1155: the runtime-env asset must have run under the CSP (no inline
     // script) and, when the build carried the licence key, handed it to the design system.
-    const runtimeEnv = await page.evaluate(() => window.__env__ ?? null);
-    if (!runtimeEnv || typeof runtimeEnv !== 'object') {
+    if (!runtimeEnv?.hasRuntimeEnv) {
       throw new Error(`${path}: window.__env__ missing — runtime-env asset did not run`);
     }
-    if (process.env.EXPECT_AG_GRID_LICENSE === 'true' && !runtimeEnv.VITE_AG_GRID_LICENSE_KEY) {
+    if (process.env.EXPECT_AG_GRID_LICENSE === 'true' && !runtimeEnv.hasLicense) {
       throw new Error(`${path}: AG Grid licence key missing from window.__env__`);
     }
     await page.close();
