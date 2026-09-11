@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import type { SchemaSnapshot, Relationship as _Relationship } from '../api/schemaApi';
+import { countOverlaps, layoutOptions } from './graphLayout';
 
 cytoscape.use(fcose);
 
@@ -25,8 +26,13 @@ const CYTOSCAPE_STYLE: cytoscape.StylesheetStyle[] = [
       'background-color': '#1a1d27',
       'border-width': 1.5,
       'border-color': '#2a2d3a',
-      width: 'mapData(refCount, 0, 50, 40, 100)',
-      height: 'mapData(refCount, 0, 50, 40, 100)',
+      // Sized by the label (gitops#3650): a box sized by reference count let long
+      // names run over their neighbours; hubs keep their colour and weight instead.
+      width: 'label',
+      height: 'label',
+      padding: '8px',
+      'text-wrap': 'wrap',
+      'text-max-width': '140px',
       shape: 'roundrectangle',
       'min-zoomed-font-size': 8,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +45,7 @@ const CYTOSCAPE_STYLE: cytoscape.StylesheetStyle[] = [
       'border-color': '#4f8ff7',
       'border-width': 2,
       'font-weight': 'bold',
-      'font-size': 12,
+      'font-size': 11,
     },
   },
   {
@@ -152,24 +158,30 @@ export const SchemaGraph = ({ snapshot, selectedTable, viewMode, onTableSelect, 
     const tableNodes = cy.nodes('[type="table"]');
     if (tableNodes.length === 0) return;
 
+    // The container reports where the layout stands (gitops#3650): `running` while fcose
+    // animates, `settled` once it stopped and the view was fitted, plus the number of
+    // overlapping table boxes (labels included) — the acceptance harness reads both.
+    const container = containerRef.current;
+    if (container) {
+      container.dataset.layout = 'running';
+      delete container.dataset.overlaps;
+    }
+    cy.one('layoutstop', () => {
+      cy.fit(undefined, 40);
+      if (container) {
+        const boxes = cy.nodes('[type="table"]').map(n => n.boundingBox({ includeLabels: true }));
+        container.dataset.overlaps = String(countOverlaps(boxes));
+        container.dataset.layout = 'settled';
+      }
+    });
     try {
-      cy.layout({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        name: 'fcose' as any,
-        quality: viewMode === 'neighborhood' ? 'default' : 'draft',
-        animate: true,
-        animationDuration: 500,
-        randomize: true,
-        nodeSeparation: viewMode === 'neighborhood' ? 80 : 120,
-        idealEdgeLength: 100,
-        nodeRepulsion: 8000,
-        numIter: viewMode === 'neighborhood' ? 1500 : 500,
+      const center = viewMode === 'neighborhood' && selectedTable && cy.getElementById(selectedTable).length ? selectedTable : null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any).run();
+      cy.layout(layoutOptions(viewMode, center) as any).run();
     } catch (e) {
       // Fallback to grid layout if fcose fails
       console.warn('fcose layout failed, falling back to grid:', e);
-      cy.layout({ name: 'grid', animate: true }).run();
+      cy.layout({ name: 'grid', animate: true, fit: true, padding: 40 }).run();
     }
 
     if (selectedTable) {
@@ -192,7 +204,7 @@ export const SchemaGraph = ({ snapshot, selectedTable, viewMode, onTableSelect, 
           Neighborhood
         </button>
       </div>
-      <div ref={containerRef} className="se-graph__canvas" />
+      <div ref={containerRef} className="se-graph__canvas" data-testid="se-graph-canvas" />
       <div className="se-graph__controls">
         <button onClick={handleZoomIn}>+</button>
         <button onClick={handleZoomOut}>-</button>
