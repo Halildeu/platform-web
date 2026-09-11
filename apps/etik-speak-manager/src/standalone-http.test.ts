@@ -4,7 +4,9 @@ import {
   clearAccessTokenProvider,
   clearAuthorizationFailureHandler,
   registerAccessTokenProvider,
+  registerAccessTokenSnapshot,
   registerAuthorizationFailureHandler,
+  resolveAuthToken,
 } from './standalone-http';
 
 describe('Etik Speak manager HTTP boundary', () => {
@@ -117,5 +119,32 @@ describe('Etik Speak manager HTTP boundary', () => {
       }),
     );
     expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('fresh-token');
+  });
+});
+
+/**
+ * platform-web#1155 — the design-system grid-variants client reads `resolveAuthToken()`
+ * synchronously right before its fetch. The manager used to answer with the async
+ * provider's Promise (typeof !== 'string' → null), so every /api/v1/variants request
+ * went out without an Authorization header and came back 401.
+ */
+describe('Etik Speak manager synchronous token snapshot', () => {
+  afterEach(() => clearAccessTokenProvider());
+
+  it('is null before the session is ready', () => {
+    expect(resolveAuthToken()).toBeNull();
+  });
+
+  it('answers synchronously from the registered snapshot, not from the async provider', () => {
+    registerAccessTokenProvider(vi.fn().mockResolvedValue('from-async-provider'));
+    expect(resolveAuthToken()).toBeNull();
+    registerAccessTokenSnapshot(() => 'current-session-token');
+    expect(resolveAuthToken()).toBe('current-session-token');
+  });
+
+  it('forgets the snapshot together with the provider', () => {
+    registerAccessTokenSnapshot(() => 'current-session-token');
+    clearAccessTokenProvider();
+    expect(resolveAuthToken()).toBeNull();
   });
 });

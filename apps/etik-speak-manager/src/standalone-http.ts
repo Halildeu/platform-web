@@ -12,15 +12,29 @@ type RequestConfig = {
 };
 type ApiResponse<T> = { data: T };
 
+type AccessTokenSnapshot = () => string | null;
+
 let accessTokenProvider: AccessTokenProvider | undefined;
+let accessTokenSnapshot: AccessTokenSnapshot | undefined;
 let authorizationFailureHandler: (() => void) | undefined;
 
 export const registerAccessTokenProvider = (provider: AccessTokenProvider): void => {
   accessTokenProvider = provider;
 };
 
+/**
+ * The synchronous view of the same session, for callers that cannot await —
+ * the design-system grid-variants client reads `resolveAuthToken()` right before its
+ * fetch (platform-web#1155: without it every `/api/v1/variants` call left the manager
+ * without an Authorization header and came back 401).
+ */
+export const registerAccessTokenSnapshot = (snapshot: AccessTokenSnapshot): void => {
+  accessTokenSnapshot = snapshot;
+};
+
 export const clearAccessTokenProvider = (): void => {
   accessTokenProvider = undefined;
+  accessTokenSnapshot = undefined;
 };
 
 export const registerAuthorizationFailureHandler = (handler: () => void): void => {
@@ -94,14 +108,12 @@ export const api = {
 
 /**
  * Names the design-system barrel resolves from `@mfe/shared-http` at link time. The cell
- * aliases that package here, so these have to exist even though nothing in this bundle
- * calls the grid-variants API that wants them. They deliberately mirror the real
- * signatures rather than throwing: a throwing stub would move the failure from "unused
- * code" to "first render of any future component that touches it".
+ * aliases that package here. The grid-variants client DOES call them (saved grid views):
+ * `resolveAuthToken` must answer synchronously with the current session token — the
+ * earlier version invoked the async provider and returned null on its Promise, which
+ * is why the manager's `/api/v1/variants` requests carried no Authorization header
+ * (measured 2026-09-11, platform-web#1155). Null before the session is ready.
  */
-export const resolveAuthToken = (): string | null => {
-  const value = accessTokenProvider?.();
-  return typeof value === 'string' ? value : null;
-};
+export const resolveAuthToken = (): string | null => accessTokenSnapshot?.() ?? null;
 
 export const getGatewayBaseUrl = (): string => '/api';
