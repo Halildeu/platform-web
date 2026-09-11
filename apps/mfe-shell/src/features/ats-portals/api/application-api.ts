@@ -3,6 +3,15 @@ import { api } from '@mfe/shared-http';
 export const ATS_API_BASE = '/api/ats/v1';
 export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
 export const RESUME_IMPORT_NOTICE_VERSION = 'candidate-resume-import-v1' as const;
+// ATS ApplicationIntakeService.normalizeSubmission; server validation remains authoritative.
+export const APPLICATION_SUMMARY_LIMITS = { min: 10, max: 4000 } as const;
+export const APPLICATION_SUMMARY_ERROR = `Profesyonel özet ${APPLICATION_SUMMARY_LIMITS.min} ile ${APPLICATION_SUMMARY_LIMITS.max} karakter arasında olmalıdır.`;
+export const getApplicationSummaryError = (summary: string): string | null => {
+  const length = summary.trim().length;
+  return length < APPLICATION_SUMMARY_LIMITS.min || length > APPLICATION_SUMMARY_LIMITS.max
+    ? APPLICATION_SUMMARY_ERROR
+    : null;
+};
 const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
 /**
  * #235 e-posta girişi oturumu. Başvuru-başına anahtardan AYRI tutulur: biri
@@ -778,6 +787,8 @@ export const submitApplication = async (
   ) {
     throw new Error('Güvenli başvuru oturumu geçersiz; sayfayı yenileyip yeniden deneyin.');
   }
+  const summaryError = getApplicationSummaryError(submission.summary);
+  if (summaryError) throw new Error(summaryError);
   const response = await fetch(`${publicJobPath(jobSlug, publicHandle)}/applications`, {
     method: 'POST',
     headers: {
@@ -789,7 +800,14 @@ export const submitApplication = async (
     credentials: 'same-origin',
     body: JSON.stringify(submission),
   });
-  return safeJson<ApplicationReceiptDto>(response);
+  try {
+    return await safeJson<ApplicationReceiptDto>(response);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'summary 10..4000 karakter olmalı') {
+      throw new Error(APPLICATION_SUMMARY_ERROR, { cause: error });
+    }
+    throw error;
+  }
 };
 
 const candidateResumePath = (importId: string): string =>

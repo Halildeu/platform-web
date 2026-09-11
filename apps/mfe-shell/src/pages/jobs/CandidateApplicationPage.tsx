@@ -8,6 +8,7 @@ import {
   createApplicationIdempotencyKey,
   createCandidateAccessToken,
   DEFAULT_APPLICATION_FIELDS,
+  getApplicationSummaryError,
   getResumeImport,
   getPublicJob,
   replaceResumePdf,
@@ -718,6 +719,7 @@ const CandidateApplicationPage = () => {
   });
   const derivedExperience = deriveExperienceText(experienceEntries);
   const derivedEducation = deriveEducationText(educationEntries);
+  const summaryError = values.summary ? getApplicationSummaryError(values.summary) : null;
   const [view, setView] = useState<View>('form');
   /**
    * #1048: `formStep` artık bölüm GİZLEMİYOR — üç bölüm (CV / İletişim /
@@ -1602,6 +1604,11 @@ const CandidateApplicationPage = () => {
       setFormError('Önizlemeye geçmek için yıldızlı alanları doldurun.');
       return;
     }
+    if (getApplicationSummaryError(values.summary)) {
+      setFormError('');
+      document.getElementById('candidate-summary')?.focus();
+      return;
+    }
     // ats#240 B: zorunlu ilan soruları da bu tek gerçek kapıda denetlenir (aynı ilke:
     // iki yerde tutmak drift üretirdi). Backend kendi ilan sözleşmesinden yeniden doğrular.
     if (questions.some((q) => q.required && !isAnswered(q, answers[q.questionId]))) {
@@ -1941,7 +1948,20 @@ const CandidateApplicationPage = () => {
         placeholder={placeholder}
         required={required}
         rows={rows}
+        aria-invalid={field === 'summary' && summaryError ? true : undefined}
+        aria-describedby={
+          field === 'summary' && summaryError ? 'candidate-summary-error' : undefined
+        }
       />
+      {field === 'summary' && summaryError ? (
+        <p
+          id="candidate-summary-error"
+          role="alert"
+          className="text-sm font-medium text-text-primary"
+        >
+          {summaryError}
+        </p>
+      ) : null}
       {renderProvenance(field)}
     </div>
   );
