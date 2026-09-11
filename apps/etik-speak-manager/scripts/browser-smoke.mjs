@@ -49,6 +49,15 @@ try {
       throw new Error(`${path}: check-sso not bounded`);
     }
     if (runtimeErrors.length) throw new Error(`${path}: ${runtimeErrors.join('; ')}`);
+    // platform-web#1155: the runtime-env asset must have run under the CSP (no inline
+    // script) and, when the build carried the licence key, handed it to the design system.
+    const runtimeEnv = await page.evaluate(() => window.__env__ ?? null);
+    if (!runtimeEnv || typeof runtimeEnv !== 'object') {
+      throw new Error(`${path}: window.__env__ missing — runtime-env asset did not run`);
+    }
+    if (process.env.EXPECT_AG_GRID_LICENSE === 'true' && !runtimeEnv.VITE_AG_GRID_LICENSE_KEY) {
+      throw new Error(`${path}: AG Grid licence key missing from window.__env__`);
+    }
     await page.close();
   }
 } finally {

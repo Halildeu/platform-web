@@ -47,6 +47,10 @@ jobs:
       - name: Install isolated Chromium for runtime boot smoke
         run: pnpm exec playwright install --with-deps chromium
       - name: Local candidate route, security and browser smoke
+        env:
+          # platform-web#1155: the smoke asserts the licence key reached window.__env__
+          # (only when the secret is available — fork/Dependabot PRs build without it).
+          EXPECT_AG_GRID_LICENSE: ${{ secrets.AG_GRID_LICENSE_KEY != '' }}
         run: |
           container="etik-speak-manager-validate-${GITHUB_RUN_ID}"
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }

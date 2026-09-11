@@ -5,15 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex,nofollow" />
     <title>Etik Speak · Yetkili vaka yönetimi</title>
+    <!-- The inject-runtime-env plugin (vite.config.ts) prepends a same-origin, content-hashed
+         runtime-env script here at build time; it sets window.__env__ for the design system.
+         No inline script: the CSP is script-src 'self'. -->
   </head>
   <body>
-    <script>
-      // Build-time runtime env the design system reads in the browser through
-      // window.__env__ (packages/design-system/src/lib/ag-grid-license.ts); the
-      // inject-runtime-env plugin in vite.config.ts fills it at build time with the
-      // allowlisted VITE_* keys only. Same shape as the platform shell's index.html.
-      window.__env__ = window.__env__ || {};
-    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

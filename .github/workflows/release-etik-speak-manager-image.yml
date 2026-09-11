@@ -114,6 +114,8 @@ jobs:
       - name: Smoke the exact registry digest before attestation
         env:
           IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          # platform-web#1155: the smoke asserts the licence key reached window.__env__
+          EXPECT_AG_GRID_LICENSE: 'true'
         run: |
           image="ghcr.io/halildeu/platform-web-etik-speak-manager@${IMAGE_DIGEST}"
           revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")"
