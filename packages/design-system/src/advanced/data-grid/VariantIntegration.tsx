@@ -793,22 +793,42 @@ export const VariantIntegration = <RowData = unknown,>({
   }, [variants, activeId]);
 
   // ── Fetch variants ─────────────────────────────────────────────────
-  const loadVariants = useCallback(async () => {
+  /*
+   * Web Test Gate 2026-09-11 (run 34571036236): the fetch settled after the test
+   * file's jsdom was gone and `finally { setLoading(false) }` ran on an unmounted
+   * tree — "ReferenceError: window is not defined" as an unhandled rejection. State
+   * is only touched while the component is mounted and the answer still belongs to
+   * the current gridId; a superseded gridId's answer is dropped, not shown.
+   */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const loadVariants = useCallback(async (stillWanted: () => boolean = () => true) => {
+    const live = () => mountedRef.current && stillWanted();
     try {
-      setLoading(true);
+      if (live()) setLoading(true);
       const result = await fetchGridVariants(gridId);
-      if (Array.isArray(result)) {
+      if (live() && Array.isArray(result)) {
         setVariants(result as GridVariant[]);
       }
     } catch {
       // Graceful degradation — grid works without variants
     } finally {
-      setLoading(false);
+      if (live()) setLoading(false);
     }
   }, [gridId]);
 
   useEffect(() => {
-    loadVariants();
+    let current = true;
+    void loadVariants(() => current);
+    return () => {
+      current = false;
+    };
   }, [loadVariants]);
 
   // ── Auto-apply on first load ───────────────────────────────────────
