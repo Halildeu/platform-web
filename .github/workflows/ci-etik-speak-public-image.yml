@@ -76,7 +76,7 @@ jobs:
           cache-to: type=gha,scope=etik-speak-public,mode=max
           provenance: false
       - name: Sign GitHub artifact provenance
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ghcr.io/halildeu/platform-web-etik-speak-public
           subject-digest: ${{ steps.image.outputs.digest }}
