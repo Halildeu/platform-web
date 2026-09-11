@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import type { SchemaSnapshot, Relationship as _Relationship } from '../api/schemaApi';
-import { countOverlaps, layoutOptions } from './graphLayout';
+import { countOverlaps, initialPositions, layoutOptions, resolveOverlaps } from './graphLayout';
 
 cytoscape.use(fcose);
 
@@ -166,16 +166,31 @@ export const SchemaGraph = ({ snapshot, selectedTable, viewMode, onTableSelect, 
       container.dataset.layout = 'running';
       delete container.dataset.overlaps;
     }
+    const center = viewMode === 'neighborhood' && selectedTable && cy.getElementById(selectedTable).length ? selectedTable : null;
+    // Deterministic start (gitops#3650): the same neighbourhood lays out the same way on
+    // every visit, and fcose is told not to randomize.
+    const starts = initialPositions(tableNodes.map(n => n.id()), center);
+    cy.batch(() => tableNodes.forEach(n => { const p = starts.get(n.id()); if (p) n.position(p); }));
     cy.one('layoutstop', () => {
+      // fcose does not guarantee separation; push whatever still intersects apart (the
+      // pinned centre stays put) before fitting, so the reported count is 0 by construction.
+      const tables = cy.nodes('[type="table"]');
+      const shifts = resolveOverlaps(
+        tables.map(n => ({ id: n.id(), ...n.boundingBox({ includeLabels: true }) })),
+        center,
+      );
+      cy.batch(() => tables.forEach(n => {
+        const s = shifts.get(n.id());
+        if (s && (s.x !== 0 || s.y !== 0)) n.shift(s);
+      }));
       cy.fit(undefined, 40);
       if (container) {
-        const boxes = cy.nodes('[type="table"]').map(n => n.boundingBox({ includeLabels: true }));
+        const boxes = tables.map(n => n.boundingBox({ includeLabels: true }));
         container.dataset.overlaps = String(countOverlaps(boxes));
         container.dataset.layout = 'settled';
       }
     });
     try {
-      const center = viewMode === 'neighborhood' && selectedTable && cy.getElementById(selectedTable).length ? selectedTable : null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       cy.layout(layoutOptions(viewMode, center) as any).run();
     } catch (e) {
