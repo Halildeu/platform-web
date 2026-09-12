@@ -70,13 +70,10 @@ for (const width of [320, 390, 1280]) {
           storageMode: 'canonical',
         };
       } else if (url.pathname.endsWith('/sessions')) {
-        data = {
-          content: [
-            { id: 'old', startedAt: '2026-09-11T07:00:00Z' },
-            { id: 'new', startedAt: '2026-09-12T07:00:00Z' },
-          ],
-          last: true,
-        };
+        data = [
+          { id: 'old', startedAt: '2026-09-11T07:00:00Z' },
+          { id: 'new', startedAt: '2026-09-12T07:00:00Z' },
+        ];
       } else if (url.pathname.endsWith('/transcripts')) {
         data = {
           content: [

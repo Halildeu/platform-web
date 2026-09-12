@@ -947,10 +947,17 @@ export async function loadMeetingDetail(
           `${meetingBase}/${meetingId}/sessions?page=${page}&size=50`,
           { headers: { Accept: 'application/json' } },
         );
-        if (!isRecord(response.data) || !Array.isArray(response.data.content)) {
+        // The current backend returns a complete array; retain paged compatibility.
+        const unpaged = Array.isArray(response.data);
+        const values = unpaged
+          ? response.data
+          : isRecord(response.data)
+            ? response.data.content
+            : undefined;
+        if (!Array.isArray(values)) {
           throw new Error('invalid-session-page');
         }
-        for (const value of response.data.content) {
+        for (const value of unpaged ? values.slice(0, 500) : values) {
           if (!isRecord(value)) throw new Error('invalid-session');
           const id = requiredString(value, 'id');
           if (id.length > 64 || (value.meetingId && value.meetingId !== meeting.id)) {
@@ -960,9 +967,14 @@ export async function loadMeetingDetail(
             sessions.push({ id, startedAt: readString(value, 'startedAt') });
           }
         }
+        if (unpaged) {
+          complete = values.length <= 500;
+          break;
+        }
         if (
-          response.data.last === true ||
-          (response.data.last !== false && response.data.content.length < PAGE_SIZE)
+          isRecord(response.data) &&
+          (response.data.last === true ||
+            (response.data.last !== false && values.length < PAGE_SIZE))
         ) {
           complete = true;
           break;

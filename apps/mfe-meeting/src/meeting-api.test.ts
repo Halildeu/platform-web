@@ -117,27 +117,54 @@ function baseMeeting(): MeetingRecord {
 }
 
 describe('meeting canonical API boundary', () => {
-  it('selects an exact prior session without fetching other session transcripts', async () => {
-    const get = vi.fn(async (url: string) => {
-      if (url.includes('/intelligence/result?'))
-        return { data: canonicalResult({ sessionId: 'session-old' }) };
-      if (url.includes('/sessions?'))
-        return { data: { content: [{ id: 'session-old' }, { id: 'session-new' }] } };
-      return { data: transcriptPage() };
-    });
-    const detail = await loadMeetingDetail(baseMeeting(), {
-      services: createServices(get),
-      sessionId: 'session-old',
-    });
-    expect(detail.detail?.state).toBe('ready');
-    expect(detail.detailSessionId).toBe('session-old');
-    expect(detail.analysisSessions).toHaveLength(2);
-    expect(get.mock.calls.map(([url]) => url)).toEqual([
-      `/v1/admin/meetings/${meetingId}/intelligence/result?sessionId=session-old`,
-      `/v1/admin/meetings/${meetingId}/sessions?page=0&size=50`,
-      '/v1/admin/transcripts?sessionId=session-old&page=0&size=200',
-    ]);
-  });
+  it.each(['array', 'page'])(
+    'selects an exact prior session from a %s response without fetching other session transcripts',
+    async (shape) => {
+      const get = vi.fn(async (url: string) => {
+        if (url.includes('/intelligence/result?'))
+          return { data: canonicalResult({ sessionId: 'session-old' }) };
+        if (url.includes('/sessions?')) {
+          const content = [{ id: 'session-old' }, { id: 'session-new' }];
+          return { data: shape === 'array' ? content : { content } };
+        }
+        return { data: transcriptPage() };
+      });
+      const detail = await loadMeetingDetail(baseMeeting(), {
+        services: createServices(get),
+        sessionId: 'session-old',
+      });
+      expect(detail.detail?.state).toBe('ready');
+      expect(detail.detailSessionId).toBe('session-old');
+      expect(detail.analysisSessions).toHaveLength(2);
+      expect(detail.sessionsIncomplete).toBe(false);
+      expect(get.mock.calls.map(([url]) => url)).toEqual([
+        `/v1/admin/meetings/${meetingId}/intelligence/result?sessionId=session-old`,
+        `/v1/admin/meetings/${meetingId}/sessions?page=0&size=50`,
+        '/v1/admin/transcripts?sessionId=session-old&page=0&size=200',
+      ]);
+    },
+  );
+
+  it.each([0, 500, 501])(
+    'bounds a complete array of %i sessions without repeating it as pages',
+    async (count) => {
+      const get = vi.fn(async (url: string) => {
+        if (url.includes('/intelligence/result')) return { data: canonicalResult() };
+        if (url.includes('/sessions?'))
+          return {
+            data: Array.from({ length: count }, (_, index) => ({ id: `session-${index}` })),
+          };
+        return { data: transcriptPage() };
+      });
+      const detail = await loadMeetingDetail(baseMeeting(), {
+        services: createServices(get),
+        sessionId: 'session-1',
+      });
+      expect(detail.analysisSessions).toHaveLength(Math.min(count, 500));
+      expect(detail.sessionsIncomplete).toBe(count > 500);
+      expect(get.mock.calls.filter(([url]) => url.includes('/sessions?'))).toHaveLength(1);
+    },
+  );
 
   it('rejects a latest result returned for a different requested session', async () => {
     const get = vi.fn().mockResolvedValue({ data: canonicalResult() });
