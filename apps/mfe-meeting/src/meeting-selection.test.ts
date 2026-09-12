@@ -3,10 +3,21 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildMeetingSelectionUrl,
   readMeetingSelection,
+  readSessionSelection,
   writeMeetingSelection,
 } from './meeting-selection';
 
 describe('meeting URL selection', () => {
+  it('roundtrips the session and clears it when switching meetings', () => {
+    window.history.replaceState({}, '', '/admin/meetings?tab=result#source');
+    writeMeetingSelection('meeting-1', 'session/a&b');
+    expect(readSessionSelection()).toBe('session/a&b');
+    expect(readMeetingSelection()).toBe('meeting-1');
+    expect(window.location.hash).toBe('#source');
+    writeMeetingSelection('meeting-2');
+    expect(readSessionSelection()).toBe('');
+    expect(readMeetingSelection()).toBe('meeting-2');
+  });
   afterEach(() => window.history.replaceState({}, '', '/'));
 
   it('prefers the canonical meetingId query selection and preserves other parameters', () => {

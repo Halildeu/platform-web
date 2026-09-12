@@ -1476,3 +1476,47 @@ button {
   color: var(--meeting-accent);
   border-color: var(--meeting-accent);
 }
+
+.session-selection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+  padding-inline: 20px;
+  font-size: 14px;
+}
+
+.session-selection label {
+  font-weight: 600;
+}
+
+.session-input,
+.session-refresh {
+  color: var(--meeting-text-action);
+  background: var(--meeting-surface);
+  border: 1px solid var(--meeting-border);
+  border-radius: 6px;
+}
+
+.session-input {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+.session-refresh {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.session-input:focus-visible,
+.session-refresh:focus-visible {
+  outline: 2px solid var(--meeting-accent);
+  outline-offset: 2px;
+}

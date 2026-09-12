@@ -23,6 +23,7 @@ import {
   loadMeetingById,
   loadMeetingDetail,
   loadMeetingWorkbenchData,
+  type LoadMeetingDetailOptions,
   type MeetingWorkbenchData,
 } from './meeting-api';
 import {
@@ -56,7 +57,11 @@ import {
 import { buildTranscriptFlow } from './transcript-flow';
 import { TasksPanel } from './TasksPanel';
 import { MyTasksPanel } from './MyTasksPanel';
-import { readMeetingSelection, writeMeetingSelection } from './meeting-selection';
+import {
+  readMeetingSelection,
+  readSessionSelection,
+  writeMeetingSelection,
+} from './meeting-selection';
 import { parseWsStreamEventMessage } from './ws-stream-events';
 import { getShellServices } from './shell-services';
 
@@ -71,7 +76,10 @@ const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
 export interface MeetingAppProps {
   loadWorkbench?: () => Promise<MeetingWorkbenchData>;
   loadMeeting?: (meetingId: string) => Promise<MeetingRecord>;
-  loadDetail?: (meeting: MeetingRecord) => Promise<MeetingRecord>;
+  loadDetail?: (
+    meeting: MeetingRecord,
+    options?: LoadMeetingDetailOptions,
+  ) => Promise<MeetingRecord>;
   subscribeAuthChanges?: (listener: () => void) => () => void;
   resolveLiveStreamEndpoint?: (meeting: MeetingRecord) => string | null;
   webSocketFactory?: (endpoint: string) => MeetingWebSocket;
@@ -535,6 +543,26 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   );
 }
 
+function pendingSession(meeting: MeetingRecord, sessionId: string): MeetingRecord {
+  return {
+    ...meeting,
+    detailSessionId: sessionId,
+    status: meeting.status === 'live' && !sessionId ? 'live' : 'processing',
+    detail: {
+      state: 'loading',
+      label: 'Sonuç yükleniyor',
+      detail: 'Seçili oturumun sonucu bekleniyor.',
+    },
+    intelligence: undefined,
+    summary: { text: 'Sonuç bekleniyor.', citations: [], confidence: 0, kind: 'pending' },
+    decisions: [],
+    actions: [],
+    transcript: [],
+    transcriptFeed: { state: 'blocked', label: 'Transkript bekleniyor', detail: '' },
+    gates: meeting.gates.map((gate) => ({ ...gate, state: 'pending' })),
+  };
+}
+
 export default function MeetingApp({
   loadWorkbench = loadMeetingWorkbenchData,
   loadMeeting = loadMeetingById,
@@ -553,6 +581,7 @@ export default function MeetingApp({
   const [detailReloadToken, setDetailReloadToken] = useState(0);
   const [authRevision, setAuthRevision] = useState(0);
   const [selectedId, setSelectedId] = useState(() => readMeetingSelection());
+  const [selectedSessionId, setSelectedSessionId] = useState(() => readSessionSelection());
   const [selectionStatus, setSelectionStatus] = useState<MeetingDetailStatus | null>(null);
   const [liveStreamToken, setLiveStreamToken] = useState(0);
   const [liveStream, setLiveStream] = useState<MeetingLiveStreamSnapshot>(() =>
@@ -591,6 +620,7 @@ export default function MeetingApp({
   useEffect(() => {
     const syncFromHistory = () => {
       setSelectedId(readMeetingSelection());
+      setSelectedSessionId(readSessionSelection());
       setSelectionStatus(null);
     };
     window.addEventListener('popstate', syncFromHistory);
@@ -672,32 +702,33 @@ export default function MeetingApp({
     if (!['api', 'empty'].includes(workbench.source.mode) || !selectedId) return;
     const selected = workbench.records.find((meeting) => meeting.id === selectedId);
     if (!selected) return;
-    if (selected.detail && selected.detail.state !== 'idle') return;
+    if (
+      (selected.detailSessionId ?? '') === selectedSessionId &&
+      selected.detail &&
+      !['idle', 'loading'].includes(selected.detail.state)
+    )
+      return;
 
     let cancelled = false;
     setWorkbench((current) => ({
       ...current,
       records: current.records.map((meeting) =>
-        meeting.id === selectedId
-          ? {
-              ...meeting,
-              detail: {
-                state: 'loading',
-                label: 'Canonical sonuç yükleniyor',
-                detail: 'Kalıcı intelligence snapshot ve final transcript doğrulanıyor.',
-              },
-            }
-          : meeting,
+        meeting.id === selectedId ? pendingSession(meeting, selectedSessionId) : meeting,
       ),
     }));
 
-    loadDetail(selected)
+    const request = selectedSessionId
+      ? loadDetail(pendingSession(selected, selectedSessionId), { sessionId: selectedSessionId })
+      : loadDetail(pendingSession(selected, ''));
+    request
       .then((hydrated) => {
         if (cancelled) return;
         setWorkbench((current) => ({
           ...current,
           records: current.records.map((meeting) =>
-            meeting.id === hydrated.id ? hydrated : meeting,
+            meeting.id === selectedId && hydrated.id === selectedId
+              ? { ...hydrated, detailSessionId: selectedSessionId }
+              : meeting,
           ),
         }));
       })
@@ -709,7 +740,8 @@ export default function MeetingApp({
           records: current.records.map((meeting) =>
             meeting.id === selectedId
               ? {
-                  ...meeting,
+                  ...pendingSession(meeting, selectedSessionId),
+                  analysisSessions: [],
                   detail,
                 }
               : meeting,
@@ -720,16 +752,27 @@ export default function MeetingApp({
     return () => {
       cancelled = true;
     };
-  }, [detailReloadToken, loadDetail, reloadToken, selectedId, workbench.source.mode]);
+  }, [
+    detailReloadToken,
+    loadDetail,
+    reloadToken,
+    selectedId,
+    selectedSessionId,
+    workbench.source.mode,
+  ]);
 
   const filteredMeetings = useMemo(
     () => filterMeetings(workbench.records, { query, status: statusFilter }),
     [query, statusFilter, workbench.records],
   );
-  const selectedMeeting = useMemo(
-    () => findSelectedMeeting(workbench.records, selectedId),
-    [selectedId, workbench.records],
-  );
+  const selectedMeeting = useMemo(() => {
+    const meeting = findSelectedMeeting(workbench.records, selectedId);
+    return meeting &&
+      ['api', 'empty'].includes(workbench.source.mode) &&
+      (meeting.detailSessionId ?? '') !== selectedSessionId
+      ? pendingSession(meeting, selectedSessionId)
+      : meeting;
+  }, [selectedId, selectedSessionId, workbench.records, workbench.source.mode]);
   // Faz 24 İ2-T — merge WS live-stream (owner-recorder path) chunks + SSE
   // broadcast (multi-viewer path) chunks into the rendered transcript
   // list. Broadcast SSE chunks feed viewers who are NOT recording; owner
@@ -737,7 +780,9 @@ export default function MeetingApp({
   // SSE chunks appended so the UI reveals broadcast frames as they arrive.
   const liveTranscriptSseChunks = liveTranscriptSse?.chunks ?? [];
   const hasLiveSegments =
-    !!selectedMeeting && (liveStream.segments.length > 0 || liveTranscriptSseChunks.length > 0);
+    !selectedSessionId &&
+    !!selectedMeeting &&
+    (liveStream.segments.length > 0 || liveTranscriptSseChunks.length > 0);
   const renderedSelectedMeeting =
     hasLiveSegments && selectedMeeting
       ? {
@@ -758,6 +803,7 @@ export default function MeetingApp({
   const stats = computeStats(workbench.records);
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedId(meetingId);
+    setSelectedSessionId('');
     setSelectionStatus(null);
     writeMeetingSelection(meetingId);
   };
@@ -782,9 +828,13 @@ export default function MeetingApp({
   };
 
   useEffect(() => {
-    if (!selectedMeeting) {
+    if (!selectedMeeting || selectedSessionId) {
       setLiveStream(
-        createLiveStreamSnapshot('not-configured', undefined, 'Toplantı seçili değil.'),
+        createLiveStreamSnapshot(
+          'not-configured',
+          undefined,
+          selectedSessionId ? 'Geçmiş oturum.' : 'Toplantı seçili değil.',
+        ),
       );
       return;
     }
@@ -867,7 +917,13 @@ export default function MeetingApp({
       closedByCleanup = true;
       socket.close();
     };
-  }, [resolveLiveStreamEndpoint, selectedMeeting, liveStreamToken, webSocketFactory]);
+  }, [
+    resolveLiveStreamEndpoint,
+    selectedMeeting,
+    selectedSessionId,
+    liveStreamToken,
+    webSocketFactory,
+  ]);
 
   // Faz 24 İ2-T — subscribe to audio-gateway live transcript SSE broadcast
   // whenever a meeting is selected. Feature is not-configured if the env var
@@ -875,7 +931,7 @@ export default function MeetingApp({
   // + snapshot state `not-configured`). Late-mount viewers only see events
   // after they connect; canonical replay lives on meeting-service.
   useEffect(() => {
-    if (!selectedMeeting) {
+    if (!selectedMeeting || selectedSessionId) {
       setLiveTranscriptSse(null);
       return;
     }
@@ -893,7 +949,7 @@ export default function MeetingApp({
     return () => {
       controller?.close();
     };
-  }, [selectedMeeting]);
+  }, [selectedMeeting, selectedSessionId]);
 
   return (
     // Faz 24 smoke contract — `data-testid="mfe-meeting-root"` on the outer
@@ -1026,6 +1082,48 @@ export default function MeetingApp({
                 {statusLabel(renderedSelectedMeeting.status)}
               </span>
             </div>
+
+            {['api', 'empty'].includes(workbench.source.mode) ? (
+              <div className="session-selection">
+                <label htmlFor="analysis-session">Analiz oturumu</label>
+                <select
+                  id="analysis-session"
+                  className="session-input"
+                  value={selectedSessionId}
+                  onChange={(event) => {
+                    setSelectedSessionId(event.target.value);
+                    writeMeetingSelection(selectedId, event.target.value);
+                  }}
+                >
+                  <option value="">Son analiz</option>
+                  {selectedSessionId &&
+                  !renderedSelectedMeeting.analysisSessions?.some(
+                    (session) => session.id === selectedSessionId,
+                  ) ? (
+                    <option value={selectedSessionId}>Seçili oturum</option>
+                  ) : null}
+                  {(renderedSelectedMeeting.analysisSessions ?? []).map((session, index) => (
+                    <option key={session.id} value={session.id}>
+                      {Number.isFinite(Date.parse(session.startedAt))
+                        ? `Oturum ${index + 1} · ${formatStart(session.startedAt)}`
+                        : `Oturum ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+                {renderedSelectedMeeting.sessionsIncomplete ? (
+                  <span role="status">Oturum listesi eksik.</span>
+                ) : null}
+                <button
+                  type="button"
+                  title="Oturumları ve sonucu yenile"
+                  className="session-refresh"
+                  aria-label="Oturumları ve sonucu yenile"
+                  onClick={handleRetryDetail}
+                >
+                  <RefreshCw size={16} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
 
             {renderedSelectedMeeting.detail && renderedSelectedMeeting.detail.state !== 'idle' ? (
               <DetailStatusPanel

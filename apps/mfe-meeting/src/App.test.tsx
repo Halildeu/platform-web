@@ -7,6 +7,109 @@ import type { MeetingWorkbenchData } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 
 describe('MeetingApp', () => {
+  it('isolates session switches, ignores late results and reopens the URL selection', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [{ id: 'meeting-sessions', title: 'Oturum testi', status: 'COMPLETED' }],
+    })[0]!;
+    const sessions = [
+      { id: 'old', startedAt: '' },
+      { id: 'new', startedAt: '' },
+    ];
+    const ready = (session: string): MeetingRecord => ({
+      ...record,
+      detail: { state: 'ready', label: 'Hazır', detail: '' },
+      analysisSessions: sessions,
+      summary: { text: `summary-${session}`, citations: [], confidence: 1, kind: 'ai-summary' },
+    });
+    let finishOld!: (value: MeetingRecord) => void;
+    const loadWorkbench = async (): Promise<MeetingWorkbenchData> => ({
+      records: [record],
+      source: { mode: 'api', label: 'API', detail: '', checkedAt: '' },
+    });
+    const loadDetail = vi.fn(async (_meeting: MeetingRecord, options?: { sessionId?: string }) => {
+      if (options?.sessionId === 'old')
+        return new Promise<MeetingRecord>((resolve) => {
+          finishOld = resolve;
+        });
+      return ready(options?.sessionId ?? 'latest');
+    });
+    const props = {
+      loadWorkbench,
+      loadDetail,
+      subscribeAuthChanges: () => () => undefined,
+      resolveLiveStreamEndpoint: () => null,
+    };
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=meeting-sessions');
+    const view = render(<MeetingApp {...props} />);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Seçili toplantı')).toHaveTextContent('summary-latest'),
+    );
+    fireEvent.change(screen.getByLabelText('Analiz oturumu'), { target: { value: 'old' } });
+    expect(screen.queryByText('summary-latest')).not.toBeInTheDocument();
+    await waitFor(() => expect(finishOld).toBeDefined());
+    fireEvent.change(screen.getByLabelText('Analiz oturumu'), { target: { value: 'new' } });
+    await waitFor(() =>
+      expect(screen.getByLabelText('Seçili toplantı')).toHaveTextContent('summary-new'),
+    );
+    await act(async () => finishOld(ready('old')));
+    expect(screen.queryByText('summary-old')).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('sessionId')).toBe('new');
+    view.unmount();
+    render(<MeetingApp {...props} />);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Seçili toplantı')).toHaveTextContent('summary-new'),
+    );
+    expect(screen.getByLabelText('Analiz oturumu')).toHaveValue('new');
+    act(() => {
+      window.history.replaceState({}, '', '/admin/meetings?meetingId=meeting-sessions');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText('Seçili toplantı')).toHaveTextContent('summary-latest'),
+    );
+    expect(screen.getByLabelText('Analiz oturumu')).toHaveValue('');
+  });
+
+  it('clears a prior summary when a new session request rejects', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [{ id: 'meeting-failure', title: 'Oturum testi', status: 'COMPLETED' }],
+    })[0]!;
+    const loadDetail = vi.fn(
+      async (_meeting: MeetingRecord, options?: { sessionId?: string }): Promise<MeetingRecord> => {
+        if (options?.sessionId) throw { response: { status: 403 } };
+        return {
+          ...record,
+          detail: { state: 'ready', label: 'Hazır', detail: '' },
+          analysisSessions: [{ id: 'old', startedAt: '' }],
+          summary: {
+            text: 'previous private result',
+            citations: [],
+            confidence: 1,
+            kind: 'ai-summary',
+          },
+        };
+      },
+    );
+    window.history.replaceState({}, '', '/admin/meetings?meetingId=meeting-failure');
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({
+          records: [record],
+          source: { mode: 'api', label: 'API', detail: '', checkedAt: '' },
+        })}
+        loadDetail={loadDetail}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Seçili toplantı')).toHaveTextContent('previous private result'),
+    );
+    fireEvent.change(screen.getByLabelText('Analiz oturumu'), { target: { value: 'old' } });
+    expect(await screen.findByText('Toplantı içeriği gösterilemiyor')).toBeInTheDocument();
+    expect(screen.queryByText('previous private result')).not.toBeInTheDocument();
+  });
+
   const loadDemo = async () => createDemoWorkbenchData();
 
   afterEach(() => window.history.replaceState({}, '', '/'));

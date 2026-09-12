@@ -41,6 +41,7 @@ export interface LoadMeetingByIdOptions {
 
 export interface LoadMeetingDetailOptions extends LoadMeetingByIdOptions {
   transcriptsEndpoint?: string;
+  sessionId?: string;
 }
 
 export interface CanonicalMeetingIntelligenceCitation {
@@ -660,7 +661,8 @@ function resolveCitation(
   const quote = normalizedText(citation.sourceText);
   if (!quote || normalizedText(slice) !== quote) return null;
   const span = spans.find(
-    (candidate) => candidate.start <= citation.sourceCharStart && citation.sourceCharStart < candidate.end,
+    (candidate) =>
+      candidate.start <= citation.sourceCharStart && citation.sourceCharStart < candidate.end,
   );
   if (!span) return null;
   const { segment } = span;
@@ -737,6 +739,7 @@ function failureRecord(
             ? 'blocked'
             : meeting.status,
     detail,
+    analysisSessions: hideContent ? [] : meeting.analysisSessions,
     intelligence: {
       state: intelligenceState,
       persisted: false,
@@ -756,7 +759,7 @@ function failureRecord(
     transcript: visibleTranscript,
     summary: hideContent
       ? { text: 'İçerik gösterilmedi.', citations: [], confidence: 0, kind: 'pending' }
-      : meeting.summary,
+      : { text: 'Sonuç gösterilmedi.', citations: [], confidence: 0, kind: 'pending' },
     decisions: [],
     actions: [],
     gates: [
@@ -913,6 +916,18 @@ export async function loadMeetingDetail(
   meeting: MeetingRecord,
   options: LoadMeetingDetailOptions = {},
 ): Promise<MeetingRecord> {
+  meeting = { ...meeting, detailSessionId: options.sessionId ?? '' };
+  if (
+    options.sessionId !== undefined &&
+    (!options.sessionId.trim() || options.sessionId.length > 64)
+  ) {
+    return failureRecord(
+      meeting,
+      describeMeetingDetailError({ response: { status: 400 } }),
+      [],
+      false,
+    );
+  }
   let services: MeetingShellServices;
   try {
     services = await resolveServices(options.services);
@@ -923,21 +938,73 @@ export async function loadMeetingDetail(
   const meetingBase = (options.meetingsEndpoint ?? CANONICAL_MEETINGS_ENDPOINT).split('?')[0];
   const transcriptsEndpoint = options.transcriptsEndpoint ?? CANONICAL_TRANSCRIPTS_ENDPOINT;
   const meetingId = encodeURIComponent(meeting.id);
+  const loadSessions = async () => {
+    const sessions: NonNullable<MeetingRecord['analysisSessions']> = [];
+    let complete = false;
+    try {
+      for (let page = 0; page < 10; page += 1) {
+        const response = await services.http.get<unknown>(
+          `${meetingBase}/${meetingId}/sessions?page=${page}&size=50`,
+          { headers: { Accept: 'application/json' } },
+        );
+        if (!isRecord(response.data) || !Array.isArray(response.data.content)) {
+          throw new Error('invalid-session-page');
+        }
+        for (const value of response.data.content) {
+          if (!isRecord(value)) throw new Error('invalid-session');
+          const id = requiredString(value, 'id');
+          if (id.length > 64 || (value.meetingId && value.meetingId !== meeting.id)) {
+            throw new Error('invalid-session');
+          }
+          if (!sessions.some((session) => session.id === id)) {
+            sessions.push({ id, startedAt: readString(value, 'startedAt') });
+          }
+        }
+        if (
+          response.data.last === true ||
+          (response.data.last !== false && response.data.content.length < PAGE_SIZE)
+        ) {
+          complete = true;
+          break;
+        }
+      }
+    } catch (error) {
+      if (isUnauthorized(error)) throw error;
+    }
+    meeting = { ...meeting, analysisSessions: sessions, sessionsIncomplete: !complete };
+  };
   let resultResponse: { data: unknown };
   try {
     resultResponse = await services.http.get<unknown>(
-      `${meetingBase}/${meetingId}/intelligence/result`,
+      `${meetingBase}/${meetingId}/intelligence/result${
+        options.sessionId !== undefined ? `?sessionId=${encodeURIComponent(options.sessionId)}` : ''
+      }`,
       {
         headers: { Accept: 'application/json' },
       },
     );
   } catch (error) {
+    if (errorCodeOf(error) === 'ANALYSIS_RESULT_NOT_FOUND') {
+      try {
+        await loadSessions();
+      } catch (sessionError) {
+        return failureRecord(
+          { ...meeting, analysisSessions: [] },
+          describeMeetingDetailError(sessionError),
+          [],
+          false,
+        );
+      }
+    }
     return failureRecord(meeting, describeMeetingDetailError(error), [], false);
   }
 
   let result: CanonicalMeetingIntelligenceResult;
   try {
     result = normalizeCanonicalIntelligenceResult(resultResponse.data, meeting.id);
+    if (options.sessionId !== undefined && result.sessionId !== options.sessionId) {
+      throw new Error('result-session-mismatch');
+    }
   } catch {
     return failureRecord(
       meeting,
@@ -956,6 +1023,17 @@ export async function loadMeetingDetail(
   }
 
   try {
+    await loadSessions();
+  } catch (error) {
+    return failureRecord(
+      { ...meeting, analysisSessions: [] },
+      describeMeetingDetailError(error),
+      [],
+      false,
+    );
+  }
+
+  try {
     const transcriptResponse = await loadTranscriptPages(
       services,
       result.sessionId,
@@ -970,17 +1048,17 @@ export async function loadMeetingDetail(
     // Oturum listesi alınamazsa analiz oturumu tek başına gösterilmeye
     // devam eder (fail-open değil: ekstra içerik sadece eksilir).
     const extraSegments: MeetingRecord['transcript'] = [];
-    let displayComplete = transcriptResponse.complete;
+    let displayComplete =
+      transcriptResponse.complete &&
+      (options.sessionId !== undefined || !meeting.sessionsIncomplete);
     try {
-      const sessionsResponse = await services.http.get<unknown>(
-        `${meetingBase}/${meetingId}/sessions?page=0&size=50`,
-        { headers: { Accept: 'application/json' } },
-      );
-      const sessionIds = isRecord(sessionsResponse.data)
-        ? readArray(sessionsResponse.data.content)
-            .map((value) => (isRecord(value) ? readString(value, 'id') : ''))
-            .filter((id) => id && id !== result.sessionId)
-        : [];
+      // Explicit selection must not mix another session's transcript into its source view.
+      const sessionIds =
+        options.sessionId !== undefined
+          ? []
+          : (meeting.analysisSessions ?? [])
+              .map((session) => session.id)
+              .filter((id) => id !== result.sessionId);
       for (const sessionId of sessionIds) {
         const extra = await loadTranscriptPages(services, sessionId, transcriptsEndpoint);
         extraSegments.push(...mapTranscript(extra.payload));
@@ -988,6 +1066,7 @@ export async function loadMeetingDetail(
       }
     } catch {
       // Ek oturum okunamadı — analiz oturumunun transkripti yine gösterilir.
+      displayComplete = false;
     }
     const displayTranscript =
       extraSegments.length > 0 ? [...analysisTranscript, ...extraSegments] : analysisTranscript;

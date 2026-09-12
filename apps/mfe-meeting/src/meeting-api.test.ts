@@ -117,6 +117,110 @@ function baseMeeting(): MeetingRecord {
 }
 
 describe('meeting canonical API boundary', () => {
+  it('selects an exact prior session without fetching other session transcripts', async () => {
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result?'))
+        return { data: canonicalResult({ sessionId: 'session-old' }) };
+      if (url.includes('/sessions?'))
+        return { data: { content: [{ id: 'session-old' }, { id: 'session-new' }] } };
+      return { data: transcriptPage() };
+    });
+    const detail = await loadMeetingDetail(baseMeeting(), {
+      services: createServices(get),
+      sessionId: 'session-old',
+    });
+    expect(detail.detail?.state).toBe('ready');
+    expect(detail.detailSessionId).toBe('session-old');
+    expect(detail.analysisSessions).toHaveLength(2);
+    expect(get.mock.calls.map(([url]) => url)).toEqual([
+      `/v1/admin/meetings/${meetingId}/intelligence/result?sessionId=session-old`,
+      `/v1/admin/meetings/${meetingId}/sessions?page=0&size=50`,
+      '/v1/admin/transcripts?sessionId=session-old&page=0&size=200',
+    ]);
+  });
+
+  it('rejects a latest result returned for a different requested session', async () => {
+    const get = vi.fn().mockResolvedValue({ data: canonicalResult() });
+    const detail = await loadMeetingDetail(baseMeeting(), {
+      services: createServices(get),
+      sessionId: 'session-old',
+    });
+    expect(detail.detail?.state).toBe('failed');
+    expect(detail.intelligence?.persisted).toBe(false);
+    expect(detail.transcript).toEqual([]);
+    expect(detail.summary.kind).toBe('pending');
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([' ', 'x'.repeat(65)])(
+    'refuses an invalid session selector without fetching',
+    async (sessionId) => {
+      const get = vi.fn();
+      const detail = await loadMeetingDetail(baseMeeting(), {
+        services: createServices(get),
+        sessionId,
+      });
+      expect(detail.detail?.state).toBe('failed');
+      expect(get).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps choices but clears prior analysis when the selected result is not ready', async () => {
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result'))
+        throw { response: { status: 404, data: { error: 'ANALYSIS_RESULT_NOT_FOUND' } } };
+      return { data: { content: [{ id: 'session-old' }, { id: 'session-new' }] } };
+    });
+    const previous = {
+      ...baseMeeting(),
+      summary: {
+        text: 'obsolete summary',
+        citations: [],
+        confidence: 1,
+        kind: 'ai-summary' as const,
+      },
+    };
+    const detail = await loadMeetingDetail(previous, {
+      services: createServices(get),
+      sessionId: 'session-new',
+    });
+    expect(detail.detail?.state).toBe('pending');
+    expect(detail.summary.text).not.toBe('obsolete summary');
+    expect(detail.analysisSessions).toHaveLength(2);
+    expect(get.mock.calls.some(([url]) => url.endsWith('/intelligence/result'))).toBe(false);
+  });
+
+  it('clears result and choices when session enumeration is denied', async () => {
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result')) return { data: canonicalResult() };
+      throw { response: { status: 403 } };
+    });
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+    expect(detail.detail?.state).toBe('denied');
+    expect(detail.analysisSessions).toEqual([]);
+    expect(detail.transcript).toEqual([]);
+    expect(detail.intelligence?.persisted).toBe(false);
+  });
+
+  it('enumerates additional session pages and deduplicates choices', async () => {
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result')) return { data: canonicalResult() };
+      if (url.includes('/sessions?page=0'))
+        return { data: { content: [{ id: 'session-1' }], last: false } };
+      if (url.includes('/sessions?page=1'))
+        return { data: { content: [{ id: 'session-1' }, { id: 'session-2' }], last: true } };
+      return { data: transcriptPage() };
+    });
+    const detail = await loadMeetingDetail(baseMeeting(), {
+      services: createServices(get),
+      sessionId: 'session-1',
+    });
+    expect(detail.analysisSessions?.map((session) => session.id)).toEqual([
+      'session-1',
+      'session-2',
+    ]);
+    expect(detail.sessionsIncomplete).toBe(false);
+  });
   it('uses demo records only when demo mode is explicitly requested', async () => {
     const data = await loadMeetingWorkbenchData({ endpoint: null });
 
@@ -360,7 +464,9 @@ describe('meeting canonical API boundary', () => {
     const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
 
     expect(detail.decisions[0]?.citations).toEqual([]);
-    expect(detail.actions[0]?.citations).toEqual([{ segmentId: 'segment-3', quote: 'Müşteri takibini yarın yap.', confidence: 'high' }]);
+    expect(detail.actions[0]?.citations).toEqual([
+      { segmentId: 'segment-3', quote: 'Müşteri takibini yarın yap.', confidence: 'high' },
+    ]);
   });
 
   it('grounds citations on DRAFT segments — the snapshot is built from ASR text too (live b8ca6dbf)', async () => {
@@ -374,8 +480,14 @@ describe('meeting canonical API boundary', () => {
     const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
 
     expect(detail.summary.citations[0]?.segmentId).toBe('segment-1');
-    expect(detail.decisions[0]?.citations).toEqual([{ segmentId: 'segment-2', quote: 'Pilot kapsamı genel amaçlı kalacak.', confidence: 'high' }]);
-    expect(detail.gates).toContainEqual({ id: 'grounded-summary', label: 'Kaynaklı çıktılar', state: 'pass' });
+    expect(detail.decisions[0]?.citations).toEqual([
+      { segmentId: 'segment-2', quote: 'Pilot kapsamı genel amaçlı kalacak.', confidence: 'high' },
+    ]);
+    expect(detail.gates).toContainEqual({
+      id: 'grounded-summary',
+      label: 'Kaynaklı çıktılar',
+      state: 'pass',
+    });
   });
 
   it('grounds an extractive summary sentence by sentence (live b8ca6dbf: no whole-summary claim)', async () => {
@@ -398,7 +510,11 @@ describe('meeting canonical API boundary', () => {
 
     expect(detail.summary.text).toBe(summary);
     expect(detail.summary.citations.map((c) => c.segmentId)).toEqual(['segment-1', 'segment-2']);
-    expect(detail.gates).toContainEqual({ id: 'grounded-summary', label: 'Kaynaklı çıktılar', state: 'pass' });
+    expect(detail.gates).toContainEqual({
+      id: 'grounded-summary',
+      label: 'Kaynaklı çıktılar',
+      state: 'pass',
+    });
   });
 
   it('ignores a summary citation whose claim is not a sentence of the summary', async () => {
