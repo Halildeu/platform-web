@@ -1018,10 +1018,6 @@ export async function loadMeetingDetail(
     );
   }
 
-  if (!result.sessionId) {
-    return mapCanonicalResult(meeting, result, [], false);
-  }
-
   try {
     await loadSessions();
   } catch (error) {
@@ -1031,6 +1027,10 @@ export async function loadMeetingDetail(
       [],
       false,
     );
+  }
+
+  if (!result.sessionId) {
+    return mapCanonicalResult(meeting, result, [], false);
   }
 
   try {

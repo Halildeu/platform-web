@@ -590,6 +590,9 @@ describe('meeting canonical API boundary', () => {
       if (url.endsWith('/intelligence/result')) {
         return Promise.resolve({ data: canonicalResult({ sessionId: null }) });
       }
+      if (url.includes('/sessions?')) {
+        return Promise.resolve({ data: { content: [{ id: 'session-prior' }], last: true } });
+      }
       return Promise.resolve({ data: transcriptPage() });
     });
 
@@ -603,7 +606,27 @@ describe('meeting canonical API boundary', () => {
       label: 'Kaynaklı çıktılar',
       state: 'pending',
     });
-    expect(get).toHaveBeenCalledTimes(1);
+    expect(detail.analysisSessions).toEqual([{ id: 'session-prior', startedAt: '' }]);
+    expect(detail.sessionsIncomplete).toBe(false);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get.mock.calls.some(([url]) => url.includes('/transcripts'))).toBe(false);
+  });
+
+  it('hides an unbound result when session choices are forbidden', async () => {
+    const get = vi.fn(async (url: string) => {
+      if (url.endsWith('/intelligence/result')) {
+        return { data: canonicalResult({ sessionId: null }) };
+      }
+      throw { response: { status: 403 } };
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.detail?.state).toBe('denied');
+    expect(detail.analysisSessions).toEqual([]);
+    expect(detail.summary.kind).toBe('pending');
+    expect(detail.summary.citations).toEqual([]);
+    expect(detail.transcript).toEqual([]);
   });
 
   it('continues transcript pagination before verifying citation indices', async () => {
