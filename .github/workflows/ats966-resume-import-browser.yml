@@ -7,20 +7,20 @@ name: ats#966 Resume Import Browser Regressions
 # CANLI TEST KABULU DEGILDIR; normal aday -> duzeltme -> gonderim -> IK kalici okuma
 # kabulu ayri bir hattir ve bu is ile karsilanmaz.
 #
-# KAPSAM: "ats#966" ve #1164 summary validation bloklari kosar (-g filtresi). Ayni spec
-# dosyasindaki daha eski iki test main uzerinde ZATEN kirik (artik var olmayan
-# `candidate-experience` testid'i ve "Basvuruyu onizle" dugmesi araniyor); bu spec
-# hicbir workflow tarafindan kosulmadigi icin fark edilmemis. Onlarin onarimi bu
-# PR'in kapsami degildir, ayrica raporlandi.
+# KAPSAM: #1158 ile tum aday spec'i kosar; gruplu duzeltme, onaylar, makbuz,
+# #1164 ozet dogrulamasi ve ats#966 gecikmeli confirm/retry negatifleri korunur.
 
 on:
   workflow_call:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'apps/mfe-shell/src/pages/jobs/CandidateApplicationPage.tsx'
-      - 'apps/mfe-shell/src/features/ats-portals/api/application-api.ts'
+      - 'apps/mfe-shell/src/pages/jobs/**'
+      - 'apps/mfe-shell/src/features/ats-portals/**'
+      - 'apps/mfe-shell/src/app/public-candidate-bootstrap.tsx'
       - 'tests/playwright/faz25-candidate-application.spec.ts'
+      - 'tests/playwright/playwright.config.ts'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/ats966-resume-import-browser.yml'
 
 permissions:
@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   resume-import-browser:
-    name: Chromium — gecikmeli confirm + retry anahtari
+    name: Chromium — aday basvurusu + resume import
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -63,7 +63,7 @@ jobs:
           tail -n 200 /tmp/ats966-shell.log || true
           exit 1
 
-      - name: Chromium regressions (ats#966 and summary validation)
+      - name: Chromium candidate journey and resume import regressions
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
         run: >-
@@ -72,10 +72,9 @@ jobs:
           --config tests/playwright/playwright.config.ts
           --project=chromium
           --workers=1
-          -g "ats#966|summary validation"
 
-      - name: Upload browser diagnostics on failure
-        if: failure()
+      - name: Upload synthetic browser evidence
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ats966-browser-diagnostics

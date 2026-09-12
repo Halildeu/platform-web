@@ -350,7 +350,7 @@ test.describe('Faz 25 public candidate journey', () => {
   test('discovers a job, imports a real PDF, preserves edits and submits only confirmed fields at 390px without auth or a11y violations', async ({
     page,
     baseURL,
-  }) => {
+  }, testInfo) => {
     const dataRequests: string[] = [];
     const externalRemoteEntries: string[] = [];
     const submissions: Array<Record<string, unknown>> = [];
@@ -419,19 +419,36 @@ test.describe('Faz 25 public candidate journey', () => {
     await expect(page.getByTestId('candidate-resume-meta')).toContainText('8 alan forma aktarıldı');
     await expect(page.getByTestId('candidate-fullName')).toHaveValue('Deniz Yilmaz');
     await expect(page.getByTestId('candidate-email')).toHaveValue('deniz.yilmaz@example.test');
-    await expect(page.getByTestId('candidate-experience')).toHaveValue(
+    await expect(page.getByTestId('candidate-experience-0-description')).toHaveValue(
       'Urun Uzmani - Ornek Teknoloji - 2022-2026',
+    );
+    await expect(page.getByTestId('candidate-education-0-description')).toHaveValue(
+      'Yonetim Bilisim Sistemleri - Ornek Universitesi - 2020',
     );
     await expect(page.getByTestId('candidate-resume-meta')).toContainText('ham PDF tutulmadı');
     await expect(page.getByTestId('candidate-resume-meta')).not.toContainText('ornek-cv.pdf');
     await expect(page.getByTestId('candidate-resume')).toHaveCount(0);
     await page.getByTestId('candidate-fullName').fill('Düzenlenmiş Demo Adayı');
-    await page.getByRole('button', { name: 'Başvuruyu önizle' }).click();
+    await page.getByTestId('candidate-linkedIn').fill('https://www.linkedin.com/in/deniz-demo');
+    await page.getByTestId('candidate-portfolio').fill('https://portfolio.example.test/deniz');
+    await page.getByTestId('candidate-note').fill('Urun odakli ekibinizle calismak istiyorum.');
+    await page.getByTestId('candidate-experience-0-title').fill('Kidemli Urun Uzmani');
+    await page.getByTestId('candidate-education-0-school').fill('Duzenlenmis Ornek Universitesi');
+    await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
 
     await expect(page.getByTestId('candidate-application-preview')).toContainText(
       'Düzenlenmiş Demo Adayı',
     );
+    await expect(page.getByTestId('candidate-application-preview')).toContainText(
+      'Kidemli Urun Uzmani',
+    );
+    await expect(page.getByTestId('candidate-application-preview')).toContainText(
+      'Duzenlenmis Ornek Universitesi',
+    );
+    await expect(page.getByTestId('create-application-receipt')).toBeDisabled();
+    expect(submissions).toHaveLength(0);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('grouped-preview-390.png'), fullPage: true });
     for (const confirmation of await page.getByRole('checkbox').all()) {
       await confirmation.check();
     }
@@ -448,15 +465,29 @@ test.describe('Faz 25 public candidate journey', () => {
     expect(submissions[0]).toMatchObject({
       fullName: 'Düzenlenmiş Demo Adayı',
       email: 'deniz.yilmaz@example.test',
-      experience: 'Urun Uzmani - Ornek Teknoloji - 2022-2026',
+      linkedIn: 'https://www.linkedin.com/in/deniz-demo',
+      portfolio: 'https://portfolio.example.test/deniz',
+      note: 'Urun odakli ekibinizle calismak istiyorum.',
+      experienceEntries: [
+        {
+          title: 'Kidemli Urun Uzmani',
+          description: 'Urun Uzmani - Ornek Teknoloji - 2022-2026',
+        },
+      ],
+      educationEntries: [
+        {
+          school: 'Duzenlenmis Ornek Universitesi',
+          description: 'Yonetim Bilisim Sistemleri - Ornek Universitesi - 2020',
+        },
+      ],
     });
     expect(Object.keys(submissions[0]).sort()).toEqual(
       [
         'accuracyConfirmedAt',
         'city',
-        'education',
+        'educationEntries',
         'email',
-        'experience',
+        'experienceEntries',
         'fullName',
         'linkedIn',
         'note',
@@ -484,17 +515,22 @@ test.describe('Faz 25 public candidate journey', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(horizontalOverflow).toBeLessThanOrEqual(1);
+    await page.screenshot({
+      path: testInfo.outputPath('submission-receipt-390.png'),
+      fullPage: true,
+    });
   });
 
   test('invalidates prior confirmations when the applicant returns to edit', async ({
     page,
     baseURL,
   }) => {
-    await installAtsApi(page);
+    const submissions: Array<Record<string, unknown>> = [];
+    await installAtsApi(page, submissions);
     await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/jobs/urun-yoneticisi/apply/`);
     await expect(page.getByRole('heading', { name: 'Ürün Yöneticisi' })).toBeVisible();
     await page.getByTestId('fill-synthetic-resume').click();
-    await page.getByRole('button', { name: 'Başvuruyu önizle' }).click();
+    await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
     for (const confirmation of await page.getByRole('checkbox').all()) {
       await confirmation.check();
     }
@@ -502,12 +538,22 @@ test.describe('Faz 25 public candidate journey', () => {
 
     await page.getByRole('button', { name: 'Bilgileri düzenle' }).click();
     await page.getByTestId('candidate-fullName').fill('Yeniden Düzenlenmiş Demo Adayı');
-    await page.getByRole('button', { name: 'Başvuruyu önizle' }).click();
+    await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
 
     await expect(page.getByTestId('create-application-receipt')).toBeDisabled();
     for (const confirmation of await page.getByRole('checkbox').all()) {
       await expect(confirmation).not.toBeChecked();
     }
+    expect(submissions).toHaveLength(0);
+    for (const confirmation of await page.getByRole('checkbox').all()) {
+      await confirmation.check();
+    }
+    await page.getByTestId('create-application-receipt').click();
+    await expect(page.getByTestId('candidate-receipt-id')).toHaveText(
+      'app_abcdefghijklmnopqrstuvwx',
+    );
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0].fullName).toBe('Yeniden Düzenlenmiş Demo Adayı');
   });
 });
 
