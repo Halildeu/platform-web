@@ -159,6 +159,13 @@ const RecruiterApplicationReviewPanel = ({
       await loadDetail();
     } catch (error) {
       setActionError(describeAtsError(error, 'Durum güncellenemedi.'));
+      // #992 A2: ret onayı verildiği SÜRÜME aittir. İstek başarısız olunca kayıt yeniden
+      // yükleniyor ve sürümü değişmiş olabilir (409: başka bir kullanıcı kaydı taşıdı). Onay
+      // durumu burada sıfırlanmazsa, sıfırlayan efekt yalnız `publicRef` değişince çalıştığı
+      // için, eski sürüme verilmiş onay değişmiş kayıt üzerinde yeniden kullanılabiliyordu.
+      // Başarı yolundaki gibi kapatıyoruz: İK güncel kaydı gördükten sonra yeniden onaylar.
+      setRejectionOpen(false);
+      setRejectionConfirmed(false);
       await loadDetail();
     } finally {
       setUpdating(false);
