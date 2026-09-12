@@ -470,6 +470,35 @@ describe('application-api', () => {
     expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('body');
   });
 
+  /**
+   * #992 Dilim A1 — geri çekme çakışmasında aday ham sunucu kodunu görmemeli.
+   *
+   * <p>Gövde, ats `ApplicationApiController.withdrawCandidate`'in terminal başvuru için
+   * döndürdüğü 409'un BİREBİR şekli: `error` + `currentStatus` + `currentVersion`, `reason`
+   * YOK. `safeJson` mesajı `reason ?? error` ile kurduğu için bu gövdede mesaj
+   * `ILLEGAL_TRANSITION` oluyor ve `CandidatePortalPage` onu adaya olduğu gibi gösteriyor.
+   *
+   * <p>Senaryo: İK başvuruyu reddettiği anda aday "Başvuruyu geri çek"e basar.
+   */
+  it('explains a withdrawal conflict in candidate language instead of the raw server code', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { error: 'ILLEGAL_TRANSITION', currentStatus: 'REJECTED', currentVersion: 3 },
+        409,
+      ),
+    );
+
+    const failure = await withdrawCandidateApplication({
+      publicRef: 'app_abcdefghijklmnopqrstuvwx',
+      candidateAccessToken: 'A'.repeat(43),
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).not.toContain('ILLEGAL_TRANSITION');
+    expect(message).toMatch(/başvurunuzun durumu/i);
+  });
+
   it('uses a versioned candidate-only PDF lifecycle without putting credentials or filenames in URLs', async () => {
     const token = 'R'.repeat(43);
     const resumeImport: ResumeImportDto = {
