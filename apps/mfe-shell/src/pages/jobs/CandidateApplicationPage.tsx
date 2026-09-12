@@ -3186,7 +3186,7 @@ const CandidateApplicationPage = () => {
                 {previewRows.map(([field, label, value]) => (
                   <div
                     key={field}
-                    className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
+                    className="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
                   >
                     <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
                       {label}
@@ -3212,7 +3212,7 @@ const CandidateApplicationPage = () => {
                     <div
                       key={question.questionId}
                       data-testid={`candidate-preview-question-${question.questionId}`}
-                      className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
+                      className="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4"
                     >
                       <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
                         {question.text}
@@ -3223,7 +3223,7 @@ const CandidateApplicationPage = () => {
                     </div>
                   );
                 })}
-                <div className="grid gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4">
+                <div className="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4">
                   <dt className="text-xs font-bold uppercase tracking-wide text-text-secondary">
                     PDF
                   </dt>

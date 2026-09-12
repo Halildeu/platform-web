@@ -272,6 +272,35 @@ const buildSyntheticResumePdf = () => {
 };
 
 test.describe('Faz 25 public candidate journey', () => {
+  for (const width of [320, 390, 1280]) {
+    test(`maximum-length summary reflows in preview at ${width}px`, async ({
+      page,
+      baseURL,
+    }, testInfo) => {
+      const submissions: Array<Record<string, unknown>> = [];
+      await installAtsApi(page, submissions);
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`${baseURL}/careers/acik/jobs/${JOB.slug}/apply`);
+      await page.getByTestId('fill-synthetic-resume').click();
+      const summary = 'a'.repeat(4000);
+      await page.getByTestId('candidate-summary').fill(summary);
+      await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
+      const preview = page.getByTestId('candidate-application-preview');
+      await expect(preview).toBeVisible();
+      await expect(preview.getByText(summary, { exact: true })).toHaveText(summary);
+      await expect(page.getByRole('heading', { name: 'Başvuru önizlemesi' })).toBeFocused();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+      ).toBeLessThanOrEqual(1);
+      await expect(page.getByTestId('create-application-receipt')).toBeDisabled();
+      expect(submissions).toHaveLength(0);
+      await preview.getByText(summary, { exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`summary-preview-${width}.png`) });
+      await page.getByRole('button', { name: 'Bilgileri düzenle' }).click();
+      await expect(page.getByTestId('candidate-summary')).toHaveValue(summary);
+    });
+  }
+
   for (const width of [390, 1280]) {
     test(`summary validation preserves edits and blocks invalid preview at ${width}px`, async ({
       page,
