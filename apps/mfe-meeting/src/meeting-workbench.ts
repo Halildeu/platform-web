@@ -117,6 +117,9 @@ export interface TranscriptFeed {
 }
 
 export interface MeetingRecord {
+  detailSessionId?: string;
+  analysisSessions?: Array<{ id: string; startedAt: string }>;
+  sessionsIncomplete?: boolean;
   id: string;
   title: string;
   organizer: string;
