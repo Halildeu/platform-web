@@ -1,3 +1,4 @@
+import { expandSpeakerTurns } from './speaker-attribution';
 import {
   AlertCircle,
   CalendarDays,
@@ -237,7 +238,7 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
   // kuyruk (sektör konvansiyonu — docs/faz24-realtime-stt-industry-survey.md).
   // 'Satırlar' segment-başına denetim kartlarını aynen korur.
   const [view, setView] = useState<'fluent' | 'rows'>('fluent');
-  const segments = orderTranscriptSegments(meeting.transcript);
+  const segments = expandSpeakerTurns(orderTranscriptSegments(meeting.transcript));
   if (segments.length === 0) {
     return (
       <>

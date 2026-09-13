@@ -19,6 +19,7 @@ export interface FlowGroup {
   /** İlk segment id'sinden türetilen kararlı anahtar. */
   id: string;
   speaker: string;
+  speakerKey?: string;
   startedAtMs: number;
   /** Cümle-sınırlı paragraflar; her paragraf segment listesi taşır. */
   paragraphs: TranscriptSegment[][];
@@ -50,10 +51,11 @@ export function buildTranscriptFlow(segments: readonly TranscriptSegment[]): Flo
       continue;
     }
     const active = groups.at(-1);
-    if (!active || active.speaker !== segment.speaker) {
+    if (!active || active.speaker !== segment.speaker || active.speakerKey !== segment.speakerKey) {
       groups.push({
         id: `flow:${segment.id}`,
         speaker: segment.speaker,
+        ...(segment.speakerKey ? { speakerKey: segment.speakerKey } : {}),
         startedAtMs: segment.startedAtMs,
         paragraphs: [[segment]],
         tail: [],

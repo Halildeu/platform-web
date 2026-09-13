@@ -1,3 +1,5 @@
+import type { SpeakerAttribution } from './speaker-attribution';
+
 export type MeetingStatus = 'live' | 'ready' | 'processing' | 'blocked';
 export type TranscriptSegmentStatus = 'draft' | 'stabilizing' | 'final' | 'revised';
 export type TranscriptFeedState = 'live' | 'recorded' | 'demo' | 'blocked';
@@ -8,6 +10,8 @@ export type MeetingPolicyActionState = 'preview' | 'pending' | 'blocked';
 export interface TranscriptSegment {
   id: string;
   speaker: string;
+  speakerKey?: string;
+  speakerAttribution?: SpeakerAttribution;
   startedAtMs: number;
   status: TranscriptSegmentStatus;
   text: string;
