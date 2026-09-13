@@ -483,6 +483,49 @@ describe('meeting canonical API boundary', () => {
     });
   });
 
+  it.each([
+    ['relative source phrase', 'Perşembe günü', 'Perşembe günü'],
+    [
+      'long source phrase',
+      'Gelecek hafta müşteri onayından sonra',
+      'Gelecek hafta müşteri onayından sonra',
+    ],
+    ['maximum source phrase', 'Yarın '.repeat(42) + 'son', 'Yarın '.repeat(42) + 'son'],
+    ['non-ISO date', '12 Temmuz 2026 öğleden sonra', '12 Temmuz 2026 öğleden sonra'],
+    [
+      'date-prefixed source phrase',
+      '2026-07-12 müşteri onayından sonra',
+      '2026-07-12 müşteri onayından sonra',
+    ],
+    ['ISO UTC', '2026-07-12T08:00:00Z', '2026-07-12'],
+    ['ISO minute precision', '2026-07-12T08:00Z', '2026-07-12'],
+    ['ISO offset and fraction', '2026-07-12T08:00:00.123+03:00', '2026-07-12'],
+    ['ISO without timezone', '2026-07-12T08:00:00', '2026-07-12'],
+    ['ISO date only', '2026-07-12', '2026-07-12'],
+    ['null', null, '-'],
+    ['missing', undefined, '-'],
+    ['empty', '', '-'],
+  ])('preserves action due display for %s', async (_case, dueDate, expected) => {
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/intelligence/result'))
+        return Promise.resolve({
+          data: canonicalResult({
+            action_items: [{ text: sourceTexts[2], owner: 'user-2', due_date: dueDate }],
+          }),
+        });
+      if (url.includes('/sessions?'))
+        return Promise.resolve({ data: { content: [{ id: 'session-1' }] } });
+      if (url.includes('/v1/admin/transcripts?'))
+        return Promise.resolve({ data: transcriptPage() });
+      return Promise.reject(new Error(`unexpected endpoint: ${url}`));
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.actions[0]?.due).toBe(expected);
+    expect(detail.actions[0]?.citations).toMatchObject([{ segmentId: 'segment-3' }]);
+  });
+
   it('renders every session transcript while keeping citations on the analysis session (gitops#3421)', async () => {
     const secondSessionPage = {
       content: [

@@ -7,6 +7,26 @@ import type { MeetingWorkbenchData } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 
 describe('MeetingApp', () => {
+  it('renders the complete 255-character source due phrase on an action card', async () => {
+    const data = createDemoWorkbenchData();
+    const due = 'Yarın '.repeat(42) + 'son';
+    const record = { ...data.records[0] };
+    record.actions = [{ ...record.actions[0], due }];
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({ ...data, records: [record] })}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(due).toHaveLength(255);
+    const metadata = await screen.findByText(`${record.actions[0].owner} · ${due}`);
+    expect(metadata.tagName).toBe('EM');
+    expect(metadata.closest('.output-copy')).not.toBeNull();
+    expect(metadata).toHaveTextContent(due);
+  });
+
   it('shows session-relative time in rows, flowing text and citation links after reopening', async () => {
     const data = createDemoWorkbenchData();
     const origin = Date.parse('2026-09-13T16:00:00Z');
