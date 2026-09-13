@@ -70,8 +70,28 @@ type UnknownRecord = Record<string, unknown>;
 
 const strictEventKeys: Record<Exclude<WsStreamEventType, 'debug'>, string[]> = {
   loading: ['stage', 'type'],
-  ready: ['final_model', 'live_model', 'sample_rate', 'type'],
-  partial: ['confirmed', 'elapsed_ms', 'rms', 'seq', 'source', 'tentative', 'type'],
+  ready: [
+    'final_model',
+    'live_model',
+    'sample_rate',
+    'type',
+    'partial_mode',
+    'protocol',
+    'capabilities',
+    'supports_eof',
+    'terminal_timeout_ms',
+  ],
+  partial: [
+    'confirmed',
+    'elapsed_ms',
+    'rms',
+    'seq',
+    'source',
+    'tentative',
+    'type',
+    'audio_sent_ms',
+    'emitted_at_ms',
+  ],
   final: [
     'elapsed_ms',
     'reason',
@@ -129,7 +149,15 @@ function parseKnownEvent(record: UnknownRecord, eventType: WsStreamEventType): W
         hasStrictShape('ready', record) &&
         isIntegerAtLeast(record.sample_rate, 8000) &&
         isString(record.live_model) &&
-        isString(record.final_model)
+        isString(record.final_model) &&
+        ['partial_mode', 'protocol'].every(
+          (key) => record[key] === undefined || isString(record[key]),
+        ) &&
+        (record.capabilities === undefined ||
+          (Array.isArray(record.capabilities) && record.capabilities.every(isString))) &&
+        (record.supports_eof === undefined || typeof record.supports_eof === 'boolean') &&
+        (record.terminal_timeout_ms === undefined ||
+          isIntegerAtLeast(record.terminal_timeout_ms, 0))
       ) {
         return {
           ok: true,
@@ -151,7 +179,10 @@ function parseKnownEvent(record: UnknownRecord, eventType: WsStreamEventType): W
         isString(record.tentative) &&
         isIntegerAtLeast(record.elapsed_ms, 0) &&
         isNumberAtLeast(record.rms, 0) &&
-        isString(record.source)
+        isString(record.source) &&
+        ['audio_sent_ms', 'emitted_at_ms'].every(
+          (key) => record[key] === undefined || isIntegerAtLeast(record[key], 0),
+        )
       ) {
         return {
           ok: true,

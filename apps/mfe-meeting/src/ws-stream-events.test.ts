@@ -62,6 +62,24 @@ describe('ws-stream-events consumer contract', () => {
     });
   });
 
+  it('accepts gateway protocol metadata without dropping ready and partial events', () => {
+    expect(
+      parseWsStreamEvent({
+        ...validEvents[1],
+        partial_mode: 'stable-v1',
+        protocol: 'audio-gateway.live.v1',
+        capabilities: ['eof'],
+        supports_eof: true,
+        terminal_timeout_ms: 30000,
+      }),
+    ).toEqual({ ok: true, event: validEvents[1] });
+    expect(
+      parseWsStreamEvent({ ...validEvents[2], audio_sent_ms: 2000, emitted_at_ms: 1789300000000 }),
+    ).toEqual({ ok: true, event: validEvents[2] });
+    expect(parseWsStreamEvent({ ...validEvents[1], capabilities: [42] }).ok).toBe(false);
+    expect(parseWsStreamEvent({ ...validEvents[2], audio_sent_ms: -1 }).ok).toBe(false);
+  });
+
   it('rejects malformed or drifted strict event shapes', () => {
     expect(
       parseWsStreamEvent({
