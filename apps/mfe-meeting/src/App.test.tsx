@@ -159,7 +159,21 @@ describe('MeetingApp', () => {
       screen.getByText('Web ürün yüzeyi acceptance hattından bağımsız paralel ilerleyecek.'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /00:00 · Ürün/i })).toHaveLength(2);
-    expect(screen.getAllByText('Yüksek güven')).not.toHaveLength(0);
+    expect(screen.getAllByText('Kaynak eşleşmesi: Yüksek')).not.toHaveLength(0);
+    expect(screen.queryByText('Yüksek güven')).not.toBeInTheDocument();
+  });
+
+  it('labels citation similarity as source matching, not semantic confidence', async () => {
+    const data = createDemoWorkbenchData();
+    const record = {
+      ...data.records[0],
+      summary: { ...data.records[0].summary, confidence: 0.7 },
+    };
+    render(<MeetingApp loadWorkbench={async () => ({ ...data, records: [record] })} />);
+
+    expect(await screen.findAllByText('Kaynak eşleşmesi: Orta')).not.toHaveLength(0);
+    expect(screen.queryByText(/^(Yüksek|Orta|Düşük) güven$/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /00:00 · Ürün/i })).toHaveLength(2);
   });
 
   it('filters blocked meetings and keeps empty transcript state honest', async () => {

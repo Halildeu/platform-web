@@ -207,7 +207,7 @@ function CitationTrail({
   return (
     <div className="citation-trail" aria-label="Kaynaklar">
       <span className={`confidence-chip confidence-${confidence >= 0.85 ? 'high' : 'medium'}`}>
-        {confidenceLabel(confidence)} güven
+        Kaynak eşleşmesi: {confidenceLabel(confidence)}
       </span>
       {finalCitations.map((citation) => {
         const segment = meeting.transcript.find((item) => item.id === citation.segmentId);
