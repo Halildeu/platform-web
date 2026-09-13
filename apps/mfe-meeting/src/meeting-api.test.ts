@@ -229,6 +229,48 @@ describe('meeting canonical API boundary', () => {
     expect(detail.intelligence?.persisted).toBe(false);
   });
 
+  it('preserves durable speaker turns on reopen without attributing redacted content', async () => {
+    const attribution = {
+      scope: '22222222-2222-4222-8222-222222222222',
+      turns: [
+        { speaker: 'S1', textStart: 0, textEnd: 5, startMs: 0, endMs: 700 },
+        { speaker: 'S2', textStart: 6, textEnd: 11, startMs: 500, endMs: 1000 },
+      ],
+    };
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result')) return { data: canonicalResult() };
+      if (url.includes('/sessions?'))
+        return { data: { content: [{ id: 'session-1' }], last: true } };
+      return {
+        data: {
+          content: [
+            {
+              id: 'speaker-segment',
+              textDraft: 'hello world',
+              status: 'DRAFT',
+              startTime: 1,
+              speakerAttribution: attribution,
+            },
+            {
+              id: 'redacted-segment',
+              textDraft: 'hello world',
+              status: 'REDACTED',
+              startTime: 2,
+              speakerAttribution: attribution,
+            },
+          ],
+          last: true,
+        },
+      };
+    });
+    const detail = await loadMeetingDetail(baseMeeting(), {
+      services: createServices(get),
+      sessionId: 'session-1',
+    });
+    expect(detail.transcript[0].speakerAttribution).toEqual(attribution);
+    expect(detail.transcript[1].speakerAttribution).toBeUndefined();
+  });
+
   it('enumerates additional session pages and deduplicates choices', async () => {
     const get = vi.fn(async (url: string) => {
       if (url.includes('/intelligence/result')) return { data: canonicalResult() };

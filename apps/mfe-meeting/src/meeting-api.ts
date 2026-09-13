@@ -1,3 +1,4 @@
+import { parseSpeakerAttribution } from './speaker-attribution';
 import {
   meetings,
   orderTranscriptSegments,
@@ -466,6 +467,9 @@ function mapTranscript(payload: unknown): MeetingRecord['transcript'] {
               ? ('revised' as const)
               : ('draft' as const),
         text,
+        ...(rawStatus !== 'REDACTED' && parseSpeakerAttribution(value.speakerAttribution, text)
+          ? { speakerAttribution: parseSpeakerAttribution(value.speakerAttribution, text) }
+          : {}),
       },
     ];
   });

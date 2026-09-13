@@ -19,11 +19,13 @@
  */
 
 import type { TranscriptSegment, TranscriptSegmentStatus } from './meeting-workbench';
+import { parseSpeakerAttribution } from './speaker-attribution';
 
 const DEFAULT_LIVE_TRANSCRIPT_SSE_ENV = 'VITE_MEETING_LIVE_TRANSCRIPT_SSE_URL';
 
 /** Backend TranscriptResult JSON shape (mirrors audio-gateway dto). */
 export interface LiveTranscriptChunk {
+  speakerAttribution?: unknown;
   text: string;
   language?: string | null;
   languageProbability?: number | null;
@@ -134,6 +136,9 @@ export function chunkToSegment(
     startedAtMs: receivedAtMs,
     status: liveStatusToSegmentStatus(chunk.status),
     text: chunk.text ?? '',
+    ...(parseSpeakerAttribution(chunk.speakerAttribution, chunk.text ?? '')
+      ? { speakerAttribution: parseSpeakerAttribution(chunk.speakerAttribution, chunk.text ?? '') }
+      : {}),
     // Audit trail back to the fragments the gateway folded, so a citation on
     // an assembled line can be traced to the chunks it came from.
     assemblyReason: chunk.assemblyReason ?? undefined,
