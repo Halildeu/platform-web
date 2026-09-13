@@ -3,6 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { KvkkNoticeDisclosure } from '../../features/ats-portals/KvkkNoticeBody';
 import { noticeFor } from '../../features/ats-portals/kvkk-notices';
 import {
+  candidateDataPolicyText,
+  resolveCandidateDataPolicy,
+} from '../../features/ats-portals/candidate-data-policy';
+import {
   confirmResumeImport,
   createResumeImport,
   createApplicationIdempotencyKey,
@@ -17,8 +21,6 @@ import {
   terminateResumeImport,
   updateResumeProposal,
   uploadResumePdf,
-  APPLICATION_NOTICE_VERSION,
-  RESUME_IMPORT_NOTICE_VERSION,
   type ApplicationFieldKey,
   type ResumeFieldKey,
   RESUME_ONLY_FIELDS,
@@ -865,11 +867,26 @@ const CandidateApplicationPage = () => {
    * sistem yalnız sürüm kimliği taşıyor, "okudum" beyanı alıyor ve o beyanı kalıcı
    * kaydediyordu. Metni olmayan bir sürüm için onay toplanamaz.
    */
-  const applicationNotice = noticeFor(
-    job?.noticeVersion ?? APPLICATION_NOTICE_VERSION,
-    publicHandle,
-  );
-  const resumeNotice = noticeFor(RESUME_IMPORT_NOTICE_VERSION, publicHandle);
+  const dataPolicy = resolveCandidateDataPolicy(job?.candidateDataPolicy);
+  const applicationNotice =
+    dataPolicy && job && noticeFor(job.noticeVersion, publicHandle)
+      ? noticeFor(dataPolicy.applicationNoticeVersion, publicHandle)
+      : null;
+  const resumeNotice = dataPolicy
+    ? noticeFor(dataPolicy.resumeImportNoticeVersion, publicHandle)
+    : null;
+  useEffect(() => {
+    setNoticeAccepted(false);
+    setNoticeAcceptedAt('');
+    setResumeNoticeAccepted(false);
+    setResumeNoticeAcceptedAt('');
+    setAccuracyConfirmed(false);
+    setAccuracyConfirmedAt('');
+  }, [
+    dataPolicy?.mode,
+    dataPolicy?.applicationNoticeVersion,
+    dataPolicy?.resumeImportNoticeVersion,
+  ]);
   const noticeHref = publicHandle
     ? `/careers/${encodeURIComponent(publicHandle)}/jobs/aydinlatma`
     : '/jobs/aydinlatma';
@@ -1029,7 +1046,7 @@ const CandidateApplicationPage = () => {
       return;
     }
 
-    if (!resumeNoticeAccepted || !resumeNoticeAcceptedAt) {
+    if (!dataPolicy || !resumeNotice || !resumeNoticeAccepted || !resumeNoticeAcceptedAt) {
       setFileError('PDF yüklemeden önce CV içe aktarma aydınlatmasını okuyup onaylayın.');
       event.target.value = '';
       return;
@@ -1045,6 +1062,7 @@ const CandidateApplicationPage = () => {
           candidateAccessTokenRef.current,
           resumeNoticeAcceptedAt,
           publicHandle,
+          dataPolicy.resumeImportNoticeVersion,
         );
       } else if (replaceRequested && active.documentVersion > 0) {
         active = await replaceResumePdf(active, candidateAccessTokenRef.current);
@@ -1669,6 +1687,8 @@ const CandidateApplicationPage = () => {
   const createPersistentReceipt = async () => {
     if (
       !job ||
+      !dataPolicy ||
+      !applicationNotice ||
       !noticeAccepted ||
       !noticeAcceptedAt ||
       !accuracyConfirmed ||
@@ -1712,7 +1732,7 @@ const CandidateApplicationPage = () => {
                   .map((q) => toAnswerDto(q, answers[q.questionId] as AnswerDraft)),
               }
             : {}),
-          noticeVersion: job.noticeVersion,
+          noticeVersion: dataPolicy.applicationNoticeVersion,
           noticeAcceptedAt,
           accuracyConfirmedAt,
           ...(resumeBinding
@@ -2361,34 +2381,41 @@ const CandidateApplicationPage = () => {
                     </div>
 
                     <div className="mt-5 rounded-2xl border border-dashed border-border-strong bg-surface-subtle p-4 sm:p-5">
-                      <label
-                        className="flex items-start gap-3 text-sm leading-6"
-                        htmlFor="resume-import-notice"
-                      >
-                        <input
-                          id="resume-import-notice"
-                          type="checkbox"
-                          checked={resumeNoticeAccepted}
-                          disabled={Boolean(resumeImport)}
-                          onChange={(event) => {
-                            setResumeNoticeAccepted(event.target.checked);
-                            setResumeNoticeAcceptedAt(
-                              event.target.checked ? new Date().toISOString() : '',
-                            );
-                            setFileError('');
-                          }}
-                          className="mt-1 h-4 w-4 shrink-0"
-                        />
-                        <span>
-                          {/* Beyan metni aynen korunur — gerekçe başvuru onayındaki
-                              yorumda. Okunabilir metin aşağıya eklenir. */}
-                          CV içe aktarma aydınlatmasını okudum. Test ortamında yalnız sentetik veri
-                          kullanacağımı; PDF’nin güvenlik taraması ve alan çıkarımı için geçici
-                          olarak işleneceğini, ham dosyanın saklanmayacağını ve yalnız seçtiğim
-                          alanların taslağa aktarılacağını anladım.
-                          <span className="sr-only"> Sürüm: {RESUME_IMPORT_NOTICE_VERSION}</span>
-                        </span>
-                      </label>
+                      {dataPolicy ? (
+                        <p className="mb-3 text-sm">{candidateDataPolicyText(dataPolicy)}</p>
+                      ) : job ? (
+                        <p role="alert">
+                          Aday verisi politikası doğrulanamadı. CV yükleme ve başvuru gönderimi
+                          kullanılamıyor.
+                        </p>
+                      ) : null}
+                      {resumeNotice ? (
+                        <label
+                          className="flex items-start gap-3 text-sm leading-6"
+                          htmlFor="resume-import-notice"
+                        >
+                          <input
+                            id="resume-import-notice"
+                            type="checkbox"
+                            checked={resumeNoticeAccepted}
+                            disabled={Boolean(resumeImport)}
+                            onChange={(event) => {
+                              setResumeNoticeAccepted(event.target.checked);
+                              setResumeNoticeAcceptedAt(
+                                event.target.checked ? new Date().toISOString() : '',
+                              );
+                              setFileError('');
+                            }}
+                            className="mt-1 h-4 w-4 shrink-0"
+                          />
+                          <span>
+                            CV içe aktarma aydınlatmasını okudum. PDF’nin güvenlik taraması ve alan
+                            çıkarımı için geçici olarak işleneceğini, ham dosyanın saklanmayacağını
+                            ve yalnız seçtiğim alanların taslağa aktarılacağını anladım.
+                            <span className="sr-only"> Sürüm: {resumeNotice.version}</span>
+                          </span>
+                        </label>
+                      ) : null}
                       {resumeNotice ? (
                         <KvkkNoticeDisclosure notice={resumeNotice} permanentHref={noticeHref} />
                       ) : null}
@@ -2398,6 +2425,7 @@ const CandidateApplicationPage = () => {
                           <label
                             className={`flex flex-col items-center gap-2 text-center ${
                               resumeNoticeAccepted &&
+                              Boolean(resumeNotice) &&
                               resumeStatus !== 'uploading' &&
                               (!resumeImport?.documentVersion || replaceRequested)
                                 ? 'cursor-pointer'
@@ -2421,6 +2449,7 @@ const CandidateApplicationPage = () => {
                             onChange={handleFileChange}
                             disabled={
                               !resumeNoticeAccepted ||
+                              !resumeNotice ||
                               resumeStatus === 'uploading' ||
                               Boolean(resumeImport?.documentVersion && !replaceRequested)
                             }
@@ -2433,8 +2462,8 @@ const CandidateApplicationPage = () => {
                         id="candidate-resume-boundary"
                         className="mt-3 text-center text-xs text-text-secondary"
                       >
-                        Test ortamında gerçek kişisel veri kullanmayın. Form, PDF işlenirken de elle
-                        doldurulabilir; işleme hatası manuel başvuruyu engellemez.
+                        Form, PDF işlenirken de elle doldurulabilir; işleme hatası manuel başvuruyu
+                        engellemez.
                       </p>
                       {resumeStatus === 'uploading' ? (
                         <p
@@ -3240,6 +3269,9 @@ const CandidateApplicationPage = () => {
                     Yalnız açılır bölümü gizlemek yetmiyordu — kutu duruyor, aday
                     işaretliyor ve beyan kaydediliyordu; kusurun kendisi buydu.
                     `noticeAccepted` hiç true olamadığı için gönderim de kapalı kalır. */}
+                {dataPolicy ? (
+                  <p className="text-sm">{candidateDataPolicyText(dataPolicy)}</p>
+                ) : null}
                 {!applicationNotice ? (
                   <p
                     role="alert"
@@ -3269,15 +3301,9 @@ const CandidateApplicationPage = () => {
                       className="mt-1 h-4 w-4"
                     />
                     <span>
-                      {/* BEYAN METNİ AYNEN KORUNUR. Bu cümle `kvkk-application-v1`
-                        sürümü altında kaydedilen beyandır; sözcüklerini değiştirip
-                        sürümü aynı bırakmak, tek sürüm altında iki farklı beyan
-                        kaydetmek olurdu (parserVersion ile aynı provenance kuralı).
-                        Metnin okunabilir hâli aşağıya EKLENİR, beyan değişmez. */}
-                      KVKK başvuru aydınlatma metnini okudum; bu test ortamında yalnız sentetik veri
-                      kullanacağımı ve doğruladığım form alanlarının başvuru amacıyla
-                      kaydedileceğini anladım.{' '}
-                      <span className="sr-only">Sürüm: {job?.noticeVersion}</span>
+                      KVKK başvuru aydınlatma metnini okudum; doğruladığım form alanlarının başvuru
+                      amacıyla kaydedileceğini anladım.{' '}
+                      <span className="sr-only">Sürüm: {applicationNotice.version}</span>
                     </span>
                   </label>
                 )}
@@ -3313,6 +3339,8 @@ const CandidateApplicationPage = () => {
                 onClick={() => void createPersistentReceipt()}
                 disabled={
                   !job ||
+                  !dataPolicy ||
+                  !applicationNotice ||
                   !noticeAccepted ||
                   !noticeAcceptedAt ||
                   !accuracyConfirmed ||
@@ -3478,7 +3506,7 @@ const CandidateApplicationPage = () => {
               <li>• Formdaki bütün özgeçmiş alanlarını değiştirebilirsiniz.</li>
               <li>• CV önerileri yalnız alan bazlı kararınızdan sonra forma geçer.</li>
               <li>• PDF ve dosya adı kalıcı kayda alınmaz.</li>
-              <li>• Testte gerçek kişisel veri kullanmayın.</li>
+              {dataPolicy ? <li>{candidateDataPolicyText(dataPolicy)}</li> : null}
               <li>• Oturum açmanız gerekmez.</li>
             </ul>
           </section>
