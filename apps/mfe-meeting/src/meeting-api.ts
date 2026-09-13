@@ -794,6 +794,13 @@ function failureRecord(
   };
 }
 
+function formatActionDue(value: string | null): string {
+  if (!value) return '-';
+  // Source phrases are not dates: only shorten a complete ISO date-time value.
+  const isoDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?$/;
+  return isoDateTime.test(value) ? value.slice(0, 10) : value;
+}
+
 function mapCanonicalResult(
   meeting: MeetingRecord,
   result: CanonicalMeetingIntelligenceResult,
@@ -830,7 +837,7 @@ function mapCanonicalResult(
       id: `${result.analysisRunId}-action-${index}`,
       label: action.text,
       owner: action.owner ?? 'Atanmamış',
-      due: action.dueDate?.slice(0, 10) || '-',
+      due: formatActionDue(action.dueDate),
       state: 'open' as const,
       citations: citationsForClaim(action.text, rawCitations, transcript),
       confidence: confidenceOf(rawCitations),
