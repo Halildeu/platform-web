@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RecruiterWorkspacePage from './RecruiterWorkspacePage';
 
@@ -892,6 +892,71 @@ describe('RecruiterWorkspacePage', () => {
       'REJECTED',
     );
     expect(await screen.findByText(/Durum güncellendi: İnsan kararıyla reddedildi/i)).toBeVisible();
+  });
+
+  /**
+   * #992 Dilim A2 — ret onayı verildiği SÜRÜME aittir; çakışma sonrası yeni sürüme taşınmamalı.
+   *
+   * <p>Senaryo: İK kullanıcısı "Ret kararını hazırla" → onay → "Adayı reddet" der; aynı anda
+   * başka bir kullanıcı kaydı kısa listeye (INTERVIEW_PENDING) taşımıştır. Ret isteği 409
+   * alır, detay yeni sürümle yüklenir. Kayıt hâlâ erken aşamada olduğu için ret eylemi
+   * açık kalır.
+   *
+   * <p>Önceki hâlinde `changeStatus` hata yolunda ret onay durumunu SIFIRLAMIYOR; sıfırlayan
+   * efekt yalnız `publicRef` değişince çalışıyor. Sonuç: eski sürüme verilmiş onay işaretli
+   * kalıyor ve DEĞİŞMİŞ kayıt yeniden onay alınmadan reddedilebiliyor. Aday tarafında aynı
+   * ilke ("düzenlemeye dönünce önceki onaylar geçersizleşir") zaten testle korunuyor.
+   */
+  it('does not carry a rejection confirmation over a version conflict to the reloaded record', async () => {
+    const evaluation = {
+      evaluationId: 'eval_abcdefghijklmnopqrstuvwx',
+      actorRef: 'user:test-recruiter',
+      policyVersion: 'structured-evaluation-v1',
+      jobRelatednessConfirmed: true,
+      recommendation: 'NO_HIRE',
+      criteria: [
+        {
+          key: 'role_requirements',
+          label: 'Rol gereklilikleriyle eşleşme',
+          rating: 1,
+          evidence: 'Sentetik işle ilgili yetersiz kanıt.',
+        },
+      ],
+      summary: 'Sentetik ilerletmeme gerekçesi.',
+      predecessorEvaluationId: null,
+      revision: 1,
+      createdAt: '2026-07-16T11:00:00Z',
+    };
+    apiMocks.getRecruiterApplication
+      .mockResolvedValueOnce({
+        application: { ...APPLICATION, status: 'UNDER_REVIEW', version: 1 },
+        history: [],
+        evaluations: [evaluation],
+      })
+      .mockResolvedValue({
+        // Başka bir kullanıcı kaydı kısa listeye taşıdı: yeni sürüm, hâlâ erken aşama.
+        application: { ...APPLICATION, status: 'INTERVIEW_PENDING', version: 2 },
+        history: [],
+        evaluations: [evaluation],
+      });
+    apiMocks.updateRecruiterApplicationStatus.mockRejectedValueOnce({ response: { status: 409 } });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ret kararını hazırla' }));
+    fireEvent.click(screen.getByLabelText(/Son yapılandırılmış değerlendirmeyi inceledim/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Adayı reddet' }));
+
+    // Hata görünür olmalı. Metni bilerek assert etmiyoruz: bu dosyadaki `describeAtsError`
+    // taklidi yalnız 403'ü eşliyor, 409 için genel metin dönüyor. Bu testin iddiası mesaj
+    // değil, onayın yeni sürüme taşınmaması.
+    expect(await screen.findByRole('alert')).toBeVisible();
+    await waitFor(() => expect(apiMocks.getRecruiterApplication).toHaveBeenCalledTimes(2));
+    // Yeni sürüm yüklendi ve ret hâlâ mümkün; ama eski onayla DEĞİL.
+    expect(await screen.findByRole('button', { name: 'Ret kararını hazırla' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Adayı reddet' })).not.toBeInTheDocument();
+    expect(apiMocks.updateRecruiterApplicationStatus).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Durum güncellendi:/i)).not.toBeInTheDocument();
   });
 
   it('plans a persisted interview from the reviewed application with a legal structured rubric', async () => {

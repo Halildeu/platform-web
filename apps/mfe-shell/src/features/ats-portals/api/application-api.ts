@@ -999,6 +999,16 @@ export const withdrawCandidateApplication = async ({
       credentials: 'same-origin',
     },
   );
+  // #992 A1: sunucu terminal başvuru için 409 `{error: 'ILLEGAL_TRANSITION', currentStatus,
+  // currentVersion}` döner, `reason` yoktur. `safeJson` mesajı `reason ?? error` ile
+  // kurduğundan aday ham `ILLEGAL_TRANSITION` kodunu görüyordu (ör. İK tam o anda reddettiyse).
+  // Bu uç noktada 409'un tek anlamı "durum bu arada değişti"; çağıran sayfa ardından güncel
+  // durumu zaten yeniden yüklüyor.
+  if (response.status === 409) {
+    throw new Error(
+      'Başvurunuzun durumu bu arada değiştiği için geri çekme işlemi yapılamadı. Güncel durumu bu sayfada görebilirsiniz.',
+    );
+  }
   return safeJson<CandidateStatusDto>(response);
 };
 
