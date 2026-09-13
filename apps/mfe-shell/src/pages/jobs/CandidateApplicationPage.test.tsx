@@ -84,6 +84,11 @@ const JOB = {
     'note',
   ],
   noticeVersion: 'kvkk-application-v1' as const,
+  candidateDataPolicy: {
+    mode: 'synthetic-only',
+    applicationNoticeVersion: 'kvkk-application-v2',
+    resumeImportNoticeVersion: 'candidate-resume-import-v2',
+  } as const,
 };
 
 // ats#240 B: ilana özel sorular. Sıra BİLEREK karışık (2, 1, 3): ekran `order`a göre dizmeli.
@@ -339,7 +344,7 @@ describe('CandidateApplicationPage', () => {
       expect.objectContaining({
         email: 'deniz.yilmaz@example.test',
         skills: expect.arrayContaining(['Ürün keşfi', 'erişilebilirlik']),
-        noticeVersion: 'kvkk-application-v1',
+        noticeVersion: 'kvkk-application-v2',
         accuracyConfirmedAt: expect.any(String),
       }),
       undefined,
@@ -478,6 +483,7 @@ describe('CandidateApplicationPage', () => {
       'A'.repeat(43),
       expect.any(String),
       undefined,
+      'candidate-resume-import-v2',
     );
     expect(apiMocks.uploadResumePdf).toHaveBeenCalledWith(
       CREATED_IMPORT,
@@ -1755,6 +1761,64 @@ describe('CandidateApplicationPage', () => {
     expect(await screen.findByRole('button', { name: 'Başvuruyu gönder' })).toBeInTheDocument();
   });
 
+  it.each(['synthetic-only', 'real-allowed'])(
+    'discloses the enforced %s policy separately from v2 consent',
+    async (mode) => {
+      apiMocks.getPublicJob.mockResolvedValueOnce({
+        ...JOB,
+        candidateDataPolicy: { ...JOB.candidateDataPolicy, mode },
+      });
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      expect(
+        screen.getAllByText(
+          mode === 'synthetic-only'
+            ? /Bu ortamda yalnız sentetik aday verisi kullanın/
+            : /Bu ortamda sentetik veri kısıtı uygulanmıyor/,
+        )[0],
+      ).toBeVisible();
+      const consent = screen.getByLabelText(/CV içe aktarma aydınlatmasını okudum/);
+      expect(consent.closest('label')).not.toHaveTextContent('yalnız sentetik veri kullanacağımı');
+      expect(consent.closest('label')).toHaveTextContent('candidate-resume-import-v2');
+      expect(screen.queryByText(/Testte gerçek kişisel veri kullanmayın/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Test ortamında gerçek kişisel veri kullanmayın/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    undefined,
+    { ...JOB.candidateDataPolicy, mode: 'unknown' },
+    { ...JOB.candidateDataPolicy, applicationNoticeVersion: 'future-version' },
+  ])(
+    'does not collect consent or send data with unknown policy %j',
+    async (candidateDataPolicy) => {
+      apiMocks.getPublicJob.mockResolvedValueOnce({ ...JOB, candidateDataPolicy });
+      renderPage();
+      await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+      expect(screen.getByText(/Aday verisi politikası doğrulanamadı/)).toBeVisible();
+      expect(
+        screen.queryByLabelText(/CV içe aktarma aydınlatmasını okudum/),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId('candidate-resume')).toBeDisabled();
+      fireEvent.change(screen.getByTestId('candidate-resume'), {
+        target: {
+          files: [new File(['%PDF synthetic'], 'synthetic.pdf', { type: 'application/pdf' })],
+        },
+      });
+      expect(apiMocks.createResumeImport).not.toHaveBeenCalled();
+      expect(apiMocks.uploadResumePdf).not.toHaveBeenCalled();
+      await reachPreview();
+      expect(
+        screen.queryByLabelText(/KVKK başvuru aydınlatma metnini okudum/),
+      ).not.toBeInTheDocument();
+      screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu gönder' }));
+      expect(apiMocks.submitApplication).not.toHaveBeenCalled();
+    },
+  );
+
   it('surfaces the backend policy rejection instead of a hardcoded client message', async () => {
     apiMocks.submitApplication.mockRejectedValueOnce(
       new Error('Bu ortam yalnız sentetik .test e-posta kabul eder'),
@@ -1819,7 +1883,7 @@ describe('CandidateApplicationPage', () => {
     renderPage();
     await reachPreview();
 
-    const disclosure = screen.getByTestId('kvkk-notice-disclosure-kvkk-application-v1');
+    const disclosure = screen.getByTestId('kvkk-notice-disclosure-kvkk-application-v2');
     // The action color is only 4.37:1 on the disclosure's subtle surface.
     expect(disclosure.querySelector('summary')).toHaveClass('text-text-primary', 'underline');
     expect(disclosure.querySelector('summary')).not.toHaveClass('text-action-primary');
@@ -1869,7 +1933,7 @@ describe('CandidateApplicationPage', () => {
 
     // Metin yok → açılır bölüm de, KVKK onay kutusu da yok.
     expect(
-      screen.queryByTestId('kvkk-notice-disclosure-kvkk-application-v1'),
+      screen.queryByTestId('kvkk-notice-disclosure-kvkk-application-v2'),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/aydınlatma metnini okudum/i)).not.toBeInTheDocument();
     // Ve gönderim kapalı kalır.

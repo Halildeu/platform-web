@@ -3,6 +3,13 @@ import { api } from '@mfe/shared-http';
 export const ATS_API_BASE = '/api/ats/v1';
 export const APPLICATION_NOTICE_VERSION = 'kvkk-application-v1' as const;
 export const RESUME_IMPORT_NOTICE_VERSION = 'candidate-resume-import-v1' as const;
+export const APPLICATION_POLICY_NOTICE_VERSION = 'kvkk-application-v2' as const;
+export const RESUME_IMPORT_POLICY_NOTICE_VERSION = 'candidate-resume-import-v2' as const;
+export type CandidateDataPolicyDto = {
+  mode: 'synthetic-only' | 'real-allowed';
+  applicationNoticeVersion: typeof APPLICATION_POLICY_NOTICE_VERSION;
+  resumeImportNoticeVersion: typeof RESUME_IMPORT_POLICY_NOTICE_VERSION;
+};
 // ATS ApplicationIntakeService.normalizeSubmission; server validation remains authoritative.
 export const APPLICATION_SUMMARY_LIMITS = { min: 10, max: 4000 } as const;
 export const APPLICATION_SUMMARY_ERROR = `Profesyonel özet ${APPLICATION_SUMMARY_LIMITS.min} ile ${APPLICATION_SUMMARY_LIMITS.max} karakter arasında olmalıdır.`;
@@ -160,6 +167,7 @@ export type PublicJobDto = {
    */
   questions?: PublicJobQuestionDto[];
   noticeVersion: typeof APPLICATION_NOTICE_VERSION;
+  candidateDataPolicy?: CandidateDataPolicyDto;
 };
 
 /**
@@ -198,7 +206,7 @@ export type ApplicationSubmissionDto = {
   languages?: string;
   certifications?: string;
   note?: string;
-  noticeVersion: typeof APPLICATION_NOTICE_VERSION;
+  noticeVersion: typeof APPLICATION_NOTICE_VERSION | typeof APPLICATION_POLICY_NOTICE_VERSION;
   noticeAcceptedAt: string;
   accuracyConfirmedAt: string;
   resumeImportId?: string;
@@ -243,7 +251,7 @@ export type ResumeImportDto = {
   state: 'ACTIVE' | 'CONFIRMED' | 'CANCELLED' | 'REJECT_ALL' | 'EXPIRED' | 'FAILED' | 'SUPERSEDED';
   version: number;
   documentVersion: number;
-  noticeVersion: typeof RESUME_IMPORT_NOTICE_VERSION;
+  noticeVersion: typeof RESUME_IMPORT_NOTICE_VERSION | typeof RESUME_IMPORT_POLICY_NOTICE_VERSION;
   noticeAcceptedAt: string;
   uploadExpiresAt: string;
   firstUploadAt: string | null;
@@ -826,6 +834,9 @@ export const createResumeImport = async (
   candidateAccessToken: string,
   noticeAcceptedAt: string,
   publicHandle?: string,
+  noticeVersion:
+    | typeof RESUME_IMPORT_NOTICE_VERSION
+    | typeof RESUME_IMPORT_POLICY_NOTICE_VERSION = RESUME_IMPORT_NOTICE_VERSION,
 ): Promise<ResumeImportDto> => {
   if (!IDEMPOTENCY_PATTERN.test(idempotencyKey))
     throw new Error('Güvenli CV işlem anahtarı geçersiz.');
@@ -839,7 +850,7 @@ export const createResumeImport = async (
     },
     credentials: 'same-origin',
     body: JSON.stringify({
-      noticeVersion: RESUME_IMPORT_NOTICE_VERSION,
+      noticeVersion,
       noticeAcceptedAt,
     }),
   });

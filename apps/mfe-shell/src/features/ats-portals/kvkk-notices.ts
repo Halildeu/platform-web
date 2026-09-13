@@ -210,6 +210,13 @@ const NOTICES_BY_TENANT: Record<string, Record<string, KvkkNotice>> = {
   acik: {
     [APPLICATION_NOTICE.version]: APPLICATION_NOTICE,
     [RESUME_IMPORT_NOTICE.version]: RESUME_IMPORT_NOTICE,
+    // v2 separates the environment policy from the acknowledgement. Legal terms
+    // remain identical; v1 records retain their original version and meaning.
+    'kvkk-application-v2': { ...APPLICATION_NOTICE, version: 'kvkk-application-v2' },
+    'candidate-resume-import-v2': {
+      ...RESUME_IMPORT_NOTICE,
+      version: 'candidate-resume-import-v2',
+    },
   },
 };
 
