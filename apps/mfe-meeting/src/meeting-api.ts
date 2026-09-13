@@ -1093,7 +1093,7 @@ export async function loadMeetingDetail(
       displayComplete,
       displayTranscript,
     );
-  } catch {
-    return mapCanonicalResult(meeting, result, [], false);
+  } catch (error) {
+    return failureRecord(meeting, describeMeetingDetailError(error), [], false);
   }
 }

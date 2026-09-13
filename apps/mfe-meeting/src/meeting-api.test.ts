@@ -654,6 +654,30 @@ describe('meeting canonical API boundary', () => {
     expect(get).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    [{ response: { status: 403, data: { error: 'FORBIDDEN' } } }, 'denied'],
+    [new Error('network'), 'retryable'],
+  ])('does not disguise a transcript read failure as an empty ready result (%s)', async (error, state) => {
+    const get = vi.fn(async (url: string) => {
+      if (url.endsWith('/intelligence/result')) return { data: canonicalResult() };
+      if (url.includes('/sessions?')) {
+        return { data: { content: [{ id: 'session-1' }], last: true } };
+      }
+      throw error;
+    });
+
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+
+    expect(detail.detail?.state).toBe(state);
+    expect(detail.transcript).toEqual([]);
+    expect(detail.transcriptFeed?.state).toBe('blocked');
+    expect(detail.summary.kind).toBe('pending');
+    expect(detail.summary.citations).toEqual([]);
+    expect(detail.decisions).toEqual([]);
+    expect(detail.actions).toEqual([]);
+    expect(get.mock.calls.some(([url]) => url.includes('/transcripts'))).toBe(true);
+  });
+
   it('does not bind citations to meeting-wide transcript when result session provenance is absent', async () => {
     const get = vi.fn((url: string) => {
       if (url.endsWith('/intelligence/result')) {
