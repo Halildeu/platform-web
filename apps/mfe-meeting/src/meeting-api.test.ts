@@ -11,6 +11,7 @@ import {
 } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 import type { MeetingShellServices } from './shell-services';
+import { formatTranscriptOffset } from './transcript-time';
 
 function createServices(get: ReturnType<typeof vi.fn>): MeetingShellServices {
   return {
@@ -117,6 +118,77 @@ function baseMeeting(): MeetingRecord {
 }
 
 describe('meeting canonical API boundary', () => {
+  it('binds reopened timestamps to each exact session without changing citation matching', async () => {
+    const origin = Date.parse('2026-09-13T16:00:00Z');
+    const rawStart = origin / 1000 + 71;
+    const result = canonicalResult();
+    result.summary_citations[0].start_sec = rawStart;
+    result.citations.forEach((value, index) => {
+      value.start_sec = rawStart + (index + 1) * 5;
+    });
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result')) return { data: result };
+      if (url.includes('/sessions?'))
+        return {
+          data: [
+            { id: 'session-1', startedAt: '2026-09-13T16:00:00Z' },
+            { id: 'session-2', startedAt: '2026-09-13T17:00:00Z' },
+          ],
+        };
+      const page = transcriptPage();
+      if (url.includes('sessionId=session-2'))
+        return {
+          data: {
+            ...page,
+            content: [
+              {
+                ...page.content[0],
+                id: 'extra',
+                startTime: origin / 1000 + 3605,
+              },
+            ],
+          },
+        };
+      return {
+        data: {
+          ...page,
+          content: page.content.map((segment, index) => ({
+            ...segment,
+            startTime: rawStart + index * 5,
+          })),
+        },
+      };
+    });
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+    expect(detail.transcript.map(formatTranscriptOffset)).toEqual([
+      '01:11',
+      '01:16',
+      '01:21',
+      '00:05',
+    ]);
+    expect(detail.transcript[0].startedAtMs).toBe(rawStart * 1000);
+    expect(detail.summary.citations[0]?.segmentId).toBe('segment-1');
+    expect(detail.decisions[0]?.citations[0]?.segmentId).toBe('segment-2');
+
+    const reopened = await loadMeetingDetail(detail, {
+      services: createServices(get),
+      sessionId: 'session-1',
+    });
+    expect(reopened.transcript.map(formatTranscriptOffset)).toEqual(['01:11', '01:16', '01:21']);
+    expect(reopened.summary.citations).toEqual(detail.summary.citations);
+  });
+
+  it('retains canonical content and citations but hides time when the session origin is unavailable', async () => {
+    const get = vi.fn(async (url: string) => {
+      if (url.includes('/intelligence/result')) return { data: canonicalResult() };
+      if (url.includes('/sessions?')) return { data: [{ id: 'session-1' }] };
+      return { data: transcriptPage() };
+    });
+    const detail = await loadMeetingDetail(baseMeeting(), { services: createServices(get) });
+    expect(detail.transcript.map(formatTranscriptOffset)).toEqual(['--:--', '--:--', '--:--']);
+    expect(detail.summary.citations[0]?.segmentId).toBe('segment-1');
+  });
+
   it.each(['array', 'page'])(
     'selects an exact prior session from a %s response without fetching other session transcripts',
     async (shape) => {

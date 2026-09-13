@@ -21,6 +21,7 @@ export interface FlowGroup {
   speaker: string;
   speakerKey?: string;
   startedAtMs: number;
+  timeOriginMs?: number | null;
   /** Cümle-sınırlı paragraflar; her paragraf segment listesi taşır. */
   paragraphs: TranscriptSegment[][];
   /** Grubun sonundaki commit edilmemiş canlı kuyruk segmentleri. */
@@ -57,6 +58,7 @@ export function buildTranscriptFlow(segments: readonly TranscriptSegment[]): Flo
         speaker: segment.speaker,
         ...(segment.speakerKey ? { speakerKey: segment.speakerKey } : {}),
         startedAtMs: segment.startedAtMs,
+        timeOriginMs: segment.timeOriginMs,
         paragraphs: [[segment]],
         tail: [],
       });

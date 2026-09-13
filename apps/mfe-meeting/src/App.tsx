@@ -1,4 +1,5 @@
 import { expandSpeakerTurns } from './speaker-attribution';
+import { formatTranscriptOffset } from './transcript-time';
 import {
   AlertCircle,
   CalendarDays,
@@ -119,12 +120,6 @@ function formatStart(value: string): string {
   }).format(new Date(value));
 }
 
-function formatOffset(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
 function MeetingListItem({
   meeting,
   selected,
@@ -212,12 +207,12 @@ function CitationTrail({
   return (
     <div className="citation-trail" aria-label="Kaynaklar">
       <span className={`confidence-chip confidence-${confidence >= 0.85 ? 'high' : 'medium'}`}>
-        {confidenceLabel(confidence)} güven
+        Kaynak eşleşmesi: {confidenceLabel(confidence)}
       </span>
       {finalCitations.map((citation) => {
         const segment = meeting.transcript.find((item) => item.id === citation.segmentId);
         const label = segment
-          ? `${formatOffset(segment.startedAtMs)} · ${segment.speaker}`
+          ? `${formatTranscriptOffset(segment)} · ${segment.speaker}`
           : citation.segmentId;
         return (
           <a
@@ -293,7 +288,7 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
           {buildTranscriptFlow(segments).map((group) => (
             <article className="transcript-flow-group" key={group.id}>
               <div className="segment-meta">
-                <span>{formatOffset(group.startedAtMs)}</span>
+                <span>{formatTranscriptOffset(group)}</span>
                 <span>{group.speaker}</span>
               </div>
               {group.paragraphs.map((paragraph, paragraphIndex) => (
@@ -333,7 +328,7 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
               key={segment.id}
             >
               <div className="segment-meta">
-                <span>{formatOffset(segment.startedAtMs)}</span>
+                <span>{formatTranscriptOffset(segment)}</span>
                 <span>{segment.speaker}</span>
                 <span>{segmentStatusLabel(segment.status)}</span>
               </div>

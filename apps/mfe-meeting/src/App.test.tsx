@@ -7,6 +7,34 @@ import type { MeetingWorkbenchData } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 
 describe('MeetingApp', () => {
+  it('shows session-relative time in rows, flowing text and citation links after reopening', async () => {
+    const data = createDemoWorkbenchData();
+    const origin = Date.parse('2026-09-13T16:00:00Z');
+    const record = { ...data.records[0] };
+    record.transcript = record.transcript.map((segment) => ({
+      ...segment,
+      startedAtMs: origin + segment.startedAtMs + 71000,
+      timeOriginMs: origin,
+    }));
+    const props = {
+      loadWorkbench: async () => ({ ...data, records: [record] }),
+      subscribeAuthChanges: () => () => undefined,
+      resolveLiveStreamEndpoint: () => null,
+    };
+    const view = render(<MeetingApp {...props} />);
+    const link = await screen.findAllByRole('link', { name: /^01:11/ });
+    expect(link[0]).toHaveAttribute('href', `#segment-${record.transcript[0].id}`);
+    expect(screen.getByTestId('transcript-flow')).toHaveTextContent('01:11');
+    fireEvent.click(screen.getByRole('button', { name: 'Satırlar' }));
+    expect(document.getElementById(`segment-${record.transcript[0].id}`)).toHaveTextContent('01:11');
+    expect(document.body.textContent).not.toMatch(/298\d{5}:/);
+    view.unmount();
+    render(<MeetingApp {...props} />);
+    expect((await screen.findAllByRole('link', { name: /^01:11/ }))[0]).toHaveAttribute(
+      'href', `#segment-${record.transcript[0].id}`,
+    );
+  });
+
   it('isolates session switches, ignores late results and reopens the URL selection', async () => {
     const record = normalizeWorkbenchPayload({
       content: [{ id: 'meeting-sessions', title: 'Oturum testi', status: 'COMPLETED' }],
@@ -131,7 +159,21 @@ describe('MeetingApp', () => {
       screen.getByText('Web ürün yüzeyi acceptance hattından bağımsız paralel ilerleyecek.'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /00:00 · Ürün/i })).toHaveLength(2);
-    expect(screen.getAllByText('Yüksek güven')).not.toHaveLength(0);
+    expect(screen.getAllByText('Kaynak eşleşmesi: Yüksek')).not.toHaveLength(0);
+    expect(screen.queryByText('Yüksek güven')).not.toBeInTheDocument();
+  });
+
+  it('labels citation similarity as source matching, not semantic confidence', async () => {
+    const data = createDemoWorkbenchData();
+    const record = {
+      ...data.records[0],
+      summary: { ...data.records[0].summary, confidence: 0.7 },
+    };
+    render(<MeetingApp loadWorkbench={async () => ({ ...data, records: [record] })} />);
+
+    expect(await screen.findAllByText('Kaynak eşleşmesi: Orta')).not.toHaveLength(0);
+    expect(screen.queryByText(/^(Yüksek|Orta|Düşük) güven$/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /00:00 · Ürün/i })).toHaveLength(2);
   });
 
   it('filters blocked meetings and keeps empty transcript state honest', async () => {
