@@ -1,4 +1,5 @@
 import { parseSpeakerAttribution } from './speaker-attribution';
+import { sessionTimeOrigin } from './transcript-time';
 import {
   meetings,
   orderTranscriptSegments,
@@ -445,7 +446,7 @@ export async function loadMeetingById(
   return meeting;
 }
 
-function mapTranscript(payload: unknown): MeetingRecord['transcript'] {
+function mapTranscript(payload: unknown, startedAt?: string): MeetingRecord['transcript'] {
   if (!isRecord(payload)) return [];
   return readArray(payload.content).flatMap((value) => {
     if (!isRecord(value)) return [];
@@ -460,6 +461,7 @@ function mapTranscript(payload: unknown): MeetingRecord['transcript'] {
         id,
         speaker: readString(value, 'speakerId', 'Konuşmacı'),
         startedAtMs: Math.max(0, readNumber(value, 'startTime') * 1000),
+        timeOriginMs: sessionTimeOrigin(startedAt),
         status:
           rawStatus === 'FINALIZED'
             ? ('final' as const)
@@ -1055,7 +1057,12 @@ export async function loadMeetingDetail(
       result.sessionId,
       transcriptsEndpoint,
     );
-    const analysisTranscript = mapTranscript(transcriptResponse.payload);
+    const sessionStart = (id: string) =>
+      meeting.analysisSessions?.find((session) => session.id === id)?.startedAt;
+    const analysisTranscript = mapTranscript(
+      transcriptResponse.payload,
+      sessionStart(result.sessionId),
+    );
     // gitops#3421: analiz sonucu yalnız SON run'ın oturumuna bağlanıyor;
     // socket-close sonrası açılan kısa kuyruk oturumu 'son run' olunca ana
     // oturumun içeriği ekranda hiç görünmüyordu. Diğer oturumların
@@ -1077,7 +1084,7 @@ export async function loadMeetingDetail(
               .filter((id) => id !== result.sessionId);
       for (const sessionId of sessionIds) {
         const extra = await loadTranscriptPages(services, sessionId, transcriptsEndpoint);
-        extraSegments.push(...mapTranscript(extra.payload));
+        extraSegments.push(...mapTranscript(extra.payload, sessionStart(sessionId)));
         displayComplete = displayComplete && extra.complete;
       }
     } catch {

@@ -134,6 +134,8 @@ export function chunkToSegment(
     id: chunk.eventId?.trim() ? chunk.eventId.trim() : `live-sse-${receivedAtMs}-${seq}`,
     speaker: 'Kayıtçı',
     startedAtMs: receivedAtMs,
+    // Receipt time is not the audio capture offset; reconnect cannot establish an origin.
+    timeOriginMs: null,
     status: liveStatusToSegmentStatus(chunk.status),
     text: chunk.text ?? '',
     ...(parseSpeakerAttribution(chunk.speakerAttribution, chunk.text ?? '')

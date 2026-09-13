@@ -13,6 +13,8 @@ export interface TranscriptSegment {
   speakerKey?: string;
   speakerAttribution?: SpeakerAttribution;
   startedAtMs: number;
+  /** Display only: undefined for relative streams, null when the origin is unknown. */
+  timeOriginMs?: number | null;
   status: TranscriptSegmentStatus;
   text: string;
   /**
