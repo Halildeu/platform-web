@@ -25,6 +25,11 @@ const JOB = {
     'note',
   ],
   noticeVersion: 'kvkk-application-v1',
+  candidateDataPolicy: {
+    mode: 'synthetic-only',
+    applicationNoticeVersion: 'kvkk-application-v2',
+    resumeImportNoticeVersion: 'candidate-resume-import-v2',
+  },
 };
 
 const SECOND_JOB = {
@@ -102,7 +107,8 @@ const installAtsApi = async (page: Page, submissions: Array<Record<string, unkno
     }
     if (request.method() === 'POST' && path.endsWith(`/jobs/${JOB.slug}/resume-imports`)) {
       const body = JSON.parse(request.postData() ?? '{}') as Record<string, unknown>;
-      resumeImport = { ...resumeImport, noticeAcceptedAt: body.noticeAcceptedAt };
+      expect(body.noticeVersion).toBe('candidate-resume-import-v2');
+      resumeImport = { ...resumeImport, noticeVersion: body.noticeVersion, noticeAcceptedAt: body.noticeAcceptedAt };
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -492,6 +498,7 @@ test.describe('Faz 25 public candidate journey', () => {
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(submissions).toHaveLength(1);
     expect(submissions[0]).toMatchObject({
+      noticeVersion: 'kvkk-application-v2',
       fullName: 'Düzenlenmiş Demo Adayı',
       email: 'deniz.yilmaz@example.test',
       linkedIn: 'https://www.linkedin.com/in/deniz-demo',
