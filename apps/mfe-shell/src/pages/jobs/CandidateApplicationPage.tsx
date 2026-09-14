@@ -1745,7 +1745,7 @@ const CandidateApplicationPage = () => {
         publicHandle,
       );
       setReceipt(saved);
-      setCandidateSessionSaved(saveCandidateSession(saved));
+      setCandidateSessionSaved(saveCandidateSession(saved, job?.title));
       setView('receipt');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (submissionError) {

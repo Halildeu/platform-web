@@ -12,7 +12,11 @@ import {
   parseTrackingCredentialFile,
   readCandidateEmailSession,
   readCandidateSession,
+  readCandidateSessions,
+  rememberCandidateApplicationSummary,
+  removeCandidateSession,
   requestCandidateLoginCode,
+  selectCandidateSession,
   respondCandidateOffer,
   verifyCandidateLoginCode,
   withdrawCandidateApplication,
@@ -22,6 +26,7 @@ import {
   type CandidateLoginApplicationDto,
   type CandidateOfferDto,
   type CandidateSession,
+  type CandidateSessionEntry,
   type CandidateStatusDto,
 } from '../../features/ats-portals/api/application-api';
 
@@ -170,6 +175,10 @@ const CandidatePortalPage = () => {
    * çiftiyle oturumu buradan kurabilir.
    */
   const [session, setSession] = useState<CandidateSession | null>(() => readCandidateSession());
+  /** #965: bu sekmede açılmış tüm başvurular; geçiş listesi bundan çizilir. */
+  const [tabApplications, setTabApplications] = useState<CandidateSessionEntry[]>(
+    () => readCandidateSessions().entries,
+  );
   const [signInRef, setSignInRef] = useState('');
   const [signInToken, setSignInToken] = useState('');
   const [signInError, setSignInError] = useState('');
@@ -228,9 +237,19 @@ const CandidatePortalPage = () => {
   const [responseAcknowledged, setResponseAcknowledged] = useState(false);
   const [responding, setResponding] = useState(false);
   const offerMutation = useRef<{ signature: string; key: string } | null>(null);
+  /**
+   * #965: başvurular arasında hızlı geçişte önceki başvurunun geç gelen yanıtı
+   * yeni başvurunun ekranını ezmesin; yalnız son isteğin sonucu yazılır.
+   */
+  const refreshSequence = useRef(0);
+
+  const syncTabApplications = useCallback(() => {
+    setTabApplications(readCandidateSessions().entries);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!session) return;
+    const sequence = ++refreshSequence.current;
     setLoading(true);
     setInterviewsLoading(true);
     setOffersLoading(true);
@@ -242,8 +261,15 @@ const CandidatePortalPage = () => {
       getCandidateInterviews(session),
       getCandidateOffers(session),
     ]);
+    if (sequence !== refreshSequence.current) return;
     if (statusResult.status === 'fulfilled') {
       setStatus(statusResult.value);
+      rememberCandidateApplicationSummary(session.publicRef, {
+        jobTitle: statusResult.value.jobTitle,
+        status: statusResult.value.status,
+        createdAt: statusResult.value.createdAt,
+      });
+      syncTabApplications();
     } else {
       setStatus(null);
       setError(
@@ -273,7 +299,7 @@ const CandidatePortalPage = () => {
     setLoading(false);
     setInterviewsLoading(false);
     setOffersLoading(false);
-  }, [session]);
+  }, [session, syncTabApplications]);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -408,18 +434,18 @@ const CandidatePortalPage = () => {
     }
     setSignInError('');
     setSignInToken('');
-    setError('');
+    resetApplicationView();
     setSession(next);
+    syncTabApplications();
   };
 
-  /** Yanlış çiftle girildiğinde adayın forma dönebilmesi gerekir. */
-  const signOut = () => {
-    // Düğmenin adı "başka referans ve anahtarla gir" — adayı o seçeneğe
-    // GÖTÜRMELİ. Aksi halde çıkış yapıp e-posta ekranında kalıyordu ve
-    // söylenen şeyi yapmak için bir tık daha gerekiyordu.
-    setSignInOption('manual');
-    clearCandidateSession();
-    setSession(null);
+  /**
+   * Bir başvurudan ötekine geçerken önceki başvurunun ekran durumu temizlenir.
+   * Özellikle geri çekme ve teklif yanıtı onayları başvuruya özgüdür: A için
+   * verilen onay B'ye taşınmamalı (#992 A2 ile aynı ders).
+   */
+  const resetApplicationView = () => {
+    refreshSequence.current += 1;
     setStatus(null);
     setInterviews([]);
     setOffers([]);
@@ -428,6 +454,59 @@ const CandidatePortalPage = () => {
     setOfferError('');
     setActionError('');
     setSuccessMessage('');
+    setWithdrawalOpen(false);
+    setWithdrawalConfirmed(false);
+    setResponseTarget(null);
+    setResponseAcknowledged(false);
+    offerMutation.current = null;
+  };
+
+  /** #965: sekmedeki başka bir başvuruyu açar. */
+  const openTabApplication = (publicRef: string) => {
+    if (publicRef === session?.publicRef) return;
+    const next = selectCandidateSession(publicRef);
+    syncTabApplications();
+    if (!next) return;
+    resetApplicationView();
+    setSession(next);
+  };
+
+  /**
+   * #965: tek başvurunun anahtarını bu sekmeden kaldırır; sunucudaki başvuruya
+   * dokunmaz. Açık olan kaldırılırsa sıradaki açılır.
+   */
+  const removeTabApplication = (publicRef: string) => {
+    const next = removeCandidateSession(publicRef);
+    syncTabApplications();
+    if (publicRef !== session?.publicRef) return;
+    resetApplicationView();
+    setSession(next);
+  };
+
+  /**
+   * Yanlış çiftle girildiğinde adayın forma dönebilmesi gerekir. #965: yalnız
+   * çözülemeyen çift sekmeden çıkar; diğer başvuruların anahtarları kalır.
+   */
+  const signInAgain = () => {
+    // Düğmenin adı "başka referans ve anahtarla gir" — adayı o seçeneğe
+    // GÖTÜRMELİ. Aksi halde çıkış yapıp e-posta ekranında kalıyordu ve
+    // söylenen şeyi yapmak için bir tık daha gerekiyordu.
+    setSignInOption('manual');
+    if (session) removeCandidateSession(session.publicRef);
+    syncTabApplications();
+    resetApplicationView();
+    setSession(null);
+    setSignInError('');
+    setSignInToken('');
+  };
+
+  /** Paylaşılan cihazda sekmedeki TÜM başvuru anahtarlarını bırakır. */
+  const signOut = () => {
+    setSignInOption('manual');
+    clearCandidateSession();
+    syncTabApplications();
+    resetApplicationView();
+    setSession(null);
     setSignInError('');
     setSignInToken('');
   };
@@ -906,6 +985,79 @@ const CandidatePortalPage = () => {
             KABUĞU kalıyordu — sayfanın altında boş bir kart duruyordu (canlıda
             ekran görüntüsüyle görüldü). Kabuk da koşula bağlandı. */}
 
+        {/* #965: aynı sekmede birden çok başvuru. Önceden ikinci başvuru ilkinin
+            anahtarını eziyordu; aday ilk başvurusuna bu ekrandan dönemiyordu. */}
+        {tabApplications.length > 1 ? (
+          <section
+            className="mt-6 rounded-3xl border border-border-subtle bg-surface-default p-5 shadow-xs sm:p-6"
+            aria-labelledby="candidate-tab-applications-heading"
+            data-testid="candidate-tab-applications"
+          >
+            <h2 id="candidate-tab-applications-heading" className="text-lg font-bold">
+              Bu sekmedeki başvurularım
+            </h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Bu tarayıcı sekmesinde açtığınız başvurular. Listeden kaldırmak yalnız bu sekmedeki
+              erişimi kaldırır; başvurunuz silinmez veya geri çekilmez.
+            </p>
+            <ul className="mt-4 space-y-3">
+              {tabApplications.map((entry) => {
+                const active = entry.publicRef === session?.publicRef;
+                const title = entry.jobTitle ?? entry.publicRef;
+                return (
+                  <li
+                    key={entry.publicRef}
+                    data-testid={`candidate-tab-application-${entry.publicRef}`}
+                    aria-current={active ? 'true' : undefined}
+                    className={`rounded-2xl border p-4 ${
+                      active
+                        ? 'border-action-primary bg-surface-muted'
+                        : 'border-border-subtle bg-surface-subtle'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="break-all font-semibold text-text-primary">{title}</p>
+                      {entry.status ? (
+                        <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-bold">
+                          {statusCopy(entry.status).label}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      {entry.createdAt ? `${formatDate(entry.createdAt)} · ` : ''}
+                      <span className="break-all font-mono">{entry.publicRef}</span>
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {active ? (
+                        <span className="inline-flex min-h-10 items-center text-sm font-bold text-action-primary">
+                          Şu an açık
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openTabApplication(entry.publicRef)}
+                          aria-label={`${title} başvurusunu aç`}
+                          className="min-h-10 rounded-xl border border-border-strong bg-surface-default px-4 py-2 text-sm font-bold"
+                        >
+                          Aç
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeTabApplication(entry.publicRef)}
+                        aria-label={`${title} başvurusunu bu listeden kaldır`}
+                        className="min-h-10 rounded-xl border border-border-subtle bg-surface-default px-4 py-2 text-sm font-bold"
+                      >
+                        Bu listeden kaldır
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+
         {loading ? (
           <div
             className="mt-6 rounded-2xl border border-border-subtle bg-surface-default p-6 text-sm text-text-secondary"
@@ -934,7 +1086,7 @@ const CandidatePortalPage = () => {
                   hatalı oturumda kilitli kalır ve doğru anahtarı giremez. */}
               <button
                 type="button"
-                onClick={signOut}
+                onClick={signInAgain}
                 data-testid="candidate-sign-in-again"
                 className="min-h-11 rounded-xl border border-border-subtle bg-surface-default px-4 py-2 text-sm font-bold"
               >
