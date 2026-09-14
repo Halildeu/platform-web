@@ -30,6 +30,10 @@ import {
   listRecruiterJobs,
   listRecruiterOffers,
   readCandidateSession,
+  readCandidateSessions,
+  rememberCandidateApplicationSummary,
+  removeCandidateSession,
+  selectCandidateSession,
   respondCandidateOffer,
   replaceResumePdf,
   saveCandidateSession,
@@ -349,6 +353,192 @@ describe('application-api', () => {
       }),
     );
     expect(readCandidateSession()).toBeNull();
+  });
+
+  describe('multi-application tab sessions (#965)', () => {
+    const REF_A = `app_${'a'.repeat(24)}`;
+    const REF_B = `app_${'b'.repeat(24)}`;
+    const receipt = (publicRef: string, token: string) => ({
+      publicRef,
+      candidateAccessToken: token,
+      status: 'SUBMITTED' as const,
+      version: 0,
+      submittedAt: '2026-07-16T10:00:00Z',
+      replayed: false,
+    });
+
+    it('keeps the earlier application when a second one is saved in the same tab', () => {
+      // #965'in kökü: ikinci ilana başvurmak ilk başvurunun anahtarını EZİYORDU.
+      expect(saveCandidateSession(receipt(REF_A, 'A'.repeat(43)), 'Ürün Yöneticisi')).toBe(true);
+      expect(saveCandidateSession(receipt(REF_B, 'B'.repeat(43)), 'Kıdemli Frontend')).toBe(true);
+
+      const { activeRef, entries } = readCandidateSessions();
+      expect(activeRef).toBe(REF_B);
+      expect(entries.map((entry) => entry.publicRef)).toEqual([REF_B, REF_A]);
+      expect(entries.map((entry) => entry.jobTitle)).toEqual(['Kıdemli Frontend', 'Ürün Yöneticisi']);
+      expect(readCandidateSession()).toEqual({
+        publicRef: REF_B,
+        candidateAccessToken: 'B'.repeat(43),
+      });
+      expect(window.localStorage.length).toBe(0);
+    });
+
+    it('switches the active application without losing the other one', () => {
+      establishCandidateSession(REF_A, 'A'.repeat(43));
+      establishCandidateSession(REF_B, 'B'.repeat(43));
+
+      expect(selectCandidateSession(REF_A)).toEqual({
+        publicRef: REF_A,
+        candidateAccessToken: 'A'.repeat(43),
+      });
+      expect(readCandidateSession()?.publicRef).toBe(REF_A);
+      expect(readCandidateSessions().entries).toHaveLength(2);
+      // Listede olmayan referansa geçilemez; etkin kayıt değişmez.
+      expect(selectCandidateSession(`app_${'z'.repeat(24)}`)).toBeNull();
+      expect(readCandidateSession()?.publicRef).toBe(REF_A);
+    });
+
+    it('does not duplicate an application added twice; the latest key wins', () => {
+      establishCandidateSession(REF_A, 'A'.repeat(43));
+      establishCandidateSession(REF_B, 'B'.repeat(43));
+      establishCandidateSession(REF_A, 'C'.repeat(43));
+
+      const { activeRef, entries } = readCandidateSessions();
+      expect(entries.map((entry) => entry.publicRef)).toEqual([REF_A, REF_B]);
+      expect(entries[0].candidateAccessToken).toBe('C'.repeat(43));
+      expect(activeRef).toBe(REF_A);
+    });
+
+    it('removes one application from the tab and opens the next one', () => {
+      establishCandidateSession(REF_A, 'A'.repeat(43));
+      establishCandidateSession(REF_B, 'B'.repeat(43));
+
+      expect(removeCandidateSession(REF_B)).toEqual({
+        publicRef: REF_A,
+        candidateAccessToken: 'A'.repeat(43),
+      });
+      expect(readCandidateSessions().entries.map((entry) => entry.publicRef)).toEqual([REF_A]);
+      expect(readCandidateSession()?.publicRef).toBe(REF_A);
+
+      expect(removeCandidateSession(REF_A)).toBeNull();
+      expect(readCandidateSession()).toBeNull();
+      expect(window.sessionStorage.getItem('ats.candidate.sessions.v2')).toBeNull();
+    });
+
+    it('keeps the active application when an inactive one is removed', () => {
+      establishCandidateSession(REF_A, 'A'.repeat(43));
+      establishCandidateSession(REF_B, 'B'.repeat(43));
+
+      expect(removeCandidateSession(REF_A)?.publicRef).toBe(REF_B);
+      expect(readCandidateSession()?.publicRef).toBe(REF_B);
+    });
+
+    it('signs out of every application in the tab for shared devices', () => {
+      establishCandidateSession(REF_A, 'A'.repeat(43));
+      establishCandidateSession(REF_B, 'B'.repeat(43));
+
+      clearCandidateSession();
+
+      expect(readCandidateSessions()).toEqual({ activeRef: null, entries: [] });
+      expect(window.sessionStorage.getItem('ats.candidate.sessions.v2')).toBeNull();
+    });
+
+    it('migrates the previous single-application record without loss', () => {
+      window.sessionStorage.setItem(
+        'ats.candidate.latest.v1',
+        JSON.stringify({ publicRef: REF_A, candidateAccessToken: 'A'.repeat(43) }),
+      );
+
+      expect(readCandidateSession()).toEqual({
+        publicRef: REF_A,
+        candidateAccessToken: 'A'.repeat(43),
+      });
+      expect(readCandidateSessions().entries.map((entry) => entry.publicRef)).toEqual([REF_A]);
+      expect(window.sessionStorage.getItem('ats.candidate.latest.v1')).toBeNull();
+      expect(window.sessionStorage.getItem('ats.candidate.sessions.v2')).not.toBeNull();
+
+      // Migrasyondan sonra yeni başvuru eskisini ezmez.
+      establishCandidateSession(REF_B, 'B'.repeat(43));
+      expect(readCandidateSessions().entries.map((entry) => entry.publicRef)).toEqual([
+        REF_B,
+        REF_A,
+      ]);
+    });
+
+    it('keeps the old record when the migrated list cannot be written', () => {
+      window.sessionStorage.setItem(
+        'ats.candidate.latest.v1',
+        JSON.stringify({ publicRef: REF_A, candidateAccessToken: 'A'.repeat(43) }),
+      );
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+      try {
+        expect(readCandidateSession()?.publicRef).toBe(REF_A);
+        // Yeni liste yazılamadıysa eski kayıt SİLİNMEZ: aday erişimini kaybetmez.
+        expect(window.sessionStorage.getItem('ats.candidate.latest.v1')).not.toBeNull();
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it('drops a malformed entry without discarding the valid ones', () => {
+      window.sessionStorage.setItem(
+        'ats.candidate.sessions.v2',
+        JSON.stringify({
+          v: 2,
+          activeRef: 'app_too-short',
+          entries: [
+            { publicRef: 'app_too-short', candidateAccessToken: 'attacker-controlled' },
+            { publicRef: REF_A, candidateAccessToken: 'A'.repeat(43), addedAt: '2026-07-16T10:00:00Z' },
+          ],
+        }),
+      );
+
+      expect(readCandidateSessions().entries.map((entry) => entry.publicRef)).toEqual([REF_A]);
+      // Etkin referans geçersizse ilk geçerli kayıt etkin sayılır.
+      expect(readCandidateSession()?.publicRef).toBe(REF_A);
+    });
+
+    it('caps the tab list at 20 by dropping the oldest application', () => {
+      const refs = Array.from({ length: 21 }, (_, index) =>
+        `app_${String(index).padStart(24, 'x')}`,
+      );
+      refs.forEach((ref) => establishCandidateSession(ref, 'A'.repeat(43)));
+
+      const { activeRef, entries } = readCandidateSessions();
+      expect(entries).toHaveLength(20);
+      expect(entries.map((entry) => entry.publicRef)).not.toContain(refs[0]);
+      expect(activeRef).toBe(refs[20]);
+    });
+
+    it('remembers job, status and date for the switcher and nothing else', () => {
+      establishCandidateSession(REF_A, 'A'.repeat(43));
+
+      rememberCandidateApplicationSummary(REF_A, {
+        jobTitle: 'Ürün Yöneticisi',
+        status: 'UNDER_REVIEW',
+        createdAt: '2026-07-16T10:00:00Z',
+      });
+      // Listede olmayan başvuru için hiçbir şey yazılmaz.
+      rememberCandidateApplicationSummary(REF_B, {
+        jobTitle: 'Kıdemli Frontend',
+        status: 'SUBMITTED',
+        createdAt: '2026-07-17T10:00:00Z',
+      });
+
+      const { entries } = readCandidateSessions();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        publicRef: REF_A,
+        jobTitle: 'Ürün Yöneticisi',
+        status: 'UNDER_REVIEW',
+        createdAt: '2026-07-16T10:00:00Z',
+      });
+      expect(Object.keys(entries[0]).sort()).toEqual(
+        ['addedAt', 'candidateAccessToken', 'createdAt', 'jobTitle', 'publicRef', 'status'].sort(),
+      );
+    });
   });
 
   it('sends the candidate token only as a request header and never in the URL', async () => {
