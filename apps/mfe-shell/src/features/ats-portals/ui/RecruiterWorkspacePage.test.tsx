@@ -5,6 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RecruiterWorkspacePage from './RecruiterWorkspacePage';
+import RecruiterApplicationReviewPanel from './RecruiterApplicationReviewPanel';
 
 const apiMocks = vi.hoisted(() => ({
   listRecruiterApplications: vi.fn(),
@@ -957,6 +958,165 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.queryByRole('button', { name: 'Adayı reddet' })).not.toBeInTheDocument();
     expect(apiMocks.updateRecruiterApplicationStatus).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Durum güncellendi:/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * #992 Dilim B — madde 5 kabulünde görülen odak/yeniden akış bulguları (İK tarafı).
+   *
+   * <p>Kök neden: işlemden sonra `loadDetail()` `loading`'e geçiyor ve bu durum panelin
+   * TAMAMINI "yükleniyor…" yazısıyla değiştiriyordu. Basılan düğme DOM'dan kalkıyor, odak
+   * `body`'ye düşüyordu; klavye ve ekran okuyucu kullanıcısı işlem yaptığı yeri kaybediyordu.
+   * Sonuç mesajı da görüşme/teklif bölümlerinin altında, düğmelerden uzakta çıkıyordu.
+   */
+  describe('focus and message placement after actions (#992 B)', () => {
+    const evaluation = {
+      evaluationId: 'eval_abcdefghijklmnopqrstuvwx',
+      actorRef: 'user:test-recruiter',
+      policyVersion: 'structured-evaluation-v1',
+      jobRelatednessConfirmed: true,
+      recommendation: 'NO_HIRE',
+      criteria: [
+        {
+          key: 'role_requirements',
+          label: 'Rol gereklilikleriyle eşleşme',
+          rating: 1,
+          evidence: 'Sentetik işle ilgili yetersiz kanıt.',
+        },
+      ],
+      summary: 'Sentetik ilerletmeme gerekçesi.',
+      predecessorEvaluationId: null,
+      revision: 1,
+      createdAt: '2026-07-16T11:00:00Z',
+    };
+    const precedes = (first: Element, second: Element) =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    it('moves focus to the outcome after a status change instead of dropping it', async () => {
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      const start = await screen.findByRole('button', { name: 'İnsan incelemesini başlat' });
+      start.focus();
+      fireEvent.click(start);
+
+      const outcome = await screen.findByText('Durum güncellendi: İnsan incelemesinde.');
+      await waitFor(() => expect(outcome.closest('[data-testid="application-action-outcome"]')).toHaveFocus());
+      // Mesaj işlem düğmelerinin hemen altında; görüşme bölümünden önce.
+      expect(
+        precedes(outcome, screen.getByRole('heading', { name: 'Görüşme çalışma alanı' })),
+      ).toBe(true);
+    });
+
+    it('keeps the panel on screen while the record reloads after an action', async () => {
+      let resolveReload: (value: unknown) => void = () => undefined;
+      apiMocks.getRecruiterApplication
+        .mockResolvedValueOnce({ application: APPLICATION, history: [], evaluations: [] })
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveReload = resolve;
+            }),
+        );
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'İnsan incelemesini başlat' }));
+
+      await waitFor(() => expect(apiMocks.getRecruiterApplication).toHaveBeenCalledTimes(2));
+      // Yeniden yükleme sürerken panel ve sonuç mesajı yerinde kalır.
+      expect(screen.queryByText('Yetkili başvuru detayı yükleniyor…')).not.toBeInTheDocument();
+      expect(screen.getByText('Sentetik profesyonel özet')).toBeVisible();
+      expect(screen.getByText('Durum güncellendi: İnsan incelemesinde.')).toBeVisible();
+
+      resolveReload({
+        application: { ...APPLICATION, status: 'UNDER_REVIEW', version: 1 },
+        history: [],
+        evaluations: [],
+      });
+      expect(await screen.findByRole('button', { name: 'Kısa listeye al' })).toBeVisible();
+    });
+
+    it('moves focus to the error next to the actions after a conflict', async () => {
+      apiMocks.getRecruiterApplication
+        .mockResolvedValueOnce({ application: APPLICATION, history: [], evaluations: [] })
+        .mockResolvedValue({
+          application: { ...APPLICATION, status: 'UNDER_REVIEW', version: 1 },
+          history: [],
+          evaluations: [],
+        });
+      apiMocks.updateRecruiterApplicationStatus.mockRejectedValueOnce(
+        new Error('409 sürüm çakışması'),
+      );
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'İnsan incelemesini başlat' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('409 sürüm çakışması');
+      await waitFor(() =>
+        expect(alert.closest('[data-testid="application-action-outcome"]')).toHaveFocus(),
+      );
+      expect(
+        precedes(alert, screen.getByRole('heading', { name: 'Görüşme çalışma alanı' })),
+      ).toBe(true);
+    });
+
+    it('never shows the previous application while another one loads', async () => {
+      // Panel yeniden yüklemede yerinde kalıyor; ama BAŞKA bir başvuruya geçişte eski
+      // kaydın detayı ve düğmeleri, yenisi gelene kadar ekranda kalmamalı.
+      const OTHER_REF = 'app_zzzzzzzzzzzzzzzzzzzzzzzz';
+      let resolveOther: (value: unknown) => void = () => undefined;
+      apiMocks.getRecruiterApplication.mockImplementation((ref: string) =>
+        ref === OTHER_REF
+          ? new Promise((resolve) => {
+              resolveOther = resolve;
+            })
+          : Promise.resolve({ application: APPLICATION, history: [], evaluations: [] }),
+      );
+      const props = { canManage: true, onApplicationChanged: vi.fn() };
+      const { rerender } = render(
+        <RecruiterApplicationReviewPanel publicRef={APPLICATION.publicRef} {...props} />,
+      );
+      expect(await screen.findByText('Sentetik profesyonel özet')).toBeVisible();
+
+      rerender(<RecruiterApplicationReviewPanel publicRef={OTHER_REF} {...props} />);
+
+      expect(await screen.findByText('Yetkili başvuru detayı yükleniyor…')).toBeVisible();
+      expect(screen.queryByText('Sentetik profesyonel özet')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'İnsan incelemesini başlat' }),
+      ).not.toBeInTheDocument();
+
+      resolveOther({
+        application: {
+          ...APPLICATION,
+          publicRef: OTHER_REF,
+          summary: 'Diğer sentetik özet',
+        },
+        history: [],
+        evaluations: [],
+      });
+      expect(await screen.findByText('Diğer sentetik özet')).toBeVisible();
+    });
+
+    it('moves focus into the rejection panel and back to its opener on cancel', async () => {
+      apiMocks.getRecruiterApplication.mockResolvedValue({
+        application: { ...APPLICATION, status: 'UNDER_REVIEW' },
+        history: [],
+        evaluations: [evaluation],
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Ret kararını hazırla' }));
+
+      await waitFor(() =>
+        expect(screen.getByLabelText(/Son yapılandırılmış değerlendirmeyi inceledim/i)).toHaveFocus(),
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Ret kararını hazırla' })).toHaveFocus(),
+      );
+    });
   });
 
   it('plans a persisted interview from the reviewed application with a legal structured rubric', async () => {
