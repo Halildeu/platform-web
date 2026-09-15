@@ -527,6 +527,21 @@ const CandidatePortalPage = () => {
     setSuccessMessage('');
     try {
       const withdrawn = await withdrawCandidateApplication(session);
+      // Refresh only the originating entry; never resurrect a removed credential.
+      if (
+        readCandidateSessions().entries.some(
+          (entry) =>
+            entry.publicRef === session.publicRef &&
+            entry.candidateAccessToken === session.candidateAccessToken,
+        )
+      ) {
+        rememberCandidateApplicationSummary(session.publicRef, {
+          jobTitle: withdrawn.jobTitle,
+          status: withdrawn.status,
+          createdAt: withdrawn.createdAt,
+        });
+        syncTabApplications();
+      }
       if (!isCurrentView()) return;
       setStatus(withdrawn);
       try {

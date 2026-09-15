@@ -972,6 +972,28 @@ describe('CandidatePortalPage', () => {
       );
     });
 
+    it.each(['removed', 'replaced'] as const)(
+      'does not update a %s credential from a late withdrawal',
+      async (change) => {
+        const pending = deferred<typeof STATUS_B>();
+        apiMocks.withdrawCandidateApplication.mockReturnValue(pending.promise);
+        await startWithdrawalOnBThenOpenA();
+        if (change === 'removed') actual.removeCandidateSession(REF_B);
+        else actual.establishCandidateSession(REF_B, 'C'.repeat(43));
+        apiMocks.rememberCandidateApplicationSummary.mockClear();
+
+        await act(async () => {
+          pending.resolve({ ...STATUS_B, status: 'WITHDRAWN', withdrawalAllowed: false });
+        });
+
+        expect(summaryRef()).toHaveTextContent(REF_A);
+        expect(apiMocks.rememberCandidateApplicationSummary).not.toHaveBeenCalled();
+        const entry = actual.readCandidateSessions().entries.find((item) => item.publicRef === REF_B);
+        if (change === 'removed') expect(entry).toBeUndefined();
+        else expect(entry?.candidateAccessToken).toBe('C'.repeat(43));
+      },
+    );
+
     it('keeps A on screen when a withdrawal started on B fails after the switch', async () => {
       const pending = deferred<typeof STATUS_B>();
       apiMocks.withdrawCandidateApplication.mockReturnValue(pending.promise);
