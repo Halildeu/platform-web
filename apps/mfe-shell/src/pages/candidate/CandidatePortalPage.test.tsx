@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CandidatePortalPage from './CandidatePortalPage';
 
@@ -746,6 +746,145 @@ describe('CandidatePortalPage', () => {
       fireEvent.click(submit);
       await waitFor(() => expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledTimes(1));
       expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledWith(PAIR_A);
+    });
+
+    it.each(['success', 'failure'] as const)(
+      'ignores a pending withdrawal %s after switching applications',
+      async (outcome) => {
+        let finish: () => void = () => undefined;
+        apiMocks.withdrawCandidateApplication.mockImplementation(
+          () =>
+            new Promise((resolve, reject) => {
+              finish = () =>
+                outcome === 'success'
+                  ? resolve({ ...STATUS_B, status: 'WITHDRAWN', withdrawalAllowed: false })
+                  : reject(new Error('Previous application withdrawal failed'));
+            }),
+        );
+        renderPage();
+        await screen.findByText(REF_B, { selector: 'dd' });
+        fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+        fireEvent.click(
+          screen.getByLabelText(
+            /Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i,
+          ),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+        expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledWith(PAIR_B);
+
+        openA();
+        await screen.findByText(REF_A, { selector: 'dd' });
+        await act(async () => finish());
+
+        expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+        expect(screen.queryByText(REF_B, { selector: 'dd' })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Başvurunuz geri çekildi/)).not.toBeInTheDocument();
+        expect(
+          screen.queryByText('Previous application withdrawal failed'),
+        ).not.toBeInTheDocument();
+        expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A);
+      },
+    );
+
+    it.each(['success', 'failure'] as const)(
+      'ignores a pending offer response %s after switching applications',
+      async (outcome) => {
+        const offer = {
+          offerId: 'off_abcdefghijklmnopqrstuvwx',
+          applicationPublicRef: REF_B,
+          jobTitle: STATUS_B.jobTitle,
+          roleTitle: 'Synthetic frontend role',
+          startDate: '2026-10-01',
+          employmentType: 'Full time',
+          workMode: 'HYBRID',
+          location: 'Synthetic location',
+          compensationAmount: 120000,
+          currency: 'TRY',
+          payPeriod: 'MONTHLY',
+          expiresAt: '2026-09-30T12:00:00Z',
+          termsSummary: 'Synthetic offer',
+          status: 'EXTENDED',
+          version: 1,
+          updatedAt: '2026-09-15T00:00:00Z',
+          legalBoundary: 'Synthetic process response',
+        };
+        apiMocks.getCandidateOffers.mockImplementation(async (pair: { publicRef: string }) =>
+          pair.publicRef === REF_B ? [offer] : [],
+        );
+        let finish: () => void = () => undefined;
+        apiMocks.respondCandidateOffer.mockImplementation(
+          () =>
+            new Promise((resolve, reject) => {
+              finish = () =>
+                outcome === 'success'
+                  ? resolve({ ...offer, status: 'ACCEPTED', version: 2 })
+                  : reject(new Error('Previous application offer failed'));
+            }),
+        );
+        renderPage();
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Teklifi kabul etmeyi hazırla' }),
+        );
+        fireEvent.click(screen.getByLabelText(/yalnız ATS süreç yanıtı olduğunu/i));
+        fireEvent.click(screen.getByRole('button', { name: 'Kabul yanıtını kalıcı kaydet' }));
+        expect(apiMocks.respondCandidateOffer).toHaveBeenCalledWith(
+          PAIR_B,
+          offer,
+          'ACCEPTED',
+          'web-offer-response-1234',
+        );
+
+        openA();
+        await screen.findByText(REF_A, { selector: 'dd' });
+        await act(async () => finish());
+
+        expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+        expect(screen.queryByText(REF_B, { selector: 'dd' })).not.toBeInTheDocument();
+        expect(
+          screen.queryByText(/Teklif kabul yanıtınız kalıcı olarak kaydedildi/),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText('Previous application offer failed')).not.toBeInTheDocument();
+        expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A);
+      },
+    );
+
+    it('does not let an old withdrawal completion release a new withdrawal', async () => {
+      let finishB: () => void = () => undefined;
+      let finishA: () => void = () => undefined;
+      apiMocks.withdrawCandidateApplication.mockImplementation(
+        (pair: { publicRef: string }) =>
+          new Promise((resolve) => {
+            const finish = () =>
+              resolve({
+                ...(pair.publicRef === REF_A ? STATUS_A : STATUS_B),
+                status: 'WITHDRAWN',
+                withdrawalAllowed: false,
+              });
+            if (pair.publicRef === REF_A) finishA = finish;
+            else finishB = finish;
+          }),
+      );
+      const withdraw = () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+        fireEvent.click(
+          screen.getByLabelText(
+            /Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i,
+          ),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+      };
+      renderPage();
+      await screen.findByText(REF_B, { selector: 'dd' });
+      withdraw();
+      openA();
+      await screen.findByText(REF_A, { selector: 'dd' });
+      withdraw();
+      expect(apiMocks.withdrawCandidateApplication).toHaveBeenLastCalledWith(PAIR_A);
+      await act(async () => finishB());
+      expect(screen.getByRole('button', { name: 'Geri çekiliyor…' })).toBeDisabled();
+      expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+      await act(async () => finishA());
+      expect(screen.getByRole('status')).toHaveTextContent('Başvurunuz geri çekildi');
     });
 
     it('ignores a late answer for the application the candidate already left', async () => {
