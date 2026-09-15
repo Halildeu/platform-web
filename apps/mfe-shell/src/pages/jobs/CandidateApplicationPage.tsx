@@ -1248,12 +1248,24 @@ const CandidateApplicationPage = () => {
    * göstermek yanlış veri olur. O durumda açıklamaya eklenir: aday görür ve
    * düzeltir, ama hiçbir bilgi kaybolmaz.
    */
-  const splitDateRange = (dateText: string): { start: string; end: string; leftover: string } => {
+  const splitDateRange = (
+    dateText: string,
+    numericShape: RegExp,
+  ): { start: string; end: string; leftover: string } => {
     const raw = dateText.trim();
     if (!raw) return { start: '', end: '', leftover: '' };
-    const parts = raw.split(/\s*[-–—]\s*/u);
-    if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
-      return { start: parts[0].trim(), end: parts[1].trim(), leftover: '' };
+    // Match whole year/month tokens before the range separator; a month's hyphen is not a boundary.
+    const range = raw.match(
+      /^(\d{4}(?:-\d{2})?|[^–—-]+)\s*[-–—]\s*(\d{4}(?:-\d{2})?|[^–—-]+)$/u,
+    );
+    if (range) {
+      const start = range[1].trim();
+      const end = range[2].trim();
+      // Keep legacy date text, but never turn a lone month or malformed numeric date into a range.
+      const valid = [start, end].every(
+        (value) => value && (!/^[\d-]+$/u.test(value) || numericShape.test(value)),
+      );
+      if (valid) return { start, end, leftover: '' };
     }
     return { start: '', end: '', leftover: raw };
   };
@@ -1292,7 +1304,7 @@ const CandidateApplicationPage = () => {
           if (grouped.length > 0) {
             if (field === 'experience') {
               nextExperience = grouped.map((entry) => {
-                const { start, end, leftover } = splitDateRange(entry.dateText);
+                const { start, end, leftover } = splitDateRange(entry.dateText, MONTH_OR_YEAR_VALUE);
                 const description = [leftover, entry.description]
                   .filter((part) => part.trim())
                   .join('\n');
@@ -1309,7 +1321,7 @@ const CandidateApplicationPage = () => {
               });
             } else {
               nextEducation = grouped.map((entry) => {
-                const { start, end, leftover } = splitDateRange(entry.dateText);
+                const { start, end, leftover } = splitDateRange(entry.dateText, YEAR_VALUE);
                 const description = [leftover, entry.description]
                   .filter((part) => part.trim())
                   .join('\n');

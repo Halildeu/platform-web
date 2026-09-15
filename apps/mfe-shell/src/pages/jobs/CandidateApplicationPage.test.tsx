@@ -2325,7 +2325,7 @@ describe('CandidateApplicationPage', () => {
   });
 
   /** #218: ayrıştırıcının gruplayıp yayınladığı kayıtlarla taslak. */
-  const withGroupedEntries = () => {
+  const withGroupedEntries = (dateText = '2019 - 2023', educationDateText = '2011 - 2015') => {
     const base = apiMocks.confirmResumeImport.mock.results;
     apiMocks.confirmResumeImport.mockResolvedValue({
       resumeImport: { ...UPLOADED_IMPORT, state: 'CONFIRMED', version: 10, proposals: [] },
@@ -2342,7 +2342,7 @@ describe('CandidateApplicationPage', () => {
             {
               title: 'Kıdemli Kalite Mühendisi',
               subtitle: '',
-              dateText: '2019 - 2023',
+              dateText,
               description: 'Kalite sistemini kurdu',
             },
             {
@@ -2356,7 +2356,7 @@ describe('CandidateApplicationPage', () => {
             {
               title: 'Örnek Üniversitesi',
               subtitle: '',
-              dateText: '2011 - 2015',
+              dateText: educationDateText,
               description: 'Çevre Mühendisliği',
             },
             { title: 'Örnek Lisesi', subtitle: '', dateText: 'belirsiz tarih', description: '' },
@@ -2379,6 +2379,38 @@ describe('CandidateApplicationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ }));
     await waitFor(() => expect(screen.getByTestId('candidate-fullName')).toBeInTheDocument());
   };
+
+  it.each([
+    ['2022-09 - 2024-03', '2022-09', '2024-03'],
+    ['2022-09–2024-03', '2022-09', '2024-03'],
+    ['2022-09—2024-03', '2022-09', '2024-03'],
+    ['2022-09-2024-03', '2022-09', '2024-03'],
+    ['2019-2021', '2019', '2021'],
+    ['2019 - 2021-03', '2019', '2021-03'],
+    ['2022-09 - Devam ediyor', '2022-09', 'Devam ediyor'],
+    ['2022-09-Present', '2022-09', 'Present'],
+  ])('preserves grouped date range %s in structured fields', async (dateText, start, end) => {
+    withGroupedEntries(dateText);
+    await importResumeIntoForm();
+    expect(screen.getByTestId('candidate-experience-0-startDate')).toHaveValue(start);
+    expect(screen.getByTestId('candidate-experience-0-endDate')).toHaveValue(end);
+    expect(screen.getByTestId('candidate-experience-0-description')).toHaveValue(
+      'Kalite sistemini kurdu',
+    );
+  });
+
+  it.each(['2022-09', '2022-13 - 2024-03', '2022-09 - 2024-00', '2022-09-01 - 2024-03-01'])(
+    'keeps ambiguous or invalid date %s available for correction without inventing fields',
+    async (dateText) => {
+      withGroupedEntries(dateText);
+      await importResumeIntoForm();
+      expect(screen.getByTestId('candidate-experience-0-startDate')).toHaveValue('');
+      expect(screen.getByTestId('candidate-experience-0-endDate')).toHaveValue('');
+      expect(screen.getByTestId('candidate-experience-0-description')).toHaveValue(
+        `${dateText}\nKalite sistemini kurdu`,
+      );
+    },
+  );
 
   it('spreads grouped resume records across separate cards', async () => {
     // SAHİP RAPORU: "birden fazla deneyim olunca tek deneyim gibi atıyor".
@@ -2407,6 +2439,16 @@ describe('CandidateApplicationPage', () => {
     // İkinci kaydın başlığı birinci kayda sızmamalı.
     expect(screen.getByTestId('candidate-experience-0-description')).not.toHaveValue(
       expect.stringContaining('Kalite Uzmanı') as unknown as string,
+    );
+  });
+
+  it('preserves education month ranges for correction without putting months in year-only fields', async () => {
+    withGroupedEntries('2019 - 2023', '2011-09 - 2015-06');
+    await importResumeIntoForm();
+    expect(screen.getByTestId('candidate-education-0-startYear')).toHaveValue('');
+    expect(screen.getByTestId('candidate-education-0-endYear')).toHaveValue('');
+    expect(screen.getByTestId('candidate-education-0-description')).toHaveValue(
+      '2011-09 - 2015-06\nÇevre Mühendisliği',
     );
   });
 
