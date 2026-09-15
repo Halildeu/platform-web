@@ -449,6 +449,72 @@ describe('CandidatePortalPage', () => {
     expect(screen.queryByText(/Kısa liste/)).not.toBeInTheDocument();
   });
 
+  it('shows a controlled fallback instead of crashing on an unknown status', async () => {
+    // #965: sunucu kapalı enum'a yeni bir durum eklerse eski web paketi o
+    // değeri tanımaz. Kopya lookup'ı boş dönüp `.label` okununca sayfa
+    // tamamen çöküyordu; aday kendi başvurusunu hiç göremiyordu.
+    apiMocks.getCandidateStatus.mockResolvedValue({
+      ...STATUS,
+      status: 'ON_HOLD',
+      nextAction: 'SIGN_DOCUMENTS',
+      history: [...STATUS.history, { status: 'ON_HOLD', occurredAt: '2026-07-16T12:00:00Z' }],
+    });
+    renderPage();
+
+    // Güncel durum kartı, geçmiş ve özet: üç yer de aynı kontrollü metni gösterir.
+    expect((await screen.findAllByText('Güncel durum gösterilemiyor')).length).toBe(3);
+    expect(screen.getByText(/güncel durumu bu ekranda henüz gösteremiyoruz/i)).toBeVisible();
+    expect(screen.getByText(/Bu adımın açıklaması bu ekranda henüz yok/i)).toBeVisible();
+    // Bilinen geçmiş adımları olduğu gibi kalır; ham sunucu kodu adaya gösterilmez.
+    expect(screen.getByText('Başvuru alındı')).toBeVisible();
+    expect(screen.queryByText(/ON_HOLD|SIGN_DOCUMENTS/)).not.toBeInTheDocument();
+    expect(screen.getByText(SESSION.publicRef)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Durumu yenile' })).toBeVisible();
+  });
+
+  it('keeps the address list usable when one application has an unknown status', async () => {
+    apiMocks.verifyCandidateLoginCode.mockResolvedValue({
+      email: 'aday@example.test',
+      sessionToken: 'B'.repeat(43),
+    });
+    apiMocks.listCandidateLoginApplications.mockResolvedValue([
+      {
+        publicRef: 'app_bbbbbbbbbbbbbbbbbbbbbbbb',
+        jobSlug: 'urun-yoneticisi',
+        jobTitle: 'Ürün Yöneticisi',
+        status: 'ON_HOLD',
+        createdAt: '2026-07-20T10:00:00Z',
+        updatedAt: '2026-07-20T11:00:00Z',
+      },
+      {
+        publicRef: 'app_cccccccccccccccccccccccc',
+        jobSlug: 'kidemli-frontend',
+        jobTitle: 'Kıdemli Frontend',
+        status: 'INTERVIEW_PENDING',
+        createdAt: '2026-07-18T10:00:00Z',
+        updatedAt: '2026-07-19T11:00:00Z',
+      },
+    ]);
+    renderPage();
+    fireEvent.change(screen.getByTestId('candidate-login-email'), {
+      target: { value: 'aday@example.test' },
+    });
+    fireEvent.click(screen.getByTestId('candidate-login-submit'));
+    fireEvent.change(await screen.findByTestId('candidate-login-code'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByTestId('candidate-login-submit'));
+
+    const unknown = await screen.findByTestId(
+      'candidate-my-application-app_bbbbbbbbbbbbbbbbbbbbbbbb',
+    );
+    expect(unknown).toHaveTextContent('Güncel durum gösterilemiyor');
+    expect(unknown).not.toHaveTextContent('ON_HOLD');
+    expect(
+      screen.getByTestId('candidate-my-application-app_cccccccccccccccccccccccc'),
+    ).toHaveTextContent('Mülakat planlaması');
+  });
+
   it('refreshes status from the backend', async () => {
     renderPage();
     await screen.findAllByText('İnsan incelemesinde');

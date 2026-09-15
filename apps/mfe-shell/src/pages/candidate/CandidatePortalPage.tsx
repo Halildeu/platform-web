@@ -81,6 +81,32 @@ const NEXT_ACTION_COPY: Record<CandidateStatusDto['nextAction'], string> = {
   NONE: 'Bu başvuru için açık bir sonraki adım yok.',
 };
 
+/**
+ * #965: sunucu kapalı enum'a yeni bir değer eklediğinde eski web paketi onu
+ * tanımaz. Doğrudan `STATUS_COPY[x].label` okumak o anda tüm portalı
+ * çökertiyordu. Ham sunucu kodunu adaya göstermek yerine tarafsız bir metin
+ * gösterilir; sahte bir aşama da uydurulmaz. `hasOwnProperty`: `toString`
+ * gibi prototip anahtarları kopya sayılmasın.
+ */
+const UNKNOWN_STATUS_COPY = {
+  label: 'Güncel durum gösterilemiyor',
+  description:
+    'Başvurunuz kayıtlı; ancak güncel durumu bu ekranda henüz gösteremiyoruz. Sayfayı daha sonra yenileyerek tekrar bakabilirsiniz.',
+};
+
+const UNKNOWN_NEXT_ACTION_COPY =
+  'Bu adımın açıklaması bu ekranda henüz yok. Sayfayı daha sonra yenileyerek tekrar bakabilirsiniz.';
+
+const statusCopy = (status: string) =>
+  Object.prototype.hasOwnProperty.call(STATUS_COPY, status)
+    ? STATUS_COPY[status as ApplicationStatus]
+    : UNKNOWN_STATUS_COPY;
+
+const nextActionCopy = (nextAction: string) =>
+  Object.prototype.hasOwnProperty.call(NEXT_ACTION_COPY, nextAction)
+    ? NEXT_ACTION_COPY[nextAction as CandidateStatusDto['nextAction']]
+    : UNKNOWN_NEXT_ACTION_COPY;
+
 const OFFER_STATUS_COPY: Record<CandidateOfferDto['status'], string> = {
   EXTENDED: 'Yanıtınız bekleniyor',
   ACCEPTED: 'Kabul edildi',
@@ -860,7 +886,7 @@ const CandidatePortalPage = () => {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-semibold text-text-primary">{item.jobTitle}</p>
                     <span className="rounded-full border border-border-subtle bg-surface-default px-3 py-1 text-xs font-bold">
-                      {STATUS_COPY[item.status].label}
+                      {statusCopy(item.status).label}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-text-secondary">
@@ -947,9 +973,9 @@ const CandidatePortalPage = () => {
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-action-primary">
                   Güncel durum
                 </p>
-                <h3 className="mt-2 text-xl font-bold">{STATUS_COPY[status.status].label}</h3>
+                <h3 className="mt-2 text-xl font-bold">{statusCopy(status.status).label}</h3>
                 <p className="mt-2 text-sm leading-6 text-text-secondary">
-                  {STATUS_COPY[status.status].description}
+                  {statusCopy(status.status).description}
                 </p>
               </div>
 
@@ -958,7 +984,7 @@ const CandidatePortalPage = () => {
                   Sıradaki adım
                 </h3>
                 <p className="mt-2 rounded-xl border border-state-info-border bg-state-info-bg p-4 text-sm leading-6 text-text-secondary">
-                  {NEXT_ACTION_COPY[status.nextAction]}
+                  {nextActionCopy(status.nextAction)}
                 </p>
               </section>
 
@@ -1230,7 +1256,7 @@ const CandidatePortalPage = () => {
                         className="absolute -left-[1.6rem] top-1 h-3 w-3 rounded-full bg-action-primary"
                         aria-hidden="true"
                       />
-                      <h4 className="text-sm font-bold">{STATUS_COPY[event.status].label}</h4>
+                      <h4 className="text-sm font-bold">{statusCopy(event.status).label}</h4>
                       <p className="mt-1 text-xs text-text-secondary">
                         {formatDate(event.occurredAt)}
                       </p>
@@ -1322,7 +1348,7 @@ const CandidatePortalPage = () => {
                 </div>
                 <div>
                   <dt className="text-xs font-semibold text-text-secondary">Durum</dt>
-                  <dd className="mt-1 font-bold">{STATUS_COPY[status.status].label}</dd>
+                  <dd className="mt-1 font-bold">{statusCopy(status.status).label}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-semibold text-text-secondary">Gönderildi</dt>
