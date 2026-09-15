@@ -242,6 +242,8 @@ const CandidatePortalPage = () => {
    * yeni başvurunun ekranını ezmesin; yalnız son isteğin sonucu yazılır.
    */
   const refreshSequence = useRef(0);
+  // Mutations belong to one view, even when the candidate leaves and returns.
+  const applicationViewEpoch = useRef(0);
 
   const syncTabApplications = useCallback(() => {
     setTabApplications(readCandidateSessions().entries);
@@ -306,6 +308,8 @@ const CandidatePortalPage = () => {
     document.title = 'Aday Alanım | Açık Kariyer';
     void refresh();
     return () => {
+      applicationViewEpoch.current += 1;
+      refreshSequence.current += 1;
       document.title = previousTitle;
     };
   }, [refresh]);
@@ -445,6 +449,7 @@ const CandidatePortalPage = () => {
    * verilen onay B'ye taşınmamalı (#992 A2 ile aynı ders).
    */
   const resetApplicationView = () => {
+    applicationViewEpoch.current += 1;
     refreshSequence.current += 1;
     setStatus(null);
     setInterviews([]);
@@ -456,8 +461,10 @@ const CandidatePortalPage = () => {
     setSuccessMessage('');
     setWithdrawalOpen(false);
     setWithdrawalConfirmed(false);
+    setWithdrawing(false);
     setResponseTarget(null);
     setResponseAcknowledged(false);
+    setResponding(false);
     offerMutation.current = null;
   };
 
@@ -513,36 +520,45 @@ const CandidatePortalPage = () => {
 
   const withdraw = async () => {
     if (!session || !status?.withdrawalAllowed || !withdrawalConfirmed || withdrawing) return;
+    const epoch = applicationViewEpoch.current;
+    const isCurrentView = () => epoch === applicationViewEpoch.current;
     setWithdrawing(true);
     setActionError('');
     setSuccessMessage('');
     try {
-      setStatus(await withdrawCandidateApplication(session));
+      const withdrawn = await withdrawCandidateApplication(session);
+      if (!isCurrentView()) return;
+      setStatus(withdrawn);
       try {
         const [nextInterviews, nextOffers] = await Promise.all([
           getCandidateInterviews(session),
           getCandidateOffers(session),
         ]);
+        if (!isCurrentView()) return;
         setInterviews(nextInterviews);
         setOffers(nextOffers);
       } catch {
+        if (!isCurrentView()) return;
         setInterviewError('Başvuru geri çekildi; güncel görüşme takvimini yenileyin.');
       }
       setSuccessMessage('Başvurunuz geri çekildi. Güncel terminal durum aşağıda görünür.');
       setWithdrawalOpen(false);
       setWithdrawalConfirmed(false);
     } catch (withdrawError) {
+      if (!isCurrentView()) return;
       setActionError(
         withdrawError instanceof Error ? withdrawError.message : 'Başvuru geri çekilemedi.',
       );
       await refresh();
     } finally {
-      setWithdrawing(false);
+      if (isCurrentView()) setWithdrawing(false);
     }
   };
 
   const respondToOffer = async () => {
     if (!session || !responseTarget || !responseAcknowledged || responding) return;
+    const epoch = applicationViewEpoch.current;
+    const isCurrentView = () => epoch === applicationViewEpoch.current;
     const signature = JSON.stringify({
       offerId: responseTarget.offer.offerId,
       expectedVersion: responseTarget.offer.version,
@@ -562,6 +578,7 @@ const CandidatePortalPage = () => {
         responseTarget.target,
         offerMutation.current.key,
       );
+      if (!isCurrentView()) return;
       offerMutation.current = null;
       const accepted = responseTarget.target === 'ACCEPTED';
       setResponseTarget(null);
@@ -573,12 +590,13 @@ const CandidatePortalPage = () => {
       );
       await refresh();
     } catch (responseError) {
+      if (!isCurrentView()) return;
       setActionError(
         responseError instanceof Error ? responseError.message : 'Teklif yanıtı kaydedilemedi.',
       );
       await refresh();
     } finally {
-      setResponding(false);
+      if (isCurrentView()) setResponding(false);
     }
   };
 
