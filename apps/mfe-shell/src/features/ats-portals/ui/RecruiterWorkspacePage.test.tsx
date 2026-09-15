@@ -990,10 +990,24 @@ describe('RecruiterWorkspacePage', () => {
     };
     const precedes = (first: Element, second: Element) =>
       Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+    /**
+     * Çekmece (`Drawer` → `useFocusTrap`) açıldıktan 50 ms SONRA odağı ilk odaklanabilir
+     * öğeye ("Aday detayını kapat") kendi zamanlayıcısıyla taşır. Testte işlem 50 ms dolmadan
+     * bitebildiği için bu gecikmeli odak panelin verdiği odağın ÜSTÜNE yazabiliyordu; sıra
+     * makine hızına bağlıydı (yerelde yeşil, CI'da kırmızı). Gerçek kullanıcı çekmece
+     * açıldıktan sonraki 50 ms içinde işlem yapıp sonucunu alamaz; bu yüzden işlemden önce
+     * çekmecenin kendi başlangıç odağının yerleşmesini bekliyoruz.
+     */
+    const openReviewAndLetDrawerSettle = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Aday detayını kapat' })).toHaveFocus(),
+      );
+    };
 
     it('moves focus to the outcome after a status change instead of dropping it', async () => {
       renderPage();
-      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      await openReviewAndLetDrawerSettle();
       const start = await screen.findByRole('button', { name: 'İnsan incelemesini başlat' });
       start.focus();
       fireEvent.click(start);
@@ -1046,7 +1060,7 @@ describe('RecruiterWorkspacePage', () => {
         new Error('409 sürüm çakışması'),
       );
       renderPage();
-      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      await openReviewAndLetDrawerSettle();
       fireEvent.click(await screen.findByRole('button', { name: 'İnsan incelemesini başlat' }));
 
       const alert = await screen.findByRole('alert');
@@ -1104,7 +1118,7 @@ describe('RecruiterWorkspacePage', () => {
         evaluations: [evaluation],
       });
       renderPage();
-      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      await openReviewAndLetDrawerSettle();
       fireEvent.click(await screen.findByRole('button', { name: 'Ret kararını hazırla' }));
 
       await waitFor(() =>
