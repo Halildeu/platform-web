@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import type { ResumeDraftDto } from '../../apps/mfe-shell/src/features/ats-portals/api/application-api';
 
 const JOB = {
   slug: 'urun-yoneticisi',
@@ -39,7 +40,11 @@ const SECOND_JOB = {
   team: 'Mühendislik',
 };
 
-const installAtsApi = async (page: Page, submissions: Array<Record<string, unknown>> = []) => {
+const installAtsApi = async (
+  page: Page,
+  submissions: Array<Record<string, unknown>> = [],
+  entries?: ResumeDraftDto['entries'],
+) => {
   const proposalValues: Record<string, string> = {
     fullName: 'Deniz Yilmaz',
     email: 'deniz.yilmaz@example.test',
@@ -205,6 +210,7 @@ const installAtsApi = async (page: Page, submissions: Array<Record<string, unkno
             importId: resumeImport.importId,
             version: 0,
             fields,
+            ...(entries ? { entries } : {}),
             createdAt: '2026-07-18T06:02:00Z',
           },
         }),
@@ -231,7 +237,57 @@ const installAtsApi = async (page: Page, submissions: Array<Record<string, unkno
   });
 };
 
-const buildSyntheticResumePdf = () => {
+for (const width of [390, 1280]) {
+  test(`month-level grouped import preserves edited dates through preview and submission at ${width}px (synthetic routes)`, async ({ page, baseURL }, testInfo) => {
+    const submissions: Array<Record<string, unknown>> = [];
+    await installAtsApi(page, submissions, {
+      experience: [
+        { title: 'Urun Uzmani', subtitle: 'Ornek Teknoloji', dateText: '2022-09 - 2024-03', description: 'Urun kesfi' },
+        { title: 'Analist', subtitle: 'Ornek Teknoloji', dateText: '2019-2021', description: 'Analiz' },
+      ],
+      education: [
+        { title: 'Ornek Universitesi', subtitle: 'Bilisim', dateText: '2015-2019', description: '' },
+      ],
+    });
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/jobs/${JOB.slug}/apply`);
+    await page.getByLabel(/CV içe aktarma aydınlatmasını okudum/i).check();
+    await page.getByTestId('candidate-resume').setInputFiles({
+      name: 'synthetic-month-dates.pdf',
+      mimeType: 'application/pdf',
+      buffer: buildSyntheticResumePdf('2022-09 - 2024-03'),
+    });
+    await page.getByRole('button', { name: 'Güvenli önerileri kabul et' }).click();
+    await page.getByRole('button', { name: /Seçtiğim alanları forma aktar \(8\)/ }).click();
+    await expect(page.getByTestId('candidate-experience-0-startDate')).toHaveValue('2022-09');
+    await expect(page.getByTestId('candidate-experience-0-endDate')).toHaveValue('2024-03');
+    await expect(page.getByTestId('candidate-experience-0-description')).toHaveValue('Urun kesfi');
+    await expect(page.getByTestId('candidate-experience-1-startDate')).toHaveValue('2019');
+    await expect(page.getByTestId('candidate-experience-1-endDate')).toHaveValue('2021');
+    await expect(page.getByTestId('candidate-education-0-startYear')).toHaveValue('2015');
+    await expect(page.getByTestId('candidate-education-0-endYear')).toHaveValue('2019');
+    await page.getByTestId('candidate-experience-0-endDate').fill('2024-04');
+    await page.getByRole('button', { name: 'Başvuruyu kontrol et' }).click();
+    await expect(page.getByTestId('candidate-application-preview')).toContainText('2022-09 - 2024-04');
+    await expect(page.getByTestId('candidate-application-preview')).toContainText('2015 - 2019');
+    await page.screenshot({ path: testInfo.outputPath(`month-dates-preview-${width}.png`), fullPage: true });
+    for (const confirmation of await page.getByRole('checkbox').all()) await confirmation.check();
+    await page.getByTestId('create-application-receipt').click();
+    await expect(page.getByTestId('candidate-application-receipt')).toContainText('Başvurunuz kaydedildi');
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0]).toMatchObject({
+      experienceEntries: [
+        { title: 'Urun Uzmani', company: 'Ornek Teknoloji', startDate: '2022-09', endDate: '2024-04', description: 'Urun kesfi' },
+        { title: 'Analist', company: 'Ornek Teknoloji', startDate: '2019', endDate: '2021', description: 'Analiz' },
+      ],
+      educationEntries: [
+        { school: 'Ornek Universitesi', field: 'Bilisim', startYear: '2015', endYear: '2019' },
+      ],
+    });
+  });
+}
+
+const buildSyntheticResumePdf = (experienceDateRange = '2022-2026') => {
   const lines = [
     'Ad Soyad: Deniz Yilmaz',
     'E-posta: deniz.yilmaz@example.test',
@@ -242,7 +298,7 @@ const buildSyntheticResumePdf = () => {
     'Profesyonel Ozet',
     'Kullanici ihtiyacini urune donusturen urun profesyoneli.',
     'Is Deneyimi',
-    'Urun Uzmani - Ornek Teknoloji - 2022-2026',
+    `Urun Uzmani - Ornek Teknoloji - ${experienceDateRange}`,
     'Egitim',
     'Yonetim Bilisim Sistemleri - Ornek Universitesi - 2020',
     'Beceriler',
