@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CandidatePortalPage from './CandidatePortalPage';
 
@@ -22,8 +22,16 @@ const apiMocks = vi.hoisted(() => ({
   verifyCandidateLoginCode: vi.fn(),
   listCandidateLoginApplications: vi.fn(),
   parseTrackingCredentialFile: vi.fn(),
+  readCandidateSessions: vi.fn(),
+  selectCandidateSession: vi.fn(),
+  removeCandidateSession: vi.fn(),
+  rememberCandidateApplicationSummary: vi.fn(),
 }));
 vi.mock('../../features/ats-portals/api/application-api', () => ({
+  readCandidateSessions: apiMocks.readCandidateSessions,
+  selectCandidateSession: apiMocks.selectCandidateSession,
+  removeCandidateSession: apiMocks.removeCandidateSession,
+  rememberCandidateApplicationSummary: apiMocks.rememberCandidateApplicationSummary,
   readCandidateSession: apiMocks.readCandidateSession,
   establishCandidateSession: apiMocks.establishCandidateSession,
   clearCandidateSession: apiMocks.clearCandidateSession,
@@ -75,6 +83,12 @@ const chooseManualOption = async () => {
 describe('CandidatePortalPage', () => {
   beforeEach(() => {
     apiMocks.readCandidateSession.mockReturnValue(SESSION);
+    // Tek başvurulu sekme: geçiş listesi görünmez, mevcut testler etkilenmez.
+    apiMocks.readCandidateSessions.mockReturnValue({
+      activeRef: SESSION.publicRef,
+      entries: [{ ...SESSION, addedAt: '2026-07-16T10:00:00Z' }],
+    });
+    apiMocks.removeCandidateSession.mockReturnValue(null);
     apiMocks.readCandidateEmailSession.mockReturnValue(null);
     apiMocks.requestCandidateLoginCode.mockResolvedValue(undefined);
     apiMocks.listCandidateLoginApplications.mockResolvedValue([]);
@@ -588,7 +602,10 @@ describe('CandidatePortalPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('başvuru bulunamadı');
     fireEvent.click(screen.getByTestId('candidate-sign-in-again'));
 
-    expect(apiMocks.clearCandidateSession).toHaveBeenCalled();
+    // #965: yalnız çözülemeyen çift sekmeden çıkar; aynı sekmedeki diğer
+    // başvuruların anahtarları silinmez.
+    expect(apiMocks.removeCandidateSession).toHaveBeenCalledWith(SESSION.publicRef);
+    expect(apiMocks.clearCandidateSession).not.toHaveBeenCalled();
     // #1062: ayrı kart yok; iddia "giriş formu kullanılabilir".
     expect(screen.getByTestId('candidate-signin-pane-manual')).not.toHaveAttribute('hidden');
   });
@@ -603,6 +620,487 @@ describe('CandidatePortalPage', () => {
     // #1062: ayrı kart yok; iddia "giriş formu kullanılabilir".
     expect(screen.getByTestId('candidate-signin-pane-manual')).not.toHaveAttribute('hidden');
     expect(screen.queryByText(SESSION.publicRef)).not.toBeInTheDocument();
+  });
+
+  describe('several applications in one tab (#965)', () => {
+    const REF_A = `app_${'a'.repeat(24)}`;
+    const REF_B = `app_${'b'.repeat(24)}`;
+    const PAIR_A = { publicRef: REF_A, candidateAccessToken: 'A'.repeat(43) };
+    const PAIR_B = { publicRef: REF_B, candidateAccessToken: 'B'.repeat(43) };
+    const STATUS_A = { ...STATUS, publicRef: REF_A, jobTitle: 'Ürün Yöneticisi' };
+    const STATUS_B = {
+      ...STATUS,
+      publicRef: REF_B,
+      jobSlug: 'kidemli-frontend',
+      jobTitle: 'Kıdemli Frontend',
+      status: 'SUBMITTED',
+      history: [{ status: 'SUBMITTED', occurredAt: '2026-07-17T10:00:00Z' }],
+    };
+    type Api = typeof import('../../features/ats-portals/api/application-api');
+    let actual: Api;
+
+    /** Depolama katmanı gerçek: geçişin sekme depolamasında kalıcı olduğu da sınanır. */
+    beforeEach(async () => {
+      actual = await vi.importActual<Api>('../../features/ats-portals/api/application-api');
+      window.sessionStorage.clear();
+      apiMocks.readCandidateSession.mockImplementation(actual.readCandidateSession);
+      apiMocks.readCandidateSessions.mockImplementation(actual.readCandidateSessions);
+      apiMocks.establishCandidateSession.mockImplementation(actual.establishCandidateSession);
+      apiMocks.clearCandidateSession.mockImplementation(actual.clearCandidateSession);
+      apiMocks.selectCandidateSession.mockImplementation(actual.selectCandidateSession);
+      apiMocks.removeCandidateSession.mockImplementation(actual.removeCandidateSession);
+      apiMocks.rememberCandidateApplicationSummary.mockImplementation(
+        actual.rememberCandidateApplicationSummary,
+      );
+      apiMocks.getCandidateStatus.mockImplementation(async (pair: { publicRef: string }) =>
+        pair.publicRef === REF_A ? STATUS_A : STATUS_B,
+      );
+      // A önce, B sonra açıldı: B etkin. A'nın özeti daha önceki bir yüklemeden.
+      actual.establishCandidateSession(PAIR_A.publicRef, PAIR_A.candidateAccessToken);
+      actual.rememberCandidateApplicationSummary(REF_A, {
+        jobTitle: 'Ürün Yöneticisi',
+        status: 'UNDER_REVIEW',
+        createdAt: '2026-07-16T10:00:00Z',
+      });
+      actual.establishCandidateSession(PAIR_B.publicRef, PAIR_B.candidateAccessToken);
+    });
+    afterEach(() => {
+      window.sessionStorage.clear();
+    });
+
+    const openA = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Ürün Yöneticisi başvurusunu aç' }));
+
+    it('lists the applications of this tab and switches between them', async () => {
+      renderPage();
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_B));
+
+      const list = await screen.findByTestId('candidate-tab-applications');
+      expect(list).toBeVisible();
+      // B'nin ilan ve durumu, B yüklendikten sonra listeye not edildi.
+      await waitFor(() =>
+        expect(screen.getByTestId(`candidate-tab-application-${REF_B}`)).toHaveTextContent(
+          'Kıdemli Frontend',
+        ),
+      );
+      expect(screen.getByTestId(`candidate-tab-application-${REF_B}`)).toHaveTextContent(
+        'Başvuru alındı',
+      );
+      expect(screen.getByTestId(`candidate-tab-application-${REF_B}`)).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+      expect(screen.getByTestId(`candidate-tab-application-${REF_A}`)).toHaveTextContent(
+        'İnsan incelemesinde',
+      );
+
+      openA();
+
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A));
+      expect(apiMocks.getCandidateInterviews).toHaveBeenLastCalledWith(PAIR_A);
+      expect(apiMocks.getCandidateOffers).toHaveBeenLastCalledWith(PAIR_A);
+      expect(screen.getByTestId(`candidate-tab-application-${REF_A}`)).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+      expect(screen.getByTestId(`candidate-tab-application-${REF_B}`)).not.toHaveAttribute(
+        'aria-current',
+      );
+    });
+
+    it('keeps the selected application after the page is reloaded', async () => {
+      renderPage();
+      await screen.findByTestId('candidate-tab-applications');
+      openA();
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A));
+
+      cleanup();
+      apiMocks.getCandidateStatus.mockClear();
+      renderPage();
+
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenCalledWith(PAIR_A));
+      expect(apiMocks.getCandidateStatus).not.toHaveBeenCalledWith(PAIR_B);
+    });
+
+    it('does not carry a withdrawal confirmation over to another application', async () => {
+      renderPage();
+      await screen.findAllByText('Başvuru alındı');
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+      fireEvent.click(
+        screen.getByLabelText(/Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i),
+      );
+      expect(screen.getByRole('button', { name: 'Başvuruyu geri çek' })).toBeEnabled();
+
+      openA();
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A));
+
+      // B için verilen onay A'ya taşınmaz: panel kapalı, yeniden açınca onay boş.
+      expect(screen.queryByRole('button', { name: 'Başvuruyu geri çek' })).not.toBeInTheDocument();
+      fireEvent.click(await screen.findByRole('button', { name: 'Geri çekme onayını aç' }));
+      const submit = screen.getByRole('button', { name: 'Başvuruyu geri çek' });
+      expect(submit).toBeDisabled();
+
+      fireEvent.click(
+        screen.getByLabelText(/Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i),
+      );
+      fireEvent.click(submit);
+      await waitFor(() => expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledTimes(1));
+      expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledWith(PAIR_A);
+    });
+
+    it.each(['success', 'failure'] as const)(
+      'ignores a pending withdrawal %s after switching applications',
+      async (outcome) => {
+        let finish: () => void = () => undefined;
+        apiMocks.withdrawCandidateApplication.mockImplementation(
+          () =>
+            new Promise((resolve, reject) => {
+              finish = () =>
+                outcome === 'success'
+                  ? resolve({ ...STATUS_B, status: 'WITHDRAWN', withdrawalAllowed: false })
+                  : reject(new Error('Previous application withdrawal failed'));
+            }),
+        );
+        renderPage();
+        await screen.findByText(REF_B, { selector: 'dd' });
+        fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+        fireEvent.click(
+          screen.getByLabelText(
+            /Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i,
+          ),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+        expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledWith(PAIR_B);
+
+        openA();
+        await screen.findByText(REF_A, { selector: 'dd' });
+        await act(async () => finish());
+
+        expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+        expect(screen.queryByText(REF_B, { selector: 'dd' })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Başvurunuz geri çekildi/)).not.toBeInTheDocument();
+        expect(
+          screen.queryByText('Previous application withdrawal failed'),
+        ).not.toBeInTheDocument();
+        expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A);
+      },
+    );
+
+    it.each(['success', 'failure'] as const)(
+      'ignores a pending offer response %s after switching applications',
+      async (outcome) => {
+        const offer = {
+          offerId: 'off_abcdefghijklmnopqrstuvwx',
+          applicationPublicRef: REF_B,
+          jobTitle: STATUS_B.jobTitle,
+          roleTitle: 'Synthetic frontend role',
+          startDate: '2026-10-01',
+          employmentType: 'Full time',
+          workMode: 'HYBRID',
+          location: 'Synthetic location',
+          compensationAmount: 120000,
+          currency: 'TRY',
+          payPeriod: 'MONTHLY',
+          expiresAt: '2026-09-30T12:00:00Z',
+          termsSummary: 'Synthetic offer',
+          status: 'EXTENDED',
+          version: 1,
+          updatedAt: '2026-09-15T00:00:00Z',
+          legalBoundary: 'Synthetic process response',
+        };
+        apiMocks.getCandidateOffers.mockImplementation(async (pair: { publicRef: string }) =>
+          pair.publicRef === REF_B ? [offer] : [],
+        );
+        let finish: () => void = () => undefined;
+        apiMocks.respondCandidateOffer.mockImplementation(
+          () =>
+            new Promise((resolve, reject) => {
+              finish = () =>
+                outcome === 'success'
+                  ? resolve({ ...offer, status: 'ACCEPTED', version: 2 })
+                  : reject(new Error('Previous application offer failed'));
+            }),
+        );
+        renderPage();
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Teklifi kabul etmeyi hazırla' }),
+        );
+        fireEvent.click(screen.getByLabelText(/yalnız ATS süreç yanıtı olduğunu/i));
+        fireEvent.click(screen.getByRole('button', { name: 'Kabul yanıtını kalıcı kaydet' }));
+        expect(apiMocks.respondCandidateOffer).toHaveBeenCalledWith(
+          PAIR_B,
+          offer,
+          'ACCEPTED',
+          'web-offer-response-1234',
+        );
+
+        openA();
+        await screen.findByText(REF_A, { selector: 'dd' });
+        await act(async () => finish());
+
+        expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+        expect(screen.queryByText(REF_B, { selector: 'dd' })).not.toBeInTheDocument();
+        expect(
+          screen.queryByText(/Teklif kabul yanıtınız kalıcı olarak kaydedildi/),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText('Previous application offer failed')).not.toBeInTheDocument();
+        expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A);
+      },
+    );
+
+    it('does not let an old withdrawal completion release a new withdrawal', async () => {
+      let finishB: () => void = () => undefined;
+      let finishA: () => void = () => undefined;
+      apiMocks.withdrawCandidateApplication.mockImplementation(
+        (pair: { publicRef: string }) =>
+          new Promise((resolve) => {
+            const finish = () =>
+              resolve({
+                ...(pair.publicRef === REF_A ? STATUS_A : STATUS_B),
+                status: 'WITHDRAWN',
+                withdrawalAllowed: false,
+              });
+            if (pair.publicRef === REF_A) finishA = finish;
+            else finishB = finish;
+          }),
+      );
+      const withdraw = () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+        fireEvent.click(
+          screen.getByLabelText(
+            /Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i,
+          ),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+      };
+      renderPage();
+      await screen.findByText(REF_B, { selector: 'dd' });
+      withdraw();
+      openA();
+      await screen.findByText(REF_A, { selector: 'dd' });
+      withdraw();
+      expect(apiMocks.withdrawCandidateApplication).toHaveBeenLastCalledWith(PAIR_A);
+      await act(async () => finishB());
+      expect(screen.getByRole('button', { name: 'Geri çekiliyor…' })).toBeDisabled();
+      expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+      await act(async () => finishA());
+      expect(screen.getByRole('status')).toHaveTextContent('Başvurunuz geri çekildi');
+    });
+
+    it('ignores a late answer for the application the candidate already left', async () => {
+      let resolveB: (value: typeof STATUS_B) => void = () => undefined;
+      apiMocks.getCandidateStatus.mockImplementation((pair: { publicRef: string }) =>
+        pair.publicRef === REF_A
+          ? Promise.resolve(STATUS_A)
+          : new Promise((resolve) => {
+              resolveB = resolve;
+            }),
+      );
+      renderPage();
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_B));
+
+      openA();
+      expect((await screen.findAllByText('İnsan incelemesinde')).length).toBeGreaterThan(0);
+
+      // B'nin yanıtı A açıldıktan SONRA geliyor; A'nın ekranını ezmemeli.
+      resolveB(STATUS_B);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(screen.getByRole('heading', { name: 'Başvuru yolculuğum' })).toBeVisible();
+      expect(screen.getByText(REF_A, { selector: 'dd' })).toBeVisible();
+      expect(screen.queryByText(REF_B, { selector: 'dd' })).not.toBeInTheDocument();
+    });
+
+    /**
+     * #1180 review (P1): geçiş, bekleyen bir işlem sürerken de mümkün. B için
+     * başlatılan geri çekme / teklif yanıtı A'ya geçildikten SONRA bittiğinde,
+     * sonucu (başarı ya da hata) A'nın ekranına yazılmamalı ve B'yi yeniden
+     * yükleyip A'yı ezmemeli.
+     */
+    const deferred = <T,>() => {
+      let resolve: (value: T) => void = () => undefined;
+      let reject: (reason: unknown) => void = () => undefined;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+    const summaryRef = () => screen.getByText(/^app_/, { selector: 'dd' });
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const statusCallsFor = (pair: typeof PAIR_B) =>
+      apiMocks.getCandidateStatus.mock.calls.filter(([arg]) => arg.publicRef === pair.publicRef)
+        .length;
+
+    const startWithdrawalOnBThenOpenA = async () => {
+      renderPage();
+      await waitFor(() => expect(summaryRef()).toHaveTextContent(REF_B));
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+      fireEvent.click(
+        screen.getByLabelText(/Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+      await waitFor(() => expect(apiMocks.withdrawCandidateApplication).toHaveBeenCalledWith(PAIR_B));
+      openA();
+      await waitFor(() => expect(summaryRef()).toHaveTextContent(REF_A));
+    };
+
+    it('keeps A on screen when a withdrawal started on B succeeds after the switch', async () => {
+      const pending = deferred<typeof STATUS_B>();
+      apiMocks.withdrawCandidateApplication.mockReturnValue(pending.promise);
+      await startWithdrawalOnBThenOpenA();
+      const bStatusCalls = statusCallsFor(PAIR_B);
+
+      // B'nin işlemi sürerken A'nın kendi geri çekme düğmesi kilitli kalmaz.
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+      fireEvent.click(
+        screen.getByLabelText(/Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i),
+      );
+      expect(screen.getByRole('button', { name: 'Başvuruyu geri çek' })).toBeEnabled();
+
+      pending.resolve({ ...STATUS_B, status: 'WITHDRAWN', withdrawalAllowed: false, version: 2 });
+      await flush();
+      await flush();
+
+      expect(summaryRef()).toHaveTextContent(REF_A);
+      expect(screen.queryByText(/Başvurunuz geri çekildi/)).not.toBeInTheDocument();
+      // A'nın açık onay paneli B'nin sonucuyla kapatılmaz.
+      expect(screen.getByRole('button', { name: 'Başvuruyu geri çek' })).toBeEnabled();
+      expect(statusCallsFor(PAIR_B)).toBe(bStatusCalls);
+      // B'nin yeni durumu yine de sekme listesine işlenir (kayıt B'ye aittir).
+      expect(screen.getByTestId(`candidate-tab-application-${REF_B}`)).toHaveTextContent(
+        'Başvuru geri çekildi',
+      );
+    });
+
+    it.each(['removed', 'replaced'] as const)(
+      'does not update a %s credential from a late withdrawal',
+      async (change) => {
+        const pending = deferred<typeof STATUS_B>();
+        apiMocks.withdrawCandidateApplication.mockReturnValue(pending.promise);
+        await startWithdrawalOnBThenOpenA();
+        if (change === 'removed') actual.removeCandidateSession(REF_B);
+        else actual.establishCandidateSession(REF_B, 'C'.repeat(43));
+        apiMocks.rememberCandidateApplicationSummary.mockClear();
+
+        await act(async () => {
+          pending.resolve({ ...STATUS_B, status: 'WITHDRAWN', withdrawalAllowed: false });
+        });
+
+        expect(summaryRef()).toHaveTextContent(REF_A);
+        expect(apiMocks.rememberCandidateApplicationSummary).not.toHaveBeenCalled();
+        const entry = actual.readCandidateSessions().entries.find((item) => item.publicRef === REF_B);
+        if (change === 'removed') expect(entry).toBeUndefined();
+        else expect(entry?.candidateAccessToken).toBe('C'.repeat(43));
+      },
+    );
+
+    it('keeps A on screen when a withdrawal started on B fails after the switch', async () => {
+      const pending = deferred<typeof STATUS_B>();
+      apiMocks.withdrawCandidateApplication.mockReturnValue(pending.promise);
+      await startWithdrawalOnBThenOpenA();
+      const bStatusCalls = statusCallsFor(PAIR_B);
+
+      pending.reject(new Error('B için çakışma'));
+      await flush();
+      await flush();
+
+      expect(summaryRef()).toHaveTextContent(REF_A);
+      expect(screen.queryByText('B için çakışma')).not.toBeInTheDocument();
+      // Hata yolundaki yeniden yükleme B'yi getirip A'yı ezmez.
+      expect(statusCallsFor(PAIR_B)).toBe(bStatusCalls);
+    });
+
+    const OFFER_B = {
+      offerId: 'off_bbbbbbbbbbbbbbbbbbbbbbbb',
+      applicationPublicRef: REF_B,
+      jobTitle: 'Kıdemli Frontend',
+      roleTitle: 'Kıdemli Frontend Geliştirici',
+      startDate: '2026-08-03',
+      employmentType: 'Tam zamanlı',
+      workMode: 'HYBRID',
+      location: 'İstanbul',
+      compensationAmount: 120000,
+      currency: 'TRY',
+      payPeriod: 'MONTHLY',
+      expiresAt: '2026-07-25T12:00:00Z',
+      termsSummary: 'Sentetik teklif koşulları.',
+      status: 'EXTENDED',
+      version: 1,
+      updatedAt: '2026-07-18T12:00:00Z',
+      legalBoundary: 'Bu yanıt ATS sürecini kaydeder; ayrı iş sözleşmesi veya e-imza değildir.',
+    };
+
+    const startOfferResponseOnBThenOpenA = async () => {
+      apiMocks.getCandidateStatus.mockImplementation(async (pair: { publicRef: string }) =>
+        pair.publicRef === REF_A
+          ? STATUS_A
+          : { ...STATUS_B, status: 'OFFER_PENDING', nextAction: 'REVIEW_OFFER', withdrawalAllowed: false },
+      );
+      apiMocks.getCandidateOffers.mockImplementation(async (pair: { publicRef: string }) =>
+        pair.publicRef === REF_B ? [OFFER_B] : [],
+      );
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Teklifi kabul etmeyi hazırla' }));
+      fireEvent.click(screen.getByLabelText(/yalnız ATS süreç yanıtı olduğunu/i));
+      fireEvent.click(screen.getByRole('button', { name: 'Kabul yanıtını kalıcı kaydet' }));
+      await waitFor(() => expect(apiMocks.respondCandidateOffer).toHaveBeenCalled());
+      expect(apiMocks.respondCandidateOffer.mock.calls[0][0]).toEqual(PAIR_B);
+      openA();
+      await waitFor(() => expect(summaryRef()).toHaveTextContent(REF_A));
+    };
+
+    it('keeps A on screen when an offer response started on B succeeds after the switch', async () => {
+      const pending = deferred<typeof OFFER_B>();
+      apiMocks.respondCandidateOffer.mockReturnValue(pending.promise);
+      await startOfferResponseOnBThenOpenA();
+      const bStatusCalls = statusCallsFor(PAIR_B);
+
+      pending.resolve({ ...OFFER_B, status: 'ACCEPTED', version: 2 });
+      await flush();
+      await flush();
+
+      expect(summaryRef()).toHaveTextContent(REF_A);
+      expect(screen.queryByText(/Teklif kabul yanıtınız/)).not.toBeInTheDocument();
+      expect(statusCallsFor(PAIR_B)).toBe(bStatusCalls);
+    });
+
+    it('keeps A on screen when an offer response started on B fails after the switch', async () => {
+      const pending = deferred<typeof OFFER_B>();
+      apiMocks.respondCandidateOffer.mockReturnValue(pending.promise);
+      await startOfferResponseOnBThenOpenA();
+      const bStatusCalls = statusCallsFor(PAIR_B);
+
+      pending.reject(new Error('B teklifi için çakışma'));
+      await flush();
+      await flush();
+
+      expect(summaryRef()).toHaveTextContent(REF_A);
+      expect(screen.queryByText('B teklifi için çakışma')).not.toBeInTheDocument();
+      expect(statusCallsFor(PAIR_B)).toBe(bStatusCalls);
+    });
+
+    it('removes one application from this tab and keeps the other', async () => {
+      renderPage();
+      await screen.findByTestId('candidate-tab-applications');
+      await waitFor(() =>
+        expect(screen.getByTestId(`candidate-tab-application-${REF_B}`)).toHaveTextContent(
+          'Kıdemli Frontend',
+        ),
+      );
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Kıdemli Frontend başvurusunu bu listeden kaldır' }),
+      );
+
+      // Etkin başvuru kaldırıldı: sıradaki açılır; tek başvuru kalınca liste gizlenir.
+      await waitFor(() => expect(apiMocks.getCandidateStatus).toHaveBeenLastCalledWith(PAIR_A));
+      expect(screen.queryByTestId('candidate-tab-applications')).not.toBeInTheDocument();
+      expect(actual.readCandidateSessions().entries.map((entry) => entry.publicRef)).toEqual([
+        REF_A,
+      ]);
+      // Kaldırma yalnız bu sekmedeki anahtarı siler; sunucuya istek gitmez.
+      expect(apiMocks.withdrawCandidateApplication).not.toHaveBeenCalled();
+    });
   });
 
   it('requires explicit confirmation and renders the terminal withdrawal result', async () => {

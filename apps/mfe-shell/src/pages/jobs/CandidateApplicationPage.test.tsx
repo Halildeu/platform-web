@@ -349,7 +349,7 @@ describe('CandidateApplicationPage', () => {
       }),
       undefined,
     );
-    expect(apiMocks.saveCandidateSession).toHaveBeenCalledWith(RECEIPT);
+    expect(apiMocks.saveCandidateSession).toHaveBeenCalledWith(RECEIPT, 'Ürün Yöneticisi');
   });
 
   it('hands the candidate both halves of the credential on the receipt', async () => {

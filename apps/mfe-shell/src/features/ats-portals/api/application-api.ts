@@ -19,7 +19,10 @@ export const getApplicationSummaryError = (summary: string): string | null => {
     ? APPLICATION_SUMMARY_ERROR
     : null;
 };
-const CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
+/** #965 öncesi tek kayıt; yalnız migrasyon için okunur. */
+const LEGACY_CANDIDATE_SESSION_KEY = 'ats.candidate.latest.v1';
+const CANDIDATE_SESSIONS_KEY = 'ats.candidate.sessions.v2';
+const MAX_CANDIDATE_SESSIONS = 20;
 /**
  * #235 e-posta girişi oturumu. Başvuru-başına anahtardan AYRI tutulur: biri
  * tek başvuruyu açar, diğeri o adresin tümünü. Aynı kutuya yazmak, e-posta
@@ -724,6 +727,23 @@ export type CandidateSession = {
   candidateAccessToken: string;
 };
 
+/**
+ * #965: sekmede tutulan başvurulardan biri. `jobTitle/status/createdAt`
+ * kimlik bilgisi değildir; geçiş listesinde ilan/durum/tarih göstermek için
+ * durum yanıtından kopyalanır, böylece liste başvuru başına istek atmaz.
+ */
+export type CandidateSessionEntry = CandidateSession & {
+  jobTitle?: string;
+  status?: string;
+  createdAt?: string;
+  addedAt: string;
+};
+
+export type CandidateSessionList = {
+  activeRef: string | null;
+  entries: CandidateSessionEntry[];
+};
+
 const safeJson = async <T>(response: Response): Promise<T> => {
   const payload = (await response.json().catch(() => null)) as
     | (T & { reason?: string; error?: string })
@@ -1172,27 +1192,169 @@ export const clearCandidateEmailSession = (): void => {
   }
 };
 
-export const saveCandidateSession = (receipt: ApplicationReceiptDto): boolean => {
-  if (
-    typeof window === 'undefined' ||
-    !PUBLIC_REF_PATTERN.test(receipt.publicRef) ||
-    !receipt.candidateAccessToken ||
-    !CANDIDATE_ACCESS_PATTERN.test(receipt.candidateAccessToken)
-  ) {
-    return false;
+const isCandidatePair = (publicRef: unknown, candidateAccessToken: unknown): boolean =>
+  typeof publicRef === 'string' &&
+  PUBLIC_REF_PATTERN.test(publicRef) &&
+  typeof candidateAccessToken === 'string' &&
+  CANDIDATE_ACCESS_PATTERN.test(candidateAccessToken);
+
+const EMPTY_CANDIDATE_SESSIONS: CandidateSessionList = { activeRef: null, entries: [] };
+
+/** Özet alanları yalnız görüntü içindir; beklenmeyen tür veya aşırı uzunluk atılır. */
+const summaryText = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.length > 0 && value.length <= 300 ? value : undefined;
+
+const normalizeSessionEntry = (raw: unknown): CandidateSessionEntry | null => {
+  const candidate = raw as Partial<CandidateSessionEntry> | null;
+  if (!candidate || !isCandidatePair(candidate.publicRef, candidate.candidateAccessToken)) {
+    return null;
   }
+  const entry: CandidateSessionEntry = {
+    publicRef: candidate.publicRef as string,
+    candidateAccessToken: candidate.candidateAccessToken as string,
+    addedAt: summaryText(candidate.addedAt) ?? new Date(0).toISOString(),
+  };
+  // Tanımsız alanlar anahtar olarak da yazılmaz: depoda yalnız bilinen alanlar kalır.
+  const jobTitle = summaryText(candidate.jobTitle);
+  const status = summaryText(candidate.status);
+  const createdAt = summaryText(candidate.createdAt);
+  if (jobTitle) entry.jobTitle = jobTitle;
+  if (status) entry.status = status;
+  if (createdAt) entry.createdAt = createdAt;
+  return entry;
+};
+
+const toCandidateSession = (entry: CandidateSessionEntry | undefined): CandidateSession | null =>
+  entry ? { publicRef: entry.publicRef, candidateAccessToken: entry.candidateAccessToken } : null;
+
+/** Listeyi yazar; boş liste anahtarı siler. Depolama reddederse `false`. */
+const writeCandidateSessions = (list: CandidateSessionList): boolean => {
   try {
-    window.sessionStorage.setItem(
-      CANDIDATE_SESSION_KEY,
-      JSON.stringify({
-        publicRef: receipt.publicRef,
-        candidateAccessToken: receipt.candidateAccessToken,
-      } satisfies CandidateSession),
-    );
+    if (list.entries.length === 0) {
+      window.sessionStorage.removeItem(CANDIDATE_SESSIONS_KEY);
+    } else {
+      window.sessionStorage.setItem(
+        CANDIDATE_SESSIONS_KEY,
+        JSON.stringify({ v: 2, activeRef: list.activeRef, entries: list.entries }),
+      );
+    }
     return true;
   } catch {
     return false;
   }
+};
+
+/**
+ * #965 öncesi tek kayıt (`latest.v1`) listeye taşınır. Eski kayıt YALNIZ yeni
+ * liste yazılabildiyse silinir: depolama yazmayı reddederse aday erişimini
+ * kaybetmez, oturum bu okuma için bellekten döner.
+ */
+const migrateLegacyCandidateSession = (): CandidateSessionList => {
+  let legacy: Partial<CandidateSession> | null = null;
+  try {
+    legacy = JSON.parse(
+      window.sessionStorage.getItem(LEGACY_CANDIDATE_SESSION_KEY) ?? 'null',
+    ) as Partial<CandidateSession> | null;
+  } catch {
+    return EMPTY_CANDIDATE_SESSIONS;
+  }
+  if (!legacy || !isCandidatePair(legacy.publicRef, legacy.candidateAccessToken)) {
+    return EMPTY_CANDIDATE_SESSIONS;
+  }
+  const list: CandidateSessionList = {
+    activeRef: legacy.publicRef as string,
+    entries: [
+      {
+        publicRef: legacy.publicRef as string,
+        candidateAccessToken: legacy.candidateAccessToken as string,
+        addedAt: new Date().toISOString(),
+      },
+    ],
+  };
+  if (writeCandidateSessions(list)) {
+    try {
+      window.sessionStorage.removeItem(LEGACY_CANDIDATE_SESSION_KEY);
+    } catch {
+      // Silinemezse bir sonraki okumada v2 zaten önce okunur.
+    }
+  }
+  return list;
+};
+
+const readCandidateSessionList = (): CandidateSessionList => {
+  if (typeof window === 'undefined') return EMPTY_CANDIDATE_SESSIONS;
+  let raw: string | null;
+  try {
+    raw = window.sessionStorage.getItem(CANDIDATE_SESSIONS_KEY);
+  } catch {
+    return EMPTY_CANDIDATE_SESSIONS;
+  }
+  if (raw === null) return migrateLegacyCandidateSession();
+  try {
+    const parsed = JSON.parse(raw) as { activeRef?: unknown; entries?: unknown } | null;
+    const entries: CandidateSessionEntry[] = [];
+    for (const item of Array.isArray(parsed?.entries) ? parsed.entries : []) {
+      const entry = normalizeSessionEntry(item);
+      // Bozuk kayıt tek başına atılır; geçerli kayıtlar korunur.
+      if (entry && !entries.some((existing) => existing.publicRef === entry.publicRef)) {
+        entries.push(entry);
+      }
+    }
+    const capped = entries.slice(0, MAX_CANDIDATE_SESSIONS);
+    const activeRef = capped.some((entry) => entry.publicRef === parsed?.activeRef)
+      ? (parsed?.activeRef as string)
+      : (capped[0]?.publicRef ?? null);
+    return { activeRef, entries: capped };
+  } catch {
+    return EMPTY_CANDIDATE_SESSIONS;
+  }
+};
+
+/**
+ * Başvuruyu listenin başına ekler ve etkin yapar. Aynı referans yinelenmez;
+ * yeni anahtar eskisinin yerine geçer, bilinen özet alanları korunur. Sınır
+ * aşılırsa en eski kayıt düşer (etkin kayıt her zaman en baştadır).
+ */
+const upsertCandidateSession = (
+  entry: Omit<CandidateSessionEntry, 'addedAt'>,
+): CandidateSessionList => {
+  const current = readCandidateSessionList();
+  const previous = current.entries.find((existing) => existing.publicRef === entry.publicRef);
+  const merged = normalizeSessionEntry({
+    ...previous,
+    ...entry,
+    addedAt: new Date().toISOString(),
+  }) as CandidateSessionEntry;
+  const entries = [
+    merged,
+    ...current.entries.filter((existing) => existing.publicRef !== entry.publicRef),
+  ].slice(0, MAX_CANDIDATE_SESSIONS);
+  return { activeRef: merged.publicRef, entries };
+};
+
+/**
+ * Başvuru gönderiminden sonra anahtarı sekmeye kaydeder. #965: önceki
+ * başvurunun anahtarını EZMEZ; ikinci ilana başvuran aday ilkine dönebilir.
+ */
+export const saveCandidateSession = (
+  receipt: ApplicationReceiptDto,
+  jobTitle?: string,
+): boolean => {
+  if (
+    typeof window === 'undefined' ||
+    !isCandidatePair(receipt.publicRef, receipt.candidateAccessToken)
+  ) {
+    return false;
+  }
+  return writeCandidateSessions(
+    upsertCandidateSession({
+      publicRef: receipt.publicRef,
+      candidateAccessToken: receipt.candidateAccessToken as string,
+      status: receipt.status,
+      createdAt: receipt.submittedAt,
+      ...(jobTitle ? { jobTitle } : {}),
+    }),
+  );
 };
 
 /**
@@ -1213,49 +1375,74 @@ export const establishCandidateSession = (
 ): CandidateSession | null => {
   const ref = publicRef.trim();
   const token = candidateAccessToken.trim();
-  if (
-    typeof window === 'undefined' ||
-    !PUBLIC_REF_PATTERN.test(ref) ||
-    !CANDIDATE_ACCESS_PATTERN.test(token)
-  ) {
+  if (typeof window === 'undefined' || !isCandidatePair(ref, token)) {
     return null;
   }
-  const session: CandidateSession = { publicRef: ref, candidateAccessToken: token };
-  try {
-    window.sessionStorage.setItem(CANDIDATE_SESSION_KEY, JSON.stringify(session));
-  } catch {
-    // Depolama reddedilse bile oturum bu sekmede geçerlidir: durum sorgusu
-    // yalnız bellekteki çiftle çalışır. Sessizce başarısız olup adayı
-    // erişimsiz bırakmak, boşluğun ta kendisiydi.
-  }
-  return session;
+  // Depolama reddedilse bile oturum bu sekmede geçerlidir: durum sorgusu
+  // yalnız bellekteki çiftle çalışır. Sessizce başarısız olup adayı
+  // erişimsiz bırakmak, boşluğun ta kendisiydi.
+  writeCandidateSessions(upsertCandidateSession({ publicRef: ref, candidateAccessToken: token }));
+  return { publicRef: ref, candidateAccessToken: token };
 };
 
-/** Anahtarı bu sekmeden siler; paylaşılan cihazda oturumu bırakma yolu. */
+/** Paylaşılan cihaz için sekmedeki TÜM başvuru anahtarlarını siler. */
 export const clearCandidateSession = (): void => {
   if (typeof window === 'undefined') return;
   try {
-    window.sessionStorage.removeItem(CANDIDATE_SESSION_KEY);
+    window.sessionStorage.removeItem(CANDIDATE_SESSIONS_KEY);
+    window.sessionStorage.removeItem(LEGACY_CANDIDATE_SESSION_KEY);
   } catch {
     // Depolama erişilemezse silinecek bir şey de yoktur.
   }
 };
 
+/** Etkin başvurunun çifti; mevcut tek-başvuru çağıranları için. */
 export const readCandidateSession = (): CandidateSession | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const parsed = JSON.parse(
-      window.sessionStorage.getItem(CANDIDATE_SESSION_KEY) ?? 'null',
-    ) as Partial<CandidateSession> | null;
-    return parsed?.publicRef &&
-      PUBLIC_REF_PATTERN.test(parsed.publicRef) &&
-      parsed.candidateAccessToken &&
-      CANDIDATE_ACCESS_PATTERN.test(parsed.candidateAccessToken)
-      ? { publicRef: parsed.publicRef, candidateAccessToken: parsed.candidateAccessToken }
-      : null;
-  } catch {
-    return null;
-  }
+  const { activeRef, entries } = readCandidateSessionList();
+  return toCandidateSession(entries.find((entry) => entry.publicRef === activeRef));
+};
+
+/** #965: sekmedeki tüm başvurular (yeniden eskiye) ve etkin olanın referansı. */
+export const readCandidateSessions = (): CandidateSessionList => readCandidateSessionList();
+
+/** Listedeki bir başvuruyu etkin yapar; listede yoksa hiçbir şey değişmez. */
+export const selectCandidateSession = (publicRef: string): CandidateSession | null => {
+  const list = readCandidateSessionList();
+  const entry = list.entries.find((existing) => existing.publicRef === publicRef);
+  if (!entry) return null;
+  writeCandidateSessions({ ...list, activeRef: entry.publicRef });
+  return toCandidateSession(entry);
+};
+
+/**
+ * Tek başvurunun anahtarını bu sekmeden siler (sunucudaki başvuruya
+ * dokunmaz). Etkin olan silinirse sıradaki açılır; dönen değer yeni etkin
+ * başvurudur, liste boşaldıysa `null`.
+ */
+export const removeCandidateSession = (publicRef: string): CandidateSession | null => {
+  const list = readCandidateSessionList();
+  const entries = list.entries.filter((existing) => existing.publicRef !== publicRef);
+  const activeRef =
+    list.activeRef !== null && list.activeRef !== publicRef
+      ? list.activeRef
+      : (entries[0]?.publicRef ?? null);
+  writeCandidateSessions({ activeRef, entries });
+  return toCandidateSession(entries.find((entry) => entry.publicRef === activeRef));
+};
+
+/** Geçiş listesinde ilan/durum/tarih göstermek için durum yanıtını not eder. */
+export const rememberCandidateApplicationSummary = (
+  publicRef: string,
+  summary: { jobTitle: string; status: string; createdAt: string },
+): void => {
+  const list = readCandidateSessionList();
+  const index = list.entries.findIndex((existing) => existing.publicRef === publicRef);
+  if (index < 0) return;
+  const updated = normalizeSessionEntry({ ...list.entries[index], ...summary });
+  if (!updated) return;
+  const entries = [...list.entries];
+  entries[index] = updated;
+  writeCandidateSessions({ ...list, entries });
 };
 
 export const describeAtsError = (error: unknown, fallback: string): string => {
