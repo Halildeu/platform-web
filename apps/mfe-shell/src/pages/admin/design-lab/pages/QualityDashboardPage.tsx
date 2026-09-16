@@ -161,8 +161,8 @@ const GRADE_COLORS: Record<string, string> = {
   A: 'bg-state-success-bg text-state-success-text',
   B: 'bg-state-info-bg text-state-info-text',
   C: 'bg-state-warning-bg text-state-warning-text',
-  D: 'bg-state-danger-bg text-state-danger-text',
-  F: 'bg-state-danger-bg text-state-danger-text font-bold',
+  D: 'bg-state-danger-bg text-text-primary',
+  F: 'bg-state-danger-bg text-text-primary font-bold',
 };
 
 /* ---- Quality gate definitions ---- */
@@ -831,7 +831,7 @@ export default function QualityDashboardPage() {
                         )}
                         {sc.status === 'legacy' && (
                           <span
-                            className="rounded-full bg-state-danger-bg px-1.5 py-0.5 text-[9px] font-bold text-state-danger-text"
+                            className="rounded-full bg-state-danger-bg px-1.5 py-0.5 text-[9px] font-bold text-text-primary"
                             data-testid="legacy-badge"
                           >
                             LEGACY → {sc.replacedBy?.replace('@mfe/', '') ?? 'x-charts'}
@@ -1134,7 +1134,7 @@ export default function QualityDashboardPage() {
               className="flex cursor-pointer items-center gap-4 px-5 py-3 transition-colors hover:bg-surface-canvas/30"
               onClick={() => handleComponentNavigate(comp.item.name)}
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-state-danger-bg text-[10px] font-bold text-state-danger-text">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-state-danger-bg text-[10px] font-bold text-text-primary">
                 {idx + 1}
               </span>
               <div className="min-w-0 flex-1">

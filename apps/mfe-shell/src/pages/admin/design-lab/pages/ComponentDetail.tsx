@@ -1733,7 +1733,7 @@ type ChangelogEntry = {
 const CHANGELOG_TYPE_CONFIG: Record<ChangelogEntry["type"], { label: string; color: string; dot: string }> = {
   feature: { label: "Feature", color: "bg-state-success-bg text-state-success-text", dot: "bg-state-success-text" },
   fix: { label: "Fix", color: "bg-state-info-bg text-state-info-text", dot: "bg-state-info-text" },
-  breaking: { label: "Breaking", color: "bg-state-danger-bg text-state-danger-text", dot: "bg-state-danger-text" },
+  breaking: { label: "Breaking", color: "bg-state-danger-bg text-text-primary", dot: "bg-state-danger-text" },
   deprecation: { label: "Deprecated", color: "bg-state-warning-bg text-state-warning-text", dot: "bg-state-warning-text" },
   refactor: { label: "Refactor", color: "bg-action-primary/10 text-action-primary", dot: "bg-action-primary" },
 };

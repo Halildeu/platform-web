@@ -580,7 +580,7 @@ export const RESUME_DECISION_STYLES = {
     // İlk sürümde ikisi de border-border-subtle + bg-border-strong taşıyordu:
     // rozet dışında hiçbir görsel fark yoktu (canlı geri bildirim: "çerçeve
     // rengi değişmiyor"). Dışlama sinyali için danger ailesi kullanılıyor.
-    badge: 'border-state-danger-border bg-state-danger-bg text-state-danger-text',
+    badge: 'border-state-danger-border bg-state-danger-bg text-text-primary',
     accent: 'bg-state-danger-border',
     card: 'border-state-danger-border bg-state-danger-bg/40',
   },
@@ -2292,7 +2292,7 @@ const CandidateApplicationPage = () => {
           {jobError ? (
             <p
               role="alert"
-              className="mb-6 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+              className="mb-6 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-text-primary"
             >
               İlan servisine ulaşılamadı: {jobError}
             </p>
@@ -2495,7 +2495,7 @@ const CandidateApplicationPage = () => {
                           role="alert"
                           aria-live="assertive"
                           tabIndex={-1}
-                          className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-3 py-2 text-sm font-medium text-state-danger-text outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                          className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-3 py-2 text-sm font-medium text-text-primary outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                         >
                           {fileError}
                         </p>
@@ -3159,7 +3159,7 @@ const CandidateApplicationPage = () => {
                   {formError ? (
                     <p
                       role="alert"
-                      className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+                      className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-text-primary"
                     >
                       {formError}
                     </p>
@@ -3287,7 +3287,7 @@ const CandidateApplicationPage = () => {
                 {!applicationNotice ? (
                   <p
                     role="alert"
-                    className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+                    className="rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-text-primary"
                   >
                     Bu kariyer sayfası için yayımlanmış bir aydınlatma metni bulunmuyor. Metin
                     yayımlanmadan başvuru onayı toplanamaz ve başvuru gönderilemez.
@@ -3366,7 +3366,7 @@ const CandidateApplicationPage = () => {
               {submitError ? (
                 <p
                   role="alert"
-                  className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+                  className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-text-primary"
                 >
                   Başvuru gönderilemedi: {submitError}
                 </p>

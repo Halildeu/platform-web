@@ -813,7 +813,7 @@ const LIFECYCLE_STYLES: Record<string, { dot: string; text: string; bg: string }
   stable: { dot: "bg-state-success-text", text: "text-state-success-text", bg: "bg-state-success-bg" },
   beta: { dot: "bg-state-warning-text", text: "text-state-warning-text", bg: "bg-state-warning-bg" },
   planned: { dot: "bg-text-tertiary", text: "text-text-tertiary", bg: "bg-surface-muted" },
-  deprecated: { dot: "bg-state-danger-text", text: "text-state-danger-text", bg: "bg-state-danger-bg" },
+  deprecated: { dot: "bg-state-danger-text", text: "text-text-primary", bg: "bg-state-danger-bg" },
 };
 
 function LifecycleBadge({ lifecycle }: { lifecycle?: string }) {
