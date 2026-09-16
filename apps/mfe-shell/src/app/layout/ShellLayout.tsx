@@ -36,7 +36,7 @@ import { useSessionExpiredToast } from './useSessionExpiredToast';
 /*  ShellLayout — Main application layout with header, sidebar, routes */
 /* ------------------------------------------------------------------ */
 
-const ShellChrome: React.FC = () => {
+export const ShellChrome: React.FC = () => {
   const { currentTheme } = useThemeContext();
   const colors = currentTheme.colors;
   const authState = useAppSelector((state) => state.auth);
