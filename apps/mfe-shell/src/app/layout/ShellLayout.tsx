@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/store.hooks';
 import { useThemeContext } from '../theme/theme-context.provider';
@@ -29,6 +29,8 @@ import { useChordNavigation } from '../shortcuts/useChordNavigation';
 import { ChordOverlay } from '../shortcuts/ChordOverlay';
 import { MobileBottomBar } from './MobileBottomBar';
 
+import { isPublicCandidatePath } from '../public-entry-routes';
+import { PublicSurfaceStaffStrip } from './PublicSurfaceStaffStrip';
 import { buildSafeLoginRedirect } from './buildSafeLoginRedirect';
 import { useSessionExpiredToast } from './useSessionExpiredToast';
 
@@ -41,10 +43,22 @@ export const ShellChrome: React.FC = () => {
   const colors = currentTheme.colors;
   const authState = useAppSelector((state) => state.auth);
   const { token, initialized } = authState;
-  const showSidebar = Boolean(token);
   const location = useLocation();
+  /**
+   * #1047 — aday yüzeyi (ilanlar, başvuru formu, aday portalı) personel kabuğuyla
+   * çizilmez: aday ne görüyorsa personel de onu görür. Sol menü, iç aramalı üst başlık,
+   * kırıntı yolu ve mobil alt bar bu yollarda yok; yerine yalnız personele görünen ince
+   * dönüş şeridi var.
+   */
+  const onCandidateSurface = isPublicCandidatePath(location.pathname, import.meta.env.BASE_URL);
+  const showSidebar = Boolean(token) && !onCandidateSurface;
   const { isBelow } = useBreakpoint();
   const isMobile = isBelow('md');
+  // Personel aday yüzeyine kabuk içinden geldi: geldiği iç sayfaya dönebilmeli.
+  const lastShellPath = useRef('/home');
+  useEffect(() => {
+    if (!onCandidateSurface) lastShellPath.current = `${location.pathname}${location.search}`;
+  }, [onCandidateSurface, location.pathname, location.search]);
   const showAuditSummary = initialized && location.pathname.startsWith('/audit');
   const { isPending: chordPending, activeChords } = useChordNavigation();
 
@@ -61,8 +75,12 @@ export const ShellChrome: React.FC = () => {
           header so the banner is always at the top of viewport. */}
       <ImpersonationBanner />
 
-      {/* Fixed header */}
-      <ShellHeaderNew />
+      {/* Fixed header — aday yüzeyinde yerini dönüş şeridi alır (#1047) */}
+      {onCandidateSurface ? (
+        <PublicSurfaceStaffStrip token={token} returnPath={lastShellPath.current} />
+      ) : (
+        <ShellHeaderNew />
+      )}
 
       {/* Fixed sidebar — hidden on mobile (navigation in hamburger drawer) */}
       {showSidebar && !isMobile ? <Sidebar /> : null}
@@ -71,11 +89,11 @@ export const ShellChrome: React.FC = () => {
       <div
         className="flex flex-1 flex-col"
         style={{
-          paddingTop: 'var(--shell-header-h, 0px)',
+          paddingTop: onCandidateSurface ? undefined : 'var(--shell-header-h, 0px)',
           paddingLeft: showSidebar && !isMobile ? 'var(--shell-sidebar-w, 0px)' : undefined,
         }}
       >
-        <BreadcrumbStrip maxItems={isMobile ? 3 : undefined} />
+        {onCandidateSurface ? null : <BreadcrumbStrip maxItems={isMobile ? 3 : undefined} />}
         {showAuditSummary ? <AuditSummaryStrip /> : null}
         <main
           className="flex min-h-0 flex-1 flex-col px-6 py-4"
