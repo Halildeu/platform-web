@@ -13,7 +13,7 @@ const RISK_STYLES: Record<BlastRadius["riskScore"], { bg: string; text: string; 
   low: { bg: "bg-state-success-bg", text: "text-state-success-text", label: "Low" },
   medium: { bg: "bg-state-warning-bg", text: "text-state-warning-text", label: "Medium" },
   high: { bg: "bg-state-warning-bg", text: "text-state-warning-text", label: "High" },
-  critical: { bg: "bg-state-danger-bg", text: "text-state-danger-text", label: "Critical" },
+  critical: { bg: "bg-state-danger-bg", text: "text-text-primary", label: "Critical" },
 };
 
 function RiskBadge({ score }: { score: BlastRadius["riskScore"] }) {

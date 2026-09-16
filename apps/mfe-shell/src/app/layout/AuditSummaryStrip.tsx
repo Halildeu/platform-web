@@ -275,7 +275,7 @@ export const AuditSummaryStrip: React.FC = () => {
         </div>
 
         {state.error ? (
-          <div className="rounded-2xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-xs text-state-danger-text">
+          <div className="rounded-2xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-xs text-text-primary">
             {state.error}
           </div>
         ) : null}

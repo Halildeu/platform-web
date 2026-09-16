@@ -335,7 +335,7 @@ function MigrationImpactCalculator() {
   const riskColors = {
     low: "bg-state-success-bg text-state-success-text",
     medium: "bg-state-warning-bg text-state-warning-text",
-    high: "bg-state-danger-bg text-state-danger-text",
+    high: "bg-state-danger-bg text-text-primary",
   };
 
   return (

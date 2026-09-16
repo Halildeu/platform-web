@@ -42,7 +42,7 @@ export type A11yViolation = {
 };
 
 const IMPACT_META: Record<A11yImpact, { label: string; color: string; icon: React.ReactNode; bg: string }> = {
-  critical: { label: "Critical", color: "text-state-danger-text", icon: <AlertCircle className="h-3.5 w-3.5" />, bg: "bg-state-danger-bg" },
+  critical: { label: "Critical", color: "text-text-primary", icon: <AlertCircle className="h-3.5 w-3.5" />, bg: "bg-state-danger-bg" },
   serious: { label: "Serious", color: "text-state-warning-text", icon: <AlertTriangle className="h-3.5 w-3.5" />, bg: "bg-state-warning-bg" },
   moderate: { label: "Moderate", color: "text-state-warning-text", icon: <Info className="h-3.5 w-3.5" />, bg: "bg-state-warning-bg" },
   minor: { label: "Minor", color: "text-action-primary", icon: <Info className="h-3.5 w-3.5" />, bg: "bg-state-info-bg" },
@@ -263,7 +263,7 @@ export const A11yAuditPanel: React.FC<A11yAuditPanelProps> = ({
               <CheckCircle2 className="h-3 w-3" /> Pass
             </span>
           ) : (
-            <span className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${impactCounts.critical > 0 ? "bg-state-danger-bg text-state-danger-text" : "bg-state-warning-bg text-state-warning-text"}`}>
+            <span className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${impactCounts.critical > 0 ? "bg-state-danger-bg text-text-primary" : "bg-state-warning-bg text-state-warning-text"}`}>
               {violations.length} issue{violations.length !== 1 ? "s" : ""}
             </span>
           )}

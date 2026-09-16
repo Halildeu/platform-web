@@ -232,7 +232,7 @@ export default function ParityDashboardPage() {
                   <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                     row.score >= 5 ? "bg-state-success-bg text-state-success-text" :
                     row.score >= 3 ? "bg-state-warning-bg text-state-warning-text" :
-                    "bg-state-danger-bg text-state-danger-text"
+                    "bg-state-danger-bg text-text-primary"
                   }`}>
                     {row.score}/{maxScore}
                   </span>

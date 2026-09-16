@@ -178,7 +178,7 @@ const RegisterPage = () => {
         </form>
 
         {registrationStatus === 'failed' && (
-          <div className="mt-4 rounded-md border border-state-danger-border bg-state-danger-bg px-3 py-2 text-xs text-state-danger-text">
+          <div className="mt-4 rounded-md border border-state-danger-border bg-state-danger-bg px-3 py-2 text-xs text-text-primary">
             {error || t('auth.register.failed')}
           </div>
         )}

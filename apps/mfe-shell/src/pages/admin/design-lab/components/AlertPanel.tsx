@@ -28,7 +28,7 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
   }
 
   const severityConfig = {
-    critical: { bg: 'bg-state-danger-bg dark:bg-state-danger-text-950/20', border: 'border-state-danger-text/20 dark:border-state-danger-text', icon: <AlertCircle className="h-4 w-4 text-state-danger-text" />, label: 'P0' },
+    critical: { bg: 'bg-state-danger-bg dark:bg-state-danger-text-950/20', border: 'border-state-danger-text/20 dark:border-state-danger-text', icon: <AlertCircle className="h-4 w-4 text-text-primary" />, label: 'P0' },
     warning: { bg: 'bg-state-warning-bg dark:bg-state-warning-text/20', border: 'border-state-warning-text/20 dark:border-state-warning-text', icon: <AlertTriangle className="h-4 w-4 text-state-warning-text" />, label: 'P1' },
     info: { bg: 'bg-state-info-bg dark:bg-action-primary-950/20', border: 'border-state-info-text/20 dark:border-action-primary', icon: <CheckCircle2 className="h-4 w-4 text-action-primary" />, label: 'P2' },
   };

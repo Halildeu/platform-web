@@ -48,7 +48,7 @@ function cellColor(count: number, lifecycle: string): string {
 
   // Red if lifecycle is planned but in use (breaking risk)
   if (lifecycle === "planned" && count > 0) {
-    return "bg-state-danger-bg text-state-danger-text";
+    return "bg-state-danger-bg text-text-primary";
   }
 
   // Yellow if beta

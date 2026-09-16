@@ -586,7 +586,7 @@ const RecruiterInterviewPanel = ({
       ) : null}
       {error ? (
         <p
-          className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+          className="mt-4 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-text-primary"
           role="alert"
         >
           {error}
