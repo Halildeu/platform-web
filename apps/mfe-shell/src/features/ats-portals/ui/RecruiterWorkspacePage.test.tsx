@@ -1032,4 +1032,39 @@ describe('RecruiterWorkspacePage', () => {
     );
     expect(screen.queryByText(/otomatik karar sonucu/i)).not.toBeInTheDocument();
   });
+
+  describe('offer draft follows the completed interview (#963)', () => {
+    // Sunucu kuralı: başvuruda COMPLETED durumlu görüşme yoksa teklif 409 ile reddedilir.
+    // Teklif düğmesi aynı kuralı görüşme panelinin yüklediği listeden okumalı.
+    const openShortlisted = async (interviews: unknown[]) => {
+      apiMocks.getRecruiterApplication.mockResolvedValue({
+        application: { ...APPLICATION, status: 'INTERVIEW_PENDING', version: 2 },
+        history: [],
+        evaluations: [EVALUATION],
+      });
+      apiMocks.listRecruiterInterviews.mockResolvedValue(interviews);
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+      await screen.findByText(/Teklif ve işe alım çalışma alanı/);
+    };
+
+    it('keeps the draft closed while the only interview is still scheduled', async () => {
+      await openShortlisted([INTERVIEW]);
+
+      expect(await screen.findByText('Planlandı')).toBeVisible();
+      expect(await screen.findByTestId('offer-requires-completed-interview')).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: 'Teklif taslağı oluştur' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('opens the draft once an interview is completed', async () => {
+      await openShortlisted([{ ...INTERVIEW, status: 'COMPLETED', version: 1 }]);
+
+      expect(
+        await screen.findByRole('button', { name: 'Teklif taslağı oluştur' }),
+      ).toBeVisible();
+      expect(screen.queryByTestId('offer-requires-completed-interview')).not.toBeInTheDocument();
+    });
+  });
 });

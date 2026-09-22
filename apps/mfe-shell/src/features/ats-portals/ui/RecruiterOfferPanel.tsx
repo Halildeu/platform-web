@@ -122,6 +122,8 @@ interface RecruiterOfferPanelProps {
   candidateLocation: string;
   applicationStatus: ApplicationStatus;
   canManage: boolean;
+  /** Başvuruda tamamlanmış görüşme var mı; sunucu teklifi yalnız bu durumda kabul eder. */
+  interviewCompleted?: boolean;
   onApplicationRefresh: () => Promise<void>;
 }
 
