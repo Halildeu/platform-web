@@ -159,6 +159,14 @@ const formatDate = (value: string, timeZone?: string) =>
     ...(timeZone ? { timeZone } : {}),
   }).format(new Date(value));
 
+/** Saatsiz takvim günü (`YYYY-MM-DD`): saat dilimine çevrilmeden, saatsiz gösterilir. */
+const formatCalendarDate = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(year, month - 1, day)),
+  );
+};
+
 const formatMoney = (amount: number, currency: string) => {
   try {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
@@ -1304,7 +1312,7 @@ const CandidatePortalPage = () => {
                             <dt className="text-xs font-semibold text-text-secondary">
                               Başlangıç tarihi
                             </dt>
-                            <dd className="mt-1 font-bold">{formatDate(offer.startDate)}</dd>
+                            <dd className="mt-1 font-bold">{formatCalendarDate(offer.startDate)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs font-semibold text-text-secondary">

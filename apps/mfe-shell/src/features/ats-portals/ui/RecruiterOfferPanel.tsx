@@ -230,8 +230,9 @@ const RecruiterOfferPanel = ({
       setEditing(null);
       await refresh();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Teklif kaydedilemedi.');
+      // Yenileme kendi hatasını sıfırlıyor; komutun reddi ondan sonra yazılmazsa silinir.
       await refresh();
+      setError(actionError instanceof Error ? actionError.message : 'Teklif kaydedilemedi.');
     } finally {
       setBusy(false);
     }
@@ -281,10 +282,10 @@ const RecruiterOfferPanel = ({
       setSuccess(message);
       await Promise.allSettled([refresh(), onApplicationRefresh()]);
     } catch (actionError) {
+      await Promise.allSettled([refresh(), onApplicationRefresh()]);
       setError(
         actionError instanceof Error ? actionError.message : 'Teklif durumu değiştirilemedi.',
       );
-      await Promise.allSettled([refresh(), onApplicationRefresh()]);
     } finally {
       setBusy(false);
     }
