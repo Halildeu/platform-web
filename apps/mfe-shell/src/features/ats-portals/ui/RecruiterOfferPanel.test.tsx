@@ -167,6 +167,46 @@ describe('RecruiterOfferPanel', () => {
     );
   });
 
+  describe('server rejections stay visible (#963)', () => {
+    // TEST canlı kabulünde görüşmesiz teklif 409 INTERVIEW_NOT_COMPLETED ile reddedildi ama
+    // ekranda hiçbir şey görünmedi: hata yolu mesajı yazıyor, ardından çağrılan yenileme
+    // mesajı siliyordu. İK düğmeye basıp nedenini göremiyordu.
+    const INTERVIEW_REQUIRED = "teklif için insan scorecard'lı tamamlanmış görüşme gerekli";
+
+    it('shows the server reason when a draft is rejected', async () => {
+      apiMocks.createRecruiterOffer.mockRejectedValue(new Error(INTERVIEW_REQUIRED));
+      renderPanel();
+      fireEvent.click(await screen.findByRole('button', { name: 'Teklif taslağı oluştur' }));
+      fireEvent.change(screen.getByLabelText('Brüt ücret'), { target: { value: '50000' } });
+      fireEvent.change(screen.getByLabelText('Teklif özeti'), {
+        target: { value: 'Sentetik teklif koşulları özeti.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Taslağı kalıcı kaydet' }));
+
+      await waitFor(() => expect(apiMocks.listRecruiterOffers).toHaveBeenCalledTimes(2));
+      expect(await screen.findByRole('alert')).toHaveTextContent(INTERVIEW_REQUIRED);
+    });
+
+    it('shows the server reason when a status change is rejected', async () => {
+      apiMocks.listRecruiterOffers.mockResolvedValue([OFFER]);
+      apiMocks.transitionRecruiterOffer.mockRejectedValue(
+        new Error('teklif başka bir oturumda değişti; güncel sürümü yenileyin'),
+      );
+      renderPanel();
+      fireEvent.click(await screen.findByRole('button', { name: 'Adaya iletmeyi hazırla' }));
+      fireEvent.change(screen.getByLabelText('İnsan kararı gerekçesi'), {
+        target: { value: 'Koşullar insan tarafından kontrol edildi' },
+      });
+      fireEvent.click(screen.getByLabelText(/Koşulları, ücret dönemini ve yanıt son tarihini/i));
+      fireEvent.click(screen.getByRole('button', { name: 'Teklifi adaya ilet' }));
+
+      await waitFor(() => expect(apiMocks.listRecruiterOffers).toHaveBeenCalledTimes(2));
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'teklif başka bir oturumda değişti; güncel sürümü yenileyin',
+      );
+    });
+  });
+
   it('keeps a VIEW-only recruiter read-only', async () => {
     apiMocks.listRecruiterOffers.mockResolvedValue([OFFER]);
     renderPanel({ canManage: false });
