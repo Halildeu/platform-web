@@ -107,8 +107,8 @@ function classifyRemoteError(label: string, error: unknown): ErrorClass {
 
 const TYPE_COLORS: Record<ErrorClass['type'], string> = {
   network: 'bg-state-warning-bg text-state-warning-text',
-  'share-scope': 'bg-state-danger-bg text-state-danger-text',
-  context: 'bg-state-danger-bg text-state-danger-text',
+  'share-scope': 'bg-state-danger-bg text-text-primary',
+  context: 'bg-state-danger-bg text-text-primary',
   auth: 'bg-state-info-bg text-state-info-text',
   unknown: 'bg-surface-muted text-text-secondary',
 };

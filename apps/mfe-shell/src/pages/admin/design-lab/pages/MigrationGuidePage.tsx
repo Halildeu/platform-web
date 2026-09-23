@@ -43,7 +43,7 @@ type MigrationEntry = {
 };
 
 const CHANGE_TYPE_META: Record<ChangeType, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  breaking: { label: "Breaking", color: "text-state-danger-text", bg: "bg-state-danger-bg", icon: <AlertTriangle className="h-3 w-3" /> },
+  breaking: { label: "Breaking", color: "text-text-primary", bg: "bg-state-danger-bg", icon: <AlertTriangle className="h-3 w-3" /> },
   deprecation: { label: "Deprecated", color: "text-state-warning-text", bg: "bg-state-warning-bg", icon: <AlertTriangle className="h-3 w-3" /> },
   feature: { label: "Feature", color: "text-action-primary", bg: "bg-state-info-bg", icon: <Zap className="h-3 w-3" /> },
   fix: { label: "Fix", color: "text-state-success-text", bg: "bg-state-success-bg", icon: <CheckCircle2 className="h-3 w-3" /> },

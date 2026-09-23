@@ -278,7 +278,7 @@ export default function QualityAuditPage() {
         <KpiCard label="Rehber Kapsami" value={`%${kpis.guide}`} icon={<BookOpen className="h-4 w-4 text-action-primary" />} color="bg-state-info-bg" pct={kpis.guide} />
         <KpiCard label="Token Kapsami" value={`%${kpis.tokens}`} icon={<Palette className="h-4 w-4 text-action-primary" />} color="bg-action-primary/10" pct={kpis.tokens} />
         <KpiCard label="Ornek Kapsami" value={`%${kpis.examples}`} icon={<Code2 className="h-4 w-4 text-state-warning-text" />} color="bg-state-warning-bg" pct={kpis.examples} />
-        <KpiCard label="Playground Kapsami" value={`%${kpis.playground}`} icon={<Gamepad2 className="h-4 w-4 text-state-danger-text" />} color="bg-state-danger-bg" pct={kpis.playground} />
+        <KpiCard label="Playground Kapsami" value={`%${kpis.playground}`} icon={<Gamepad2 className="h-4 w-4 text-text-primary" />} color="bg-state-danger-bg" pct={kpis.playground} />
         <KpiCard label="Genel Puan" value={`%${kpis.overall}`} icon={<ShieldCheck className="h-4 w-4 text-state-success-text" />} color="bg-state-success-bg" pct={kpis.overall} />
       </div>
 
@@ -451,7 +451,7 @@ function CoverageIndicator({ covered }: { covered: boolean }) {
       &#10003;
     </span>
   ) : (
-    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-state-danger-bg text-xs text-state-danger-text">
+    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-state-danger-bg text-xs text-text-primary">
       &#10007;
     </span>
   );
@@ -467,7 +467,7 @@ function ScoreBadge({ score }: { score: number }) {
             ? "bg-state-warning-bg text-state-warning-text"
             : score >= 40
               ? "bg-state-warning-bg text-state-warning-text"
-              : "bg-state-danger-bg text-state-danger-text"
+              : "bg-state-danger-bg text-text-primary"
       }`}
     >
       %{score}

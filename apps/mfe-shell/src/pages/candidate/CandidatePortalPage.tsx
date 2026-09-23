@@ -71,7 +71,7 @@ const STATUS_COPY: Record<ApplicationStatus, { label: string; description: strin
   },
   WITHDRAWN: {
     label: 'Başvuru geri çekildi',
-    description: 'Başvuruyu geri çektiniz; bu durum terminaldir.',
+    description: 'Başvuruyu geri çektiniz; bu başvuru kapandı ve yeniden açılamaz.',
   },
 };
 
@@ -245,6 +245,17 @@ const CandidatePortalPage = () => {
   const [responseAcknowledged, setResponseAcknowledged] = useState(false);
   const [responding, setResponding] = useState(false);
   const offerMutation = useRef<{ signature: string; key: string } | null>(null);
+  /**
+   * #992 C: işlem sonucu (başarı ya da hata) kutusuna ve geri çekme onay paneline odak.
+   * Geri çekme sonrasında bölüm kalkıyor; odak taşınmazsa basılan düğmeyle birlikte
+   * `body`'ye düşüyor ve klavye/ekran okuyucu kullanıcısı yerini kaybediyordu.
+   */
+  const outcomeRef = useRef<HTMLDivElement>(null);
+  const withdrawalOpenerRef = useRef<HTMLButtonElement>(null);
+  const withdrawalConfirmRef = useRef<HTMLInputElement>(null);
+  const focusAfterRender = useRef<'outcome' | 'withdrawal-opener' | 'withdrawal-confirm' | null>(
+    null,
+  );
   /**
    * #965: başvurular arasında hızlı geçişte önceki başvurunun geç gelen yanıtı
    * yeni başvurunun ekranını ezmesin; yalnız son isteğin sonucu yazılır.
@@ -526,6 +537,21 @@ const CandidatePortalPage = () => {
     setSignInToken('');
   };
 
+  // Odak isteği bir sonraki çizimden sonra uygulanır (hedef o çizimde DOM'a girer). Hedef
+  // yoksa istek düşer: sonradan, beklenmedik bir anda odak kaydırılmaz.
+  useEffect(() => {
+    const target = focusAfterRender.current;
+    if (!target) return;
+    focusAfterRender.current = null;
+    const element =
+      target === 'outcome'
+        ? outcomeRef.current
+        : target === 'withdrawal-opener'
+          ? withdrawalOpenerRef.current
+          : withdrawalConfirmRef.current;
+    element?.focus();
+  });
+
   const withdraw = async () => {
     if (!session || !status?.withdrawalAllowed || !withdrawalConfirmed || withdrawing) return;
     const epoch = applicationViewEpoch.current;
@@ -564,15 +590,17 @@ const CandidatePortalPage = () => {
         if (!isCurrentView()) return;
         setInterviewError('Başvuru geri çekildi; güncel görüşme takvimini yenileyin.');
       }
-      setSuccessMessage('Başvurunuz geri çekildi. Güncel terminal durum aşağıda görünür.');
+      setSuccessMessage('Başvurunuz geri çekildi. Güncel durumu bu sayfada görebilirsiniz.');
       setWithdrawalOpen(false);
       setWithdrawalConfirmed(false);
+      focusAfterRender.current = 'outcome';
     } catch (withdrawError) {
       if (!isCurrentView()) return;
       setActionError(
         withdrawError instanceof Error ? withdrawError.message : 'Başvuru geri çekilemedi.',
       );
       await refresh();
+      if (isCurrentView()) focusAfterRender.current = 'outcome';
     } finally {
       if (isCurrentView()) setWithdrawing(false);
     }
@@ -612,12 +640,14 @@ const CandidatePortalPage = () => {
           : 'Teklif ret yanıtınız kalıcı olarak kaydedildi.',
       );
       await refresh();
+      if (isCurrentView()) focusAfterRender.current = 'outcome';
     } catch (responseError) {
       if (!isCurrentView()) return;
       setActionError(
         responseError instanceof Error ? responseError.message : 'Teklif yanıtı kaydedilemedi.',
       );
       await refresh();
+      if (isCurrentView()) focusAfterRender.current = 'outcome';
     } finally {
       if (isCurrentView()) setResponding(false);
     }
@@ -1194,7 +1224,7 @@ const CandidatePortalPage = () => {
                 </div>
                 {interviewError ? (
                   <p
-                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-text-primary"
                     role="alert"
                   >
                     {interviewError}
@@ -1269,7 +1299,7 @@ const CandidatePortalPage = () => {
                 </div>
                 {offerError ? (
                   <p
-                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-text-primary"
                     role="alert"
                   >
                     {offerError}
@@ -1467,12 +1497,16 @@ const CandidatePortalPage = () => {
                     Başvuruyu geri çek
                   </h3>
                   <p className="mt-1 text-sm leading-6 text-text-secondary">
-                    Bu işlem başvuruyu terminal duruma getirir; İK ekibi başvuruyu ilerletemez.
+                    Bu işlem başvurunuzu kalıcı olarak kapatır; İK ekibi başvurunuzu artık ilerletemez.
                   </p>
                   {!withdrawalOpen ? (
                     <button
+                      ref={withdrawalOpenerRef}
                       type="button"
-                      onClick={() => setWithdrawalOpen(true)}
+                      onClick={() => {
+                        focusAfterRender.current = 'withdrawal-confirm';
+                        setWithdrawalOpen(true);
+                      }}
                       className="mt-3 min-h-11 rounded-xl border border-state-danger-border bg-surface-default px-4 text-sm font-bold text-text-primary"
                     >
                       Geri çekme onayını aç
@@ -1481,6 +1515,7 @@ const CandidatePortalPage = () => {
                     <div className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-4">
                       <label className="flex items-start gap-2 text-sm leading-5 text-text-primary">
                         <input
+                          ref={withdrawalConfirmRef}
                           type="checkbox"
                           checked={withdrawalConfirmed}
                           onChange={(event) => setWithdrawalConfirmed(event.target.checked)}
@@ -1501,6 +1536,7 @@ const CandidatePortalPage = () => {
                         <button
                           type="button"
                           onClick={() => {
+                            focusAfterRender.current = 'withdrawal-opener';
                             setWithdrawalOpen(false);
                             setWithdrawalConfirmed(false);
                           }}
@@ -1514,22 +1550,30 @@ const CandidatePortalPage = () => {
                 </section>
               ) : null}
 
-              {successMessage ? (
-                <p
-                  role="status"
-                  className="mt-5 rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-text-primary"
-                >
-                  {successMessage}
-                </p>
-              ) : null}
-              {actionError ? (
-                <p
-                  role="alert"
-                  className="mt-5 rounded-xl border border-state-danger-border bg-state-danger-bg p-4 text-sm font-semibold text-state-danger-text"
-                >
-                  {actionError}
-                </p>
-              ) : null}
+              {/* #992 C: sonuç kutusu; işlem sonrası odak buraya taşınır. */}
+              <div
+                ref={outcomeRef}
+                tabIndex={-1}
+                data-testid="candidate-action-outcome"
+                className="mt-5 space-y-3 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary empty:hidden"
+              >
+                {successMessage ? (
+                  <p
+                    role="status"
+                    className="rounded-xl border border-state-success-border bg-state-success-bg p-4 text-sm font-semibold text-text-primary"
+                  >
+                    {successMessage}
+                  </p>
+                ) : null}
+                {actionError ? (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-state-danger-border bg-state-danger-bg p-4 text-sm font-semibold text-text-primary"
+                  >
+                    {actionError}
+                  </p>
+                ) : null}
+              </div>
             </section>
 
             <aside className="rounded-3xl border border-border-subtle bg-surface-default p-5 shadow-xs sm:p-6">

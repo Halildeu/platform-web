@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<RemoteHealth['status'], { label: string; color: stri
   },
   unavailable: {
     label: 'Erisilemiyor',
-    color: 'bg-state-danger-bg text-state-danger-text dark:bg-state-danger-text/20 dark:text-state-danger-text',
+    color: 'bg-state-danger-bg text-text-primary dark:bg-state-danger-text/20 dark:text-text-primary',
     dot: 'bg-state-danger-text',
   },
 };

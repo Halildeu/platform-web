@@ -1120,6 +1120,130 @@ describe('CandidatePortalPage', () => {
     expect(screen.queryByRole('button', { name: 'Geri çekme onayını aç' })).not.toBeInTheDocument();
   });
 
+  /**
+   * #992 Dilim C — madde 5 kabulünde aday tarafında görülen bulgular.
+   *
+   * <p>Metin: aday metinlerinde teknik "terminal" terimi geçiyordu ve başarı mesajı güncel
+   * durumun "aşağıda" olduğunu söylüyordu; mesaj sayfanın altında, güncel durum ise yukarıda.
+   * Odak: geri çekme sonrasında geri çekme bölümü kalkıyor (`withdrawalAllowed` false) ve
+   * basılan düğmeyle birlikte odak `body`'ye düşüyordu; onay paneli de odak almıyor/vermiyordu.
+   */
+  describe('plain language and focus after candidate actions (#992 C)', () => {
+    const confirmWithdrawal = () =>
+      fireEvent.click(
+        screen.getByLabelText(/Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i),
+      );
+    const outcome = () => screen.getByTestId('candidate-action-outcome');
+
+    it('never shows the technical word "terminal" or points the wrong way', async () => {
+      renderPage();
+      await screen.findAllByText('İnsan incelemesinde');
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+      expect(screen.queryByText(/terminal/i)).not.toBeInTheDocument();
+
+      confirmWithdrawal();
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Başvurunuz geri çekildi');
+      expect(screen.queryByText(/terminal/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).not.toHaveTextContent(/aşağıda/i);
+    });
+
+    it('moves focus to the outcome after a withdrawal', async () => {
+      renderPage();
+      await screen.findAllByText('İnsan incelemesinde');
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+      confirmWithdrawal();
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+
+      await screen.findByRole('status');
+      await waitFor(() => expect(outcome()).toHaveFocus());
+      expect(outcome()).toHaveTextContent('Başvurunuz geri çekildi');
+    });
+
+    it('moves focus to the error after a withdrawal conflict (A1)', async () => {
+      apiMocks.withdrawCandidateApplication.mockRejectedValueOnce(
+        new Error('Başvurunuzun durumu bu arada değiştiği için geri çekme işlemi yapılamadı.'),
+      );
+      apiMocks.getCandidateStatus
+        .mockResolvedValueOnce(STATUS)
+        .mockResolvedValue({
+          ...STATUS,
+          status: 'REJECTED',
+          nextAction: 'NONE',
+          withdrawalAllowed: false,
+          version: 2,
+        });
+      renderPage();
+      await screen.findAllByText('İnsan incelemesinde');
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+      confirmWithdrawal();
+      fireEvent.click(screen.getByRole('button', { name: 'Başvuruyu geri çek' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/durumu bu arada değiştiği/);
+      await waitFor(() => expect(outcome()).toHaveFocus());
+      // Güncel durum yüklendi ve geri çekme bölümü kalktı; odak kaybolmadı.
+      expect(
+        screen.queryByRole('button', { name: 'Geri çekme onayını aç' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('moves focus into the withdrawal confirmation and back to its opener on cancel', async () => {
+      renderPage();
+      await screen.findAllByText('İnsan incelemesinde');
+      fireEvent.click(screen.getByRole('button', { name: 'Geri çekme onayını aç' }));
+
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText(/Başvurumu geri çekmek istediğimi ve işlemin geri alınamayacağını/i),
+        ).toHaveFocus(),
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Geri çekme onayını aç' })).toHaveFocus(),
+      );
+    });
+
+    it('moves focus to the outcome after an offer response', async () => {
+      const offer = {
+        offerId: 'off_abcdefghijklmnopqrstuvwx',
+        applicationPublicRef: SESSION.publicRef,
+        jobTitle: 'Ürün Yöneticisi',
+        roleTitle: 'Kıdemli Ürün Yöneticisi',
+        startDate: '2026-08-03',
+        employmentType: 'Tam zamanlı',
+        workMode: 'HYBRID',
+        location: 'İstanbul',
+        compensationAmount: 120000,
+        currency: 'TRY',
+        payPeriod: 'MONTHLY',
+        expiresAt: '2026-07-25T12:00:00Z',
+        termsSummary: 'Sentetik teklif koşulları.',
+        status: 'EXTENDED',
+        version: 1,
+        updatedAt: '2026-07-18T12:00:00Z',
+        legalBoundary: 'Bu yanıt ATS sürecini kaydeder; ayrı iş sözleşmesi veya e-imza değildir.',
+      };
+      apiMocks.getCandidateStatus.mockResolvedValue({
+        ...STATUS,
+        status: 'OFFER_PENDING',
+        nextAction: 'REVIEW_OFFER',
+        withdrawalAllowed: false,
+      });
+      apiMocks.getCandidateOffers.mockResolvedValue([offer]);
+      apiMocks.respondCandidateOffer.mockResolvedValue({ ...offer, status: 'ACCEPTED', version: 2 });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Teklifi kabul etmeyi hazırla' }));
+      fireEvent.click(screen.getByLabelText(/yalnız ATS süreç yanıtı olduğunu/i));
+      fireEvent.click(screen.getByRole('button', { name: 'Kabul yanıtını kalıcı kaydet' }));
+
+      await waitFor(() => expect(outcome()).toHaveFocus());
+      expect(outcome()).toHaveTextContent(/Teklif kabul yanıtınız/);
+    });
+  });
+
   it('shows only the candidate-safe interview schedule and no internal evaluation data', async () => {
     apiMocks.getCandidateInterviews.mockResolvedValue([
       {

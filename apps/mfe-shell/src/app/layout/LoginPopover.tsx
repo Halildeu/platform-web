@@ -120,7 +120,7 @@ const LoginPopover: React.FC<LoginPopoverProps> = ({ onClose, onNavigate }) => {
         </Button>
 
         {status === 'failed' && submitted && (
-          <div className="mt-2 rounded-md border border-state-danger-border bg-state-danger-bg px-3 py-2 text-xs text-state-danger-text">
+          <div className="mt-2 rounded-md border border-state-danger-border bg-state-danger-bg px-3 py-2 text-xs text-text-primary">
             {error || t('auth.login.failed')}
           </div>
         )}

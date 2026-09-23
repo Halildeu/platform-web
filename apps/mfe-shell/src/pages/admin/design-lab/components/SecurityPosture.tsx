@@ -86,7 +86,7 @@ const STATUS_CONFIG: Record<ConfigStatus, { icon: React.ReactNode; badge: string
     missing: {
       icon: <XCircle className="h-4 w-4 text-state-danger-text" />,
       badge:
-        'bg-state-danger-bg text-state-danger-text dark:bg-state-danger-text/30 dark:text-state-danger-text',
+        'bg-state-danger-bg text-text-primary dark:bg-state-danger-text/30 dark:text-text-primary',
       label: 'Eksik',
     },
     no_data: {

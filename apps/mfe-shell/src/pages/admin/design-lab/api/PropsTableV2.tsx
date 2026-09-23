@@ -67,7 +67,7 @@ function getTypeBadgeColor(typeStr: string): string {
   if (typeStr === "string") return "bg-state-success-bg text-state-success-text";
   if (typeStr === "number") return "bg-state-info-bg text-state-info-text";
   if (typeStr.includes("|")) return "bg-action-primary/10 text-action-primary";
-  if (typeStr.includes("=>") || typeStr.includes("Function")) return "bg-state-danger-bg text-state-danger-text";
+  if (typeStr.includes("=>") || typeStr.includes("Function")) return "bg-state-danger-bg text-text-primary";
   if (typeStr.includes("React")) return "bg-action-primary/10 text-action-primary";
   return "bg-[var(--surface-muted)] text-[var(--text-secondary)]";
 }

@@ -200,7 +200,7 @@ const STATE_COLORS: Record<string, string> = {
   emerald: "bg-state-success-bg text-state-success-text border-state-success-text/30",
   amber: "bg-state-warning-bg text-state-warning-text border-state-warning-text/30",
   violet: "bg-action-primary/10 text-action-primary border-action-primary/30",
-  red: "bg-state-danger-bg text-state-danger-text border-state-danger-text/30",
+  red: "bg-state-danger-bg text-text-primary border-state-danger-text/30",
 };
 
 function snakeToReadable(s: string): string {

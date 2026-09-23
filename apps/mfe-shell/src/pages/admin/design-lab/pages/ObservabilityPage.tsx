@@ -170,7 +170,7 @@ function ErrorSummaryPanel() {
                 key={i}
                 className="flex items-start gap-2 rounded-lg bg-surface-muted p-2"
               >
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-xs bg-state-danger-bg text-[10px] font-bold text-state-danger-text">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-xs bg-state-danger-bg text-[10px] font-bold text-text-primary">
                   {err.count}
                 </span>
                 <Text className="text-xs text-text-secondary line-clamp-2 font-mono">
@@ -286,7 +286,7 @@ function getBudgetStatus(
 const STATUS_COLORS = {
   pass: 'bg-state-success-bg text-state-success-text',
   warn: 'bg-state-warning-bg text-state-warning-text',
-  fail: 'bg-state-danger-bg text-state-danger-text',
+  fail: 'bg-state-danger-bg text-text-primary',
   measuring: 'bg-surface-muted text-text-secondary',
 };
 

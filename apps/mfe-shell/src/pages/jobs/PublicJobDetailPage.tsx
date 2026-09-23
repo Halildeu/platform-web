@@ -70,7 +70,7 @@ const PublicJobDetailPage = () => {
         {error ? (
           <p
             role="alert"
-            className="rounded-2xl border border-state-danger-border bg-state-danger-bg p-6 text-state-danger-text"
+            className="rounded-2xl border border-state-danger-border bg-state-danger-bg p-6 text-text-primary"
           >
             {error}
           </p>
