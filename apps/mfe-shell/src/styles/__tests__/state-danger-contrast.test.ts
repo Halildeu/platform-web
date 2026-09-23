@@ -19,6 +19,13 @@ import { describe, expect, it } from 'vitest';
  *
  * <p>Buradaki iki test o kuralı kalıcı kılar: (1) desen bütün temalarda ölçülür, (2) hiçbir
  * ekran tehlike zemininde `text-state-danger-text` kullanmaz.
+ *
+ * <p>Bilinen sınırlar (#1189 incelemesi): (2) SATIR bazlıdır; birden çok satıra bölünmüş
+ * `className`/`cn(...)` ya da üst öğede tehlike zemini + alt öğede tehlike metni gibi iç içe
+ * kullanımı yakalamaz. Bunu kapatacak olan, hata durumu görünürken koşan axe kontrolüdür.
+ * (1) yarı saydam zemini doğrusal ışıkta karıştırır; tarayıcılar gama kodlu sRGB'de karıştırdığı
+ * için oranlar tarayıcı ölçümünden biraz sapabilir. `--text-primary` için pay büyük (≥ 9,47),
+ * testin kararı değişmez.
  */
 const THEME_FILES: ReadonlyArray<{ label: string; relative: string }> = [
   { label: 'theme.css', relative: '../theme.css' },
