@@ -142,6 +142,8 @@ interface RecruiterInterviewPanelProps {
   interviewerActorRef: string | null;
   interviewerLabel: string;
   onApplicationRefresh: () => Promise<void>;
+  /** Her başarılı yüklemede, listenin hangi başvuruya ait olduğuyla birlikte bildirilir. */
+  onInterviewsChange?: (publicRef: string, interviews: RecruiterInterviewWorkspaceDto[]) => void;
 }
 
 const RecruiterInterviewPanel = ({
@@ -151,6 +153,7 @@ const RecruiterInterviewPanel = ({
   interviewerActorRef,
   interviewerLabel,
   onApplicationRefresh,
+  onInterviewsChange,
 }: RecruiterInterviewPanelProps) => {
   const [interviews, setInterviews] = useState<RecruiterInterviewWorkspaceDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,12 +176,17 @@ const RecruiterInterviewPanel = ({
   );
   const [scorecard, setScorecard] = useState<ScorecardForm | null>(null);
   const mutation = useRef<{ signature: string; key: string } | null>(null);
+  // Üst bileşen geri çağrıyı her çizimde yeniden üretebilir; yenilemeyi ona bağlamamak için.
+  const interviewsListener = useRef(onInterviewsChange);
+  interviewsListener.current = onInterviewsChange;
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setInterviews(await listRecruiterInterviews(publicRef));
+      const loaded = await listRecruiterInterviews(publicRef);
+      setInterviews(loaded);
+      interviewsListener.current?.(publicRef, loaded);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Görüşmeler yüklenemedi.');
     } finally {
