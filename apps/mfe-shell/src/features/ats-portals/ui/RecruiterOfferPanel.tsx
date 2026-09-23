@@ -122,6 +122,8 @@ interface RecruiterOfferPanelProps {
   candidateLocation: string;
   applicationStatus: ApplicationStatus;
   canManage: boolean;
+  /** Başvuruda tamamlanmış görüşme var mı; sunucu teklifi yalnız bu durumda kabul eder. */
+  interviewCompleted?: boolean;
   onApplicationRefresh: () => Promise<void>;
 }
 
@@ -131,6 +133,7 @@ const RecruiterOfferPanel = ({
   candidateLocation,
   applicationStatus,
   canManage,
+  interviewCompleted = false,
   onApplicationRefresh,
 }: RecruiterOfferPanelProps) => {
   const [offers, setOffers] = useState<RecruiterOfferWorkspaceDto[]>([]);
@@ -181,7 +184,8 @@ const RecruiterOfferPanel = ({
   const activeOffer = offers.find((offer) =>
     ['DRAFT', 'EXTENDED', 'ACCEPTED'].includes(offer.status),
   );
-  const canCreate = canManage && applicationStatus === 'INTERVIEW_PENDING' && !activeOffer;
+  const offerStageOpen = canManage && applicationStatus === 'INTERVIEW_PENDING' && !activeOffer;
+  const canCreate = offerStageOpen && interviewCompleted;
 
   const openCreate = () => {
     setForm(initialForm(jobTitle, candidateLocation));
@@ -364,6 +368,14 @@ const RecruiterOfferPanel = ({
       {!canManage ? (
         <p className="mt-4 rounded-xl border border-border-subtle bg-surface-muted p-3 text-sm text-text-secondary">
           Teklifleri görüntüleyebilirsiniz; oluşturma ve durum değiştirme yetkiniz yok.
+        </p>
+      ) : null}
+      {offerStageOpen && !interviewCompleted && !loading ? (
+        <p
+          className="mt-4 rounded-xl border border-border-subtle bg-surface-muted p-3 text-sm text-text-secondary"
+          data-testid="offer-requires-completed-interview"
+        >
+          Teklif taslağı, görüşme scorecard’la tamamlandıktan sonra açılır.
         </p>
       ) : null}
       {canCreate && !formOpen ? (
