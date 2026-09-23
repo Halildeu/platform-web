@@ -23,7 +23,7 @@ const GROUP_ICON_BG = [
   "bg-accent-soft/20 text-accent-primary",
   "bg-state-success-bg text-state-success-text",
   "bg-state-warning-bg text-state-warning-text",
-  "bg-state-danger-bg text-state-danger-text",
+  "bg-state-danger-bg text-text-primary",
   "bg-action-primary/10 text-action-primary",
 ];
 

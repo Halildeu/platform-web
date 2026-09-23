@@ -1216,7 +1216,7 @@ const CandidatePortalPage = () => {
                 </div>
                 {interviewError ? (
                   <p
-                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-text-primary"
                     role="alert"
                   >
                     {interviewError}
@@ -1291,7 +1291,7 @@ const CandidatePortalPage = () => {
                 </div>
                 {offerError ? (
                   <p
-                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-state-danger-text"
+                    className="mt-3 rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm text-text-primary"
                     role="alert"
                   >
                     {offerError}
@@ -1560,7 +1560,7 @@ const CandidatePortalPage = () => {
                 {actionError ? (
                   <p
                     role="alert"
-                    className="rounded-xl border border-state-danger-border bg-state-danger-bg p-4 text-sm font-semibold text-state-danger-text"
+                    className="rounded-xl border border-state-danger-border bg-state-danger-bg p-4 text-sm font-semibold text-text-primary"
                   >
                     {actionError}
                   </p>

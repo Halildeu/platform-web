@@ -105,7 +105,7 @@ export const ContextMenuProvider: React.FC<{ children: React.ReactNode }> = ({
                     text-[13px] transition-colors cursor-pointer
                     ${
                       item.danger
-                        ? "text-state-danger-text hover:bg-state-danger-bg"
+                        ? "text-text-primary hover:bg-state-danger-bg"
                         : "text-text-primary hover:bg-surface-canvas"
                     }
                   `}

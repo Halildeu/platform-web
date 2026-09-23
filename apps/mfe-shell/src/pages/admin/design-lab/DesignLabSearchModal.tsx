@@ -71,7 +71,7 @@ type SearchResult = {
 };
 
 const TYPE_BADGE_STYLES: Record<SearchResult['type'], string> = {
-  token: 'bg-state-danger-bg text-state-danger-text',
+  token: 'bg-state-danger-bg text-text-primary',
   primitive: 'bg-state-success-bg text-state-success-text',
   component: 'bg-state-info-bg text-state-info-text',
   pattern: 'bg-state-warning-bg text-state-warning-text',

@@ -197,7 +197,7 @@ const NotificationPreview = () => (
       <div className="rounded-xl border border-border-subtle bg-state-warning-bg px-3 py-2 text-state-warning-text">
         Access isteği beklemede
       </div>
-      <div className="rounded-xl border border-border-subtle bg-state-danger-bg px-3 py-2 text-state-danger-text">
+      <div className="rounded-xl border border-border-subtle bg-state-danger-bg px-3 py-2 text-text-primary">
         Audit hatası
       </div>
     </div>

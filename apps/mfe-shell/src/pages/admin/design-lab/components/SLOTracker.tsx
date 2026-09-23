@@ -29,7 +29,7 @@ export function SLOTracker({ metrics }: SLOTrackerProps) {
         const badgeBgClasses = {
           emerald: 'bg-state-success-bg text-state-success-text dark:bg-state-success-text/30 dark:text-state-success-text',
           amber: 'bg-state-warning-bg text-state-warning-text dark:bg-state-warning-text/30 dark:text-state-warning-text',
-          red: 'bg-state-danger-bg text-state-danger-text dark:bg-state-danger-text/30 dark:text-state-danger-text',
+          red: 'bg-state-danger-bg text-text-primary dark:bg-state-danger-text/30 dark:text-text-primary',
         };
         const r = 32;
         const circumference = 2 * Math.PI * r;

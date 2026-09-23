@@ -178,7 +178,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   form: "bg-state-info-bg text-state-info-text",
   conditional: "bg-state-warning-bg text-state-warning-text",
   list: "bg-state-success-bg text-state-success-text",
-  error: "bg-state-danger-bg text-state-danger-text",
+  error: "bg-state-danger-bg text-text-primary",
   composition: "bg-action-primary/10 text-action-primary",
   state: "bg-action-primary/10 text-action-primary",
 };

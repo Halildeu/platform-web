@@ -33,7 +33,7 @@ const CandidateNoticePage = () => {
           // Fail-closed'ın görünür yüzü: metin yoksa uydurma bir metin basılmaz.
           <p
             role="alert"
-            className="mt-6 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-state-danger-text"
+            className="mt-6 rounded-xl border border-state-danger-border bg-state-danger-bg px-4 py-3 text-sm font-semibold text-text-primary"
           >
             Bu kariyer sayfası için yayımlanmış bir aydınlatma metni bulunmuyor. Metin
             yayımlanmadan başvuru onayı toplanmaz.

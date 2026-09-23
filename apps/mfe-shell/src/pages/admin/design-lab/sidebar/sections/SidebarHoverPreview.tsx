@@ -28,7 +28,7 @@ const LIFECYCLE_COLORS: Record<string, string> = {
   stable: "bg-state-success-bg text-state-success-text border-state-success-border",
   beta: "bg-state-warning-bg text-state-warning-text border-state-warning-border",
   planned: "bg-surface-muted text-text-tertiary border-border-subtle",
-  deprecated: "bg-state-danger-bg text-state-danger-text border-state-danger-border",
+  deprecated: "bg-state-danger-bg text-text-primary border-state-danger-border",
 };
 
 const PreviewContext = React.createContext<{
