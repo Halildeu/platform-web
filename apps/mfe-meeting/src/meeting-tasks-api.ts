@@ -4,7 +4,8 @@
  * Talks to the canonical admin surface:
  *   GET/POST  /v1/admin/meetings/{meetingId}/actions
  *   PUT       /v1/admin/meetings/{meetingId}/actions/{actionId}
- * plus the user directory for assignee lookup: GET /v1/users?search=…
+ * plus the meeting-scoped people picker for assignees:
+ *   POST      /v1/admin/meetings/{meetingId}/assignee-candidates/search
  *
  * Deliberately mirrors meeting-api.ts conventions: shell-injected axios
  * instance, defensive response mapping, no react-query.
@@ -131,31 +132,31 @@ export async function updateMeetingTask(
 }
 
 /**
- * Assignee lookup against the user directory (same source mfe-access uses).
- * The stored value is the user's canonical subject so the assignee's own
- * "Görevlerim" view (JWT sub match) lights up; label is for humans.
+ * "Göreve ata" people picker (gitops#3834).
+ *
+ * Meeting-scoped and least-privilege: gated like creating a task, answering only
+ * people who can own an assignment and are visible to the caller. The admin user
+ * grid (GET /v1/users) needs USER_READ and 403s for every non-admin — that is why
+ * the picker used to stay empty. POST keeps the typed name out of URLs and logs.
+ *
+ * Errors propagate on purpose: the caller must show them, never render a failed
+ * search as "no match". The stored value is the numeric directory id; the backend
+ * resolves it to the stable subject (gitops#3507).
  */
-export async function searchAssignees(query: string): Promise<UserOption[]> {
+export async function searchAssignees(meetingId: string, query: string): Promise<UserOption[]> {
   const { http } = getShellServices();
-  const response = await http.get('/v1/users', {
-    params: { search: query, pageSize: 10 },
-  });
+  const response = await http.post(
+    `/v1/admin/meetings/${encodeURIComponent(meetingId)}/assignee-candidates/search`,
+    { query, limit: 10 },
+  );
   const body: unknown = response.data;
-  const rows: unknown[] = Array.isArray(body)
-    ? body
-    : isRecord(body) && Array.isArray(body.items)
-      ? body.items
-      : isRecord(body) && Array.isArray(body.content)
-        ? body.content
-        : [];
+  const rows: unknown[] = isRecord(body) && Array.isArray(body.items) ? body.items : [];
   const options: UserOption[] = [];
   for (const raw of rows) {
     if (!isRecord(raw)) continue;
-    // gitops#3507: the directory exposes only the numeric id (kcSubject is
-    // server-to-server by design); the backend resolves id → subject.
-    const userId = typeof raw.id === 'number' ? raw.id : null;
+    const userId = typeof raw.userId === 'number' ? raw.userId : null;
     if (userId === null) continue;
-    const name = str(raw, 'displayName') ?? str(raw, 'fullName') ?? str(raw, 'name') ?? null;
+    const name = str(raw, 'name');
     const email = str(raw, 'email');
     const label = name && email ? `${name} (${email})` : (name ?? email ?? String(userId));
     options.push({ userId, label });
