@@ -120,7 +120,12 @@ const RecruiterApplicationReviewPanel = ({
     null,
   );
 
+  // Yalnız EN SON isteğin yanıtı ekrana yazılır: başka başvuruya geçildikten sonra gelen eski
+  // yanıt, yeni seçimin detayını ve düğmelerini ezmemeli (#1185 inceleme notu, P2).
+  const loadSequence = useRef(0);
   const loadDetail = useCallback(async () => {
+    const sequence = ++loadSequence.current;
+    const isLatest = () => sequence === loadSequence.current;
     if (!publicRef) {
       setDetail(null);
       return;
@@ -128,12 +133,14 @@ const RecruiterApplicationReviewPanel = ({
     setLoading(true);
     setLoadError('');
     try {
-      setDetail(await getRecruiterApplication(publicRef));
+      const loaded = await getRecruiterApplication(publicRef);
+      if (isLatest()) setDetail(loaded);
     } catch (error) {
+      if (!isLatest()) return;
       setDetail(null);
       setLoadError(describeAtsError(error, 'Başvuru detayı yüklenemedi.'));
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   }, [publicRef]);
 
