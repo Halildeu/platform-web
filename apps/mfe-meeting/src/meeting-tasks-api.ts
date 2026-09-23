@@ -30,6 +30,8 @@ export interface MeetingTask {
   meetingId: string;
   description: string;
   assigneeSubject: string | null;
+  /** gitops#3834: the assignee's directory name; null when unknown or not resolvable. */
+  assigneeDisplayName: string | null;
   status: MeetingTaskStatus;
   dueAt: string | null;
   createdBySubject: string;
@@ -80,6 +82,7 @@ const toTask = (raw: unknown): MeetingTask | null => {
     meetingId,
     description,
     assigneeSubject: str(raw, 'assigneeSubject'),
+    assigneeDisplayName: str(raw, 'assigneeDisplayName'),
     status,
     dueAt: str(raw, 'dueAt'),
     createdBySubject: str(raw, 'createdBySubject') ?? '',

@@ -36,6 +36,14 @@ const dateInputValue = (iso: string | null): string => {
 
 const dateInputToIso = (value: string): string | null => (value ? `${value}T12:00:00Z` : null);
 
+/**
+ * gitops#3834: an assignee is shown by name. The subject is an account id,
+ * meaningless to a reader — when the name cannot be resolved the row says
+ * "assigned" without pretending to know to whom.
+ */
+const assigneeLabel = (task: MeetingTask): string =>
+  task.assigneeDisplayName ?? (task.assigneeSubject ? 'Atanmış kişi' : 'Ata');
+
 const errorMessage = (err: unknown): string => {
   if (typeof err === 'object' && err !== null && 'response' in err) {
     const status = (err as { response?: { status?: number } }).response?.status;
@@ -284,7 +292,7 @@ export function TasksPanel({ meetingId }: TasksPanelProps) {
                       className="task-link-btn"
                       onClick={() => setEditingAssigneeOf(task.id)}
                     >
-                      {task.assigneeSubject ?? 'Ata'}
+                      {assigneeLabel(task)}
                     </button>
                   )}
                 </span>

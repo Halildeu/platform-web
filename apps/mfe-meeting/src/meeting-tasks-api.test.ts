@@ -38,6 +38,15 @@ describe('meeting-tasks-api', () => {
     expect(rows[0].description).toBe('Raporu gönder');
   });
 
+  it('listMeetingTasks carries the assignee name when the server sends one (gitops#3834)', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [{ ...TASK, assigneeDisplayName: 'Ali Veli' }, { ...TASK, id: 't2' }],
+    });
+    installHttp(get);
+    const rows = await listMeetingTasks('m1');
+    expect(rows.map((r) => r.assigneeDisplayName)).toEqual(['Ali Veli', null]);
+  });
+
   it('listMyTasks carries meetingTitle and forwards repeatable status params', async () => {
     const get = vi.fn().mockResolvedValue({
       data: [{ ...TASK, meetingTitle: 'Bütçe toplantısı' }],

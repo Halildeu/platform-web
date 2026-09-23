@@ -22,6 +22,7 @@ const TASK: api.MeetingTask = {
   meetingId: 'm1',
   description: 'Bütçe tablosunu kontrol et',
   assigneeSubject: null,
+  assigneeDisplayName: null,
   status: 'OPEN',
   dueAt: null,
   createdBySubject: 'system:meeting-ai',
@@ -55,5 +56,17 @@ describe('TasksPanel assignee picker', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Kişi araması yapılamadı: Bu işlem için yetkiniz yok.');
     await waitFor(() => expect(screen.queryByText('sonuç yok')).not.toBeInTheDocument());
+  });
+
+  it('shows who a task is assigned to by name, never as a raw account id', async () => {
+    vi.mocked(api.listMeetingTasks).mockResolvedValue([
+      { ...TASK, id: 't2', assigneeSubject: 'kc-7', assigneeDisplayName: 'Sevil Kaya' },
+      { ...TASK, id: 't3', assigneeSubject: 'kc-gone', assigneeDisplayName: null },
+    ]);
+    render(<TasksPanel meetingId="m1" />);
+    expect(await screen.findByRole('button', { name: 'Sevil Kaya' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Atanmış kişi' })).toBeInTheDocument();
+    expect(screen.queryByText('kc-7')).not.toBeInTheDocument();
+    expect(screen.queryByText('kc-gone')).not.toBeInTheDocument();
   });
 });
