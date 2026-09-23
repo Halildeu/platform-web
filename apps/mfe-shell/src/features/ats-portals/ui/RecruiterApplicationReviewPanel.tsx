@@ -108,6 +108,17 @@ const RecruiterApplicationReviewPanel = ({
   const [rejectionConfirmed, setRejectionConfirmed] = useState(false);
   const evaluationMutation = useRef<{ signature: string; key: string } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  /**
+   * #992 B: işlem sonucu (başarı ya da hata) düğmelerin hemen altında çıkar ve odak oraya
+   * taşınır. Basılan düğme çoğu zaman sonuçla birlikte kalkar (ör. ret sonrası eylemler
+   * kilitlenir); odak taşınmazsa `body`'ye düşer ve klavye kullanıcısı yerini kaybeder.
+   */
+  const outcomeRef = useRef<HTMLDivElement>(null);
+  const rejectionOpenerRef = useRef<HTMLButtonElement>(null);
+  const rejectionConfirmRef = useRef<HTMLInputElement>(null);
+  const focusAfterRender = useRef<'outcome' | 'rejection-opener' | 'rejection-confirm' | null>(
+    null,
+  );
 
   const loadDetail = useCallback(async () => {
     if (!publicRef) {
@@ -127,6 +138,9 @@ const RecruiterApplicationReviewPanel = ({
   }, [publicRef]);
 
   useEffect(() => {
+    // Başka bir başvuruya geçişte önceki kaydın detayı ve düğmeleri, yenisi gelene kadar
+    // ekranda kalmamalı (yenileme sırasında panel yerinde kalıyor; geçişte kalmıyor).
+    setDetail(null);
     setActionError('');
     setSuccessMessage('');
     setEvaluationOpen(false);
@@ -139,6 +153,22 @@ const RecruiterApplicationReviewPanel = ({
   useEffect(() => {
     if (detail) headingRef.current?.focus();
   }, [detail?.application.publicRef]);
+
+  // Odak isteği bir sonraki çizimden sonra uygulanır: hedef (sonuç kutusu, ret paneli ya
+  // da onu açan düğme) o çizimde DOM'a girer.
+  useEffect(() => {
+    const target = focusAfterRender.current;
+    if (!target) return;
+    const element =
+      target === 'outcome'
+        ? outcomeRef.current
+        : target === 'rejection-opener'
+          ? rejectionOpenerRef.current
+          : rejectionConfirmRef.current;
+    if (!element) return;
+    focusAfterRender.current = null;
+    element.focus();
+  });
 
   const latestEvaluation = useMemo(() => latestEvaluationOf(detail), [detail]);
   const earlyPipeline = Boolean(
@@ -169,6 +199,7 @@ const RecruiterApplicationReviewPanel = ({
       setRejectionOpen(false);
       setRejectionConfirmed(false);
       await loadDetail();
+      focusAfterRender.current = 'outcome';
     } catch (error) {
       setActionError(describeAtsError(error, 'Durum güncellenemedi.'));
       // #992 A2: ret onayı verildiği SÜRÜME aittir. İstek başarısız olunca kayıt yeniden
@@ -179,6 +210,7 @@ const RecruiterApplicationReviewPanel = ({
       setRejectionOpen(false);
       setRejectionConfirmed(false);
       await loadDetail();
+      focusAfterRender.current = 'outcome';
     } finally {
       setUpdating(false);
     }
@@ -271,7 +303,9 @@ const RecruiterApplicationReviewPanel = ({
         </p>
       );
     }
-    if (loading) {
+    // Tam yükleme ekranı yalnız İLK yüklemede: işlem sonrası yenilemede panel yerinde kalır,
+    // aksi hâlde odaktaki düğme DOM'dan kalkar.
+    if (loading && !detail) {
       return (
         <p className="mt-5 text-sm font-semibold text-text-secondary" role="status">
           Yetkili başvuru detayı yükleniyor…
@@ -577,8 +611,12 @@ const RecruiterApplicationReviewPanel = ({
               </button>
               {!rejectionOpen ? (
                 <button
+                  ref={rejectionOpenerRef}
                   type="button"
-                  onClick={() => setRejectionOpen(true)}
+                  onClick={() => {
+                    focusAfterRender.current = 'rejection-confirm';
+                    setRejectionOpen(true);
+                  }}
                   disabled={!latestEvaluation || updating}
                   className="min-h-11 w-full rounded-xl border border-state-danger-border bg-surface-default px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-50"
                 >
@@ -589,6 +627,7 @@ const RecruiterApplicationReviewPanel = ({
                   <p className="text-sm font-bold text-text-primary">Geri alınamaz insan kararı</p>
                   <label className="mt-3 flex items-start gap-2 text-sm leading-5 text-text-primary">
                     <input
+                      ref={rejectionConfirmRef}
                       type="checkbox"
                       checked={rejectionConfirmed}
                       onChange={(event) => setRejectionConfirmed(event.target.checked)}
@@ -609,6 +648,7 @@ const RecruiterApplicationReviewPanel = ({
                     <button
                       type="button"
                       onClick={() => {
+                        focusAfterRender.current = 'rejection-opener';
                         setRejectionOpen(false);
                         setRejectionConfirmed(false);
                       }}
@@ -627,6 +667,31 @@ const RecruiterApplicationReviewPanel = ({
             </div>
           )}
         </section>
+
+        {/* #992 B: sonuç, düğmelerin hemen altında; odak işlem sonrası buraya taşınır. */}
+        <div
+          ref={outcomeRef}
+          tabIndex={-1}
+          data-testid="application-action-outcome"
+          className="space-y-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary empty:hidden"
+        >
+          {successMessage ? (
+            <p
+              role="status"
+              className="rounded-xl border border-state-success-border bg-state-success-bg p-3 text-sm font-semibold text-text-primary"
+            >
+              {successMessage}
+            </p>
+          ) : null}
+          {actionError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
+            >
+              {actionError}
+            </p>
+          ) : null}
+        </div>
 
         {evaluationOpen ? (
           <form
@@ -786,22 +851,6 @@ const RecruiterApplicationReviewPanel = ({
           onApplicationRefresh={refreshAfterInterviewChange}
         />
 
-        {successMessage ? (
-          <p
-            role="status"
-            className="rounded-xl border border-state-success-border bg-state-success-bg p-3 text-sm font-semibold text-text-primary"
-          >
-            {successMessage}
-          </p>
-        ) : null}
-        {actionError ? (
-          <p
-            role="alert"
-            className="rounded-xl border border-state-danger-border bg-state-danger-bg p-3 text-sm font-semibold text-text-primary"
-          >
-            {actionError}
-          </p>
-        ) : null}
 
         <section aria-labelledby="evaluation-history-heading">
           <h3 id="evaluation-history-heading" className="text-sm font-bold text-text-primary">

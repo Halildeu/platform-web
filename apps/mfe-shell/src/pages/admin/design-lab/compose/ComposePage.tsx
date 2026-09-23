@@ -392,7 +392,7 @@ export default function ComposePage() {
               <button
                 type="button"
                 onClick={() => removeNode(selectedNode.id)}
-                className="ml-auto rounded-xs p-1 text-state-danger-text hover:text-state-danger-text hover:bg-state-danger-bg transition"
+                className="ml-auto rounded-xs p-1 text-text-primary hover:text-text-primary hover:bg-state-danger-bg transition"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

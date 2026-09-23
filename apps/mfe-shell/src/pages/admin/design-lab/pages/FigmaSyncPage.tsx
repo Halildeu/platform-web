@@ -108,7 +108,7 @@ function useFigmaSyncData() {
 const STATUS_CONFIG: Record<SyncStatus, { label: string; color: string; icon: React.ReactNode }> = {
   synced: { label: "In Sync", color: "bg-state-success-bg text-state-success-text", icon: <CheckCircle2 className="h-4 w-4" /> },
   drift: { label: "Drift Detected", color: "bg-state-warning-bg text-state-warning-text", icon: <AlertTriangle className="h-4 w-4" /> },
-  error: { label: "Sync Error", color: "bg-state-danger-bg text-state-danger-text", icon: <XCircle className="h-4 w-4" /> },
+  error: { label: "Sync Error", color: "bg-state-danger-bg text-text-primary", icon: <XCircle className="h-4 w-4" /> },
   never: { label: "Never Synced", color: "bg-[var(--surface-muted)] text-[var(--text-secondary)]", icon: <Clock className="h-4 w-4" /> },
 };
 
@@ -123,7 +123,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 
 const CHANGE_TYPE_STYLES: Record<TokenChange["type"], string> = {
   added: "bg-state-success-bg text-state-success-text",
-  removed: "bg-state-danger-bg text-state-danger-text",
+  removed: "bg-state-danger-bg text-text-primary",
   changed: "bg-state-warning-bg text-state-warning-text",
 };
 

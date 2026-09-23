@@ -186,7 +186,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   typography: "bg-action-primary/10 text-action-primary",
   color: "bg-state-warning-bg text-state-warning-text",
   border: "bg-[var(--surface-muted)] text-[var(--text-secondary)]",
-  effect: "bg-state-danger-bg text-state-danger-text",
+  effect: "bg-state-danger-bg text-text-primary",
   interaction: "bg-action-primary/10 text-action-primary",
 };
 
@@ -267,7 +267,7 @@ ${activeOverrides
           <Text as="h3" className="text-sm font-semibold text-text-primary">
             Style API
           </Text>
-          <span className="rounded-full bg-state-danger-bg px-2 py-0.5 text-[10px] font-bold text-state-danger-text">
+          <span className="rounded-full bg-state-danger-bg px-2 py-0.5 text-[10px] font-bold text-text-primary">
             {parts.reduce((sum, p) => sum + p.classes.length, 0)} classes
           </span>
         </div>

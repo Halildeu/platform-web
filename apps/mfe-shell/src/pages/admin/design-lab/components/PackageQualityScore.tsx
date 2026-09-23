@@ -178,7 +178,7 @@ function scorePillClass(score: number): string {
   if (score >= 85) return "bg-state-success-bg text-state-success-text";
   if (score >= 70) return "bg-action-primary/10 text-action-primary";
   if (score >= 50) return "bg-state-warning-bg text-state-warning-text";
-  return "bg-state-danger-bg text-state-danger-text";
+  return "bg-state-danger-bg text-text-primary";
 }
 
 function ScoreBar({

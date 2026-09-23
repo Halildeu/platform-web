@@ -324,7 +324,7 @@ export const VisualRegressionPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-state-danger-bg text-state-danger-text">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-state-danger-bg text-text-primary">
             <Image className="h-5 w-5" />
           </div>
           <div>

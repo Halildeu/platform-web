@@ -162,7 +162,7 @@ export const PerfProfilerPanel: React.FC<PerfProfilerPanelProps> = ({ expanded, 
           <Activity className="h-3.5 w-3.5 text-text-tertiary" />
           <Text as="span" className="text-xs font-semibold text-text-primary">Performance</Text>
           {stats && stats.slowRenders > 0 && (
-            <span className="flex items-center gap-1 rounded-md bg-state-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-state-danger-text">
+            <span className="flex items-center gap-1 rounded-md bg-state-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-text-primary">
               <AlertTriangle className="h-2.5 w-2.5" /> {stats.slowRenders} slow
             </span>
           )}

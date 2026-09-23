@@ -48,7 +48,7 @@ export function QualityGatesOverview({ items }: QualityGatesOverviewProps) {
             ? 'bg-state-success-bg text-state-success-text dark:bg-state-success-text/30 dark:text-state-success-text'
             : overallPassing >= 50
               ? 'bg-state-warning-bg text-state-warning-text dark:bg-state-warning-text/30 dark:text-state-warning-text'
-              : 'bg-state-danger-bg text-state-danger-text dark:bg-state-danger-text/30 dark:text-state-danger-text'
+              : 'bg-state-danger-bg text-text-primary dark:bg-state-danger-text/30 dark:text-text-primary'
         }`}>
           Genel: {overallPassing}%
         </div>
@@ -75,7 +75,7 @@ export function QualityGatesOverview({ items }: QualityGatesOverviewProps) {
                     ? 'bg-state-success-bg text-state-success-text'
                     : gate.pct >= 50
                       ? 'bg-state-warning-bg text-state-warning-text'
-                      : 'bg-state-danger-bg text-state-danger-text'
+                      : 'bg-state-danger-bg text-text-primary'
                 }`}>
                   {gate.pct}%
                 </span>

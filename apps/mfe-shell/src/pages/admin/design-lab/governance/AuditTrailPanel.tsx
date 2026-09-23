@@ -24,7 +24,7 @@ const ACTION_LABELS: Record<AuditAction, string> = {
 const ACTION_COLORS: Record<AuditAction, string> = {
   doc_entry_modified: "bg-state-info-bg text-state-info-text",
   quality_override: "bg-state-warning-bg text-state-warning-text",
-  deprecation_approved: "bg-state-danger-bg text-state-danger-text",
+  deprecation_approved: "bg-state-danger-bg text-text-primary",
   deprecation_proposed: "bg-state-warning-bg text-state-warning-text",
   role_changed: "bg-action-primary/10 text-action-primary",
   lifecycle_transition: "bg-state-success-bg text-state-success-text",
