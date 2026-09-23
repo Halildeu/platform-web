@@ -161,6 +161,8 @@ const formatDate = (value: string, timeZone?: string) =>
 
 /** Saatsiz takvim günü (`YYYY-MM-DD`): saat dilimine çevrilmeden, saatsiz gösterilir. */
 const formatCalendarDate = (value: string) => {
+  // Sözleşme `format = "date"`; biçim dışı bir değer saatli biçimlemeye düşer, çizim düşmez.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDate(value);
   const [year, month, day] = value.split('-').map(Number);
   return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
     new Date(Date.UTC(year, month - 1, day)),
