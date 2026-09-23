@@ -251,8 +251,9 @@ const RecruiterInterviewPanel = ({
       setSuccess('Görüşme planlandı; adayın güvenli takvimine yansıdı.');
       await Promise.allSettled([refresh(), onApplicationRefresh()]);
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Görüşme planlanamadı.');
+      // Yenileme kendi hatasını sıfırlıyor; komutun reddi ondan sonra yazılmazsa silinir.
       await refresh();
+      setError(actionError instanceof Error ? actionError.message : 'Görüşme planlanamadı.');
     } finally {
       setBusy(false);
     }
@@ -285,8 +286,8 @@ const RecruiterInterviewPanel = ({
       setSuccess('Görüşme yeni revizyonla yeniden planlandı.');
       await refresh();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Görüşme güncellenemedi.');
       await refresh();
+      setError(actionError instanceof Error ? actionError.message : 'Görüşme güncellenemedi.');
     } finally {
       setBusy(false);
     }
@@ -316,8 +317,8 @@ const RecruiterInterviewPanel = ({
       );
       await refresh();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Görüşme kapatılamadı.');
       await refresh();
+      setError(actionError instanceof Error ? actionError.message : 'Görüşme kapatılamadı.');
     } finally {
       setBusy(false);
     }
@@ -356,8 +357,8 @@ const RecruiterInterviewPanel = ({
       setSuccess(`İnsan scorecard’ı revizyon ${saved.revision} olarak kaydedildi.`);
       await refresh();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Scorecard kaydedilemedi.');
       await refresh();
+      setError(actionError instanceof Error ? actionError.message : 'Scorecard kaydedilemedi.');
     } finally {
       setBusy(false);
     }

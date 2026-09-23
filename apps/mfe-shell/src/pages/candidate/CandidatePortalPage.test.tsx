@@ -1333,4 +1333,41 @@ describe('CandidatePortalPage', () => {
       await screen.findByText(/Teklif kabul yanıtınız kalıcı olarak kaydedildi/i),
     ).toBeVisible();
   });
+
+  it('shows the offer start date as a calendar day, without a time (#963)', async () => {
+    // `startDate` saatsiz bir takvim günüdür. TEST canlı kabulünde `2026-10-06` adaya
+    // "6 Eki 2026 03:00" olarak göründü: gün, UTC gece yarısı sanılıp yerel saate çevriliyordu.
+    apiMocks.getCandidateStatus.mockResolvedValue({
+      ...STATUS,
+      status: 'OFFER_PENDING',
+      nextAction: 'REVIEW_OFFER',
+      withdrawalAllowed: false,
+    });
+    apiMocks.getCandidateOffers.mockResolvedValue([
+      {
+        offerId: 'off_abcdefghijklmnopqrstuvwx',
+        applicationPublicRef: SESSION.publicRef,
+        jobTitle: 'Ürün Yöneticisi',
+        roleTitle: 'Kıdemli Ürün Yöneticisi',
+        startDate: '2026-10-06',
+        employmentType: 'Tam zamanlı',
+        workMode: 'HYBRID',
+        location: 'İstanbul',
+        compensationAmount: 55000,
+        currency: 'TRY',
+        payPeriod: 'MONTHLY',
+        expiresAt: '2026-09-29T13:36:00Z',
+        termsSummary: 'Sentetik teklif koşulları özeti.',
+        status: 'EXTENDED',
+        version: 2,
+        updatedAt: '2026-09-22T13:59:00Z',
+        legalBoundary: 'Bu yanıt ATS sürecini kaydeder; ayrı iş sözleşmesi veya e-imza değildir.',
+      },
+    ]);
+
+    renderPage();
+
+    const label = await screen.findByText('Başlangıç tarihi');
+    expect(label.nextElementSibling).toHaveTextContent(/^6 Eki 2026$/);
+  });
 });
