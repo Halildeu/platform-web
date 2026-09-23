@@ -71,6 +71,7 @@ const renderPanel = (overrides?: Partial<React.ComponentProps<typeof RecruiterOf
       candidateLocation="İstanbul"
       applicationStatus="INTERVIEW_PENDING"
       canManage
+      interviewCompleted
       onApplicationRefresh={vi.fn().mockResolvedValue(undefined)}
       {...overrides}
     />,
@@ -215,6 +216,17 @@ describe('RecruiterOfferPanel', () => {
     expect(screen.queryByRole('button', { name: 'Taslağı düzenle' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Adaya iletmeyi hazırla' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the draft closed until an interview is completed (#963)', async () => {
+    // Sunucu görüşmesiz teklifi 409 INTERVIEW_NOT_COMPLETED ile reddediyor. TEST canlı
+    // kabulünde düğme yine de görünüyordu: panel yalnız başvuru durumuna bakıyordu.
+    renderPanel({ interviewCompleted: false });
+
+    expect(await screen.findByTestId('offer-requires-completed-interview')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Teklif taslağı oluştur' }),
     ).not.toBeInTheDocument();
   });
 });

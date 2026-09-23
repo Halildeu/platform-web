@@ -89,6 +89,18 @@ const RecruiterApplicationReviewPanel = ({
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  // Başvuru referansına göre: başka adaya geçişte eski adayın görüşme listesi karışmasın.
+  const [completedInterviewByRef, setCompletedInterviewByRef] = useState<
+    Record<string, boolean>
+  >({});
+  const recordInterviews = useCallback(
+    (ref: string, interviews: Array<{ status: string }>) =>
+      setCompletedInterviewByRef((current) => ({
+        ...current,
+        [ref]: interviews.some((interview) => interview.status === 'COMPLETED'),
+      })),
+    [],
+  );
   const [updating, setUpdating] = useState(false);
   const [evaluationOpen, setEvaluationOpen] = useState(false);
   const [evaluationForm, setEvaluationForm] = useState<EvaluationForm>(emptyEvaluationForm);
@@ -826,12 +838,14 @@ const RecruiterApplicationReviewPanel = ({
           interviewerActorRef={latestEvaluation?.actorRef ?? null}
           interviewerLabel="Atanmış İK görüşmecisi"
           onApplicationRefresh={refreshAfterInterviewChange}
+          onInterviewsChange={recordInterviews}
         />
 
         <RecruiterOfferPanel
           publicRef={application.publicRef}
           jobTitle={application.jobTitle}
           candidateLocation={application.city}
+          interviewCompleted={completedInterviewByRef[application.publicRef] === true}
           applicationStatus={application.status}
           canManage={canManage}
           onApplicationRefresh={refreshAfterInterviewChange}
