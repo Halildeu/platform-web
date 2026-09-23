@@ -223,7 +223,10 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
           aria-describedby={description ? descriptionId : undefined}
           tabIndex={-1}
           className={cn(
-            'relative flex flex-col bg-surface-default shadow-2xl',
+            // platform-web#992 — kısa ekranda (ör. %400 yakınlaştırma, 320×256) sabit başlık
+            // görünür alanın büyük kısmını tutuyordu. Orada panelin tamamı kayar; başlık
+            // içerikle birlikte yukarı çıkar, kapat düğmesi en üstte erişilebilir kalır.
+            'relative flex flex-col bg-surface-default shadow-2xl [@media(max-height:32rem)]:overflow-y-auto',
             placementPanelStyles[placement],
             placementAnimationStyles[placement],
             sizeStyles[size],
@@ -233,8 +236,10 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
           {/* Header */}
           <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-4">
             <div className="min-w-0 flex-1">
+              {/* #992: `truncate` yerine satır kaydırma — kesilen başlık bilgi kaybıdır
+                  (WCAG 1.4.10). */}
               {title && (
-                <h2 id={titleId} className="text-lg font-semibold text-text-primary truncate">
+                <h2 id={titleId} className="text-lg font-semibold text-text-primary break-words">
                   {title}
                 </h2>
               )}
@@ -262,7 +267,9 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-auto px-6 py-4">{children}</div>
+          <div className="flex-1 overflow-auto px-6 py-4 [@media(max-height:32rem)]:flex-none [@media(max-height:32rem)]:overflow-visible">
+            {children}
+          </div>
 
           {/* Footer */}
           {footer && (
