@@ -1,0 +1,51 @@
+name: Teams meeting panel
+
+on:
+  pull_request:
+    paths:
+      - 'teams-meeting-panel/**'
+      - 'apps/mfe-meeting/src/meeting-live-transcript-sse.ts'
+      - 'apps/mfe-meeting/src/speaker-attribution.ts'
+      - 'apps/mfe-meeting/src/meeting-workbench.ts'
+      - '.github/workflows/teams-panel.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'teams-meeting-panel/**'
+      - 'apps/mfe-meeting/src/meeting-live-transcript-sse.ts'
+      - 'apps/mfe-meeting/src/speaker-attribution.ts'
+      - 'apps/mfe-meeting/src/meeting-workbench.ts'
+      - '.github/workflows/teams-panel.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-panel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: teams-meeting-panel
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: teams-meeting-panel/package-lock.json
+      - run: npm ci --workspaces=false --ignore-scripts --no-fund
+      - run: npm test
+      - run: npm run build
+      - name: Record source
+        run: git rev-parse HEAD > dist/SOURCE_COMMIT
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: teams-panel-${{ github.sha }}
+          path: teams-meeting-panel/dist/
+          if-no-files-found: error
+          retention-days: 14
