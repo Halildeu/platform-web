@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureShellServices, type MeetingShellServices } from './shell-services';
 import { listMeetingTasks, listMyTasks, searchAssignees } from './meeting-tasks-api';
 
-function installHttp(get: ReturnType<typeof vi.fn>): void {
+function installHttp(get: ReturnType<typeof vi.fn>, post: ReturnType<typeof vi.fn> = vi.fn()): void {
   configureShellServices({
-    http: { get } as unknown as MeetingShellServices['http'],
+    http: { get, post } as unknown as MeetingShellServices['http'],
   } as MeetingShellServices);
 }
 
@@ -38,6 +38,15 @@ describe('meeting-tasks-api', () => {
     expect(rows[0].description).toBe('Raporu gönder');
   });
 
+  it('listMeetingTasks carries the assignee name when the server sends one (gitops#3834)', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [{ ...TASK, assigneeDisplayName: 'Ali Veli' }, { ...TASK, id: 't2' }],
+    });
+    installHttp(get);
+    const rows = await listMeetingTasks('m1');
+    expect(rows.map((r) => r.assigneeDisplayName)).toEqual(['Ali Veli', null]);
+  });
+
   it('listMyTasks carries meetingTitle and forwards repeatable status params', async () => {
     const get = vi.fn().mockResolvedValue({
       data: [{ ...TASK, meetingTitle: 'Bütçe toplantısı' }],
@@ -55,24 +64,35 @@ describe('meeting-tasks-api', () => {
     expect(get).toHaveBeenCalledWith('/v1/admin/my/actions');
   });
 
-  it('searchAssignees reads items/content shapes and keeps only numeric directory ids', async () => {
-    // gitops#3507: the public directory intentionally has no kcSubject; rows
-    // carry a numeric id (+ name/email) and the backend resolves id→subject.
-    const get = vi.fn().mockResolvedValue({
+  it('searchAssignees asks the meeting-scoped picker with a POST body, never the admin user grid', async () => {
+    // gitops#3834: GET /v1/users needs USER_READ and 403s for every non-admin.
+    const get = vi.fn();
+    const post = vi.fn().mockResolvedValue({
       data: {
         items: [
-          { id: 30, name: 'Ali Veli', email: 'ali@acik.com' },
-          { id: 31, email: 'zey@acik.com' },
-          { kcSubject: 'kc-legacy-no-id', email: 'x@acik.com' },
+          { userId: 30, name: 'Ali Veli', email: 'ali@acik.com' },
+          { userId: 31, email: 'zey@acik.com' },
+          { id: 32, name: 'eski şekil, sayısal userId yok' },
           'noise',
         ],
       },
     });
-    installHttp(get);
-    const rows = await searchAssignees('ali');
+    installHttp(get, post);
+    const rows = await searchAssignees('m 1', 'ali');
+    expect(post).toHaveBeenCalledWith('/v1/admin/meetings/m%201/assignee-candidates/search', {
+      query: 'ali',
+      limit: 10,
+    });
+    expect(get).not.toHaveBeenCalled();
     expect(rows).toEqual([
       { userId: 30, label: 'Ali Veli (ali@acik.com)' },
       { userId: 31, label: 'zey@acik.com' },
     ]);
+  });
+
+  it('searchAssignees lets a failed search reach the caller instead of returning "no match"', async () => {
+    const post = vi.fn().mockRejectedValue({ response: { status: 403 } });
+    installHttp(vi.fn(), post);
+    await expect(searchAssignees('m1', 'ali')).rejects.toEqual({ response: { status: 403 } });
   });
 });

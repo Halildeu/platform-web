@@ -36,6 +36,14 @@ const dateInputValue = (iso: string | null): string => {
 
 const dateInputToIso = (value: string): string | null => (value ? `${value}T12:00:00Z` : null);
 
+/**
+ * gitops#3834: an assignee is shown by name. The subject is an account id,
+ * meaningless to a reader — when the name cannot be resolved the row says
+ * "assigned" without pretending to know to whom.
+ */
+const assigneeLabel = (task: MeetingTask): string =>
+  task.assigneeDisplayName ?? (task.assigneeSubject ? 'Atanmış kişi' : 'Ata');
+
 const errorMessage = (err: unknown): string => {
   if (typeof err === 'object' && err !== null && 'response' in err) {
     const status = (err as { response?: { status?: number } }).response?.status;
@@ -47,6 +55,7 @@ const errorMessage = (err: unknown): string => {
 };
 
 function AssigneeEditor(props: {
+  meetingId: string;
   current: string | null;
   onPick: (option: UserOption | null) => void;
   onClose: () => void;
@@ -54,23 +63,33 @@ function AssigneeEditor(props: {
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<UserOption[]>([]);
   const [busy, setBusy] = useState(false);
+  // gitops#3834: a failed search is not "no match" — it used to be swallowed into
+  // an empty list, which is how a 403 for every non-admin stayed invisible.
+  const [searchError, setSearchError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
     if (query.trim().length < 3) {
       setOptions([]);
+      setSearchError(null);
       return;
     }
     if (timer.current !== null) window.clearTimeout(timer.current);
     let cancelled = false;
     timer.current = window.setTimeout(() => {
       setBusy(true);
-      searchAssignees(query.trim())
+      searchAssignees(props.meetingId, query.trim())
         .then((rows) => {
-          if (!cancelled) setOptions(rows);
+          if (!cancelled) {
+            setOptions(rows);
+            setSearchError(null);
+          }
         })
-        .catch(() => {
-          if (!cancelled) setOptions([]);
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setOptions([]);
+            setSearchError(`Kişi araması yapılamadı: ${errorMessage(err)}`);
+          }
         })
         .finally(() => {
           if (!cancelled) setBusy(false);
@@ -80,7 +99,7 @@ function AssigneeEditor(props: {
       cancelled = true;
       if (timer.current !== null) window.clearTimeout(timer.current);
     };
-  }, [query]);
+  }, [query, props.meetingId]);
 
   return (
     <div className="task-assignee-editor">
@@ -96,7 +115,12 @@ function AssigneeEditor(props: {
         aria-label="Sorumlu ara"
       />
       {busy ? <small className="task-assignee-hint">aranıyor…</small> : null}
-      {!busy && query.trim().length >= 3 && options.length === 0 ? (
+      {!busy && searchError ? (
+        <small className="task-assignee-hint" role="alert">
+          {searchError}
+        </small>
+      ) : null}
+      {!busy && !searchError && query.trim().length >= 3 && options.length === 0 ? (
         <small className="task-assignee-hint">sonuç yok</small>
       ) : null}
       <ul role="listbox" aria-label="Kişi önerileri">
@@ -268,13 +292,14 @@ export function TasksPanel({ meetingId }: TasksPanelProps) {
                       className="task-link-btn"
                       onClick={() => setEditingAssigneeOf(task.id)}
                     >
-                      {task.assigneeSubject ?? 'Ata'}
+                      {assigneeLabel(task)}
                     </button>
                   )}
                 </span>
               </div>
               {editingAssigneeOf === task.id ? (
                 <AssigneeEditor
+                  meetingId={meetingId}
                   current={task.assigneeSubject}
                   onClose={() => setEditingAssigneeOf(null)}
                   onPick={(opt) => {
