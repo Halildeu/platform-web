@@ -132,6 +132,9 @@ const renderAnonymousAt = (entry: string) =>
 describe('ProtectedRoute', () => {
   afterEach(() => {
     cleanup();
+    // #1200 hold tests drive window.location directly; never leak a
+    // fragment into the next case.
+    window.history.replaceState(null, '', '/');
   });
 
   beforeEach(() => {
@@ -169,11 +172,55 @@ describe('ProtectedRoute', () => {
   it('holds instead of redirecting while an unconsumed Keycloak callback is in the URL (#1200)', () => {
     // Live shape from the KC LOGIN event: the code was never exchanged because
     // the route redirected away before keycloak-js parsed the fragment.
-    const { container } = renderAnonymousAt(
+    // The hold reads window.location (what keycloak-js actually mutates),
+    // not the router snapshot — MemoryRouter never touches window.
+    window.history.replaceState(
+      null,
+      '',
       '/admin/users#state=5668b163&session_state=jnqL&iss=https%3A%2F%2Ftestai.acik.com&code=dd81',
     );
+    const { container } = renderAnonymousAt('/admin/users');
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByText('Login Page')).not.toBeInTheDocument();
+  });
+
+  it('releases the hold and redirects CLEANLY once keycloak-js has stripped the fragment (#1200)', () => {
+    // Regression caught live after the first fix: keycloak-js removes the
+    // callback via history.replaceState, React Router's location.hash kept
+    // the stale fragment, and the hold never released — header rendered,
+    // <main> empty. The next re-render must see the live (clean) hash and
+    // redirect with a fragment-free return-to.
+    window.history.replaceState(
+      null,
+      '',
+      '/admin/users#state=5668b163&session_state=jnqL&iss=https%3A%2F%2Ftestai.acik.com&code=dd81',
+    );
+    const view = renderAnonymousAt('/admin/users');
+    expect(view.container).toBeEmptyDOMElement();
+
+    // keycloak-js parse step: fragment gone from the live URL.
+    window.history.replaceState(null, '', '/admin/users');
+    view.rerender(
+      <MemoryRouter initialEntries={['/admin/users']}>
+        <Routes>
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute requiredPermissions={['VIEW_USERS']}>
+                <div>Protected Content</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/login" element={<LocationViewer label="Login Page" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Login Page')).toBeInTheDocument();
+    expect(screen.getByTestId('location-display').textContent).toBe(
+      '/login?redirect=%2Fadmin%2Fusers',
+    );
+    expect(screen.getByTestId('location-display').textContent).not.toContain('%23');
   });
 
   it('still redirects normally when the hash is not a Keycloak callback', () => {
