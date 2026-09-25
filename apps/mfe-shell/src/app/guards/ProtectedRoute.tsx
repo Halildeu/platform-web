@@ -93,9 +93,16 @@ export const ProtectedRoute = ({
     // parses and clears that fragment during init; redirecting away now
     // would discard the authorization code (the second half of #1200: the
     // first callback on a deep route was never exchanged). Hold until the
-    // fragment is gone or a token has arrived — keycloak-js removes the
-    // fragment on parse regardless of outcome, so this cannot stick.
-    if (hasOidcCallbackFragment(location.hash)) {
+    // fragment is gone or a token has arrived.
+    //
+    // Read the LIVE hash, not React Router's snapshot: keycloak-js clears
+    // the callback with history.replaceState, which React Router does not
+    // observe, so `location.hash` keeps the stale fragment and the hold
+    // would never release (live symptom on testai: shell chrome rendered,
+    // <main> empty). AuthBootstrapper always dispatches a final phase after
+    // kc.init, so the re-render that re-reads the clean hash is guaranteed.
+    const liveHash = typeof window !== 'undefined' ? window.location.hash : location.hash;
+    if (hasOidcCallbackFragment(liveHash)) {
       return null;
     }
     const redirect = buildRedirectTarget();
