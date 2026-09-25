@@ -50,6 +50,8 @@ type ThemeBlock = {
   text: ParsedColor;
   danger: ParsedColor;
   surface: ParsedColor;
+  /** Blok `--state-danger-text` tanımlıyorsa o değer; tanımlamıyorsa `null`. */
+  dangerText: ParsedColor | null;
 };
 
 const collectBlocks = (): ThemeBlock[] => {
@@ -65,6 +67,7 @@ const collectBlocks = (): ThemeBlock[] => {
       const textRaw = read('text-primary');
       const dangerRaw = read('state-danger-bg');
       const surfaceRaw = read('surface-default-bg');
+      const dangerTextRaw = read('state-danger-text');
       if (!textRaw || !dangerRaw || !surfaceRaw) continue;
       const text = parseColor(textRaw);
       const danger = parseColor(dangerRaw);
@@ -76,6 +79,7 @@ const collectBlocks = (): ThemeBlock[] => {
         text,
         danger,
         surface,
+        dangerText: dangerTextRaw ? parseColor(dangerTextRaw) : null,
       });
     }
   }
@@ -112,6 +116,26 @@ describe('state-danger contrast (#1021)', () => {
       const tint = compositeOver(block.danger, block.surface);
 
       expect(contrastRatio(block.text, tint)).toBeGreaterThanOrEqual(MIN_RATIO);
+    },
+  );
+
+  const dangerTextBlocks = blocks.filter((block) => block.dangerText !== null);
+
+  it('measures the danger text in every theme that defines it', () => {
+    expect(dangerTextBlocks.length).toBeGreaterThanOrEqual(5);
+  });
+
+  // #1021 kalan kapsam (Halil, 2026-09-23): kusurun kökü rengin kendisi. Açık temalarda
+  // `--state-danger-text` düz beyazda da 3.76; ~200 kullanım yerini tek tek yamamak yerine
+  // token düzeltilir ve bu eşik her iki zeminde kalıcı olur.
+  it.each(dangerTextBlocks.map((block) => [`${block.file} ${block.selector}`, block] as const))(
+    'keeps the danger text itself readable on the plain surface and on the danger tint: %s',
+    (_label, block) => {
+      const dangerText = block.dangerText as ParsedColor;
+      const tint = compositeOver(block.danger, block.surface);
+
+      expect(contrastRatio(dangerText, block.surface)).toBeGreaterThanOrEqual(MIN_RATIO);
+      expect(contrastRatio(dangerText, tint)).toBeGreaterThanOrEqual(MIN_RATIO);
     },
   );
 
