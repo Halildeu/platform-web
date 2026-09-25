@@ -245,6 +245,8 @@ export type ResumeProposalDto = {
     height: number;
     confidence: number;
     parserVersion: string;
+    /** ats#213 G: öneriyi üreten çıkarım kuralı; kapalı küme, yoksa alan gelmez. */
+    source?: 'ADDRESS_LAST_LINE';
   };
 };
 
