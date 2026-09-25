@@ -310,6 +310,19 @@ describe('RecruiterWorkspacePage', () => {
     expect(screen.getByText(/Otomatik puanlama, sıralama veya karar/i)).toBeVisible();
   });
 
+  it('keeps the inbox on screen when an application date is not a date (#1193 review)', async () => {
+    // Yerel formatDate `new Date('abc')` için RangeError fırlatıp gelen kutusunu düşürüyordu.
+    apiMocks.listRecruiterApplications.mockResolvedValue({
+      items: [{ ...APPLICATION, createdAt: 'abc' }],
+      page: 0,
+      size: 50,
+      total: 1,
+    });
+    renderPage();
+    expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
+    expect(screen.getByText('—')).toBeVisible();
+  });
+
   it('keeps the default surface applicant-first and opens job management only on demand', async () => {
     renderPage();
     expect(await screen.findByText('Deniz Sentetik')).toBeVisible();
@@ -1013,7 +1026,9 @@ describe('RecruiterWorkspacePage', () => {
       fireEvent.click(start);
 
       const outcome = await screen.findByText('Durum güncellendi: İnsan incelemesinde.');
-      await waitFor(() => expect(outcome.closest('[data-testid="application-action-outcome"]')).toHaveFocus());
+      await waitFor(() =>
+        expect(outcome.closest('[data-testid="application-action-outcome"]')).toHaveFocus(),
+      );
       // Mesaj işlem düğmelerinin hemen altında; görüşme bölümünden önce.
       expect(
         precedes(outcome, screen.getByRole('heading', { name: 'Görüşme çalışma alanı' })),
@@ -1068,9 +1083,9 @@ describe('RecruiterWorkspacePage', () => {
       await waitFor(() =>
         expect(alert.closest('[data-testid="application-action-outcome"]')).toHaveFocus(),
       );
-      expect(
-        precedes(alert, screen.getByRole('heading', { name: 'Görüşme çalışma alanı' })),
-      ).toBe(true);
+      expect(precedes(alert, screen.getByRole('heading', { name: 'Görüşme çalışma alanı' }))).toBe(
+        true,
+      );
     });
 
     it('never shows the previous application while another one loads', async () => {
@@ -1122,7 +1137,9 @@ describe('RecruiterWorkspacePage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Ret kararını hazırla' }));
 
       await waitFor(() =>
-        expect(screen.getByLabelText(/Son yapılandırılmış değerlendirmeyi inceledim/i)).toHaveFocus(),
+        expect(
+          screen.getByLabelText(/Son yapılandırılmış değerlendirmeyi inceledim/i),
+        ).toHaveFocus(),
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
@@ -1235,9 +1252,7 @@ describe('RecruiterWorkspacePage', () => {
     it('opens the draft once an interview is completed', async () => {
       await openShortlisted([{ ...INTERVIEW, status: 'COMPLETED', version: 1 }]);
 
-      expect(
-        await screen.findByRole('button', { name: 'Teklif taslağı oluştur' }),
-      ).toBeVisible();
+      expect(await screen.findByRole('button', { name: 'Teklif taslağı oluştur' })).toBeVisible();
       expect(screen.queryByTestId('offer-requires-completed-interview')).not.toBeInTheDocument();
     });
   });
