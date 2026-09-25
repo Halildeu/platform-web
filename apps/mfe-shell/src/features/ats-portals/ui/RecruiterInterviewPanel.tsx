@@ -143,7 +143,11 @@ interface RecruiterInterviewPanelProps {
   interviewerLabel: string;
   onApplicationRefresh: () => Promise<void>;
   /** Her başarılı yüklemede, listenin hangi başvuruya ait olduğuyla birlikte bildirilir. */
-  onInterviewsChange?: (publicRef: string, interviews: RecruiterInterviewWorkspaceDto[]) => void;
+  /** Liste yüklenemezse {@code null}: "görüşme yok" ile "bilinmiyor" ayrı durumlardır. */
+  onInterviewsChange?: (
+    publicRef: string,
+    interviews: RecruiterInterviewWorkspaceDto[] | null,
+  ) => void;
 }
 
 const RecruiterInterviewPanel = ({
@@ -189,6 +193,7 @@ const RecruiterInterviewPanel = ({
       interviewsListener.current?.(publicRef, loaded);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Görüşmeler yüklenemedi.');
+      interviewsListener.current?.(publicRef, null);
     } finally {
       setLoading(false);
     }

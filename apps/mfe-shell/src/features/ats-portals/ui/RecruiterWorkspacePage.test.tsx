@@ -1240,5 +1240,53 @@ describe('RecruiterWorkspacePage', () => {
       ).toBeVisible();
       expect(screen.queryByTestId('offer-requires-completed-interview')).not.toBeInTheDocument();
     });
+
+    it('says the interview status is unknown when the interviews cannot be loaded', async () => {
+      // #1191 inceleme notu: "bilinmiyor" ile "yok" aynı değil. Liste yüklenemezse panel
+      // "görüşme tamamlandıktan sonra açılır" demiyor; İK'ya yanlış bir neden okutmuyor.
+      apiMocks.getRecruiterApplication.mockResolvedValue({
+        application: { ...APPLICATION, status: 'INTERVIEW_PENDING', version: 2 },
+        history: [],
+        evaluations: [EVALUATION],
+      });
+      apiMocks.listRecruiterInterviews.mockRejectedValue(new Error('Görüşmeler yüklenemedi.'));
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+
+      expect(await screen.findByTestId('offer-interview-status-unknown')).toHaveTextContent(
+        /Görüşme bilgisi alınamadı/,
+      );
+      expect(screen.queryByTestId('offer-requires-completed-interview')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Teklif taslağı oluştur' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not fire a stale focus request after the detail reload failed (#1185 note)', async () => {
+    // İşlem başarılı, ama ardından detay yüklenemedi: sonuç kutusu o çizimde yok. İstek
+    // bekletilirse "Detayı yeniden yükle" sonrasında odak başlık yerine eski sonuca atlıyordu.
+    // #1187'deki kural burada da geçerli: hedef yoksa istek düşer.
+    apiMocks.getRecruiterApplication
+      .mockResolvedValueOnce({ application: APPLICATION, history: [], evaluations: [] })
+      .mockRejectedValueOnce(new Error('Başvuru detayı yüklenemedi.'))
+      .mockResolvedValue({
+        application: { ...APPLICATION, status: 'UNDER_REVIEW', version: 1 },
+        history: [],
+        evaluations: [],
+      });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Başvuruyu incele' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Aday detayını kapat' })).toHaveFocus(),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'İnsan incelemesini başlat' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Detayı yeniden yükle' }));
+
+    expect(await screen.findByRole('button', { name: 'Kısa listeye al' })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Aday bilgileri ve insan kararı' })).toHaveFocus(),
+    );
+    expect(screen.getByTestId('application-action-outcome')).not.toHaveFocus();
   });
 });
