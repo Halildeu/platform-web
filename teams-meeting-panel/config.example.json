@@ -1,4 +1,5 @@
 {
+  "calendarEnabled": false,
   "keycloak": {
     "url": "https://identity.example.invalid",
     "realm": "approved-realm",

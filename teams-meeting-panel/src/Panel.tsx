@@ -6,6 +6,7 @@ import { AccessError, UnavailableError, checkLiveAccess, findMeetings, loadMeeti
   receiveTranscript, streamOnce, type LiveAnalysis, type Meeting } from './live';
 import { expandSpeakerTurns } from '../../apps/mfe-meeting/src/speaker-attribution';
 import type { TranscriptSegment } from '../../apps/mfe-meeting/src/meeting-workbench';
+import { CalendarPicker } from './CalendarPicker';
 
 type Tab = 'Metin' | 'Özet' | 'Kararlar' | 'Aksiyonlar';
 const pause = (signal: AbortSignal, ms: number) => new Promise<void>(resolve => {
@@ -41,13 +42,14 @@ export function Panel({ config }: { config: PanelConfig }) {
     {!session ? <section><p>Toplantı içeriğini görmek için platform hesabınızla giriş yapın.</p>
       <button onClick={() => void login()} disabled={busy}>{busy ? 'Giriş bekleniyor…' : 'Giriş yap'}</button></section>
       : <><button className="quiet" onClick={() => exit()}>Panel oturumunu kapat</button>
-        {configuring ? <Configure session={session} deny={exit} /> : id
-          ? <LiveMeeting key={id} id={id} session={session} deny={exit} />
+        {configuring ? <Configure session={session} deny={exit} calendarEnabled={config.calendarEnabled} /> : id
+          ? <>{config.calendarEnabled && <CalendarPicker id={id} session={session} deny={exit} />}
+            <LiveMeeting key={id} id={id} session={session} deny={exit} /></>
           : <p role="alert">Bu sekme bir toplantıya bağlanmamış. Toplantıyı düzenleyen kişi sekme ayarından toplantıyı seçebilir.</p>}</>}
   </main>;
 }
 
-function Configure({ session, deny }: { session: PanelSession; deny: (message: string) => void }) {
+function Configure({ session, deny, calendarEnabled }: { session: PanelSession; deny: (message: string) => void; calendarEnabled?: boolean }) {
   const [query, setQuery] = useState('');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [chosen, setChosen] = useState<Meeting | null>(null);
@@ -103,10 +105,13 @@ function Configure({ session, deny }: { session: PanelSession; deny: (message: s
       <input id="meeting-search" value={query} maxLength={200} onChange={event => setQuery(event.target.value)} /><button>Ara</button></form>
     <p role="status">{message}</p><ul className="meeting-list">{meetings.map(meeting => <li key={meeting.id}>
       <button onClick={() => void choose(meeting)} aria-pressed={chosen?.id === meeting.id}>{meeting.title}</button></li>)}</ul>
+    {calendarEnabled && chosen && <CalendarPicker id={chosen.id} session={session} deny={deny} />}
   </section>;
 }
 
 export function LiveMeeting({ id, session, deny }: { id: string; session: PanelSession; deny: (message: string) => void }) {
+  const [attempt, setAttempt] = useState(0);
+  const [retryAvailable, setRetryAvailable] = useState(false);
   const [title, setTitle] = useState('');
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [analysis, setAnalysis] = useState<LiveAnalysis | null>(null);
@@ -117,11 +122,14 @@ export function LiveMeeting({ id, session, deny }: { id: string; session: PanelS
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
+    setRetryAvailable(false); setMessage('Toplantı erişimi doğrulanıyor…');
+    setState({ transcript: 'Bağlanıyor', analysis: 'Bağlanıyor' });
     const clear = () => { setTitle(''); setSegments([]); setAnalysis(null); };
     function fatal(err: Error) {
       controller.abort(); clear(); setMessage(err.message);
       setState({ transcript: 'Kapalı', analysis: 'Kapalı' });
       if (err instanceof AccessError) denyRef.current(err.message);
+      else setRetryAvailable(true);
     }
     async function feed(kind: 'transcript' | 'analysis') {
       while (!signal.aborted) {
@@ -169,11 +177,12 @@ export function LiveMeeting({ id, session, deny }: { id: string; session: PanelS
       } catch (err) { if (!signal.aborted) fatal(err instanceof Error ? err : new Error('Toplantı açılamadı.')); }
     })();
     return () => controller.abort();
-  }, [id, session]);
+  }, [id, session, attempt]);
   const rendered = expandSpeakerTurns(segments);
   return <section>
     {title && <h2>{title}</h2>}
     <p role="status" className="notice">{message}</p>
+    {retryAvailable && <button onClick={() => setAttempt(value => value + 1)}>Canlı görünümü yeniden aç</button>}
     <div className="connection"><span>Metin: {state.transcript}</span><span>Analiz: {state.analysis}</span></div>
     <nav aria-label="Toplantı bölümleri">{(['Metin', 'Özet', 'Kararlar', 'Aksiyonlar'] as Tab[]).map(label =>
       <button key={label} aria-pressed={tab === label} onClick={() => setTab(label)}>{label}</button>)}</nav>

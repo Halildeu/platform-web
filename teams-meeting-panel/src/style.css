@@ -21,5 +21,11 @@ nav button { color: #2445a8; background: white; } nav button[aria-pressed=true] 
 ul { padding-left: 1.25rem; } li { margin-bottom: .9rem; }
 form { display: grid; gap: .5rem; } input { min-width: 0; width: 100%; background: white; }
 .meeting-list { list-style: none; padding: 0; } .meeting-list button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.calendar { margin: 1rem -.5rem; padding: .6rem; display: grid; grid-template-columns: minmax(0,1fr); gap: .75rem; min-width: 0; }
+.calendar form { grid-template-columns: minmax(0,1fr); min-width: 0; } .calendar label { min-width: 0; }
+.calendar input[type=date] { padding-inline: .15rem; max-width: 100%; }
+.calendar p { margin: 0; } .calendar fieldset { border: 1px solid #c4cbda; border-radius: .5rem; min-width: 0; margin: 0; padding: .75rem; }
+.calendar-choice { display: flex; gap: .6rem; align-items: flex-start; margin: .6rem 0; overflow-wrap: anywhere; }
+.calendar-choice input { width: auto; flex-shrink: 0; margin-top: .45rem; } .calendar-choice span { min-width: 0; } .calendar-choice small { display: block; }
 @media (min-width: 32rem) { nav { grid-template-columns: repeat(4,minmax(0,1fr)); } }
 @media (prefers-color-scheme: dark) { :root { background: #111827; color: #edf0f7; } .content, input, nav button { background: #1e293b; color: #edf0f7; border-color: #45516b; } .notice, .draft, small, .connection, .speaker, .eyebrow { color: #b4c4e5; } button.quiet { color: #b4c4e5; } [role=alert] { color: #ffafa6; } }
