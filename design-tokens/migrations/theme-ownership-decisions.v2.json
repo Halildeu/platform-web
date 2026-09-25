@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "kind": "theme-ownership-remediations",
+  "predecessor": {
+    "manifest": "design-tokens/migrations/theme-ownership-decisions.v1.json",
+    "commit": "110d48ef840a1e5aa771a586abc804effe5cb72d"
+  },
+  "decisions": [],
+  "result": {
+    "tokenSourceSha256": "433a73813b9a23ecc5f3974aa570f6d06be9b69af837b476a9db9ee99371f545",
+    "generatedThemeCssSha256": "233d5e2ec141453896df9b4a6aaeb14d2cfe0b5e66f9bb8c3bbb87036439af2a",
+    "themeExtensionCssSha256": "9e29d452e7b6c89ae7b371557d21a5b4a2617ac47876e923f27827730d8bd7f8",
+    "generatedThemeInlineCssSha256": "c348fe2c1bd25b8e9f1dc864f541acbdadf1743822cb6f769e05594941f9cf57",
+    "themeInlineExtensionCssSha256": "5ef1f38a2e467c47567407ef550a75f2376304f9732d16efbc8ca8d4e2b46b8c"
+  }
+}
