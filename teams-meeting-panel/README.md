@@ -20,6 +20,20 @@ the current shell, desktop bundle, gateway or shared speech settings.
   meeting content is cleared and both live streams are closed. Authorization is
   rechecked every 60 seconds with a 15-second token/header deadline. Network errors
   on a stream retry after five seconds. The server has no replay; gaps are shown.
+- An optional, default-off Outlook picker lists only server-authorized organizer
+  events for the selected canonical meeting. Browsing/selecting a radio button
+  does not schedule a join: the user explicitly confirms the event. Only its
+  opaque event ID is submitted, never an organizer, join URL or browser timing.
+- The picker reads status before offering selection, periodically rechecks it,
+  and can cancel pending selections. Dispatching/joined calls are not presented
+  as cancellable pending selections. A lost mutation response locks further
+  mutations until status is read; no mutation is automatically retried.
+- Calendar-only permission denial clears calendar choices without logging a
+  read-only live viewer out. A 401 ends the panel session. Responses and token/
+  network/body waits are bounded. Truncated lists invite narrowing the date range.
+- If a future meeting's live view is unavailable, the user can reopen it with a
+  fresh server access check once the meeting starts. Bot joined status does not
+  by itself claim that live audio or analysis is working.
 
 ## Build and check
 
@@ -42,6 +56,9 @@ It does not deploy or replace the existing frontend image.
 2. Serve `/teams/panel/config.json` using `config.example.json` as a shape only.
    Supply the approved Keycloak URL, realm and **public** client ID. No client
    secret, worker control key or Microsoft application credential belongs here.
+   Keep `calendarEnabled` false until backend #1195, dispatch-time recording
+   permission revalidation, approved Graph permissions and real tenant acceptance
+   are complete. Setting this flag does not configure or authorize the backend.
 3. The approved Keycloak client needs Standard Flow, PKCE S256, exact valid
    redirect `https://testai.acik.com/teams/panel/login.html`, and web origin
    `https://testai.acik.com` for code redemption/refresh. Do not add wildcard
@@ -81,7 +98,9 @@ access checks. They do **not** prove a real Teams/Keycloak login or tenant setup
 
 This panel consumes an existing meeting stream. Native Teams audio ingestion,
 time-aligned participant-name mapping and the user-authorized Outlook selection
-bridge to the worker scheduler remain separate integration work. Configuration
+bridge runtime to the worker scheduler remain separate acceptance work. The
+picker uses `/api/v1/admin/meetings/{id}/teams-calendar` from backend #1195;
+it must remain disabled until the backend's activation conditions are met. Configuration
 selects which existing platform meeting to display; it does not join a call or
 automatically prove a Teams chat-to-platform mapping. Speaker labels remain the
 canonical stream's labels; identity is not inferred from a name spoken aloud.
@@ -91,6 +110,11 @@ authorized/unauthorized meetings, live transcript/decisions/actions during speec
 meeting-specific selection, logout, revoked access, reconnect and panel removal.
 Repeat in the desktop Teams client and browser, including a narrow panel and large
 text. Confirm gaps after reconnect are not presented as complete saved content.
+Calendar tests additionally cover ambiguous mutation outcomes, denied access,
+stale/unmounted views, truncation, response scope and explicit user selection.
+Synthetic browser QA at 320px and 200% text verified selection, scheduling and
+cancellation without horizontal page overflow. This is not real Outlook/Teams
+acceptance, and no institutional account or live calendar was changed.
 
 Microsoft references: [meeting tabs](https://learn.microsoft.com/en-us/microsoftteams/platform/apps-in-teams-meetings/build-tabs-for-meeting),
 [tab authentication](https://learn.microsoft.com/en-us/microsoftteams/platform/tabs/how-to/authentication/auth-tab-aad).

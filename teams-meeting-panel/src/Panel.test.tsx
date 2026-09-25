@@ -42,6 +42,23 @@ function setup() {
 }
 
 describe('meeting panel with real SSE parser and authorization requests', () => {
+  it('can open live content after a scheduled meeting becomes available, with a fresh access check', async () => {
+    const session = { token: async () => 'platform-token', close: vi.fn() }; const deny = vi.fn();
+    let available = false;
+    const fetcher = vi.fn(async (path: string) => {
+      if (!available) return new Response(null, { status: 404 });
+      if (path === `/api/v1/admin/meetings/${id}`) return Response.json({ id, title: 'Planlanan toplantı' });
+      return new Response(new ReadableStream({}), { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    render(<LiveMeeting id={id} session={session} deny={deny} />); await act(flush);
+    expect(screen.queryByText('Planlanan toplantı')).toBeNull();
+    available = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Canlı görünümü yeniden aç' })); await act(flush);
+    expect(screen.getByText('Planlanan toplantı')).toBeTruthy();
+    expect(fetcher.mock.calls.filter(([path]) => path.includes('live-analysis'))).toHaveLength(2);
+    expect(deny).not.toHaveBeenCalled();
+  });
   it('renders and updates decisions and assigned actions from the live stream while it remains open', async () => {
     const run = setup(); await act(flush);
     expect(screen.getByText('Müşteri sunumu')).toBeTruthy();
