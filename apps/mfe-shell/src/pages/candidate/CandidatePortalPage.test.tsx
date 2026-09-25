@@ -1409,4 +1409,43 @@ describe('CandidatePortalPage', () => {
     const label = screen.getByText('Başlangıç tarihi');
     expect(label.nextElementSibling).toHaveTextContent(/2026/);
   });
+
+  it('keeps the portal on screen when a date is not a date at all (#1193 review)', async () => {
+    // Biçim dışı değer saatli biçimlemeye düşüyordu; ama `formatDate` de `new Date('abc')`
+    // için aynı RangeError'u fırlatıyor ve sayfanın çizimini düşürüyordu. Geçersiz tarih
+    // ekrana "—" olarak yazılmalı, portal çizilmeye devam etmeli.
+    apiMocks.getCandidateStatus.mockResolvedValue({
+      ...STATUS,
+      status: 'OFFER_PENDING',
+      nextAction: 'REVIEW_OFFER',
+      withdrawalAllowed: false,
+    });
+    apiMocks.getCandidateOffers.mockResolvedValue([
+      {
+        offerId: 'off_abcdefghijklmnopqrstuvwx',
+        applicationPublicRef: SESSION.publicRef,
+        jobTitle: 'Ürün Yöneticisi',
+        roleTitle: 'Kıdemli Ürün Yöneticisi',
+        startDate: 'abc',
+        employmentType: 'Tam zamanlı',
+        workMode: 'HYBRID',
+        location: 'İstanbul',
+        compensationAmount: 55000,
+        currency: 'TRY',
+        payPeriod: 'MONTHLY',
+        expiresAt: '',
+        termsSummary: 'Sentetik teklif koşulları özeti.',
+        status: 'EXTENDED',
+        version: 2,
+        updatedAt: '2026-09-22T13:59:00Z',
+        legalBoundary: 'Bu yanıt ATS sürecini kaydeder; ayrı iş sözleşmesi veya e-imza değildir.',
+      },
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Kıdemli Ürün Yöneticisi' })).toBeVisible();
+    const label = screen.getByText('Başlangıç tarihi');
+    expect(label.nextElementSibling).toHaveTextContent(/^—$/);
+  });
 });
