@@ -18,6 +18,7 @@ import {
 } from '../model/screening-answers';
 import RecruiterInterviewPanel from './RecruiterInterviewPanel';
 import RecruiterOfferPanel from './RecruiterOfferPanel';
+import { formatDateSafe } from '../format-date';
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SUBMITTED: 'Başvuru alındı',
@@ -59,10 +60,7 @@ const emptyEvaluationForm = (): EvaluationForm => ({
   criteria: SCORECARD_CRITERIA.map((criterion) => ({ ...criterion, rating: '', evidence: '' })),
 });
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+const formatDate = (value: string) => formatDateSafe(value);
 
 const latestEvaluationOf = (detail: RecruiterApplicationDetailDto | null) => {
   if (!detail?.evaluations.length) return null;

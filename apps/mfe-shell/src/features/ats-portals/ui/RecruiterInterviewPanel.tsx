@@ -14,6 +14,7 @@ import {
   type InterviewType,
   type RecruiterInterviewWorkspaceDto,
 } from '../api/application-api';
+import { formatDateSafe } from '../format-date';
 
 const TYPE_LABELS: Record<InterviewType, string> = {
   SCREENING: 'Ön görüşme',
@@ -126,12 +127,7 @@ const initialScorecard = (interview: RecruiterInterviewWorkspaceDto): ScorecardF
   })),
 });
 
-const formatDate = (value: string, timeZone?: string) =>
-  new Intl.DateTimeFormat('tr-TR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    ...(timeZone ? { timeZone } : {}),
-  }).format(new Date(value));
+const formatDate = (value: string, timeZone?: string) => formatDateSafe(value, { timeZone });
 
 const iso = (localValue: string) => new Date(localValue).toISOString();
 

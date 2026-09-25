@@ -19,7 +19,9 @@ export const formatDateSafe = (
   value: string | null | undefined,
   { withTime = true, timeZone }: FormatDateOptions = {},
 ): string => {
-  const date = new Date(value as string);
+  if (!value) return INVALID_DATE_TEXT;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return INVALID_DATE_TEXT;
   return new Intl.DateTimeFormat('tr-TR', {
     dateStyle: 'medium',
     ...(withTime ? { timeStyle: 'short' as const } : {}),
