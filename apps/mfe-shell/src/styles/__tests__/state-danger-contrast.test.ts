@@ -2,6 +2,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  compositeOver,
+  contrastRatio,
+  parseCssColor,
+  type ParsedColor,
+} from '../../../../../scripts/theme/color-contrast.mjs';
 
 /**
  * #1021 — tehlike/hata yüzeyinde metin WCAG AA'yı geçmeli.
@@ -10,6 +16,9 @@ import { describe, expect, it } from 'vitest';
  * 1.90 (serban-dark) ve 4.00 (koyu uzantı) — eşik 4.5. Açık temalarda bu renk DÜZ yüzeyde de
  * eşiğin altında (3.76). `--state-danger-bg` yarı saydam olduğu için gerçek zemin, tint'in
  * yüzey üzerine kompozit edilmiş hâlidir; `getComputedStyle` tek başına yanıltıcıdır.
+ *
+ * <p>Renk matematiği tema sahiplik kapısıyla ortaktır (`scripts/theme/color-contrast.mjs`):
+ * kompozit tarayıcı gibi gama kodlu sRGB'de yapılır, sonra göreli parlaklık hesaplanır.
  *
  * <p>Token değerini değiştirmek bu depoda ayrı bir kapıya çarpıyor: tema göç kaydı
  * (`design-tokens/migrations/theme-ownership-decisions.v1.json`) birleşik temayı tarihsel
@@ -26,56 +35,22 @@ const THEME_FILES: ReadonlyArray<{ label: string; relative: string }> = [
 ];
 const MIN_RATIO = 4.5;
 
-type Color = { L: number; C: number; h: number; alpha: number };
-
-const parseOklch = (raw: string): Color | null => {
-  const match = raw
-    .trim()
-    .match(/^oklch\(\s*([\d.]+)%?\s+([\d.]+)\s+([\d.]+)(?:deg)?\s*(?:\/\s*([\d.]+)%?)?\s*\)$/i);
-  if (!match) return null;
-  const rawL = Number.parseFloat(match[1]);
-  const rawAlpha = match[4] === undefined ? null : Number.parseFloat(match[4]);
-  return {
-    L: rawL > 1 ? rawL / 100 : rawL,
-    C: Number.parseFloat(match[2]),
-    h: Number.parseFloat(match[3]),
-    alpha: rawAlpha === null ? 1 : rawAlpha > 1 ? rawAlpha / 100 : rawAlpha,
-  };
+/** Tema değeri ölçülemeyen bir biçimdeyse (ör. `var(...)`) blok atlanır. */
+const parseColor = (raw: string): ParsedColor | null => {
+  try {
+    return parseCssColor(raw);
+  } catch {
+    return null;
+  }
 };
 
-/** OKLab → lineer sRGB (kanallar kırpılmaz; parlaklık hesabı kırpmaya duyarsız). */
-const toLinearRgb = ({ L, C, h }: Color): [number, number, number] => {
-  const hRad = (h * Math.PI) / 180;
-  const a = C * Math.cos(hRad);
-  const b = C * Math.sin(hRad);
-  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
-  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
-  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  return [
-    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-  ];
+type ThemeBlock = {
+  file: string;
+  selector: string;
+  text: ParsedColor;
+  danger: ParsedColor;
+  surface: ParsedColor;
 };
-
-const over = (color: Color, base: [number, number, number]): [number, number, number] => {
-  const lin = toLinearRgb(color);
-  if (color.alpha >= 1) return lin;
-  return lin.map((channel, index) => channel * color.alpha + base[index] * (1 - color.alpha)) as [
-    number,
-    number,
-    number,
-  ];
-};
-
-const luminance = ([r, g, b]: [number, number, number]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
-
-const contrastRatio = (fg: [number, number, number], bg: [number, number, number]) => {
-  const [lighter, darker] = [luminance(fg), luminance(bg)].sort((a, b) => b - a);
-  return (lighter + 0.05) / (darker + 0.05);
-};
-
-type ThemeBlock = { file: string; selector: string; text: Color; danger: Color; surface: Color };
 
 const collectBlocks = (): ThemeBlock[] => {
   const blocks: ThemeBlock[] = [];
@@ -91,9 +66,9 @@ const collectBlocks = (): ThemeBlock[] => {
       const dangerRaw = read('state-danger-bg');
       const surfaceRaw = read('surface-default-bg');
       if (!textRaw || !dangerRaw || !surfaceRaw) continue;
-      const text = parseOklch(textRaw);
-      const danger = parseOklch(dangerRaw);
-      const surface = parseOklch(surfaceRaw);
+      const text = parseColor(textRaw);
+      const danger = parseColor(dangerRaw);
+      const surface = parseColor(surfaceRaw);
       if (!text || !danger || !surface) continue;
       blocks.push({
         file: label,
@@ -134,10 +109,9 @@ describe('state-danger contrast (#1021)', () => {
   it.each(blocks.map((block) => [`${block.file} ${block.selector}`, block] as const))(
     'keeps the standard danger-surface text readable: %s',
     (_label, block) => {
-      const surface = toLinearRgb(block.surface);
-      const tint = over(block.danger, surface);
+      const tint = compositeOver(block.danger, block.surface);
 
-      expect(contrastRatio(toLinearRgb(block.text), tint)).toBeGreaterThanOrEqual(MIN_RATIO);
+      expect(contrastRatio(block.text, tint)).toBeGreaterThanOrEqual(MIN_RATIO);
     },
   );
 
