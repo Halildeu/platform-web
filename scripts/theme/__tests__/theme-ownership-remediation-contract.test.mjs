@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,15 +16,47 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const read = (relative) => fs.readFileSync(path.join(repoRoot, relative), 'utf8');
 const clone = (value) => structuredClone(value);
 
-const manifest = JSON.parse(read(REMEDIATION_PATHS.v2));
 const schema = JSON.parse(read(REMEDIATION_PATHS.schema));
 const v1ManifestContent = read(REMEDIATION_PATHS.v1);
-const tokenSourceContent = read(REMEDIATION_PATHS.tokens);
+const repository = {
+  manifest: JSON.parse(read(REMEDIATION_PATHS.v2)),
+  tokenSourceContent: read(REMEDIATION_PATHS.tokens),
+  tokens: JSON.parse(read(REMEDIATION_PATHS.tokens)),
+  generatedThemeCss: generatedThemeArtifacts.themeCss.content,
+  themeExtensionCss: read(REMEDIATION_PATHS.themeExtension),
+  generatedThemeInlineCss: generatedThemeArtifacts.themeInlineCss.content,
+  themeInlineExtensionCss: read(REMEDIATION_PATHS.themeInlineExtension),
+};
+
+// Synthetic scenarios start from the frozen predecessor, not from the working
+// tree: real decisions appended to the ledger must not change what these tests
+// prove, and a decision recorded in the repository is not a test fixture.
+const frozen = (relative) =>
+  execFileSync(
+    'git',
+    ['cat-file', 'blob', `${repository.manifest.predecessor.commit}:${relative}`],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    },
+  );
+const tokenSourceContent = frozen(REMEDIATION_PATHS.tokens);
 const tokens = JSON.parse(tokenSourceContent);
-const themeExtensionCss = read(REMEDIATION_PATHS.themeExtension);
-const themeInlineExtensionCss = read(REMEDIATION_PATHS.themeInlineExtension);
-const generatedThemeCss = generatedThemeArtifacts.themeCss.content;
-const generatedThemeInlineCss = generatedThemeArtifacts.themeInlineCss.content;
+const generatedThemeCss = frozen(REMEDIATION_PATHS.generatedTheme);
+const themeExtensionCss = frozen(REMEDIATION_PATHS.themeExtension);
+const generatedThemeInlineCss = frozen(REMEDIATION_PATHS.generatedThemeInline);
+const themeInlineExtensionCss = frozen(REMEDIATION_PATHS.themeInlineExtension);
+const manifest = {
+  ...clone(repository.manifest),
+  decisions: [],
+  result: {
+    tokenSourceSha256: sha256(tokenSourceContent),
+    generatedThemeCssSha256: sha256(generatedThemeCss),
+    themeExtensionCssSha256: sha256(themeExtensionCss),
+    generatedThemeInlineCssSha256: sha256(generatedThemeInlineCss),
+    themeInlineExtensionCssSha256: sha256(themeInlineExtensionCss),
+  },
+};
 
 const contract = (overrides = {}) =>
   assertThemeOwnershipRemediationContract({
@@ -126,9 +159,12 @@ function captureMessage(run) {
   assert.fail('expected the gate to reject');
 }
 
-test('the empty v2 ledger chains to the frozen v1 and passes on the repository', () => {
+test('the repository ledger chains to the frozen v1 and passes', () => {
+  assert.equal(contract(repository), true);
+});
+
+test('an empty ledger passes on the frozen predecessor state', () => {
   assert.equal(contract(), true);
-  assert.deepEqual(manifest.decisions, []);
 });
 
 test('the schema rejects unknown fields and unknown decision kinds', () => {
