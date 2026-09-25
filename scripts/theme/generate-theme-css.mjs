@@ -13,7 +13,7 @@ import {
   assertNoCuratedShadow,
   writeFileAtomicIfChanged,
 } from './theme-css-contract.mjs';
-import { assertThemeOwnershipDecisionContract } from './theme-ownership-decision-contract.mjs';
+import { assertThemeOwnershipRemediationContract } from './theme-ownership-remediation-contract.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +37,11 @@ const OUTPUT_TOKEN_TYPES = path.resolve(repoRoot, 'design-tokens/generated/token
 const OWNERSHIP_DECISIONS = path.resolve(
   repoRoot,
   'design-tokens/migrations/theme-ownership-decisions.v1.json',
+);
+// #1021: v1 is frozen at v2's predecessor commit; the working tree answers to v2.
+const OWNERSHIP_REMEDIATIONS = path.resolve(
+  repoRoot,
+  'design-tokens/migrations/theme-ownership-decisions.v2.json',
 );
 const THEME_EXTENSION_CSS = path.resolve(
   repoRoot,
@@ -454,8 +459,9 @@ function assertThemeOwnershipContract({ enforceDecisionContract = false } = {}) 
   assertNoCuratedShadow(themeInlineOutput, themeInlineExtension);
 
   if (enforceDecisionContract) {
-    assertThemeOwnershipDecisionContract({
-      manifest: JSON.parse(readRequired(OWNERSHIP_DECISIONS, 'ownership decision manifest')),
+    assertThemeOwnershipRemediationContract({
+      manifest: JSON.parse(readRequired(OWNERSHIP_REMEDIATIONS, 'ownership remediation manifest')),
+      v1ManifestContent: readRequired(OWNERSHIP_DECISIONS, 'ownership decision manifest'),
       tokenSourceContent,
       tokens,
       generatedThemeCss: cssWithEol,

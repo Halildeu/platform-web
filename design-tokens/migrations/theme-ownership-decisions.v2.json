@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 2,
+  "kind": "theme-ownership-remediations",
+  "predecessor": {
+    "manifest": "design-tokens/migrations/theme-ownership-decisions.v1.json",
+    "commit": "110d48ef840a1e5aa771a586abc804effe5cb72d"
+  },
+  "decisions": [
+    {
+      "id": "danger-text-contrast-1021",
+      "kind": "contrast-remediation",
+      "issue": "Halildeu/platform-web#1021",
+      "tokenTargets": [
+        {
+          "jsonPointer": "/semantic/color/state/danger/text/modes/serban-light/value",
+          "from": "{raw.color.danger.500}",
+          "to": "{raw.color.danger.700}"
+        },
+        {
+          "jsonPointer": "/semantic/color/state/danger/text/modes/serban-dark/value",
+          "from": "{raw.color.danger.500}",
+          "to": "{raw.color.danger.400}"
+        },
+        {
+          "jsonPointer": "/semantic/color/state/danger/text/modes/serban-compact/value",
+          "from": "{raw.color.danger.500}",
+          "to": "{raw.color.danger.700}"
+        }
+      ],
+      "cssTargets": [
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root[data-mode=\"system\"]:not([data-theme=\"serban-hc\"]),[data-theme-scope][data-mode=\"system\"]:not([data-theme=\"serban-hc\"])",
+          "atRules": [
+            {
+              "name": "media",
+              "params": "(prefers-color-scheme:dark)"
+            }
+          ],
+          "property": "--state-danger",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root[data-mode=\"system\"]:not([data-theme=\"serban-hc\"]),[data-theme-scope][data-mode=\"system\"]:not([data-theme=\"serban-hc\"])",
+          "atRules": [
+            {
+              "name": "media",
+              "params": "(prefers-color-scheme:dark)"
+            }
+          ],
+          "property": "--state-error-text",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root[data-mode=\"system\"]:not([data-theme=\"serban-hc\"]),[data-theme-scope][data-mode=\"system\"]:not([data-theme=\"serban-hc\"])",
+          "atRules": [
+            {
+              "name": "media",
+              "params": "(prefers-color-scheme:dark)"
+            }
+          ],
+          "property": "--text-danger",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root",
+          "atRules": [],
+          "property": "--state-danger-text",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(50.54% 0.1905 27.52)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root[data-theme=\"serban-compact\"],[data-theme-scope][data-theme=\"serban-compact\"]",
+          "atRules": [],
+          "property": "--state-danger-text",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(50.54% 0.1905 27.52)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root[data-theme=\"serban-dark\"],[data-theme-scope][data-theme=\"serban-dark\"]",
+          "atRules": [],
+          "property": "--state-danger-text",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": ":root[data-theme=\"serban-light\"],[data-theme-scope][data-theme=\"serban-light\"]",
+          "atRules": [],
+          "property": "--state-danger-text",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(50.54% 0.1905 27.52)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": "[data-mode=\"dark\"]",
+          "atRules": [],
+          "property": "--state-danger",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": "[data-mode=\"dark\"]",
+          "atRules": [],
+          "property": "--state-error-text",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        },
+        {
+          "artifact": "generatedTheme",
+          "selector": "[data-mode=\"dark\"]",
+          "atRules": [],
+          "property": "--text-danger",
+          "from": "oklch(63.68% 0.2078 25.33)",
+          "to": "oklch(71.06% 0.1661 22.22)"
+        }
+      ],
+      "aliasBridges": [],
+      "measurements": [
+        {
+          "themeSelector": ":root",
+          "foreground": "--state-danger-text",
+          "background": "--surface-default-bg",
+          "compositeOver": null,
+          "ratio": 6.471,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root",
+          "foreground": "--state-danger-text",
+          "background": "--state-danger-bg",
+          "compositeOver": "--surface-default-bg",
+          "ratio": 5.492,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root[data-theme=\"serban-compact\"],[data-theme-scope][data-theme=\"serban-compact\"]",
+          "foreground": "--state-danger-text",
+          "background": "--surface-default-bg",
+          "compositeOver": null,
+          "ratio": 6.471,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root[data-theme=\"serban-compact\"],[data-theme-scope][data-theme=\"serban-compact\"]",
+          "foreground": "--state-danger-text",
+          "background": "--state-danger-bg",
+          "compositeOver": "--surface-default-bg",
+          "ratio": 5.492,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root[data-theme=\"serban-dark\"],[data-theme-scope][data-theme=\"serban-dark\"]",
+          "foreground": "--state-danger-text",
+          "background": "--surface-default-bg",
+          "compositeOver": null,
+          "ratio": 7.279,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root[data-theme=\"serban-dark\"],[data-theme-scope][data-theme=\"serban-dark\"]",
+          "foreground": "--state-danger-text",
+          "background": "--state-danger-bg",
+          "compositeOver": "--surface-default-bg",
+          "ratio": 4.941,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root[data-theme=\"serban-light\"],[data-theme-scope][data-theme=\"serban-light\"]",
+          "foreground": "--state-danger-text",
+          "background": "--surface-default-bg",
+          "compositeOver": null,
+          "ratio": 6.471,
+          "threshold": 4.5
+        },
+        {
+          "themeSelector": ":root[data-theme=\"serban-light\"],[data-theme-scope][data-theme=\"serban-light\"]",
+          "foreground": "--state-danger-text",
+          "background": "--state-danger-bg",
+          "compositeOver": "--surface-default-bg",
+          "ratio": 5.492,
+          "threshold": 4.5
+        }
+      ],
+      "reason": "--state-danger-text did not reach WCAG AA on the plain surface (3.76) or on the danger tint (3.19) in the light themes, nor on the tint in serban-dark (3.63). Owner decision (2026-09-23): fix the colour at the token layer, not at ~200 call sites. Palette danger.700 for light/compact, danger.400 for serban-dark; the dark-mode aliases generated from the serban-dark token (--text-danger, --state-error-text, ...) follow the same decision."
+    }
+  ],
+  "result": {
+    "tokenSourceSha256": "64adacf72ce1f6f5937ee740bdc33061c2e1d63b82c7050c440a0ec46cac1aee",
+    "generatedThemeCssSha256": "f2a629562682e6cf37b129e1a0e6d3d8b0746e2b103c576979ece1df96345cf6",
+    "themeExtensionCssSha256": "9e29d452e7b6c89ae7b371557d21a5b4a2617ac47876e923f27827730d8bd7f8",
+    "generatedThemeInlineCssSha256": "c348fe2c1bd25b8e9f1dc864f541acbdadf1743822cb6f769e05594941f9cf57",
+    "themeInlineExtensionCssSha256": "5ef1f38a2e467c47567407ef550a75f2376304f9732d16efbc8ca8d4e2b46b8c"
+  }
+}

@@ -61,7 +61,7 @@
   --state-warning-text: oklch(76.86% 0.1647 70.08);
   --state-warning-border: oklch(76.86% 0.1647 70.08);
   --state-danger-bg: oklch(61.37% 0.2039 25.56 / 12%);
-  --state-danger-text: oklch(63.68% 0.2078 25.33);
+  --state-danger-text: oklch(50.54% 0.1905 27.52);
   --state-danger-border: oklch(63.68% 0.2078 25.33);
   --data-table-header-bg: oklch(96.7% 0.0029 264.54);
   --data-table-header-text: oklch(37.29% 0.0306 259.73);
@@ -138,7 +138,7 @@
   --state-warning-text: oklch(76.86% 0.1647 70.08);
   --state-warning-border: oklch(76.86% 0.1647 70.08);
   --state-danger-bg: oklch(61.37% 0.2039 25.56 / 12%);
-  --state-danger-text: oklch(63.68% 0.2078 25.33);
+  --state-danger-text: oklch(50.54% 0.1905 27.52);
   --state-danger-border: oklch(63.68% 0.2078 25.33);
   --data-table-header-bg: oklch(96.7% 0.0029 264.54);
   --data-table-header-text: oklch(37.29% 0.0306 259.73);
@@ -209,7 +209,7 @@
   --state-warning-text: oklch(76.86% 0.1647 70.08);
   --state-warning-border: oklch(76.86% 0.1647 70.08);
   --state-danger-bg: oklch(74.21% 0.1503 21.35 / 25%);
-  --state-danger-text: oklch(63.68% 0.2078 25.33);
+  --state-danger-text: oklch(71.06% 0.1661 22.22);
   --state-danger-border: oklch(63.68% 0.2078 25.33);
   --data-table-header-bg: oklch(21.01% 0.0318 264.66);
   --data-table-header-text: oklch(92.76% 0.0058 264.53);
@@ -351,7 +351,7 @@
   --state-warning-text: oklch(76.86% 0.1647 70.08);
   --state-warning-border: oklch(76.86% 0.1647 70.08);
   --state-danger-bg: oklch(61.37% 0.2039 25.56 / 12%);
-  --state-danger-text: oklch(63.68% 0.2078 25.33);
+  --state-danger-text: oklch(50.54% 0.1905 27.52);
   --state-danger-border: oklch(63.68% 0.2078 25.33);
   --data-table-header-bg: oklch(96.7% 0.0029 264.54);
   --data-table-header-text: oklch(37.29% 0.0306 259.73);
@@ -768,7 +768,7 @@
   --text-disabled: oklch(71.07% 0.0351 256.79);
   --text-tertiary: oklch(71.07% 0.0351 256.79);
   --text-placeholder: oklch(71.07% 0.0351 256.79);
-  --text-danger: oklch(63.68% 0.2078 25.33);
+  --text-danger: oklch(71.06% 0.1661 22.22);
   --border-strong: oklch(54.61% 0.2152 262.88);
   --border-active: oklch(71.37% 0.1434 254.62);
   --border-hover: oklch(37.29% 0.0306 259.73);
@@ -776,9 +776,9 @@
   --border-danger: oklch(63.68% 0.2078 25.33);
   --focus-ring: oklch(71.37% 0.1434 254.62);
   --state-error-bg: oklch(74.21% 0.1503 21.35 / 25%);
-  --state-error-text: oklch(63.68% 0.2078 25.33);
+  --state-error-text: oklch(71.06% 0.1661 22.22);
   --state-error-border: oklch(63.68% 0.2078 25.33);
-  --state-danger: oklch(63.68% 0.2078 25.33);
+  --state-danger: oklch(71.06% 0.1661 22.22);
   --state-success: oklch(72.27% 0.192 149.58);
   --state-warning: oklch(76.86% 0.1647 70.08);
   --state-info: oklch(62.31% 0.188 259.81);
@@ -813,7 +813,7 @@
     --text-disabled: oklch(71.07% 0.0351 256.79);
     --text-tertiary: oklch(71.07% 0.0351 256.79);
     --text-placeholder: oklch(71.07% 0.0351 256.79);
-    --text-danger: oklch(63.68% 0.2078 25.33);
+    --text-danger: oklch(71.06% 0.1661 22.22);
     --border-strong: oklch(54.61% 0.2152 262.88);
     --border-active: oklch(71.37% 0.1434 254.62);
     --border-hover: oklch(37.29% 0.0306 259.73);
@@ -821,9 +821,9 @@
     --border-danger: oklch(63.68% 0.2078 25.33);
     --focus-ring: oklch(71.37% 0.1434 254.62);
     --state-error-bg: oklch(74.21% 0.1503 21.35 / 25%);
-    --state-error-text: oklch(63.68% 0.2078 25.33);
+    --state-error-text: oklch(71.06% 0.1661 22.22);
     --state-error-border: oklch(63.68% 0.2078 25.33);
-    --state-danger: oklch(63.68% 0.2078 25.33);
+    --state-danger: oklch(71.06% 0.1661 22.22);
     --state-success: oklch(72.27% 0.192 149.58);
     --state-warning: oklch(76.86% 0.1647 70.08);
     --state-info: oklch(62.31% 0.188 259.81);
