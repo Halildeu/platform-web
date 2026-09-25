@@ -112,6 +112,23 @@ const renderWithRoleRoute = () =>
     </MemoryRouter>,
   );
 
+const renderAnonymousAt = (entry: string) =>
+  render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute requiredPermissions={['VIEW_USERS']}>
+              <div>Protected Content</div>
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/login" element={<LocationViewer label="Login Page" />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
 describe('ProtectedRoute', () => {
   afterEach(() => {
     cleanup();
@@ -132,6 +149,36 @@ describe('ProtectedRoute', () => {
     expect(screen.getByTestId('location-display')).toHaveTextContent(
       '/login?redirect=%2Fadmin%2Fusers',
     );
+  });
+
+  it('keeps the query but never the fragment in the login redirect param (#1200)', () => {
+    // A fragment on an app path is never routing state here; carrying it into
+    // ?redirect= let LoginPage hand it to Keycloak as redirect_uri (RFC 6749
+    // §3.1.2 forbids that) and produced an infinite login loop.
+    renderAnonymousAt('/admin/users?tab=roles#stage=demo');
+    expect(screen.getByText('Login Page')).toBeInTheDocument();
+    // Exact match on purpose: toHaveTextContent(string) is a substring
+    // check, so the pre-fix value `…%3Droles%23stage%3Ddemo` would still
+    // "contain" the expected prefix and the test would pass vacuously.
+    expect(screen.getByTestId('location-display').textContent).toBe(
+      '/login?redirect=%2Fadmin%2Fusers%3Ftab%3Droles',
+    );
+    expect(screen.getByTestId('location-display').textContent).not.toContain('%23');
+  });
+
+  it('holds instead of redirecting while an unconsumed Keycloak callback is in the URL (#1200)', () => {
+    // Live shape from the KC LOGIN event: the code was never exchanged because
+    // the route redirected away before keycloak-js parsed the fragment.
+    const { container } = renderAnonymousAt(
+      '/admin/users#state=5668b163&session_state=jnqL&iss=https%3A%2F%2Ftestai.acik.com&code=dd81',
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('Login Page')).not.toBeInTheDocument();
+  });
+
+  it('still redirects normally when the hash is not a Keycloak callback', () => {
+    renderAnonymousAt('/admin/users#stage=demo');
+    expect(screen.getByText('Login Page')).toBeInTheDocument();
   });
 
   it('permitAll bootstrap tamamlanmadan içerik render etmez', () => {

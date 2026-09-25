@@ -1,4 +1,5 @@
 import type { UserProfile } from '@mfe/shared-types';
+import { stripUrlFragment } from './redirect-target';
 
 export type AuthMode = 'keycloak' | 'permitAll';
 
@@ -11,7 +12,10 @@ type KeycloakConfig = {
   enableSilentCheckSso: boolean;
 };
 
-type FakeAuthProfile = Pick<UserProfile, 'email' | 'fullName' | 'displayName' | 'role' | 'permissions'>;
+type FakeAuthProfile = Pick<
+  UserProfile,
+  'email' | 'fullName' | 'displayName' | 'role' | 'permissions'
+>;
 
 export type AuthConfig = {
   mode: AuthMode;
@@ -58,10 +62,7 @@ const parseList = (value: string | undefined, fallback: string[]): string[] => {
     .filter((part) => part.length > 0);
 };
 
-const LOCAL_ALLOWED_APP_ORIGINS = new Set([
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-]);
+const LOCAL_ALLOWED_APP_ORIGINS = new Set(['http://localhost:3000', 'http://127.0.0.1:3000']);
 
 const normalizeOrigin = (value: string): string => value.trim().replace(/\/+$/, '');
 
@@ -89,16 +90,20 @@ const resolveAppPublicOrigin = (): string => {
   return 'http://localhost:3000';
 };
 
+// platform-web#1200: this is the OIDC redirect_uri boundary. RFC 6749 §3.1.2
+// forbids a fragment here, and Keycloak (response_mode=fragment) will append
+// its own `#state=…&code=…` — a pre-existing fragment breaks that callback.
+// Stripping at this boundary covers every caller, however the path was built.
 const normalizeRedirectPath = (value: string | undefined): string => {
   if (!value) {
     return '/';
   }
   if (value.startsWith('/')) {
-    return value;
+    return stripUrlFragment(value) || '/';
   }
   try {
     const parsed = new URL(value, resolveAppPublicOrigin());
-    return `${parsed.pathname}${parsed.search}${parsed.hash}` || '/';
+    return `${parsed.pathname}${parsed.search}` || '/';
   } catch {
     return '/';
   }
@@ -141,18 +146,10 @@ const authMode = resolveAuthMode();
 const appPublicOrigin = resolveAppPublicOrigin();
 
 const keycloakConfig: KeycloakConfig = {
-  url:
-    getEnvValue('VITE_KEYCLOAK_URL') ??
-    getEnvValue('KEYCLOAK_URL') ??
-    'http://localhost:8081',
-  realm:
-    getEnvValue('VITE_KEYCLOAK_REALM') ??
-    getEnvValue('KEYCLOAK_REALM') ??
-    'serban',
+  url: getEnvValue('VITE_KEYCLOAK_URL') ?? getEnvValue('KEYCLOAK_URL') ?? 'http://localhost:8081',
+  realm: getEnvValue('VITE_KEYCLOAK_REALM') ?? getEnvValue('KEYCLOAK_REALM') ?? 'serban',
   clientId:
-    getEnvValue('VITE_KEYCLOAK_CLIENT_ID') ??
-    getEnvValue('KEYCLOAK_CLIENT_ID') ??
-    'frontend',
+    getEnvValue('VITE_KEYCLOAK_CLIENT_ID') ?? getEnvValue('KEYCLOAK_CLIENT_ID') ?? 'frontend',
   appPublicOrigin,
   silentCheckSsoRedirectUri: resolveSilentCheckUri(),
   enableSilentCheckSso: resolveSilentCheckEnabled(appPublicOrigin),

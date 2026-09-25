@@ -7,6 +7,7 @@ import { Button } from '@mfe/design-system/light';
 import { useShellCommonI18n } from '../../app/i18n';
 import { resolveKeycloakLoginUrl, startKeycloakLogin } from '../../app/auth/keycloakClient';
 import { buildAppRedirectUri, isPermitAllMode } from '../../app/auth/auth-config';
+import { stripUrlFragment } from '../../app/auth/redirect-target';
 import { useAppSelector } from '../../app/store/store.hooks';
 
 /**
@@ -71,7 +72,11 @@ const LoginPage = () => {
     // javascript:, data:, mailto: schemes contain no `/` prefix and
     // were already rejected above. http(s):// has `//` after scheme
     // and was also rejected. We're left with same-origin paths.
-    return redirect;
+    //
+    // platform-web#1200: never let a fragment through. This becomes the
+    // OIDC redirect_uri; a stale `#state=…&code=…` here is exactly what
+    // turned a single lost callback into an infinite login loop.
+    return stripUrlFragment(redirect);
   }, [location.search]);
 
   const redirectUri = useMemo(() => buildAppRedirectUri(redirectPath), [redirectPath]);

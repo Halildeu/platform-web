@@ -163,6 +163,44 @@ describe('LoginPage', () => {
     });
   });
 
+  it('redirect parametresindeki Keycloak callback fragmentini redirectUri disinda birakir (#1200)', async () => {
+    // Live incident 2026-09-25: ProtectedRoute carried a stale, unconsumed
+    // `#state=…&code=…` into ?redirect=; this page then sent it to Keycloak
+    // as redirect_uri, Keycloak appended a fresh callback onto it and
+    // keycloak-js could never match the state → infinite login loop.
+    authStateMock.initialized = true;
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          '/login?redirect=%2Fadmin%2Freports%2Fhr-demografik-yapi%23state%3D5668b163%26session_state%3DjnqL%26code%3Ddd81',
+        ]}
+      >
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(resolveKeycloakLoginUrlMock).toHaveBeenCalled());
+    expect(resolveKeycloakLoginUrlMock).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/admin/reports/hr-demografik-yapi',
+    });
+  });
+
+  it('redirect parametresindeki query korunur, yalniz fragment dusurulur (#1200)', async () => {
+    authStateMock.initialized = true;
+
+    render(
+      <MemoryRouter initialEntries={['/login?redirect=%2Faccess%2Froles%3Ftab%3D2%23stage%3Ddemo']}>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(resolveKeycloakLoginUrlMock).toHaveBeenCalled());
+    expect(resolveKeycloakLoginUrlMock).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/access/roles?tab=2',
+    });
+  });
+
   it('redirect=/login/foo nested path icin de loop guard calisir', async () => {
     // Defense-in-depth: nested /login/* paths (e.g. /login/help, hypothetical
     // future sub-routes) should also be treated as login-namespace and
