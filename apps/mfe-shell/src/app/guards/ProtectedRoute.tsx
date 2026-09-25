@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { hasOidcCallbackFragment } from '../auth/redirect-target';
 import { useAppSelector } from '../store/store.hooks';
 import { usePermissions } from '@mfe/auth';
 import { isPermitAllMode } from '../auth/auth-config';
@@ -77,12 +78,26 @@ export const ProtectedRoute = ({
     return <>{children}</>;
   }
 
+  // platform-web#1200: the return-to target deliberately omits
+  // `location.hash`. The only fragment this app ever sees is Keycloak's own
+  // `#state=…&code=…` callback; carrying it into `?redirect=` let LoginPage
+  // feed it back to Keycloak as redirect_uri, which produced an infinite
+  // login loop (RFC 6749 §3.1.2 forbids fragments there in the first place).
   const buildRedirectTarget = () => {
-    const composed = `${location.pathname ?? ''}${location.search ?? ''}${location.hash ?? ''}`;
+    const composed = `${location.pathname ?? ''}${location.search ?? ''}`;
     return encodeURIComponent(composed || '/');
   };
 
   if (!token) {
+    // An unconsumed Keycloak callback is still in the URL. keycloak-js
+    // parses and clears that fragment during init; redirecting away now
+    // would discard the authorization code (the second half of #1200: the
+    // first callback on a deep route was never exchanged). Hold until the
+    // fragment is gone or a token has arrived — keycloak-js removes the
+    // fragment on parse regardless of outcome, so this cannot stick.
+    if (hasOidcCallbackFragment(location.hash)) {
+      return null;
+    }
     const redirect = buildRedirectTarget();
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }
