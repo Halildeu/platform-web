@@ -90,14 +90,18 @@ const RecruiterApplicationReviewPanel = ({
   const [actionError, setActionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   // Başvuru referansına göre: başka adaya geçişte eski adayın görüşme listesi karışmasın.
+  // Değer yoksa henüz yüklenmedi, `null` ise liste yüklenemedi (bilinmiyor).
   const [completedInterviewByRef, setCompletedInterviewByRef] = useState<
-    Record<string, boolean>
+    Record<string, boolean | null>
   >({});
   const recordInterviews = useCallback(
-    (ref: string, interviews: Array<{ status: string }>) =>
+    (ref: string, interviews: Array<{ status: string }> | null) =>
       setCompletedInterviewByRef((current) => ({
         ...current,
-        [ref]: interviews.some((interview) => interview.status === 'COMPLETED'),
+        [ref]:
+          interviews === null
+            ? null
+            : interviews.some((interview) => interview.status === 'COMPLETED'),
       })),
     [],
   );
@@ -147,6 +151,7 @@ const RecruiterApplicationReviewPanel = ({
     setRejectionOpen(false);
     setRejectionConfirmed(false);
     evaluationMutation.current = null;
+    focusAfterRender.current = null;
     void loadDetail();
   }, [loadDetail]);
 
@@ -165,9 +170,10 @@ const RecruiterApplicationReviewPanel = ({
         : target === 'rejection-opener'
           ? rejectionOpenerRef.current
           : rejectionConfirmRef.current;
-    if (!element) return;
+    // Hedef bu çizimde yoksa istek düşer (#1187 ile aynı kural): bekletilen istek, örneğin
+    // detay yüklenemediğinde, sonraki bir çizimde beklenmedik anda odağı kaydırıyordu.
     focusAfterRender.current = null;
-    element.focus();
+    element?.focus();
   });
 
   const latestEvaluation = useMemo(() => latestEvaluationOf(detail), [detail]);
@@ -845,7 +851,7 @@ const RecruiterApplicationReviewPanel = ({
           publicRef={application.publicRef}
           jobTitle={application.jobTitle}
           candidateLocation={application.city}
-          interviewCompleted={completedInterviewByRef[application.publicRef] === true}
+          interviewCompleted={completedInterviewByRef[application.publicRef]}
           applicationStatus={application.status}
           canManage={canManage}
           onApplicationRefresh={refreshAfterInterviewChange}

@@ -122,8 +122,11 @@ interface RecruiterOfferPanelProps {
   candidateLocation: string;
   applicationStatus: ApplicationStatus;
   canManage: boolean;
-  /** Başvuruda tamamlanmış görüşme var mı; sunucu teklifi yalnız bu durumda kabul eder. */
-  interviewCompleted?: boolean;
+  /**
+   * Başvuruda tamamlanmış görüşme var mı; sunucu teklifi yalnız bu durumda kabul eder.
+   * {@code undefined}: görüşmeler henüz yüklenmedi; {@code null}: yüklenemedi (bilinmiyor).
+   */
+  interviewCompleted?: boolean | null;
   onApplicationRefresh: () => Promise<void>;
 }
 
@@ -133,7 +136,7 @@ const RecruiterOfferPanel = ({
   candidateLocation,
   applicationStatus,
   canManage,
-  interviewCompleted = false,
+  interviewCompleted,
   onApplicationRefresh,
 }: RecruiterOfferPanelProps) => {
   const [offers, setOffers] = useState<RecruiterOfferWorkspaceDto[]>([]);
@@ -185,7 +188,7 @@ const RecruiterOfferPanel = ({
     ['DRAFT', 'EXTENDED', 'ACCEPTED'].includes(offer.status),
   );
   const offerStageOpen = canManage && applicationStatus === 'INTERVIEW_PENDING' && !activeOffer;
-  const canCreate = offerStageOpen && interviewCompleted;
+  const canCreate = offerStageOpen && interviewCompleted === true;
 
   const openCreate = () => {
     setForm(initialForm(jobTitle, candidateLocation));
@@ -371,12 +374,21 @@ const RecruiterOfferPanel = ({
           Teklifleri görüntüleyebilirsiniz; oluşturma ve durum değiştirme yetkiniz yok.
         </p>
       ) : null}
-      {offerStageOpen && !interviewCompleted && !loading ? (
+      {offerStageOpen && interviewCompleted === false && !loading ? (
         <p
           className="mt-4 rounded-xl border border-border-subtle bg-surface-muted p-3 text-sm text-text-secondary"
           data-testid="offer-requires-completed-interview"
         >
           Teklif taslağı, görüşme scorecard’la tamamlandıktan sonra açılır.
+        </p>
+      ) : null}
+      {offerStageOpen && interviewCompleted === null && !loading ? (
+        <p
+          className="mt-4 rounded-xl border border-border-subtle bg-surface-muted p-3 text-sm text-text-secondary"
+          data-testid="offer-interview-status-unknown"
+        >
+          Görüşme bilgisi alınamadı; teklif taslağı görüşme durumu okununca açılır. Görüşme
+          çalışma alanındaki “Görüşmeleri yenile” ile tekrar deneyin.
         </p>
       ) : null}
       {canCreate && !formOpen ? (

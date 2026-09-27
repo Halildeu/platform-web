@@ -152,15 +152,21 @@ const INTERVIEW_STATUS_COPY: Record<CandidateInterviewDto['status'], string> = {
   CANCELLED: 'İptal edildi',
 };
 
-const formatDate = (value: string, timeZone?: string) =>
-  new Intl.DateTimeFormat('tr-TR', {
+const formatDate = (value: string, timeZone?: string) => {
+  const date = new Date(value);
+  // Geçersiz tarih `format`'ta RangeError fırlatır ve sayfanın çizimini düşürür.
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('tr-TR', {
     dateStyle: 'medium',
     timeStyle: 'short',
     ...(timeZone ? { timeZone } : {}),
-  }).format(new Date(value));
+  }).format(date);
+};
 
 /** Saatsiz takvim günü (`YYYY-MM-DD`): saat dilimine çevrilmeden, saatsiz gösterilir. */
 const formatCalendarDate = (value: string) => {
+  // Sözleşme `format = "date"`; biçim dışı bir değer saatli biçimlemeye düşer (geçersizse "—").
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDate(value);
   const [year, month, day] = value.split('-').map(Number);
   return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
     new Date(Date.UTC(year, month - 1, day)),
