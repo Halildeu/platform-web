@@ -12,6 +12,7 @@ import {
   type OfferWorkMode,
   type RecruiterOfferWorkspaceDto,
 } from '../api/application-api';
+import { formatDateSafe } from '../format-date';
 
 const STATUS_LABELS: Record<OfferStatus, string> = {
   DRAFT: 'Taslak',
@@ -98,11 +99,7 @@ const termsFromForm = (form: OfferForm): OfferTermsDto => ({
   termsSummary: form.termsSummary.trim(),
 });
 
-const formatDate = (value: string, withTime = true) =>
-  new Intl.DateTimeFormat('tr-TR', {
-    dateStyle: 'medium',
-    ...(withTime ? { timeStyle: 'short' as const } : {}),
-  }).format(new Date(value));
+const formatDate = (value: string, withTime = true) => formatDateSafe(value, { withTime });
 
 const formatMoney = (amount: number, currency: string) => {
   try {

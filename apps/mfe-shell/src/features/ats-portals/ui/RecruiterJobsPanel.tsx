@@ -37,6 +37,7 @@ type QuestionFormState = {
 // ats#240 C: tür etiketlerinin tek kaynağı model modülü — İK inceleme paneli de aynı
 // etiketleri basar; iki yerde iki liste olsaydı ilk yeni tür geldiğinde ayrışırdı.
 import { QUESTION_KIND_LABELS } from '../model/screening-answers';
+import { formatDateSafe } from '../format-date';
 
 const EMPTY_QUESTION: QuestionFormState = {
   text: '',
@@ -100,10 +101,7 @@ type JobFilterId = (typeof JOB_FILTERS)[number]['id'];
 const matchesJobFilter = (job: RecruiterJobDto, filter: JobFilterId): boolean =>
   filter === 'ALL' || job.status === filter;
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+const formatDate = (value: string) => formatDateSafe(value);
 
 const formFromJob = (job: RecruiterJobDto): FormState => ({
   slug: job.slug,

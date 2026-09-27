@@ -15,6 +15,7 @@ import {
 } from '../../ats-product-catalog/model/ats-capability-registry';
 import RecruiterJobsPanel from './RecruiterJobsPanel';
 import RecruiterApplicationReviewPanel from './RecruiterApplicationReviewPanel';
+import { formatDateSafe } from '../format-date';
 
 const STAGES: ReadonlyArray<{ id: ApplicationStatus; label: string }> = [
   { id: 'SUBMITTED', label: 'Yeni' },
@@ -67,10 +68,7 @@ const COMPLETED_STATUSES: ReadonlyArray<ApplicationStatus> = [
   'OFFER_WITHDRAWN',
 ];
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+const formatDate = (value: string) => formatDateSafe(value);
 
 const initialsOf = (name: string) =>
   name
