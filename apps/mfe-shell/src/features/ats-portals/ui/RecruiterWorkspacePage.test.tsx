@@ -1111,6 +1111,37 @@ describe('RecruiterWorkspacePage', () => {
       expect(await screen.findByText('Diğer sentetik özet')).toBeVisible();
     });
 
+    it('ignores a late answer for the application the recruiter already left (#1185 P2)', async () => {
+      // #1185 inceleme notu: `loadDetail` isteği `publicRef`'e bağlı değildi. A yavaş, B hızlı
+      // gelince A'nın geç yanıtı B'nin yerine yazılıyor; İK B'yi seçtiği hâlde A'nın
+      // detayını ve düğmelerini görüyordu.
+      const OTHER_REF = 'app_zzzzzzzzzzzzzzzzzzzzzzzz';
+      let resolveFirst: (value: unknown) => void = () => undefined;
+      apiMocks.getRecruiterApplication.mockImplementation((ref: string) =>
+        ref === OTHER_REF
+          ? Promise.resolve({
+              application: { ...APPLICATION, publicRef: OTHER_REF, summary: 'Diğer sentetik özet' },
+              history: [],
+              evaluations: [],
+            })
+          : new Promise((resolve) => {
+              resolveFirst = resolve;
+            }),
+      );
+      const props = { canManage: true, onApplicationChanged: vi.fn() };
+      const { rerender } = render(
+        <RecruiterApplicationReviewPanel publicRef={APPLICATION.publicRef} {...props} />,
+      );
+      rerender(<RecruiterApplicationReviewPanel publicRef={OTHER_REF} {...props} />);
+      expect(await screen.findByText('Diğer sentetik özet')).toBeVisible();
+
+      resolveFirst({ application: APPLICATION, history: [], evaluations: [] });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(screen.getByText('Diğer sentetik özet')).toBeVisible();
+      expect(screen.queryByText('Sentetik profesyonel özet')).not.toBeInTheDocument();
+    });
+
     it('moves focus into the rejection panel and back to its opener on cancel', async () => {
       apiMocks.getRecruiterApplication.mockResolvedValue({
         application: { ...APPLICATION, status: 'UNDER_REVIEW' },
