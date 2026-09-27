@@ -22,3 +22,27 @@ description = "Project-level false-positives"
 paths = [
   '''apps/mfe-reporting/src/modules/dynamic-report/filters/widgets/index\.tsx''',
 ]
+
+# #1021 (owner decision, 2026-09-25): the theme ownership ledgers pin their
+# inputs and results with content-addressed SHA-256 digests, which the
+# generic-api-key rule reads as credentials ("tokenSourceSha256": "<hex>").
+# Commit-bound .gitleaksignore lines do not survive a squash merge and would
+# be needed for every new decision, so the exemption is scoped instead to:
+#   - this one rule (generic-api-key), and
+#   - BOTH the ledger files AND a line that is exactly one "...Sha256" field
+#     holding 64 lowercase hex characters.
+# Any other value in these files, and the same line in any other file, is
+# still reported. Measured with gitleaks 8.24.3 (the CI version): a global
+# [[allowlists]] block is not applied there, so the rule-scoped form is used.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "#1021 theme ownership ledger digests"
+condition = "AND"
+paths = [
+  '''(^|/)design-tokens/migrations/theme-ownership-decisions\.v[0-9]+\.json$''',
+]
+regexTarget = "line"
+regexes = [
+  '''^\s*"[A-Za-z]+Sha256"\s*:\s*"[0-9a-f]{64}",?\s*$''',
+]

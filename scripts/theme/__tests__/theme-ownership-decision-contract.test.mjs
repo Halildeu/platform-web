@@ -4,12 +4,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { generatedThemeArtifacts } from '../generate-theme-css.mjs';
 import { assertThemeOwnershipDecisionContract } from '../theme-ownership-decision-contract.mjs';
 import { sha256 } from '../theme-css-contract.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const read = (...segments) => fs.readFileSync(path.join(repoRoot, ...segments), 'utf8');
+// #1021: v1 is frozen at its own result commit (v2 `predecessor.commit`). Its inputs
+// come from that commit, so later reviewed remediations cannot break these tests.
+const predecessor = JSON.parse(
+  fs.readFileSync(
+    path.join(repoRoot, 'design-tokens', 'migrations', 'theme-ownership-decisions.v2.json'),
+    'utf8',
+  ),
+).predecessor.commit;
+const read = (...segments) =>
+  execFileSync('git', ['cat-file', 'blob', `${predecessor}:${segments.join('/')}`], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
 const tokenSourceContent = read('design-tokens', 'figma.tokens.json');
 const tokens = JSON.parse(tokenSourceContent);
 const manifest = JSON.parse(
@@ -23,6 +34,12 @@ const themeInlineExtensionCss = read(
   'styles',
   'theme-inline.extensions.css',
 );
+const generatedThemeArtifacts = {
+  themeCss: { content: read('apps', 'mfe-shell', 'src', 'styles', 'theme.css') },
+  themeInlineCss: {
+    content: read('apps', 'mfe-shell', 'src', 'styles', 'generated-theme-inline.css'),
+  },
+};
 
 const clone = (value) => structuredClone(value);
 const contract = (overrides = {}) =>

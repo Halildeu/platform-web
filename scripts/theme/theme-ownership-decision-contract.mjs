@@ -63,7 +63,7 @@ function assertUnique(values, label) {
   if (new Set(values).size !== values.length) fail(`${label} contains duplicates`);
 }
 
-function resolveJsonPointer(root, pointer) {
+export function resolveJsonPointer(root, pointer) {
   if (typeof pointer !== 'string' || !pointer.startsWith('/')) {
     fail(`invalid JSON pointer ${JSON.stringify(pointer)}`);
   }
@@ -329,7 +329,7 @@ function assertGitAncestor(ancestor, descendant, message) {
   }
 }
 
-function resolveAuthorityCommit(authorityRef) {
+export function resolveAuthorityCommit(authorityRef) {
   if (authorityRef !== undefined && typeof authorityRef !== 'string') {
     fail('THEME_OWNERSHIP_AUTHORITY_REF must be a string');
   }
@@ -455,7 +455,7 @@ function escapeJsonPointerSegment(segment) {
   return String(segment).replace(/~/g, '~0').replace(/\//g, '~1');
 }
 
-function collectJsonLeafChanges(expected, actual, pointer = '') {
+export function collectJsonLeafChanges(expected, actual, pointer = '') {
   const expectedObject = expected !== null && typeof expected === 'object';
   const actualObject = actual !== null && typeof actual === 'object';
   const bothArrays = Array.isArray(expected) && Array.isArray(actual);

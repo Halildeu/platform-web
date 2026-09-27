@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "design-tokens/migrations/theme-ownership-decisions.v2.schema.json",
+  "title": "Theme ownership remediation ledger (v2)",
+  "description": "#1021: append-only decisions chained after the frozen v1 migration. Enforced by scripts/theme/theme-ownership-remediation-contract.mjs, which rejects any keyword it does not implement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "predecessor", "decisions", "result"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "kind": { "const": "theme-ownership-remediations" },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "commit"],
+      "properties": {
+        "manifest": { "const": "design-tokens/migrations/theme-ownership-decisions.v1.json" },
+        "commit": { "$ref": "#/$defs/gitSha" }
+      }
+    },
+    "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokenSourceSha256",
+        "generatedThemeCssSha256",
+        "themeExtensionCssSha256",
+        "generatedThemeInlineCssSha256",
+        "themeInlineExtensionCssSha256"
+      ],
+      "properties": {
+        "tokenSourceSha256": { "$ref": "#/$defs/sha256" },
+        "generatedThemeCssSha256": { "$ref": "#/$defs/sha256" },
+        "themeExtensionCssSha256": { "$ref": "#/$defs/sha256" },
+        "generatedThemeInlineCssSha256": { "$ref": "#/$defs/sha256" },
+        "themeInlineExtensionCssSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "gitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "text": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "customProperty": { "type": "string", "pattern": "^--[a-z0-9-]+$" },
+    "atRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "params"],
+      "properties": {
+        "name": { "enum": ["media", "supports", "layer", "container"] },
+        "params": { "type": "string" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "issue",
+        "tokenTargets",
+        "cssTargets",
+        "aliasBridges",
+        "measurements",
+        "reason"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,79}$" },
+        "kind": { "enum": ["contrast-remediation"] },
+        "issue": { "type": "string", "pattern": "^Halildeu/platform-web#[1-9][0-9]*$" },
+        "tokenTargets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["jsonPointer", "from", "to"],
+            "properties": {
+              "jsonPointer": {
+                "type": "string",
+                "pattern": "^/semantic/color/[^/]+(/[^/]+)*/value$"
+              },
+              "from": { "$ref": "#/$defs/text" },
+              "to": { "$ref": "#/$defs/text" }
+            }
+          }
+        },
+        "cssTargets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact", "selector", "atRules", "property", "from", "to"],
+            "properties": {
+              "artifact": { "enum": ["generatedTheme", "themeExtension"] },
+              "selector": { "$ref": "#/$defs/text" },
+              "atRules": { "type": "array", "items": { "$ref": "#/$defs/atRule" } },
+              "property": { "$ref": "#/$defs/customProperty" },
+              "from": { "$ref": "#/$defs/text" },
+              "to": { "$ref": "#/$defs/text" }
+            }
+          }
+        },
+        "aliasBridges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["property", "resolvesTo"],
+            "properties": {
+              "property": { "$ref": "#/$defs/customProperty" },
+              "resolvesTo": { "$ref": "#/$defs/customProperty" }
+            }
+          }
+        },
+        "measurements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "themeSelector",
+              "foreground",
+              "background",
+              "compositeOver",
+              "ratio",
+              "threshold"
+            ],
+            "properties": {
+              "themeSelector": { "$ref": "#/$defs/text" },
+              "foreground": { "$ref": "#/$defs/customProperty" },
+              "background": { "$ref": "#/$defs/customProperty" },
+              "compositeOver": {
+                "type": ["string", "null"],
+                "pattern": "^--[a-z0-9-]+$"
+              },
+              "ratio": { "type": "number", "minimum": 1, "maximum": 21 },
+              "threshold": { "enum": [3, 4.5, 7] }
+            }
+          }
+        },
+        "reason": { "$ref": "#/$defs/text" }
+      }
+    }
+  }
+}

@@ -24,3 +24,15 @@
 /apps/etik-speak-manager/** @Halildeu
 /.github/workflows/ci-etik-speak-manager-image.yml @Halildeu
 /.github/workflows/release-etik-speak-manager-image.yml @Halildeu
+
+# Theme ownership ledger (#1021). v1 is frozen at v2's predecessor commit; v2 is
+# append-only and its gate recomputes every contrast claim. Changing the ledger,
+# its schema, the gate or the shared colour math needs the design-system owner.
+/design-tokens/migrations/ @Halildeu
+/scripts/theme/theme-ownership-decision-contract.mjs @Halildeu
+/scripts/theme/theme-ownership-remediation-contract.mjs @Halildeu
+/scripts/theme/color-contrast.mjs @Halildeu
+/scripts/theme/color-contrast.d.mts @Halildeu
+/scripts/theme/__tests__/theme-ownership-decision-contract.test.mjs @Halildeu
+/scripts/theme/__tests__/theme-ownership-remediation-contract.test.mjs @Halildeu
+/scripts/theme/__tests__/color-contrast.test.mjs @Halildeu
