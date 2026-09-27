@@ -589,6 +589,11 @@ export const RESUME_DECISION_STYLES = {
 const DECIDED_RESUME_STATES: readonly string[] = ['ACCEPTED', 'EDITED', 'REJECTED'];
 
 /** Ham yüzde tek başına eylem çağırmıyor; adayın ne yapması gerektiğini söyle. */
+/** ats#213 G: yalnız sözleşmedeki kapalı değerler etiketlenir; alan yoksa satır aynı kalır. */
+const PROVENANCE_SOURCE_LABELS: Record<string, string> = {
+  ADDRESS_LAST_LINE: 'Adresten',
+};
+
 const confidenceWording = (confidence: number) => {
   const percent = Math.round(confidence * 100);
   if (percent >= 85) return { text: `Yüksek güven · %${percent}`, warn: false };
@@ -2598,6 +2603,9 @@ const CandidateApplicationPage = () => {
                               const isRejected = proposal.state === 'REJECTED';
                               const isResumeOnly = RESUME_ONLY_FIELDS.includes(proposal.field);
                               const confidence = confidenceWording(proposal.provenance.confidence);
+                              const sourceLabel = proposal.provenance.source
+                                ? PROVENANCE_SOURCE_LABELS[proposal.provenance.source]
+                                : undefined;
                               return (
                                 <li
                                   key={proposal.field}
@@ -2624,7 +2632,9 @@ const CandidateApplicationPage = () => {
                                               : 'text-text-secondary'
                                           }`}
                                         >
-                                          Sayfa {proposal.provenance.page} · {confidence.text}
+                                          Sayfa {proposal.provenance.page} ·{' '}
+                                          {sourceLabel ? `${sourceLabel} · ` : ''}
+                                          {confidence.text}
                                         </p>
                                         {/* Formda karşılığı olmayan alan kabul edilince sessizce
                                             düşüyordu; aday aktarıldığını sanıyordu. */}

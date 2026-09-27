@@ -1640,6 +1640,41 @@ describe('CandidateApplicationPage', () => {
     expect(screen.getByRole('button', { name: /Seçtiğim alanları forma aktar/ })).toBeDisabled();
   });
 
+  it('says a proposal came from the address only when the contract says so (ats#213 G)', async () => {
+    // ats#274: şehir, adres bloğunun son satırı il ise düşük güvenle önerilir. Sahip kararı
+    // (2026-09-25): sözleşmedeki kapalı `provenance.source` bu değerdeyse aday "Adresten"
+    // görür; alan yoksa satır bugünkü haliyle aynı kalır.
+    const [, email, , city] = proposals;
+    apiMocks.uploadResumePdf.mockResolvedValueOnce({
+      resumeImport: {
+        ...UPLOADED_IMPORT,
+        proposals: [
+          email,
+          {
+            ...city,
+            state: 'CONTROL_REQUIRED',
+            provenance: { ...provenance, confidence: 0.5, source: 'ADDRESS_LAST_LINE' },
+          },
+        ],
+      },
+      inFlight: false,
+    });
+    renderPage();
+    await selectPdf();
+
+    expect(
+      within(screen.getByTestId('resume-proposal-city')).getByText(
+        /^Sayfa 1 · Adresten · Düşük güven · %50 — kontrol edin$/,
+      ),
+    ).toBeVisible();
+    expect(
+      within(screen.getByTestId('resume-proposal-email')).getByText(
+        /^Sayfa 1 · Yüksek güven · %96$/,
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByText(/Adresten/)).toHaveLength(1);
+  });
+
   it('terminates and purges all transient proposals after explicit reject-all confirmation', async () => {
     renderPage();
     await selectPdf();
