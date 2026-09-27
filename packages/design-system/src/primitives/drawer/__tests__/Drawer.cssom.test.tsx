@@ -1,5 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Drawer } from '../Drawer';
 import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/cssom-harness';
@@ -103,6 +104,75 @@ describe('Drawer CSSOM canary', () => {
 
     expect(container.getAttribute('data-state')).toBe('open');
     expect(container.getAttribute('data-component')).toBe('drawer');
+  });
+
+  /**
+   * platform-web#992 — %400 yakınlaştırma (320×256 CSS px). Canlı TEST gözleminde sabit başlık
+   * kısa ekranın yarısını tutuyor, gövde küçük bir pencereden kayıyordu; uzun başlık da
+   * `truncate` ile kesiliyordu (WCAG 1.4.10 bilgi kaybı).
+   */
+  describe('reflow at 400% zoom (#992)', () => {
+    const LONG_TITLE =
+      'Aday bilgileri ve insan kararı: uzun bir çekmece başlığı kesilmeden okunmalı';
+
+    const withViewport = async (width: number, height: number, run: () => Promise<void>) => {
+      const previous = { width: window.innerWidth, height: window.innerHeight };
+      await page.viewport(width, height);
+      try {
+        await run();
+      } finally {
+        await page.viewport(previous.width, previous.height);
+      }
+    };
+
+    const renderLongDrawer = async () => {
+      await render(
+        <Drawer open onClose={() => {}} placement="right" title={LONG_TITLE} description="Açıklama">
+          <div style={{ height: 1200 }}>Gövde</div>
+        </Drawer>,
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      const { panel } = findDrawer();
+      const header = panel.firstElementChild as HTMLElement;
+      const body = header.nextElementSibling as HTMLElement;
+      const heading = panel.querySelector('h2') as HTMLElement;
+      return { panel, header, body, heading };
+    };
+
+    it('scrolls the whole panel on a short screen so the header moves with the content', async () => {
+      await withViewport(320, 256, async () => {
+        const { panel, header, body, heading } = await renderLongDrawer();
+
+        // Başlık kesilmez: satır kaydırılır, taşma yok.
+        expect(getComputedStyle(heading).textOverflow).not.toBe('ellipsis');
+        expect(getComputedStyle(heading).whiteSpace).not.toBe('nowrap');
+        expect(heading.scrollWidth).toBeLessThanOrEqual(heading.clientWidth + 1);
+
+        // Kısa ekranda panelin tamamı kayar; gövde kendi küçük penceresinde kaymaz.
+        expect(getComputedStyle(panel).overflowY).toBe('auto');
+        expect(getComputedStyle(body).overflowY).toBe('visible');
+        expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+
+        // Kapat düğmesi en üstte erişilebilir.
+        const close = panel.querySelector('button') as HTMLElement;
+        const panelTop = panel.getBoundingClientRect().top;
+        expect(close.getBoundingClientRect().top).toBeGreaterThanOrEqual(panelTop);
+
+        // Başlık sabit değil: kaydırınca içerikle birlikte yukarı çıkar ve gövdeye yer açar.
+        panel.scrollTop = panel.scrollHeight;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        expect(header.getBoundingClientRect().bottom).toBeLessThanOrEqual(panelTop);
+      });
+    });
+
+    it('keeps the desktop layout: fixed header, body scrolls on its own', async () => {
+      await withViewport(1280, 800, async () => {
+        const { panel, body } = await renderLongDrawer();
+
+        expect(getComputedStyle(panel).overflowY).not.toBe('auto');
+        expect(getComputedStyle(body).overflowY).toBe('auto');
+      });
+    });
   });
 
   it('panel --surface-default flips on theme switch (light → dark)', async () => {
