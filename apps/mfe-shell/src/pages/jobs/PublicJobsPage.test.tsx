@@ -7,9 +7,18 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import PublicJobsPage from './PublicJobsPage';
 
 const apiMocks = vi.hoisted(() => ({ listPublicJobs: vi.fn() }));
-vi.mock('../../features/ats-portals/api/application-api', () => ({
+// Politika sürüm sabitleri gerçek modülden gelir; yalnız ağ çağrısı taklit edilir.
+vi.mock('../../features/ats-portals/api/application-api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../features/ats-portals/api/application-api')>()),
   listPublicJobs: apiMocks.listPublicJobs,
 }));
+
+const policy = (mode: string) => ({
+  mode,
+  applicationNoticeVersion: 'kvkk-application-v2',
+  resumeImportNoticeVersion: 'candidate-resume-import-v2',
+});
+const RESTRICTIVE = /gerçek kişisel veri kullanmayın/i;
 
 const JOBS = [
   {
@@ -49,6 +58,58 @@ describe('PublicJobsPage', () => {
       '/jobs/urun-yoneticisi',
     );
     expect(screen.getByText(/kalıcı olarak test veritabanına/i)).toBeVisible();
+  });
+
+  // web#1199: bant, başvuru formuyla aynı candidateDataPolicy projeksiyonundan okur.
+  it('says what the application form says when the policy allows real data', async () => {
+    apiMocks.listPublicJobs.mockResolvedValue(
+      JOBS.map((job) => ({ ...job, candidateDataPolicy: policy('real-allowed') })),
+    );
+    renderPage();
+    const banner = await screen.findByTestId('public-jobs-data-policy');
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    expect(banner).toHaveTextContent('Bu ortamda sentetik veri kısıtı uygulanmıyor.');
+    expect(banner).not.toHaveTextContent(RESTRICTIVE);
+  });
+
+  it('says what the application form says when the policy is synthetic only', async () => {
+    apiMocks.listPublicJobs.mockResolvedValue(
+      JOBS.map((job) => ({ ...job, candidateDataPolicy: policy('synthetic-only') })),
+    );
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    expect(screen.getByTestId('public-jobs-data-policy')).toHaveTextContent(
+      'Bu ortamda yalnız sentetik aday verisi kullanın',
+    );
+  });
+
+  it.each([
+    ['an unknown mode', [{ ...JOBS[0], candidateDataPolicy: policy('everything-goes') }]],
+    [
+      'jobs that disagree',
+      [
+        { ...JOBS[0], candidateDataPolicy: policy('real-allowed') },
+        {
+          ...JOBS[0],
+          slug: 'ikinci-ilan',
+          title: 'İkinci İlan',
+          candidateDataPolicy: policy('synthetic-only'),
+        },
+      ],
+    ],
+    ['no policy at all', JOBS],
+  ])('falls back to the most restrictive notice for %s', async (_label, jobs) => {
+    apiMocks.listPublicJobs.mockResolvedValue(jobs);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Ürün Yöneticisi' });
+    expect(screen.getByTestId('public-jobs-data-policy')).toHaveTextContent(RESTRICTIVE);
+  });
+
+  it('keeps the most restrictive notice when the jobs cannot be read', async () => {
+    apiMocks.listPublicJobs.mockRejectedValueOnce(new Error('servis kapalı'));
+    renderPage();
+    await screen.findByRole('alert');
+    expect(screen.getByTestId('public-jobs-data-policy')).toHaveTextContent(RESTRICTIVE);
   });
 
   it('shows a retryable error and never falls back to a fake catalog', async () => {
