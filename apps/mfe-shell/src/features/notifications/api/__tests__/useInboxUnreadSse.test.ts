@@ -173,6 +173,75 @@ describe('useInboxUnreadSse', () => {
     expect(stubInstances).toHaveLength(2);
   });
 
+  // web#1206: EventSource HTTP durumunu vermez. Sunucu reddedince kaynak CLOSED olur; kanca
+  // tek bir yoklamayla durumu okur. Kalıcı ret (401/403/404) yeniden bağlanmayı durdurur;
+  // 5xx ya da ağ hatası üstel beklemeyle yeniden dener.
+  const refuse = async (source: StubEventSource) => {
+    source.readyState = 2;
+    await act(async () => {
+      source.fire('error');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  it.each([401, 403, 404])(
+    'stops reconnecting when the stream is refused with %i',
+    async (status) => {
+      const probe = vi.fn().mockResolvedValue({ status });
+      vi.stubGlobal('fetch', probe);
+      const { Wrapper } = buildWrapper();
+      const { result } = renderHook(
+        () => useInboxUnreadSse({ orgId: 'default', subscriberId: 'sub-1' }),
+        { wrapper: Wrapper },
+      );
+
+      await refuse(stubInstances[0]);
+      act(() => {
+        vi.advanceTimersByTime(120_000);
+      });
+
+      expect(stubInstances).toHaveLength(1);
+      expect(result.current.stopped).toBe(true);
+      expect(probe).toHaveBeenCalledWith(
+        stubInstances[0].url,
+        expect.objectContaining({ credentials: 'include' }),
+      );
+    },
+  );
+
+  it('keeps backing off after a server error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 503 }));
+    const { Wrapper } = buildWrapper();
+    const { result } = renderHook(
+      () => useInboxUnreadSse({ orgId: 'default', subscriberId: 'sub-1' }),
+      { wrapper: Wrapper },
+    );
+
+    await refuse(stubInstances[0]);
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(stubInstances).toHaveLength(2);
+    expect(result.current.stopped).toBe(false);
+  });
+
+  it('keeps backing off when the status probe itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network')));
+    const { Wrapper } = buildWrapper();
+    renderHook(() => useInboxUnreadSse({ orgId: 'default', subscriberId: 'sub-1' }), {
+      wrapper: Wrapper,
+    });
+
+    await refuse(stubInstances[0]);
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(stubInstances).toHaveLength(2);
+  });
+
   it('tears down the previous EventSource when identity changes', () => {
     const { Wrapper } = buildWrapper();
     const { rerender } = renderHook<unknown, { orgId: string; subscriberId: string } | null>(
