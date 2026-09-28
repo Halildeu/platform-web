@@ -131,6 +131,9 @@ const formatDate = (value: string, timeZone?: string) => formatDateSafe(value, {
 
 const iso = (localValue: string) => new Date(localValue).toISOString();
 
+/** ats#278: planlanan başlangıç gelmediyse görüşme tamamlanamaz (sunucu 409 INTERVIEW_NOT_STARTED). */
+const notStarted = (interview: { startsAt: string }) => Date.parse(interview.startsAt) > Date.now();
+
 interface RecruiterInterviewPanelProps {
   publicRef: string;
   applicationStatus: ApplicationStatus;
@@ -687,12 +690,18 @@ const RecruiterInterviewPanel = ({
                 </button>
                 <button
                   type="button"
+                  disabled={notStarted(interview)}
+                  aria-describedby={
+                    notStarted(interview)
+                      ? `interview-not-started-${interview.interviewId}`
+                      : undefined
+                  }
                   onClick={() => {
                     mutation.current = null;
                     setTransitionTarget({ interview, target: 'COMPLETED' });
                     setTransitionReason('Görüşme tamamlandı');
                   }}
-                  className="min-h-10 rounded-xl border border-border-subtle bg-surface-default px-3 text-xs font-bold"
+                  className="min-h-10 rounded-xl border border-border-subtle bg-surface-default px-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Görüşmeyi tamamla
                 </button>
@@ -707,6 +716,16 @@ const RecruiterInterviewPanel = ({
                 >
                   Görüşmeyi iptal et
                 </button>
+                {notStarted(interview) ? (
+                  <p
+                    id={`interview-not-started-${interview.interviewId}`}
+                    data-testid={`interview-not-started-${interview.interviewId}`}
+                    className="text-xs text-text-secondary sm:col-span-2"
+                  >
+                    Görüşme saati henüz gelmedi; tamamlanamaz. Görüşme erken yapıldıysa önce
+                    “Yeniden planla” ile saati güncelleyin.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </li>
