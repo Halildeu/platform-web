@@ -190,6 +190,8 @@ let refreshInFlight: Promise<RefreshResult> | null = null;
 let authMode: AuthMode = resolveAuthMode();
 let authRedirectInProgress = false;
 const PROFILE_MISSING_CODE = 'PROFILE_MISSING';
+/** web#1206: user-service etkin olmayan hesabı bilinçli olarak 403 ile reddeder. */
+const ACCOUNT_DISABLED_CODE = 'ACCOUNT_DISABLED';
 /**
  * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
  * stable backend lifecycle error codes that route a 403 response into
@@ -305,6 +307,10 @@ const handleUnauthorized = (reason = 'unauthorized') => {
 
 const handleForbidden = () => {
   dispatchGlobalToast('Bu işlem için yetkiniz bulunmuyor.');
+};
+
+const handleAccountDisabled = () => {
+  dispatchGlobalToast('Hesabınız henüz etkinleştirilmedi. Lütfen yöneticinize başvurun.');
 };
 
 const handleProfileMissing = () => {
@@ -703,6 +709,10 @@ const installInterceptors = (client: AxiosInstance) => {
         if (errorCode === PROFILE_MISSING_CODE) {
           if (!requestConfig.__suppressGlobalProfileMissingToast) {
             handleProfileMissing();
+          }
+        } else if (errorCode?.includes(ACCOUNT_DISABLED_CODE)) {
+          if (!requestConfig.__suppressGlobalForbiddenToast) {
+            handleAccountDisabled();
           }
         } else {
           if (!requestConfig.__suppressGlobalForbiddenToast) {

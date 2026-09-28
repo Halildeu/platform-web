@@ -65,6 +65,13 @@ import type { InboxRequestIdentity } from './notify-inbox.types';
 const MAX_BACKOFF_MS = 30_000;
 /** Initial backoff delay; doubles on each consecutive failure. */
 const INITIAL_BACKOFF_MS = 1_000;
+/** {@code EventSource.CLOSED}; the stub-friendly literal of the standard constant. */
+const CLOSED_STATE = 2;
+/**
+ * web#1206: answers that will not change by retrying. An inactive or unknown
+ * subscriber is refused on purpose (403), so reconnecting only floods the log.
+ */
+const PERMANENT_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 
 /** Public hook return shape — exposes a small status surface for tests / debug. */
 export interface InboxUnreadSseStatus {
@@ -78,6 +85,8 @@ export interface InboxUnreadSseStatus {
   lastUnreadCount: number | null;
   /** Number of consecutive reconnect attempts since the last success. */
   retryCount: number;
+  /** {@code true} once the server refused the stream permanently (401/403/404); no more reconnects. */
+  stopped: boolean;
 }
 
 /**
@@ -94,12 +103,13 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
     connected: false,
     lastUnreadCount: null,
     retryCount: 0,
+    stopped: false,
   });
 
   useEffect(() => {
     if (!identity) {
       // Identity unresolved or signed out → no connection; remain idle.
-      setStatus({ connected: false, lastUnreadCount: null, retryCount: 0 });
+      setStatus({ connected: false, lastUnreadCount: null, retryCount: 0, stopped: false });
       return;
     }
 
@@ -194,11 +204,28 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
 
       es.addEventListener('error', () => {
         if (cancelled) return;
-        retryCount += 1;
-        setStatus((prev) => ({ ...prev, connected: false, retryCount }));
+        // web#1206: EventSource hides the HTTP status. A non-2xx answer closes the source
+        // (CLOSED); a network drop leaves it CONNECTING. Only a refused source is probed.
+        const refused = es.readyState === CLOSED_STATE;
         es.close();
         if (currentSource === es) currentSource = null;
-        scheduleReconnect();
+        const retry = () => {
+          retryCount += 1;
+          setStatus((prev) => ({ ...prev, connected: false, retryCount }));
+          scheduleReconnect();
+        };
+        if (!refused) {
+          retry();
+          return;
+        }
+        void probeStatus(url).then((httpStatus) => {
+          if (cancelled) return;
+          if (httpStatus !== null && PERMANENT_STATUSES.has(httpStatus)) {
+            setStatus((prev) => ({ ...prev, connected: false, stopped: true }));
+            return;
+          }
+          retry();
+        });
       });
     };
 
@@ -236,6 +263,29 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
   }, [identity?.orgId, identity?.subscriberId, dispatch]);
 
   return status;
+}
+
+/**
+ * web#1206: read the status the stream endpoint answers with. The request is
+ * aborted as soon as the headers arrive, so a 200 does not open a second stream.
+ * {@code null} means the status could not be read (network) and the caller
+ * keeps backing off.
+ */
+async function probeStatus(url: string): Promise<number | null> {
+  if (typeof fetch !== 'function') return null;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  try {
+    const response = await fetch(url, {
+      credentials: 'include',
+      headers: { Accept: 'text/event-stream' },
+      signal: controller?.signal,
+    });
+    return response.status;
+  } catch {
+    return null;
+  } finally {
+    controller?.abort();
+  }
 }
 
 /**
