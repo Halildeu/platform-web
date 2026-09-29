@@ -101,3 +101,28 @@ export interface ClearDisplayPolicyArgs {
   deviceId: string;
   reason: string;
 }
+
+/**
+ * POST /display-policy-assets — an uploaded wallpaper (platform-backend#1203,
+ * AdminDisplayPolicyAssetResponse). `assetRef` is `asset:sha256:<hex>`; a
+ * proposal sends it together with `assetSha256` and `contentType`, and the
+ * agent downloads and verifies the image before applying it.
+ */
+export interface DisplayPolicyAssetResponse {
+  assetRef: string;
+  assetSha256: string;
+  contentType: string;
+  sizeBytes: number;
+  created: boolean;
+  createdAt: string;
+}
+
+/** The image types the Windows wallpaper policy renders (backend V83 domain). */
+export const WALLPAPER_UPLOAD_TYPES: readonly string[] = [
+  'image/png',
+  'image/jpeg',
+  'image/bmp',
+] as const;
+
+/** Mirrors the backend's 10 MiB upload cap. */
+export const WALLPAPER_MAX_BYTES = 10 * 1024 * 1024;
