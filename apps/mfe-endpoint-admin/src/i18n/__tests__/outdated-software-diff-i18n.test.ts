@@ -49,7 +49,7 @@ describe('BE-024b outdated-software diff i18n — TR locale', () => {
     expect(value.length).toBeGreaterThan(0);
   });
 
-  it('tab label is the canonical Turkish copy', () => {
+  it('section label is the canonical Turkish copy (under the Yazılımlar tab, #1212)', () => {
     expect(t('endpointAdmin.drawer.tab.outdatedSoftwareDiff')).toBe('Güncel Olmayan Değişimler');
   });
 
@@ -71,8 +71,8 @@ describe('BE-024b outdated-software diff i18n — EN locale', () => {
     expect(value.length).toBeGreaterThan(0);
   });
 
-  it('tab label is the canonical English copy', () => {
-    expect(t('endpointAdmin.drawer.tab.outdatedSoftwareDiff')).toBe('Outdated-Software Changes');
+  it('section label is the canonical English copy (under the Software tab, #1212)', () => {
+    expect(t('endpointAdmin.drawer.tab.outdatedSoftwareDiff')).toBe('Outdated Changes');
   });
 
   it('4-status enum copy is distinct (NEVER collapsed)', () => {
