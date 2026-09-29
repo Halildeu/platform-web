@@ -73,7 +73,10 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
   const [wpAssetRef, setWpAssetRef] = React.useState('');
   const [uploaded, setUploaded] = React.useState<DisplayPolicyAssetResponse | null>(null);
   const [uploadName, setUploadName] = React.useState('');
-  const [uploadPreview, setUploadPreview] = React.useState<string | null>(null);
+  // The preview is drawn from decoded pixels onto a canvas, so no string derived
+  // from the chosen file is ever written into a DOM attribute such as img src.
+  const [uploadPreview, setUploadPreview] = React.useState<ImageBitmap | null>(null);
+  const previewCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [reason, setReason] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -85,13 +88,20 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
     setLastMutationData(null);
   }, [deviceId]);
 
-  // Release the preview's object URL when it is replaced or the view unmounts.
   React.useEffect(() => {
-    return () => {
-      if (uploadPreview && typeof URL.revokeObjectURL === 'function') {
-        URL.revokeObjectURL(uploadPreview);
-      }
-    };
+    const canvas = previewCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx && uploadPreview) {
+      const scale = Math.min(
+        canvas.width / uploadPreview.width,
+        canvas.height / uploadPreview.height,
+      );
+      const w = uploadPreview.width * scale;
+      const h = uploadPreview.height * scale;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(uploadPreview, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    }
+    return () => uploadPreview?.close();
   }, [uploadPreview]);
 
   const clearUpload = () => {
@@ -119,9 +129,12 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
       const asset = await uploadAsset(file).unwrap();
       setUploaded(asset);
       setUploadName(file.name);
-      setUploadPreview(
-        typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : null,
-      );
+      let bitmap: ImageBitmap | null = null;
+      if (typeof createImageBitmap === 'function') {
+        // A preview that fails to decode is cosmetic; the upload itself succeeded.
+        bitmap = await createImageBitmap(file).catch(() => null);
+      }
+      setUploadPreview(bitmap);
     } catch (err) {
       const s = httpStatus(err);
       if (s === 413) setUploadError(t('endpointAdmin.displayPolicy.upload.tooLarge'));
@@ -466,10 +479,12 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
               {uploaded && (
                 <div className="flex items-center gap-2" data-testid="dp-wp-uploaded">
                   {uploadPreview && (
-                    <img
-                      src={uploadPreview}
-                      alt={uploadName}
-                      className="h-12 w-20 rounded border border-border-subtle object-cover"
+                    <canvas
+                      ref={previewCanvasRef}
+                      width={160}
+                      height={96}
+                      className="h-12 w-20 rounded border border-border-subtle"
+                      data-testid="dp-wp-preview"
                     />
                   )}
                   <span>
