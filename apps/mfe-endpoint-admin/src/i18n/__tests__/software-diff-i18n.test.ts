@@ -45,8 +45,8 @@ describe('BE-024 software-diff i18n — TR locale', () => {
     expect(value.length).toBeGreaterThan(0);
   });
 
-  it('tab label is the canonical Turkish copy', () => {
-    expect(t('endpointAdmin.drawer.tab.softwareDiff')).toBe('Yazılım Değişimleri');
+  it('section label is the canonical Turkish copy (under the Yazılımlar tab, #1212)', () => {
+    expect(t('endpointAdmin.drawer.tab.softwareDiff')).toBe('Değişimler');
   });
 
   it('4-status enum copy is distinct per status (NEVER collapsed)', () => {
@@ -68,8 +68,8 @@ describe('BE-024 software-diff i18n — EN locale', () => {
     expect(value.length).toBeGreaterThan(0);
   });
 
-  it('tab label is the canonical English copy', () => {
-    expect(t('endpointAdmin.drawer.tab.softwareDiff')).toBe('Software Changes');
+  it('section label is the canonical English copy (under the Software tab, #1212)', () => {
+    expect(t('endpointAdmin.drawer.tab.softwareDiff')).toBe('Changes');
   });
 
   it('4-status enum copy is distinct per status (NEVER collapsed)', () => {

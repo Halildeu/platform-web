@@ -19,32 +19,34 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import { DetayTab } from './tabs/DetayTab';
 import { IslemlerTab } from './tabs/IslemlerTab';
+import {
+  DEFAULT_SOFTWARE_SECTION,
+  SoftwareTab,
+  type DeviceSoftwareSectionKey,
+} from './tabs/SoftwareTab';
+import { TabFallback } from './tabs/TabFallback';
 
 /**
  * WEB-014D perf follow-up (Codex 019e707e iter-2 PARTIAL absorb):
  *
- * Heavy tabs (`Audit`, `Inventory`, `Compliance`, `SoftwareCatalog`)
- * are loaded via `React.lazy` and rendered through `<Suspense>` so the
- * drawer's first paint only pays for the default tab (`Detay`) and the
- * cheap `Islemler` action surface. The previous eager import chain
- * pulled `SoftwareCatalogTab` + `InstallPreflightModal` +
- * `ComplianceHistory` into the drawer cold graph even when the operator
- * never clicked beyond `Detay`.
+ * Heavy tabs (`Audit`, `Compliance`, the posture views below and the six
+ * software views behind `Yazılımlar`) are loaded via `React.lazy` and
+ * rendered through `<Suspense>` so the drawer's first paint only pays for
+ * the default tab (`Detay`) and the cheap `Islemler` action surface. The
+ * previous eager import chain pulled `SoftwareCatalogTab` +
+ * `InstallPreflightModal` + `ComplianceHistory` into the drawer cold graph
+ * even when the operator never clicked beyond `Detay`.
  *
- * `DetayTab` and `IslemlerTab` stay eager because:
+ * `DetayTab`, `IslemlerTab` and `SoftwareTab` stay eager because:
  *  - `Detay` is the default-active tab on every open.
  *  - `Islemler` is the next-most-used tab and is a small action surface
  *    (no AG Grid, no compliance graph) so its eager cost is negligible.
+ *  - `SoftwareTab` is only the section switcher; the software views it
+ *    switches between are lazy inside it (platform-web#1212).
  */
 const AuditTab = React.lazy(() => import('./tabs/AuditTab').then((m) => ({ default: m.AuditTab })));
-const InventoryTab = React.lazy(() =>
-  import('./tabs/InventoryTab').then((m) => ({ default: m.InventoryTab })),
-);
 const ComplianceTab = React.lazy(() =>
   import('./tabs/ComplianceTab').then((m) => ({ default: m.ComplianceTab })),
-);
-const SoftwareCatalogTab = React.lazy(() =>
-  import('./tabs/SoftwareCatalogTab').then((m) => ({ default: m.SoftwareCatalogTab })),
 );
 // WEB-013 — Faz 22.5.2 / 22.5.5 frontend closure. Hardware tab is
 // lazy because the WMI/CIM tables, history accordion, and probe-error
@@ -64,17 +66,8 @@ const DeviceHealthTab = React.lazy(() =>
     default: m.DeviceHealthView,
   })),
 );
-// AG-036 outdated-software — Faz 22.5 Track C. Lazy because the package
-// table, history accordion, and probe-error list never render until the
-// operator selects this tab. Keeping it out of the drawer cold path
-// preserves the WEB-014D perf budget.
-const OutdatedSoftwareTab = React.lazy(() =>
-  import('./components/outdated-software/OutdatedSoftwareView').then((m) => ({
-    default: m.OutdatedSoftwareView,
-  })),
-);
 // AG-037 hotfix posture — Faz 22.5 Track C (WEB-014G). Lazy for the
-// same WEB-014D perf reason as outdated-software: the installed/pending
+// same WEB-014D perf reason as the software views: the installed/pending
 // tables, pendingByCategory rollup, agent-health panel, and history
 // accordion never render until the operator selects this tab.
 const HotfixPostureTab = React.lazy(() =>
@@ -92,7 +85,7 @@ const DisplayPolicyTab = React.lazy(() =>
 );
 
 // AG-038 agent self-diagnostics — Faz 22.5. Same lazy-mount pattern as
-// hotfix-posture / outdated-software: the agent-meta panel, connectivity
+// hotfix-posture / device-health: the agent-meta panel, connectivity
 // badges, lastError facet, and probeErrors list never render until the
 // operator selects the "Agent Tanılaması" tab. Direct lazy-import of
 // the view (no thin Tab wrapper — Codex 019e833d must_fix #7 follows the
@@ -133,65 +126,19 @@ const AppControlTab = React.lazy(() =>
   })),
 );
 
-// BE-024 Software-Inventory Diff (Faz 22.5 P2-A). Same lazy-mount
-// pattern; the 4-status badge + counts + 3 tables (added/removed/
-// versionChanged) never render until the operator selects the
-// "Yazılım Değişimleri" tab.
-const SoftwareDiffTab = React.lazy(() =>
-  import('./components/software-diff/SoftwareDiffView').then((m) => ({
-    default: m.SoftwareDiffView,
-  })),
-);
-
-// BE-024b Outdated-Software Diff (Faz 22.5 P2-A slice-3b). Same lazy-
-// mount pattern; the 4-status badge + counts + 4 tables (added /
-// removed / versionChanged / availableVersionBumped) never render
-// until the operator selects the "Güncel Olmayan Değişimler" tab.
-const OutdatedSoftwareDiffTab = React.lazy(() =>
-  import('./components/outdated-software-diff/OutdatedSoftwareDiffView').then((m) => ({
-    default: m.OutdatedSoftwareDiffView,
-  })),
-);
-
-// BE-025 Prohibited-Software finding view (Faz 22.5 P2-A slice-2).
-// Same lazy-mount pattern; the 2-status badge + decision badge +
-// findings table never render until the operator selects the
-// "Yasaklı Yazılım" tab.
-const ProhibitedSoftwareTab = React.lazy(() =>
-  import('./components/prohibited-software/ProhibitedSoftwareView').then((m) => ({
-    default: m.ProhibitedSoftwareView,
-  })),
-);
-
-const TabFallback: React.FC = () => (
-  <div
-    role="status"
-    aria-live="polite"
-    className="px-6 py-4 text-sm text-text-secondary"
-    data-testid="drawer-tab-fallback"
-  >
-    Yükleniyor…
-  </div>
-);
-
 export type DeviceDetailDrawerTabKey =
   | 'detay'
   | 'islemler'
   | 'audit'
-  | 'inventory'
+  | 'software'
   | 'hardware'
   | 'health'
-  | 'outdated-software'
   | 'hotfix-posture'
   | 'diagnostics'
   | 'services'
   | 'startup-exposure'
   | 'app-control'
   | 'display-policy'
-  | 'software-diff'
-  | 'outdated-software-diff'
-  | 'prohibited-software'
-  | 'software-catalog'
   | 'compliance';
 
 export interface DeviceDetailDrawerProps {
@@ -225,6 +172,8 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
 }) => {
   const { t } = useEndpointAdminI18n();
   const [activeTab, setActiveTab] = React.useState<TabKey>(initialTab ?? 'detay');
+  const [softwareSection, setSoftwareSection] =
+    React.useState<DeviceSoftwareSectionKey>(DEFAULT_SOFTWARE_SECTION);
   const [lastIssuedCommand, setLastIssuedCommand] = React.useState<EndpointCommand | null>(null);
   const [lastIssuedLocalPassword, setLastIssuedLocalPassword] = React.useState<string | null>(null);
   const [lastError, setLastError] = React.useState<string | null>(null);
@@ -235,8 +184,8 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   // the device command list ONLY while the operator is on the
   // `islemler` tab. The previous condition `open && deviceId` kept the
   // 10-second poll alive any time the drawer was open — even on
-  // `detay`, `audit`, `inventory`, `compliance`, or `software-catalog`
-  // where the command list never renders. Combined with a slower 30 s
+  // `detay`, `audit`, `software`, or `compliance` where the command
+  // list never renders. Combined with a slower 30 s
   // interval this drops background CPU + network noise to the minimum
   // surface that actually displays the data.
   const shouldPollCommands = Boolean(open && deviceId && activeTab === 'islemler');
@@ -263,10 +212,13 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
     }
   }, [open]);
 
-  // WEB-014B — Honor `initialTab` on every open / device change.
+  // WEB-014B — Honor `initialTab` on every open / device change. The
+  // "Yazılımlar" section resets with it, so a new device never opens on
+  // the previous device's section.
   React.useEffect(() => {
     if (open) {
       setActiveTab(initialTab ?? 'detay');
+      setSoftwareSection(DEFAULT_SOFTWARE_SECTION);
     }
   }, [open, deviceId, initialTab]);
 
@@ -371,12 +323,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         ),
       },
       {
-        key: 'inventory' as const,
-        label: t('endpointAdmin.drawer.tab.inventory'),
+        key: 'software' as const,
+        label: t('endpointAdmin.drawer.tab.software'),
         content: (
-          <React.Suspense fallback={<TabFallback />}>
-            <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />
-          </React.Suspense>
+          <SoftwareTab
+            device={device}
+            active={activeTab === 'software'}
+            section={softwareSection}
+            onSectionChange={setSoftwareSection}
+          />
         ),
       },
       {
@@ -394,15 +349,6 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <DeviceHealthTab deviceId={device.id} active={activeTab === 'health'} />
-          </React.Suspense>
-        ),
-      },
-      {
-        key: 'outdated-software' as const,
-        label: t('endpointAdmin.drawer.tab.outdatedSoftware'),
-        content: (
-          <React.Suspense fallback={<TabFallback />}>
-            <OutdatedSoftwareTab deviceId={device.id} active={activeTab === 'outdated-software'} />
           </React.Suspense>
         ),
       },
@@ -461,48 +407,6 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         ),
       },
       {
-        key: 'software-diff' as const,
-        label: t('endpointAdmin.drawer.tab.softwareDiff'),
-        content: (
-          <React.Suspense fallback={<TabFallback />}>
-            <SoftwareDiffTab deviceId={device.id} active={activeTab === 'software-diff'} />
-          </React.Suspense>
-        ),
-      },
-      {
-        key: 'outdated-software-diff' as const,
-        label: t('endpointAdmin.drawer.tab.outdatedSoftwareDiff'),
-        content: (
-          <React.Suspense fallback={<TabFallback />}>
-            <OutdatedSoftwareDiffTab
-              deviceId={device.id}
-              active={activeTab === 'outdated-software-diff'}
-            />
-          </React.Suspense>
-        ),
-      },
-      {
-        key: 'prohibited-software' as const,
-        label: t('endpointAdmin.drawer.tab.prohibitedSoftware'),
-        content: (
-          <React.Suspense fallback={<TabFallback />}>
-            <ProhibitedSoftwareTab
-              deviceId={device.id}
-              active={activeTab === 'prohibited-software'}
-            />
-          </React.Suspense>
-        ),
-      },
-      {
-        key: 'software-catalog' as const,
-        label: t('endpointAdmin.drawer.tab.softwareCatalog'),
-        content: (
-          <React.Suspense fallback={<TabFallback />}>
-            <SoftwareCatalogTab device={device} active={activeTab === 'software-catalog'} />
-          </React.Suspense>
-        ),
-      },
-      {
         key: 'compliance' as const,
         label: t('endpointAdmin.drawer.compliance.tabLabel'),
         content: (
@@ -522,6 +426,7 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
     lastError,
     handleIssueCommand,
     activeTab,
+    softwareSection,
     t,
   ]);
 

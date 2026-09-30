@@ -250,10 +250,15 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.detay': 'Detay',
   'endpointAdmin.drawer.tab.islemler': 'İşlemler',
   'endpointAdmin.drawer.tab.audit': 'Denetim Geçmişi',
-  'endpointAdmin.drawer.tab.inventory': 'Envanter',
+  // platform-web#1212 — one top-level tab for all software views; the six
+  // section labels below are the tabs of its secondary switcher, so they
+  // drop the "Yazılım" prefix the parent tab already carries.
+  'endpointAdmin.drawer.tab.software': 'Yazılımlar',
+  'endpointAdmin.drawer.software.sectionsLabel': 'Yazılım bölümleri',
+  'endpointAdmin.drawer.tab.inventory': 'Yüklü',
   'endpointAdmin.drawer.tab.hardware': 'Donanım',
   'endpointAdmin.drawer.tab.health': 'Sağlık',
-  'endpointAdmin.drawer.tab.outdatedSoftware': 'Güncel Olmayan Yazılım',
+  'endpointAdmin.drawer.tab.outdatedSoftware': 'Güncel Olmayan',
   'endpointAdmin.drawer.tab.hotfixPosture': 'Hotfix Duruşu',
   'endpointAdmin.drawer.tab.diagnostics': 'Agent Tanılaması',
   'endpointAdmin.drawer.tab.services': 'Hizmetler',
@@ -291,10 +296,10 @@ const DICT_TR = {
   'endpointAdmin.displayPolicy.error.generic': 'İşlem başarısız oldu.',
   'endpointAdmin.displayPolicy.makerCheckerHint':
     'Her değişiklik maker-checker: PENDING bir komut oluşturulur; İşlemler sekmesinden ikinci bir yönetici onaylamadan uygulanmaz.',
-  'endpointAdmin.drawer.tab.softwareDiff': 'Yazılım Değişimleri',
+  'endpointAdmin.drawer.tab.softwareDiff': 'Değişimler',
   'endpointAdmin.drawer.tab.outdatedSoftwareDiff': 'Güncel Olmayan Değişimler',
-  'endpointAdmin.drawer.tab.prohibitedSoftware': 'Yasaklı Yazılım',
-  'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
+  'endpointAdmin.drawer.tab.prohibitedSoftware': 'Yasaklı',
+  'endpointAdmin.drawer.tab.softwareCatalog': 'Katalog',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
   'endpointAdmin.enrollments.page.description':
@@ -2051,10 +2056,12 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.tab.detay': 'Detail',
   'endpointAdmin.drawer.tab.islemler': 'Actions',
   'endpointAdmin.drawer.tab.audit': 'Audit History',
-  'endpointAdmin.drawer.tab.inventory': 'Inventory',
+  'endpointAdmin.drawer.tab.software': 'Software',
+  'endpointAdmin.drawer.software.sectionsLabel': 'Software sections',
+  'endpointAdmin.drawer.tab.inventory': 'Installed',
   'endpointAdmin.drawer.tab.hardware': 'Hardware',
   'endpointAdmin.drawer.tab.health': 'Health',
-  'endpointAdmin.drawer.tab.outdatedSoftware': 'Outdated Software',
+  'endpointAdmin.drawer.tab.outdatedSoftware': 'Outdated',
   'endpointAdmin.drawer.tab.hotfixPosture': 'Hotfix Posture',
   'endpointAdmin.drawer.tab.diagnostics': 'Agent Diagnostics',
   'endpointAdmin.drawer.tab.services': 'Services',
@@ -2092,10 +2099,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.displayPolicy.error.generic': 'The operation failed.',
   'endpointAdmin.displayPolicy.makerCheckerHint':
     'Every change is maker-checker: it creates a PENDING command that a second admin must approve from the Commands tab before it applies.',
-  'endpointAdmin.drawer.tab.softwareDiff': 'Software Changes',
-  'endpointAdmin.drawer.tab.outdatedSoftwareDiff': 'Outdated-Software Changes',
-  'endpointAdmin.drawer.tab.prohibitedSoftware': 'Prohibited Software',
-  'endpointAdmin.drawer.tab.softwareCatalog': 'Software Catalog',
+  'endpointAdmin.drawer.tab.softwareDiff': 'Changes',
+  'endpointAdmin.drawer.tab.outdatedSoftwareDiff': 'Outdated Changes',
+  'endpointAdmin.drawer.tab.prohibitedSoftware': 'Prohibited',
+  'endpointAdmin.drawer.tab.softwareCatalog': 'Catalog',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
   'endpointAdmin.enrollments.page.description':

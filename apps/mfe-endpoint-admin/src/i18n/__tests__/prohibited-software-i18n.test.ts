@@ -42,8 +42,8 @@ describe('BE-025 prohibited-software i18n — TR locale', () => {
     expect(value.length).toBeGreaterThan(0);
   });
 
-  it('tab label is the canonical Turkish copy', () => {
-    expect(t('endpointAdmin.drawer.tab.prohibitedSoftware')).toBe('Yasaklı Yazılım');
+  it('section label is the canonical Turkish copy (under the Yazılımlar tab, #1212)', () => {
+    expect(t('endpointAdmin.drawer.tab.prohibitedSoftware')).toBe('Yasaklı');
   });
 
   it('2-status enum copy is distinct (NEVER collapsed)', () => {
@@ -72,8 +72,8 @@ describe('BE-025 prohibited-software i18n — EN locale', () => {
     expect(value.length).toBeGreaterThan(0);
   });
 
-  it('tab label is the canonical English copy', () => {
-    expect(t('endpointAdmin.drawer.tab.prohibitedSoftware')).toBe('Prohibited Software');
+  it('section label is the canonical English copy (under the Software tab, #1212)', () => {
+    expect(t('endpointAdmin.drawer.tab.prohibitedSoftware')).toBe('Prohibited');
   });
 
   it('2-status enum copy is distinct (NEVER collapsed)', () => {
