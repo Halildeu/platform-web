@@ -29,6 +29,7 @@ import {
   type CandidateSessionEntry,
   type CandidateStatusDto,
 } from '../../features/ats-portals/api/application-api';
+import { formatCalendarDaySafe, formatDateSafe } from '../../features/ats-portals/format-date';
 
 const STATUS_COPY: Record<ApplicationStatus, { label: string; description: string }> = {
   SUBMITTED: {
@@ -150,27 +151,6 @@ const INTERVIEW_STATUS_COPY: Record<CandidateInterviewDto['status'], string> = {
   SCHEDULED: 'Planlandı',
   COMPLETED: 'Tamamlandı',
   CANCELLED: 'İptal edildi',
-};
-
-const formatDate = (value: string, timeZone?: string) => {
-  const date = new Date(value);
-  // Geçersiz tarih `format`'ta RangeError fırlatır ve sayfanın çizimini düşürür.
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('tr-TR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    ...(timeZone ? { timeZone } : {}),
-  }).format(date);
-};
-
-/** Saatsiz takvim günü (`YYYY-MM-DD`): saat dilimine çevrilmeden, saatsiz gösterilir. */
-const formatCalendarDate = (value: string) => {
-  // Sözleşme `format = "date"`; biçim dışı bir değer saatli biçimlemeye düşer (geçersizse "—").
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDate(value);
-  const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(Date.UTC(year, month - 1, day)),
-  );
 };
 
 const formatMoney = (amount: number, currency: string) => {
@@ -1046,7 +1026,7 @@ const CandidatePortalPage = () => {
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-text-secondary">
-                    {formatDate(item.createdAt)} · <span className="font-mono">{item.publicRef}</span>
+                    {formatDateSafe(item.createdAt)} · <span className="font-mono">{item.publicRef}</span>
                   </p>
                 </li>
               ))}
@@ -1101,7 +1081,7 @@ const CandidatePortalPage = () => {
                       ) : null}
                     </div>
                     <p className="mt-1 text-xs text-text-secondary">
-                      {entry.createdAt ? `${formatDate(entry.createdAt)} · ` : ''}
+                      {entry.createdAt ? `${formatDateSafe(entry.createdAt)} · ` : ''}
                       <span className="break-all font-mono">{entry.publicRef}</span>
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1255,8 +1235,8 @@ const CandidatePortalPage = () => {
                             <div>
                               <h4 className="font-bold">{INTERVIEW_TYPE_COPY[interview.type]}</h4>
                               <p className="mt-1 text-sm text-text-secondary">
-                                {formatDate(interview.startsAt, interview.timeZone)} –{' '}
-                                {formatDate(interview.endsAt, interview.timeZone)}
+                                {formatDateSafe(interview.startsAt, interview.timeZone)} –{' '}
+                                {formatDateSafe(interview.endsAt, interview.timeZone)}
                               </p>
                               <p className="mt-1 text-xs text-text-secondary">
                                 Saat dilimi: {interview.timeZone}
@@ -1348,7 +1328,7 @@ const CandidatePortalPage = () => {
                             <dt className="text-xs font-semibold text-text-secondary">
                               Başlangıç tarihi
                             </dt>
-                            <dd className="mt-1 font-bold">{formatCalendarDate(offer.startDate)}</dd>
+                            <dd className="mt-1 font-bold">{formatCalendarDaySafe(offer.startDate)}</dd>
                           </div>
                           <div>
                             <dt className="text-xs font-semibold text-text-secondary">
@@ -1366,7 +1346,7 @@ const CandidatePortalPage = () => {
                             <dt className="text-xs font-semibold text-text-secondary">
                               Yanıt son tarihi
                             </dt>
-                            <dd className="mt-1 font-bold">{formatDate(offer.expiresAt)}</dd>
+                            <dd className="mt-1 font-bold">{formatDateSafe(offer.expiresAt)}</dd>
                           </div>
                         </dl>
                         <div className="mt-4 rounded-xl border border-border-subtle bg-surface-default p-4">
@@ -1487,7 +1467,7 @@ const CandidatePortalPage = () => {
                       />
                       <h4 className="text-sm font-bold">{statusCopy(event.status).label}</h4>
                       <p className="mt-1 text-xs text-text-secondary">
-                        {formatDate(event.occurredAt)}
+                        {formatDateSafe(event.occurredAt)}
                       </p>
                     </li>
                   ))}
@@ -1595,11 +1575,11 @@ const CandidatePortalPage = () => {
                 </div>
                 <div>
                   <dt className="text-xs font-semibold text-text-secondary">Gönderildi</dt>
-                  <dd className="mt-1">{formatDate(status.createdAt)}</dd>
+                  <dd className="mt-1">{formatDateSafe(status.createdAt)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs font-semibold text-text-secondary">Son güncelleme</dt>
-                  <dd className="mt-1">{formatDate(status.updatedAt)}</dd>
+                  <dd className="mt-1">{formatDateSafe(status.updatedAt)}</dd>
                 </div>
               </dl>
               <div className="mt-6 rounded-xl border border-state-info-border bg-state-info-bg p-4 text-xs leading-5 text-text-secondary">
