@@ -2,9 +2,18 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { formatDateSafe, INVALID_DATE_TEXT } from './format-date';
+import { formatCalendarDaySafe, formatDateSafe, INVALID_DATE_TEXT } from './format-date';
 
-const UI_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const UI_DIR = path.join(HERE, 'ui');
+/**
+ * Aday portali paylasilan yardimciya BAGLANMAMISTI: #1193 yalniz İK yuzeylerini
+ * tasidi, aday tarafinda ayni govdenin kopyasi kaldi. Muhafiz onu da kapsar, yoksa
+ * geçersiz-tarih hatasi bir gun yalniz aday ekraninda yeniden cikar.
+ */
+const CANDIDATE_SURFACES = [
+  path.join(HERE, '..', '..', 'pages', 'candidate', 'CandidatePortalPage.tsx'),
+];
 const RECRUITER_SURFACES = [
   'RecruiterApplicationReviewPanel.tsx',
   'RecruiterInterviewPanel.tsx',
@@ -43,11 +52,37 @@ describe('formatDateSafe (#1193 review)', () => {
   });
 });
 
-describe('recruiter surfaces format dates through the shared helper only', () => {
+describe('formatCalendarDaySafe (aday portalinden tasindi)', () => {
+  it('writes a YYYY-MM-DD day without a clock and without shifting the time zone', () => {
+    // Saat dilimine cevrilirse 1 Ocak, UTC+3'te 31 Aralik gorunebilir.
+    expect(formatCalendarDaySafe('2026-01-01')).toMatch(/1 Oca 2026/);
+    expect(formatCalendarDaySafe('2026-01-01')).not.toMatch(/\d{2}:\d{2}/);
+  });
+
+  it('falls back to the full formatter when the value is not a calendar day', () => {
+    expect(formatCalendarDaySafe('2026-09-22T13:59:00Z')).toBe(
+      formatDateSafe('2026-09-22T13:59:00Z'),
+    );
+  });
+
+  it('writes the placeholder for an invalid or missing day', () => {
+    for (const value of ['abc', '2026-13-45', '', null, undefined]) {
+      expect(formatCalendarDaySafe(value)).toBe(INVALID_DATE_TEXT);
+    }
+  });
+});
+
+describe('ATS surfaces format dates through the shared helper only', () => {
   // Yerel kopyalar kalırsa geçersiz tarih hatası bir gün yeniden çıkar (#1193 incelemesi).
   it.each(RECRUITER_SURFACES)('%s has no local date formatter', (file) => {
     const source = readFileSync(path.join(UI_DIR, file), 'utf8');
-    expect(source).toMatch(/from '\.\.\/format-date'/);
+    expect(source).toMatch(/from '.*format-date'/);
+    expect(source).not.toMatch(/new Intl\.DateTimeFormat/);
+  });
+
+  it.each(CANDIDATE_SURFACES)('%s has no local date formatter', (file) => {
+    const source = readFileSync(file, 'utf8');
+    expect(source).toMatch(/from '.*format-date'/);
     expect(source).not.toMatch(/new Intl\.DateTimeFormat/);
   });
 
