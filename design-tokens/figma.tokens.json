@@ -1452,16 +1452,16 @@
           "text": {
             "modes": {
               "serban-light": {
-                "value": "{raw.color.danger.500}"
+                "value": "{raw.color.danger.700}"
               },
               "serban-dark": {
-                "value": "{raw.color.danger.500}"
+                "value": "{raw.color.danger.400}"
               },
               "serban-hc": {
                 "value": "#FF0000"
               },
               "serban-compact": {
-                "value": "{raw.color.danger.500}"
+                "value": "{raw.color.danger.700}"
               }
             }
           },
