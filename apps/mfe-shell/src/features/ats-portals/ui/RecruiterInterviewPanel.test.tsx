@@ -106,6 +106,39 @@ describe('RecruiterInterviewPanel', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent(REASON);
     });
 
+    it('keeps completion closed until the interview has started (ats#278)', async () => {
+      // Gelecekteki bir görüşme gerçekleşmiş olamaz: sunucu 409 INTERVIEW_NOT_STARTED döner.
+      // Düğme aynı koşulda kapalı; erken yapılan görüşme için saat güncelleme yolu açık.
+      const startsAt = new Date(Date.now() + 86_400_000);
+      apiMocks.listRecruiterInterviews.mockResolvedValue([
+        {
+          ...INTERVIEW,
+          startsAt: startsAt.toISOString(),
+          endsAt: new Date(startsAt.getTime() + 3_600_000).toISOString(),
+        },
+      ]);
+      renderPanel();
+
+      const complete = await screen.findByRole('button', { name: 'Görüşmeyi tamamla' });
+      expect(complete).toBeDisabled();
+      expect(
+        screen.getByTestId(`interview-not-started-${INTERVIEW.interviewId}`),
+      ).toHaveTextContent(/saati henüz gelmedi.*Yeniden planla.*saati güncelleyin/i);
+      expect(complete).toHaveAccessibleDescription(/saati henüz gelmedi/i);
+      expect(screen.getByRole('button', { name: 'Yeniden planla' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Görüşmeyi iptal et' })).toBeEnabled();
+    });
+
+    it('opens completion once the interview has started (ats#278)', async () => {
+      apiMocks.listRecruiterInterviews.mockResolvedValue([INTERVIEW]);
+      renderPanel();
+
+      expect(await screen.findByRole('button', { name: 'Görüşmeyi tamamla' })).toBeEnabled();
+      expect(
+        screen.queryByTestId(`interview-not-started-${INTERVIEW.interviewId}`),
+      ).not.toBeInTheDocument();
+    });
+
     it('keeps the reason after a rejected completion', async () => {
       apiMocks.listRecruiterInterviews.mockResolvedValue([INTERVIEW]);
       apiMocks.transitionRecruiterInterview.mockRejectedValue(new Error(REASON));
