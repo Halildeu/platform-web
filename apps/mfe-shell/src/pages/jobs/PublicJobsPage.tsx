@@ -1,6 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { listPublicJobs, type PublicJobDto } from '../../features/ats-portals/api/application-api';
+import {
+  candidateDataPolicyText,
+  resolveCandidateDataPolicy,
+} from '../../features/ats-portals/candidate-data-policy';
+
+/**
+ * web#1199: bant, başvuru formuyla aynı `candidateDataPolicy` projeksiyonundan okur. Politika
+ * okunamazsa, ilanlar birbirini tutmazsa ya da liste gelmezse en kısıtlayıcı uyarı kalır.
+ */
+const RESTRICTIVE_NOTICE =
+  'Bu test ortamındaki ilanlar sentetiktir. Form gönderimi kalıcı olarak test veritabanına kaydedilir; gerçek kişisel veri kullanmayın.';
+
+const dataPolicyNotice = (jobs: PublicJobDto[]): string => {
+  const policies = jobs.map((job) => resolveCandidateDataPolicy(job.candidateDataPolicy));
+  const [first] = policies;
+  if (!first || policies.some((policy) => policy?.mode !== first.mode)) return RESTRICTIVE_NOTICE;
+  return candidateDataPolicyText(first);
+};
 
 const PublicJobsPage = () => {
   const { publicHandle } = useParams();
@@ -79,9 +97,11 @@ const PublicJobsPage = () => {
             Size uygun rolü bulun, ilan bağlamını inceleyin ve oturum açmadan başvuru formunu
             hazırlamaya başlayın.
           </p>
-          <div className="mt-6 inline-flex rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm leading-6 text-white/90">
-            Bu test ortamındaki ilanlar sentetiktir. Form gönderimi kalıcı olarak test veritabanına
-            kaydedilir; gerçek kişisel veri kullanmayın.
+          <div
+            className="mt-6 inline-flex rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm leading-6 text-white/90"
+            data-testid="public-jobs-data-policy"
+          >
+            {dataPolicyNotice(jobs)}
           </div>
         </section>
 
