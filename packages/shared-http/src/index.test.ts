@@ -252,6 +252,25 @@ describe('shared-http interceptors', () => {
     );
   });
 
+  // web#1206: etkin olmayan hesap (user-service CurrentUserResolver, bilinçli 403) genel
+  // "yetkiniz yok" değil, hesabın etkinleştirilmediğini söylemeli.
+  it.each([
+    [{ message: 'ACCOUNT_DISABLED' }],
+    [{ errorCode: 'ACCOUNT_DISABLED', message: 'Hesap etkin değil' }],
+  ])('tells a not-yet-activated account what to do on 403 ACCOUNT_DISABLED (%j)', async (data) => {
+    const { mod, locationReplace, dispatchEvent } = await loadModule();
+    const rejected = getResponseInterceptor(mod.api);
+    const error = { response: { status: 403, data } } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+
+    expect(locationReplace).not.toHaveBeenCalled();
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(dispatchEvent.mock.calls[0][0].detail.text).toBe(
+      'Hesabınız henüz etkinleştirilmedi. Lütfen yöneticinize başvurun.',
+    );
+  });
+
   it('skips auth header and redirect in permitAll mode', async () => {
     const { mod, locationReplace } = await loadModule();
     const handler = getRequestInterceptor(mod.api);
