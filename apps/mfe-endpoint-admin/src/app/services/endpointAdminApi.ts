@@ -33,6 +33,7 @@ import type {
   DisplayPolicyResponse,
   SetDisplayPolicyArgs,
   ClearDisplayPolicyArgs,
+  DisplayPolicyAssetResponse,
 } from '../../entities/endpoint-display-policy/types';
 import type {
   ApproveEndpointCommandBody,
@@ -2100,6 +2101,19 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
       ],
     }),
+    /**
+     * #1203 — upload a wallpaper image. Returns its managed `assetRef`; the
+     * same image uploaded twice returns the existing asset (`created: false`).
+     * FormData leaves Content-Type to the browser so the multipart boundary is
+     * set; the fetch shim forwards the body as an ArrayBuffer, byte-exact.
+     */
+    uploadDisplayPolicyAsset: builder.mutation<DisplayPolicyAssetResponse, File>({
+      query: (file) => {
+        const form = new FormData();
+        form.append('file', file);
+        return { url: '/endpoint-admin/display-policy-assets', method: 'POST', body: form };
+      },
+    }),
     /** #508 — propose CLEAR (maker-checker). */
     clearDisplayPolicy: builder.mutation<DisplayPolicyResponse, ClearDisplayPolicyArgs>({
       query: ({ deviceId, reason }) => ({
@@ -2209,4 +2223,5 @@ export const {
   useGetDisplayPolicyQuery,
   useSetDisplayPolicyMutation,
   useClearDisplayPolicyMutation,
+  useUploadDisplayPolicyAssetMutation,
 } = endpointAdminApi;
