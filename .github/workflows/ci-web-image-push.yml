@@ -18,6 +18,10 @@ on:
       - 'scripts/deploy/**'
       - 'scripts/sync-public-evidence.mjs'
       - 'Dockerfile'
+      - 'teams-meeting-panel/**'
+      - 'apps/mfe-meeting/src/meeting-live-transcript-sse.ts'
+      - 'apps/mfe-meeting/src/speaker-attribution.ts'
+      - 'apps/mfe-meeting/src/meeting-workbench.ts'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -218,6 +222,14 @@ jobs:
           # SBOM (SPDX) embedded in manifest via Buildx — enables offline SBOM
           # inspection via `docker buildx imagetools inspect --format json`.
           sbom: true
+
+      - name: Verify Teams panel in the exact published image
+        env:
+          PANEL_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
+          PANEL_SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          docker pull "$PANEL_IMAGE"
+          node teams-meeting-panel/scripts/delivery-smoke.mjs "$PANEL_IMAGE" "$PANEL_SOURCE"
 
       - name: Sign GitHub artifact provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3

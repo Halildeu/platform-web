@@ -8,6 +8,7 @@ on:
       - 'apps/mfe-meeting/src/speaker-attribution.ts'
       - 'apps/mfe-meeting/src/meeting-workbench.ts'
       - '.github/workflows/teams-panel.yml'
+      - 'Dockerfile'
   push:
     branches: [main]
     paths:
@@ -16,6 +17,7 @@ on:
       - 'apps/mfe-meeting/src/speaker-attribution.ts'
       - 'apps/mfe-meeting/src/meeting-workbench.ts'
       - '.github/workflows/teams-panel.yml'
+      - 'Dockerfile'
 
 permissions:
   contents: read
@@ -41,6 +43,11 @@ jobs:
       - run: npm ci --workspaces=false --ignore-scripts --no-fund
       - run: npm test
       - run: npm run build
+      - name: Build actual panel runtime stage
+        working-directory: .
+        run: docker build --target teams-panel-runtime --build-arg BUILD_SHA="$(git rev-parse HEAD)" -t teams-panel-smoke .
+      - name: Verify HTTP delivery, config mount and security headers
+        run: node scripts/delivery-smoke.mjs teams-panel-smoke
       - name: Record source
         run: git rev-parse HEAD > dist/SOURCE_COMMIT
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
