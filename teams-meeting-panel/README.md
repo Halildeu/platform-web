@@ -45,14 +45,52 @@ npm test
 npm run build
 ```
 
-The dedicated workflow produces a static `dist` artifact with `SOURCE_COMMIT`.
-It does not deploy or replace the existing frontend image.
+The dedicated workflow produces a static `dist` artifact with `SOURCE_COMMIT`
+and exercises the Docker `teams-panel-runtime` target over HTTP. The canonical
+frontend Dockerfile now also builds this package with Node 24 and copies it into
+the existing frontend image at `/teams/panel/`. The image workflow checks both
+published variants by digest before TEST dispatch. Neither a successful build
+nor the standalone artifact proves deployment, login or a real Teams call.
+
+The runtime supplies scoped Teams frame headers, correct asset MIME types and
+404 for missing panel files (never the platform HTML fallback). It deliberately
+does not invent a Keycloak client or bake a configuration. Until the approved
+public config is mounted, `config.json` returns 404 and panel login fails closed.
+Mount that one file at `/usr/share/nginx/html/teams/panel/config.json`; do not
+mount over the whole panel directory. Only URL, realm, public client ID and the
+calendar flag belong in the file. The shipped CSP permits **same-origin**
+Keycloak. A different approved identity origin needs an explicit scoped CSP
+change, not a wildcard or disabled policy.
+
+Smoke locally with Docker (no credentials, fixture config only):
+
+```sh
+# From the repository root:
+docker build --target teams-panel-runtime --build-arg BUILD_SHA="$(git rev-parse HEAD)" -t teams-panel-smoke .
+node teams-meeting-panel/scripts/delivery-smoke.mjs teams-panel-smoke
+```
+
+The same check runs against the full frontend image after publication and before
+deployment dispatch. It covers panel/login HTML, real compiled JS/CSS, source
+commit, missing assets, absent/mounted config, response headers and OAuth query
+log suppression. It does not test the external proxy: verify public headers,
+config, immutable source and SSE buffering after GitOps rollout. Roll back using
+the preceding frontend digest and its previous config mount through GitOps;
+do not patch the shared deployment manually.
 
 ## TEST installation contract
 
 1. Publish the static artifact under the approved origin's `/teams/panel/` path
    with correct JavaScript/CSS MIME types. Missing assets must return 404, not
    shell HTML. Keep the platform `/api/` routes on that same origin.
+   The canonical TEST deployment mounts `nginx-config` over the image's
+   `/etc/nginx/conf.d/default.conf`. Its GitOps-controlled
+   `kustomize/overlays/test/frontend-nginx-default.conf` must therefore include
+   `/etc/nginx/teams-panel-locations.conf` inside its server block, together with
+   the matching new image digest. Updating only the image leaves the mounted
+   SPA fallback active. Do not change the shared base/prod configuration for this
+   TEST activation. Roll back the digest and nginx ConfigMap together: older
+   images do not contain that include file.
 2. Serve `/teams/panel/config.json` using `config.example.json` as a shape only.
    Supply the approved Keycloak URL, realm and **public** client ID. No client
    secret, worker control key or Microsoft application credential belongs here.
@@ -71,6 +109,11 @@ It does not deploy or replace the existing frontend image.
    communication. Keep these settings scoped to the panel, not the existing app.
    Use `Cache-Control: no-store` and `Referrer-Policy: no-referrer` on login/config
    responses, and exclude login query strings from access logs (OAuth codes).
+   The public TEST URL returned `X-Frame-Options: SAMEORIGIN` on 2026-10-07.
+   Fix the outer proxy's panel-only location as well; removing the header in
+   the image does not remove a header added later by the proxy. Keep the
+   normal platform pages' protections. Check the final public response, not
+   only the pod/container response.
 5. Enable the existing authorized live SSE routes in TEST. Preserve streaming
    responses and disable proxy buffering on those routes. This code does not
    grant or change server roles, module access, or object-level meeting access.
