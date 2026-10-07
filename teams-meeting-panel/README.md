@@ -83,6 +83,14 @@ do not patch the shared deployment manually.
 1. Publish the static artifact under the approved origin's `/teams/panel/` path
    with correct JavaScript/CSS MIME types. Missing assets must return 404, not
    shell HTML. Keep the platform `/api/` routes on that same origin.
+   The canonical TEST deployment mounts `nginx-config` over the image's
+   `/etc/nginx/conf.d/default.conf`. Its GitOps-controlled
+   `kustomize/overlays/test/frontend-nginx-default.conf` must therefore include
+   `/etc/nginx/teams-panel-locations.conf` inside its server block, together with
+   the matching new image digest. Updating only the image leaves the mounted
+   SPA fallback active. Do not change the shared base/prod configuration for this
+   TEST activation. Roll back the digest and nginx ConfigMap together: older
+   images do not contain that include file.
 2. Serve `/teams/panel/config.json` using `config.example.json` as a shape only.
    Supply the approved Keycloak URL, realm and **public** client ID. No client
    secret, worker control key or Microsoft application credential belongs here.
@@ -101,6 +109,11 @@ do not patch the shared deployment manually.
    communication. Keep these settings scoped to the panel, not the existing app.
    Use `Cache-Control: no-store` and `Referrer-Policy: no-referrer` on login/config
    responses, and exclude login query strings from access logs (OAuth codes).
+   The public TEST URL returned `X-Frame-Options: SAMEORIGIN` on 2026-10-07.
+   Fix the outer proxy's panel-only location as well; removing the header in
+   the image does not remove a header added later by the proxy. Keep the
+   normal platform pages' protections. Check the final public response, not
+   only the pod/container response.
 5. Enable the existing authorized live SSE routes in TEST. Preserve streaming
    responses and disable proxy buffering on those routes. This code does not
    grant or change server roles, module access, or object-level meeting access.

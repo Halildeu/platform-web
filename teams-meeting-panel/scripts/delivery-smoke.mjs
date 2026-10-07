@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -70,8 +70,9 @@ async function verify(configured) {
       assert.match(settings.headers.get('content-type') ?? '', /^application\/json/);
       assert.deepEqual(await settings.json(), config);
     }
-    const logs = docker('logs', id);
-    assert(!logs.includes('fixture-code-do-not-log'), 'OAuth query appeared in container logs');
+    const logs = spawnSync('docker', ['logs', id], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(logs.status, 0, 'Could not inspect container logs');
+    assert(!`${logs.stdout}${logs.stderr}`.includes('fixture-code-do-not-log'), 'OAuth query appeared in container logs');
     console.log(`Panel HTTP delivery PASS (config ${configured ? 'mounted' : 'absent'})`);
   } finally {
     if (id) docker('stop', id);
