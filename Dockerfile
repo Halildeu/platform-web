@@ -15,6 +15,24 @@
 #   --build-arg VITE_KEYCLOAK_REALM=platform-test
 #   --build-arg VITE_FRONTEND_PUBLIC_ORIGIN=https://testai.acik.com
 
+# Teams panel uses its own locked npm dependency graph and Node 24 toolchain.
+# Keep it out of the MFE workspace install; both artifacts ship in this image.
+FROM node:24-alpine AS teams-panel-builder
+WORKDIR /app/teams-meeting-panel
+COPY teams-meeting-panel/package.json teams-meeting-panel/package-lock.json ./
+RUN npm ci --workspaces=false --ignore-scripts --no-fund
+COPY teams-meeting-panel/ ./
+COPY apps/mfe-meeting/src/ /app/apps/mfe-meeting/src/
+ARG BUILD_SHA
+RUN node scripts/check-source.mjs "$BUILD_SHA" && npm run build && printf '%s\n' "$BUILD_SHA" > dist/SOURCE_COMMIT
+
+# Independently runnable delivery smoke target; shares the exact files and
+# location rules consumed by the full frontend runtime below.
+FROM nginx:1.27-alpine AS teams-panel-runtime
+COPY --from=teams-panel-builder /app/teams-meeting-panel/dist/ /usr/share/nginx/html/teams/panel/
+COPY teams-meeting-panel/deploy/locations.conf /etc/nginx/teams-panel-locations.conf
+COPY teams-meeting-panel/deploy/smoke-server.conf /etc/nginx/conf.d/default.conf
+
 # Stage 1: Builder
 FROM node:22-alpine AS builder
 
@@ -127,6 +145,8 @@ FROM nginx:1.27-alpine
 
 # Build artifact'leri kopyala (46 MB civarı)
 COPY --from=builder /app/dist/ubuntu-single-domain /usr/share/nginx/html
+COPY --from=teams-panel-runtime /usr/share/nginx/html/teams/panel/ /usr/share/nginx/html/teams/panel/
+COPY teams-meeting-panel/deploy/locations.conf /etc/nginx/teams-panel-locations.conf
 
 # K8s default nginx config (basit; reverse-proxy host nginx'te yapılır)
 # /index.html no-store + /assets immutable (entry vs hashed asset cache strategy)
@@ -136,6 +156,9 @@ server {
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
+
+    # Specific panel paths must never fall through to the platform SPA.
+    include /etc/nginx/teams-panel-locations.conf;
 
     # Entry files MUST NOT cache (hashed asset references)
     # Faz 22 Sec slice-1a — CSP Report-Only, main policy repeated per HTML

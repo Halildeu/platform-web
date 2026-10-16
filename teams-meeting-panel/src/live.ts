@@ -3,7 +3,7 @@ import type { TranscriptSegment } from '../../apps/mfe-meeting/src/meeting-workb
 import type { PanelSession } from './auth';
 import { UUID, isRecord } from './config';
 
-export class AccessError extends Error {}
+export class AccessError extends Error { constructor(message: string, public readonly status = 401) { super(message); } }
 export class UnavailableError extends Error {}
 export type LiveAnalysis = { summary: string; decisions: string[]; actions: { text: string; owner: string | null; dueDate: string | null }[]; raw: Record<string, unknown> };
 export type Meeting = { id: string; title: string };
@@ -37,7 +37,10 @@ export async function authorizedFetch(path: string, session: PanelSession, signa
     requestSignal.throwIfAborted();
     const response = await abortable(fetch(path, { headers: { Authorization: `Bearer ${token}` },
       credentials: 'omit', cache: 'no-store', redirect: 'error', signal: requestSignal }), requestSignal);
-    if (response.status === 401 || response.status === 403) throw new AccessError('Bu toplantıya erişim izniniz yok veya oturumunuz sona erdi.');
+    if (response.status === 401 || response.status === 403) {
+      void response.body?.cancel().catch(() => undefined);
+      throw new AccessError(response.status === 403 ? 'Bu toplantının canlı içeriğini görme yetkiniz yok.' : 'Oturumunuz sona erdi. Yeniden giriş yapın.', response.status);
+    }
     if (response.status === 404) throw new UnavailableError('Toplantı veya canlı yayın kullanıma açık değil.');
     if (!response.ok) throw new Error('Bağlantı kurulamadı.');
     return response;

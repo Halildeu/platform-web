@@ -96,7 +96,8 @@ describe('meeting panel with real SSE parser and authorization requests', () => 
     expect(screen.queryByText('Özel görev.')).toBeNull();
     expect(run.cancelled.transcript).toHaveBeenCalledOnce(); expect(run.cancelled.analysis).toHaveBeenCalledOnce();
     expect(screen.getByText('Analiz: Kapalı')).toBeTruthy();
-    if (failure !== 'hang') expect(run.deny).toHaveBeenCalledOnce();
+    if (failure === 'token') expect(run.deny).toHaveBeenCalledOnce();
+    else expect(run.deny).not.toHaveBeenCalled();
   });
 
   it('closes the active feeds when the panel is removed', async () => {

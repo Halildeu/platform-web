@@ -7,6 +7,7 @@ import { AccessError, UnavailableError, checkLiveAccess, findMeetings, loadMeeti
 import { expandSpeakerTurns } from '../../apps/mfe-meeting/src/speaker-attribution';
 import type { TranscriptSegment } from '../../apps/mfe-meeting/src/meeting-workbench';
 import { CalendarPicker } from './CalendarPicker';
+import { RecordingConsent } from './RecordingConsent';
 
 type Tab = 'Metin' | 'Özet' | 'Kararlar' | 'Aksiyonlar';
 const pause = (signal: AbortSignal, ms: number) => new Promise<void>(resolve => {
@@ -42,14 +43,15 @@ export function Panel({ config }: { config: PanelConfig }) {
     {!session ? <section><p>Toplantı içeriğini görmek için platform hesabınızla giriş yapın.</p>
       <button onClick={() => void login()} disabled={busy}>{busy ? 'Giriş bekleniyor…' : 'Giriş yap'}</button></section>
       : <><button className="quiet" onClick={() => exit()}>Panel oturumunu kapat</button>
-        {configuring ? <Configure session={session} deny={exit} calendarEnabled={config.calendarEnabled} /> : id
-          ? <>{config.calendarEnabled && <CalendarPicker id={id} session={session} deny={exit} />}
+        {configuring ? <Configure session={session} deny={exit} calendarEnabled={config.calendarEnabled} botRecordingEnabled={config.botRecordingEnabled} /> : id
+          ? <><RecordingConsent id={id} session={session} deny={exit} enabled={config.botRecordingEnabled} />
+            {config.calendarEnabled && <CalendarPicker id={id} session={session} deny={exit} />}
             <LiveMeeting key={id} id={id} session={session} deny={exit} /></>
           : <p role="alert">Bu sekme bir toplantıya bağlanmamış. Toplantıyı düzenleyen kişi sekme ayarından toplantıyı seçebilir.</p>}</>}
   </main>;
 }
 
-function Configure({ session, deny, calendarEnabled }: { session: PanelSession; deny: (message: string) => void; calendarEnabled?: boolean }) {
+function Configure({ session, deny, calendarEnabled, botRecordingEnabled }: { session: PanelSession; deny: (message: string) => void; calendarEnabled?: boolean; botRecordingEnabled?: boolean }) {
   const [query, setQuery] = useState('');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [chosen, setChosen] = useState<Meeting | null>(null);
@@ -85,7 +87,7 @@ function Configure({ session, deny, calendarEnabled }: { session: PanelSession; 
       setMeetings(result); setMessage(result.length ? 'Bu sekmede gösterilecek toplantıyı seçin.' : 'Erişebildiğiniz bir toplantı bulunamadı.');
     } catch (err) {
       if (controller.signal.aborted) return;
-      if (err instanceof AccessError) deny(err.message); else setMessage('Toplantılar yüklenemedi.');
+      if (err instanceof AccessError && err.status === 401) deny(err.message); else setMessage('Toplantılar yüklenemedi.');
     }
   }
   async function choose(meeting: Meeting) {
@@ -97,7 +99,7 @@ function Configure({ session, deny, calendarEnabled }: { session: PanelSession; 
       setChosen(meeting); setMessage(`Seçildi: ${meeting.title}. Teams’te Kaydet’e basın.`);
     } catch (err) {
       if (controller.signal.aborted) return;
-      if (err instanceof AccessError) deny(err.message); else setMessage('Bu toplantının canlı görünümü açılamıyor.');
+      if (err instanceof AccessError && err.status === 401) deny(err.message); else setMessage('Bu toplantının canlı görünümü açılamıyor.');
     }
   }
   return <section><h2>Toplantıyı bağla</h2><p>Bu seçim panelde gösterilecek toplantıyı belirler. Botun katılımını başlatmaz.</p>
@@ -105,6 +107,7 @@ function Configure({ session, deny, calendarEnabled }: { session: PanelSession; 
       <input id="meeting-search" value={query} maxLength={200} onChange={event => setQuery(event.target.value)} /><button>Ara</button></form>
     <p role="status">{message}</p><ul className="meeting-list">{meetings.map(meeting => <li key={meeting.id}>
       <button onClick={() => void choose(meeting)} aria-pressed={chosen?.id === meeting.id}>{meeting.title}</button></li>)}</ul>
+    {chosen && <RecordingConsent id={chosen.id} session={session} deny={deny} enabled={botRecordingEnabled} />}
     {calendarEnabled && chosen && <CalendarPicker id={chosen.id} session={session} deny={deny} />}
   </section>;
 }
@@ -128,7 +131,7 @@ export function LiveMeeting({ id, session, deny }: { id: string; session: PanelS
     function fatal(err: Error) {
       controller.abort(); clear(); setMessage(err.message);
       setState({ transcript: 'Kapalı', analysis: 'Kapalı' });
-      if (err instanceof AccessError) denyRef.current(err.message);
+      if (err instanceof AccessError && err.status === 401) denyRef.current(err.message);
       else setRetryAvailable(true);
     }
     async function feed(kind: 'transcript' | 'analysis') {
@@ -163,7 +166,7 @@ export function LiveMeeting({ id, session, deny }: { id: string; session: PanelS
         catch (err) {
           if (signal.aborted) return;
           // Fail closed if periodic server authorization cannot be verified.
-          fatal(err instanceof Error ? err : new AccessError('Erişim doğrulanamadı.')); return;
+          fatal(err instanceof Error ? err : new UnavailableError('Erişim doğrulanamadı.')); return;
         }
       }
     }
