@@ -2,7 +2,7 @@ import Keycloak from 'keycloak-js';
 import { authentication } from '@microsoft/teams-js';
 import { BASE, isRecord, type PanelConfig } from './config';
 
-export interface PanelSession { token(): Promise<string>; close(): void }
+export interface PanelSession { token(): Promise<string>; close(): void; recordingStorageScope?: string }
 export type LoginResult = { request: string; token: string; refreshToken: string; idToken: string };
 
 export function parseLoginResult(raw: string, request: string): LoginResult {
@@ -29,8 +29,14 @@ export async function signIn(config: PanelConfig): Promise<PanelSession> {
     checkLoginIframe: false, pkceMethod: 'S256',
   });
   if (!authenticated) { identity.clearToken(); throw new Error('login_required'); }
+  // A storage namespace only. The API, never these browser claims, authorizes consent.
+  const issuer = identity.tokenParsed?.iss; const subject = identity.tokenParsed?.sub;
+  if (!issuer || !subject) { identity.clearToken(); throw new Error('login_required'); }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([issuer, subject])));
+  const recordingStorageScope = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
   let closed = false;
   return {
+    recordingStorageScope,
     async token() {
       if (closed) throw new Error('login_required');
       try {

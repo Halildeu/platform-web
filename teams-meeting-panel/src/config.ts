@@ -1,6 +1,6 @@
 export const BASE = '/teams/panel/';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export type PanelConfig = { keycloak: { url: string; realm: string; clientId: string }; calendarEnabled?: boolean };
+export type PanelConfig = { keycloak: { url: string; realm: string; clientId: string }; calendarEnabled?: boolean; botRecordingEnabled?: boolean };
 export const isRecord = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 
 export function parseConfig(value: unknown): PanelConfig {
@@ -13,7 +13,9 @@ export function parseConfig(value: unknown): PanelConfig {
   if (target.protocol !== 'https:' || target.username || target.password || target.search || target.hash)
     throw new Error('panel_not_configured');
   if (value.calendarEnabled !== undefined && typeof value.calendarEnabled !== 'boolean') throw new Error('panel_not_configured');
-  return { keycloak: { url: target.href.replace(/\/$/, ''), realm, clientId }, calendarEnabled: value.calendarEnabled === true };
+  if (value.botRecordingEnabled !== undefined && typeof value.botRecordingEnabled !== 'boolean') throw new Error('panel_not_configured');
+  return { keycloak: { url: target.href.replace(/\/$/, ''), realm, clientId }, calendarEnabled: value.calendarEnabled === true,
+    botRecordingEnabled: value.botRecordingEnabled === true };
 }
 
 export async function loadConfig(): Promise<PanelConfig> {

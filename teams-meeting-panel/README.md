@@ -135,6 +135,23 @@ node scripts/package-panel.mjs APPROVED_BOT_DIRECTORY NEW_PANEL_PACKAGE_DIRECTOR
 
 ## Acceptance and remaining integration
 
+The optional `botRecordingEnabled` boolean defaults to false. When enabled with the paired backend,
+the selected meeting shows verified consent terms, an explicit checkbox and grant/withdraw controls.
+The panel retains the exact request key and expiry before a grant; a lost response is recovered with GET,
+not an automatic replacement grant. Local receipt storage is partitioned by account and meeting and
+contains no tokens. New grants fail closed if that receipt cannot be stored.
+
+Independent server history remains readable with new grants disabled, even when browser receipt storage
+is empty, corrupt or unavailable. It pages through the original owner's records and supports withdrawal
+after live-content permission loss. A live-view 403 closes content streams but does not sign the user out
+of the separate withdrawal controls. A 401 still ends the panel session. Use the previously bound meeting
+panel link to manage its onays after losing content access; Configure search does not enumerate inaccessible
+meetings. Neither history, consent nor a successful bot admission proves that microphone capture is running.
+
+Requires backend user bot-recording routes and V4 owner-history migration. Keep private owner transport
+available for reads/withdrawal when disabling new grants. Native SDK calling, Microsoft recording status,
+continuous media authorization and schedule-to-intent wiring remain separate integration requirements.
+
 Automated tests cover real SSE framing, live UI updates, wrong-meeting rejection,
 source preservation, same-origin tokens, cancellation, revoked access and hung
 access checks. They do **not** prove a real Teams/Keycloak login or tenant setup.
