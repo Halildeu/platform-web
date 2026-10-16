@@ -145,7 +145,7 @@ Independent server history remains readable with new grants disabled, even when 
 is empty, corrupt or unavailable. It pages through the original owner's records and supports withdrawal
 after live-content permission loss. A live-view 403 closes content streams but does not sign the user out
 of the separate withdrawal controls. A 401 still ends the panel session. Use the previously bound meeting
-panel link to manage its onays after losing content access; Configure search does not enumerate inaccessible
+panel link to manage its consents after losing content access; Configure search does not enumerate inaccessible
 meetings. Neither history, consent nor a successful bot admission proves that microphone capture is running.
 
 Requires backend user bot-recording routes and V4 owner-history migration. Keep private owner transport

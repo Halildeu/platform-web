@@ -17,8 +17,17 @@ function RecordingHistory({ id, session, deny, current }: Props & { current: Rec
   const [next, setNext] = useState<string | null>(null);
   const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const operation = useRef<AbortController | null>(null); const denyRef = useRef(deny); denyRef.current = deny;
+  const latest = useRef(new Map<string, RecordingView>());
+  function remember(value: RecordingView) {
+    const known = latest.current.get(value.intentId);
+    if (known && known.revision > value.revision) return known;
+    latest.current.set(value.intentId, value); return value;
+  }
   useEffect(() => {
-    if (current) setItems(previous => previous.map(item => item.intentId === current.intentId && item.revision <= current.revision ? current : item));
+    if (current) {
+      const value = remember(current);
+      setItems(previous => previous.map(item => item.intentId === value.intentId ? value : item));
+    }
   }, [current]);
   async function run(action: (signal: AbortSignal) => Promise<void>) {
     if (operation.current) return;
@@ -35,7 +44,7 @@ function RecordingHistory({ id, session, deny, current }: Props & { current: Rec
   }
   async function load(signal: AbortSignal, before?: string) {
     const page = await recordingHistory(id, session, signal, before);
-    if (!signal.aborted) { setItems(page.items); setNext(page.nextBeforeIntentId); }
+    if (!signal.aborted) { setItems(page.items.map(remember)); setNext(page.nextBeforeIntentId); }
   }
   useEffect(() => {
     void run(signal => load(signal));
@@ -51,7 +60,7 @@ function RecordingHistory({ id, session, deny, current }: Props & { current: Rec
       <p>{item.state === 'REVOKED' ? 'Onay geri alındı.' : 'Sunucuda saklanan onay; ses kaydının başladığını doğrulamaz.'}</p>
       {item.state !== 'REVOKED' && <button disabled={busy} onClick={() => void run(async signal => {
         const result = await withdrawHistoricalRecording(id, item, session, signal);
-        if (!signal.aborted) setItems(previous => previous.map(value => value.intentId === result.intentId ? result : value));
+        if (!signal.aborted) { const known = remember(result); setItems(previous => previous.map(value => value.intentId === known.intentId ? known : value)); }
       })}>Bu önceki onayı geri al</button>}
     </div>)}
     <button disabled={busy} onClick={() => void run(signal => load(signal))}>Önceki onayları yenile</button>

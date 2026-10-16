@@ -108,6 +108,26 @@ describe('actual panel consent control', () => {
     expect((screen.getByRole('button', { name: 'Kayıt onayını ver' }) as HTMLButtonElement).disabled).toBe(true);
     expect(run.fetcher.mock.calls.some(([, init]) => init.method === 'POST')).toBe(false);
   });
+  it('does not resurrect a withdrawn grant when an older history response arrives late', async () => {
+    const run = setup(); await consent(); await screen.findByText('Onay sunucuda kayıtlı.');
+    let release!: (value: Response) => void; let stale!: Response;
+    vi.stubGlobal('fetch', async (path: string, init: RequestInit) => {
+      if (init.method === 'GET' && path.endsWith('/bot-recording-intents')) {
+        stale = await run.fetcher(path, init);
+        return new Promise<Response>(resolve => { release = resolve; });
+      }
+      return run.fetcher(path, init);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki onayları yenile' }));
+    await waitFor(() => expect(release).toBeTypeOf('function'));
+    fireEvent.click(screen.getByRole('button', { name: 'Kayıt onayını geri al' }));
+    await screen.findByText('Onay geri alındı.');
+    await act(async () => { release(stale); });
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni onay metnini aç' }));
+    await screen.findByRole('checkbox');
+    expect(screen.queryByRole('button', { name: 'Bu önceki onayı geri al' })).toBeNull();
+    expect(screen.getByText('Onay geri alındı.')).toBeTruthy();
+  });
   it('offers an explicit new form after server confirms an absent request is past its expiry, without POST', async () => {
     const run = setup(); await screen.findByRole('checkbox'); run.unmount();
     saveRecordingReceipt(id, run.props.session, { terms: shown, request: { requestKey: intent, consentVersion: shown.version,
